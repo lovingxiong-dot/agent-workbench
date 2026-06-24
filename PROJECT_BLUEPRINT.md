@@ -123,10 +123,22 @@ git undo    # 撤销上次提交
 当你说「请存档」时，AI 会自动执行：
 
 1. ✅ 更新 CHANGELOG.md（记录本轮改动）
-2. ✅ git add <源码文件> + CHANGELOG.md
-3. ✅ git commit -m "<自动生成摘要>"
-4. ✅ git tag v<N>（版本号递增）
-5. ✅ git push + git push --tags（如有远程）
+2. ✅ 同步更新 PROJECT_BLUEPRINT.md（如有变动）
+3. ✅ git add <源码文件> + CHANGELOG.md + PROJECT_BLUEPRINT.md
+4. ✅ git commit -m "<自动生成摘要>"
+5. ✅ git tag v<N>（版本号递增）
+6. ✅ git push + git push --tags（如有远程）
+
+**推送范围（全部入库）：**
+| 文件类型 | 说明 |
+|----------|------|
+| 源码文件 | 所有未被 .gitignore 排除的代码文件 |
+| CHANGELOG.md | 变更日志，每次存档自动更新 |
+| PROJECT_BLUEPRINT.md | 项目蓝图/AI记忆锚点 |
+
+**不会推送：**
+- .gitignore 中排除的临时文件、构建产物
+- 密钥/凭据等敏感信息（应在 .gitignore 中排除）
 
 ---
 
