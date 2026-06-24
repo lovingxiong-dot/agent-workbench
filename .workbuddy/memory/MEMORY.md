@@ -18,7 +18,7 @@
 - 全局忽略规则: 已覆盖 Python/Node.js/Windows/macOS/Linux
 
 ## 重要提醒
-- SSH 公钥需手动添加到 Gitee 后方可推送
+- ✅ SSH 公钥已添加到 Gitee，认证正常（2026-06-24 验证通过）
 - PROJECT_BLUEPRINT.md 是 AI 记忆锚点，新对话时上传此文件可快速恢复上下文
 - CHANGELOG.md 由存档流程自动维护
 - 存档范围：源码 + CHANGELOG.md + PROJECT_BLUEPRINT.md（全部推送到远程）
