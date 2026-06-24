@@ -1,0 +1,10 @@
+venv/
+build/
+dist/
+__pycache__/
+*.pyc
+*.pyo
+*.db
+storage/*.db
+storage/*.json
+storage/vector_store/
