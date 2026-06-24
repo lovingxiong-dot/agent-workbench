@@ -23,7 +23,9 @@ from PySide6.QtWidgets import (
     QStatusBar, QFrame, QStyleFactory, QListWidgetItem, QScrollBar,
     QTreeView, QFileSystemModel, QPlainTextEdit, QStackedWidget,
     QToolButton, QSizePolicy, QMenu, QInputDialog, QMessageBox,
-    QAbstractItemView, QHeaderView, QButtonGroup
+    QAbstractItemView, QHeaderView, QButtonGroup,
+    QComboBox, QDialog, QTableWidget, QFormLayout, QDialogButtonBox,
+    QTableWidgetItem, QGroupBox,
 )
 from PySide6.QtCore import Qt, QThread, Signal, Slot, QTimer, QSize, QDir
 from PySide6.QtGui import QFont, QColor, QPalette, QIcon, QTextCursor, QAction
@@ -65,8 +67,14 @@ def md_to_html(text):
 with open(resource_path("config.yaml"), "r", encoding="utf-8") as f:
     global_config = yaml.safe_load(f)
 
-mode_manager = ModeManager(resource_path("config.yaml"))
-llm_registry = LLMRegistry(resource_path("config.yaml"))
+config_read = resource_path("config.yaml")
+config_write = (
+    os.path.join(os.path.dirname(sys.executable), "config.yaml")
+    if getattr(sys, 'frozen', False)
+    else config_read
+)
+mode_manager = ModeManager(config_read)
+llm_registry = LLMRegistry(config_read, config_write)
 memory_manager = MemoryManager(global_config["memory"])
 
 TOOL_MAP = {
@@ -586,11 +594,204 @@ class TerminalWidget(QWidget):
 
 
 # ═══════════════════════════════════════════════════════
+# 提供商编辑表单对话框
+# ═══════════════════════════════════════════════════════
+class ProviderFormDialog(QDialog):
+    def __init__(self, parent=None, name="", config=None):
+        super().__init__(parent)
+        self.setWindowTitle("编辑提供商" if name else "添加提供商")
+        self.resize(440, 280)
+        self._setup_ui(name, config)
+
+    def _setup_ui(self, name, config):
+        layout = QFormLayout(self)
+        layout.setSpacing(12)
+        layout.setContentsMargins(24, 20, 24, 20)
+
+        self.name_edit = QLineEdit(name)
+        self.name_edit.setPlaceholderText("如: tool-agent, deepseek, openai")
+        layout.addRow("名称:", self.name_edit)
+
+        self.url_edit = QLineEdit(config.get("base_url", "") if config else "")
+        self.url_edit.setPlaceholderText("如: http://localhost:11434/v1")
+        layout.addRow("Base URL:", self.url_edit)
+
+        self.key_edit = QLineEdit(config.get("api_key", "") if config else "")
+        self.key_edit.setPlaceholderText("API Key（本地 Ollama 填 not-needed）")
+        self.key_edit.setEchoMode(QLineEdit.Password)
+        layout.addRow("API Key:", self.key_edit)
+
+        self.model_edit = QLineEdit(config.get("model", "") if config else "")
+        self.model_edit.setPlaceholderText("如: qwen3:4b, gpt-4o, deepseek-chat")
+        layout.addRow("模型:", self.model_edit)
+
+        btn_layout = QHBoxLayout()
+        test_btn = QPushButton("测试连接")
+        test_btn.setStyleSheet("QPushButton { background-color: #30363D; } QPushButton:hover { background-color: #484F58; }")
+        test_btn.clicked.connect(self._test_connection)
+        btn_layout.addWidget(test_btn)
+        btn_layout.addStretch()
+
+        cancel_btn = QPushButton("取消")
+        cancel_btn.setStyleSheet("QPushButton { background-color: #30363D; } QPushButton:hover { background-color: #484F58; }")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+
+        save_btn = QPushButton("保存")
+        save_btn.clicked.connect(self._validate_and_accept)
+        btn_layout.addWidget(save_btn)
+        layout.addRow(btn_layout)
+
+    def _validate_and_accept(self):
+        if not self.name_edit.text().strip():
+            QMessageBox.warning(self, "提示", "名称不能为空")
+            return
+        if not self.url_edit.text().strip():
+            QMessageBox.warning(self, "提示", "Base URL 不能为空")
+            return
+        self.accept()
+
+    def _test_connection(self):
+        try:
+            from langchain_openai import ChatOpenAI
+            llm = ChatOpenAI(
+                model=self.model_edit.text() or "test",
+                base_url=self.url_edit.text(),
+                api_key=self.key_edit.text() or "not-needed",
+                timeout=8,
+            )
+            QMessageBox.information(self, "测试结果", "连接成功！")
+        except Exception as e:
+            QMessageBox.warning(self, "测试结果", f"连接失败: {str(e)[:200]}")
+
+    def get_data(self):
+        return (
+            self.name_edit.text().strip(),
+            {
+                "base_url": self.url_edit.text().strip(),
+                "api_key": self.key_edit.text().strip() or "not-needed",
+                "model": self.model_edit.text().strip(),
+            },
+        )
+
+
+# ═══════════════════════════════════════════════════════
+# 模型设置对话框
+# ═══════════════════════════════════════════════════════
+class SettingsDialog(QDialog):
+    providers_changed = Signal()
+
+    def __init__(self, llm_registry, parent=None):
+        super().__init__(parent)
+        self.llm_registry = llm_registry
+        self.setWindowTitle("模型设置")
+        self.resize(720, 480)
+        self._setup_ui()
+        self._load_table()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+        layout.setContentsMargins(20, 16, 20, 16)
+
+        title = QLabel("LLM 提供商管理")
+        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #E6EDF3;")
+        layout.addWidget(title)
+
+        desc = QLabel("在此添加、编辑或删除模型提供商。修改后所有模式均可见。")
+        desc.setStyleSheet("color: #8B949E; font-size: 12px;")
+        layout.addWidget(desc)
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(["名称", "Base URL", "模型", "操作"])
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Fixed)
+        self.table.setColumnWidth(3, 120)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.verticalHeader().setVisible(False)
+        layout.addWidget(self.table)
+
+        btn_layout = QHBoxLayout()
+        self.add_btn = QPushButton("+ 添加提供商")
+        self.add_btn.setStyleSheet("QPushButton { background-color: #1F6FEB; } QPushButton:hover { background-color: #388BFD; }")
+        self.add_btn.clicked.connect(self._add_provider)
+        btn_layout.addWidget(self.add_btn)
+        btn_layout.addStretch()
+
+        self.close_btn = QPushButton("关闭")
+        self.close_btn.setStyleSheet("QPushButton { background-color: #30363D; } QPushButton:hover { background-color: #484F58; }")
+        self.close_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(self.close_btn)
+        layout.addLayout(btn_layout)
+
+    def _load_table(self):
+        self.table.setRowCount(0)
+        providers = self.llm_registry.list_providers()
+        for name, cfg in providers.items():
+            row = self.table.rowCount()
+            self.table.insertRow(row)
+            self.table.setItem(row, 0, QTableWidgetItem(name))
+            self.table.setItem(row, 1, QTableWidgetItem(cfg.get("base_url", "")))
+            self.table.setItem(row, 2, QTableWidgetItem(cfg.get("model", "")))
+
+            action_w = QWidget()
+            al = QHBoxLayout(action_w)
+            al.setContentsMargins(4, 2, 4, 2)
+            al.setSpacing(4)
+
+            edit_btn = QPushButton("编辑")
+            edit_btn.setFixedSize(48, 22)
+            edit_btn.setStyleSheet("QPushButton { font-size: 11px; padding: 2px 6px; }")
+            edit_btn.clicked.connect(lambda checked, n=name: self._edit_provider(n))
+            al.addWidget(edit_btn)
+
+            del_btn = QPushButton("删除")
+            del_btn.setFixedSize(48, 22)
+            del_btn.setStyleSheet("QPushButton { background-color: #DA3633; font-size: 11px; padding: 2px 6px; } QPushButton:hover { background-color: #F85149; }")
+            del_btn.clicked.connect(lambda checked, n=name: self._delete_provider(n))
+            al.addWidget(del_btn)
+
+            self.table.setCellWidget(row, 3, action_w)
+
+    def _add_provider(self):
+        dlg = ProviderFormDialog(self)
+        if dlg.exec() == QDialog.Accepted:
+            name, cfg = dlg.get_data()
+            self.llm_registry.add_provider(name, cfg)
+            self._load_table()
+            self.providers_changed.emit()
+
+    def _edit_provider(self, name):
+        cfg = self.llm_registry.get_provider_config(name)
+        dlg = ProviderFormDialog(self, name, cfg)
+        if dlg.exec() == QDialog.Accepted:
+            new_name, new_cfg = dlg.get_data()
+            if new_name != name:
+                self.llm_registry.remove_provider(name)
+            self.llm_registry.add_provider(new_name, new_cfg)
+            self._load_table()
+            self.providers_changed.emit()
+
+    def _delete_provider(self, name):
+        reply = QMessageBox.question(self, "确认删除", f"确定要删除提供商 「{name}」吗？")
+        if reply == QMessageBox.Yes:
+            self.llm_registry.remove_provider(name)
+            self._load_table()
+            self.providers_changed.emit()
+
+
+# ═══════════════════════════════════════════════════════
 # 聊天视图
 # ═══════════════════════════════════════════════════════
 class ChatView(QWidget):
     send_clicked = Signal(str)
-    mode_clicked = Signal(str)  # ask / plan / act
+    mode_clicked = Signal(str)     # ask / plan / act
+    model_changed = Signal(str)    # provider name
+    settings_clicked = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -610,9 +811,6 @@ class ChatView(QWidget):
         self.mode_indicator.setStyleSheet("color: #3FB950; font-size: 12px;")
         self.mode_label = QLabel("Ask")
         self.mode_label.setObjectName("modeLabel")
-
-        self.model_label = QLabel("tool-agent")
-        self.model_label.setObjectName("modelLabel")
 
         self.session_label = QLabel("默认会话")
         self.session_label.setObjectName("sessionLabel")
@@ -646,7 +844,42 @@ class ChatView(QWidget):
         self.btn_ask.setChecked(True)
 
         self.toolbar.addStretch()
-        self.toolbar.addWidget(self.model_label)
+
+        # ★ 模型下拉选择器
+        self.model_selector = QComboBox()
+        self.model_selector.setFixedWidth(180)
+        self.model_selector.setToolTip("选择当前使用的模型")
+        self.model_selector.setStyleSheet("""
+            QComboBox {
+                background-color: #21262D; color: #E6EDF3; border: 1px solid #30363D;
+                border-radius: 8px; padding: 4px 10px; font-size: 12px;
+            }
+            QComboBox:hover { border: 1px solid #58A6FF; }
+            QComboBox::drop-down { border: none; width: 20px; }
+            QComboBox QAbstractItemView {
+                background-color: #161B22; color: #E6EDF3; border: 1px solid #30363D;
+                selection-background-color: #1F6FEB33; selection-color: #58A6FF;
+                outline: none;
+            }
+        """)
+        self.model_selector.currentTextChanged.connect(self._on_model_changed)
+        self.toolbar.addWidget(self.model_selector)
+
+        # ★ 设置齿轮按钮
+        self.settings_btn = QPushButton("⚙")
+        self.settings_btn.setFixedSize(30, 30)
+        self.settings_btn.setToolTip("模型设置")
+        self.settings_btn.setCursor(Qt.PointingHandCursor)
+        self.settings_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent; color: #8B949E; border: none;
+                border-radius: 6px; font-size: 16px;
+            }
+            QPushButton:hover { background-color: #21262D; color: #E6EDF3; }
+        """)
+        self.settings_btn.clicked.connect(self.settings_clicked.emit)
+        self.toolbar.addWidget(self.settings_btn)
+
         self.toolbar.addWidget(self.session_label)
         layout.addLayout(self.toolbar)
 
@@ -730,14 +963,36 @@ class ChatView(QWidget):
 
     def set_header(self, mode, model, session):
         self.mode_label.setText(mode.capitalize())
-        self.model_label.setText(model)
         self.session_label.setText(session)
+        # 同步下拉框选中项（按 userData 匹配 provider name）
+        idx = self.model_selector.findData(model)
+        if idx >= 0:
+            self.model_selector.blockSignals(True)
+            self.model_selector.setCurrentIndex(idx)
+            self.model_selector.blockSignals(False)
 
     def set_mode(self, mode_name):
         self.btn_ask.setChecked(mode_name == "ask")
         self.btn_plan.setChecked(mode_name == "plan")
         self.btn_act.setChecked(mode_name == "act")
         self.mode_label.setText(mode_name.capitalize())
+
+    def populate_models(self, providers: dict, current: str):
+        """刷新模型下拉列表"""
+        self.model_selector.blockSignals(True)
+        self.model_selector.clear()
+        for name, cfg in providers.items():
+            display = f"{name}  ({cfg.get('model', '?')})"
+            self.model_selector.addItem(display, name)
+        idx = self.model_selector.findData(current)
+        if idx >= 0:
+            self.model_selector.setCurrentIndex(idx)
+        self.model_selector.blockSignals(False)
+
+    def _on_model_changed(self, text):
+        name = self.model_selector.currentData()
+        if name:
+            self.model_changed.emit(name)
 
     def clear(self):
         self.chat_area.clear()
@@ -761,8 +1016,14 @@ class MainWindow(QMainWindow):
 
         self._apply_dark_theme()
         self._setup_ui()
+        self.chat_view.model_changed.connect(self._on_model_changed)
+        self.chat_view.settings_clicked.connect(self._open_settings)
         self._init_mode("ask")
         self._init_default_session()
+        self.chat_view.populate_models(
+            llm_registry.list_providers(),
+            self._current_model_name
+        )
 
     def _apply_dark_theme(self):
         app = QApplication.instance()
@@ -889,10 +1150,6 @@ class MainWindow(QMainWindow):
                 border-top: 1px solid #30363D;
             }
             QLabel#modeLabel { color: #E6EDF3; font-weight: bold; font-size: 13px; }
-            QLabel#modelLabel {
-                background-color: #21262D; color: #58A6FF;
-                border-radius: 10px; padding: 2px 10px; font-size: 11px;
-            }
             QLabel#sessionLabel { color: #8B949E; font-size: 12px; }
             QFrame#toolbarSeparator { color: #30363D; max-height: 1px; }
 
@@ -1065,28 +1322,71 @@ class MainWindow(QMainWindow):
             self.left_stack.setCurrentIndex(1)
             self.terminal.input.setFocus()
 
-    def _init_mode(self, mode_name):
+    def _init_mode(self, mode_name, llm_name=None):
         """根据模式名加载 LLM 和工具（所有模式拥有相同工具权限）"""
         mode_config = global_config["manual_modes"].get(mode_name)
         if not mode_config:
             return
         self._current_mode = mode_name
-        llm_name = mode_config.get("default_llm", "tool-agent")
+        if llm_name is None:
+            llm_name = mode_config.get("current_model", "tool-agent")
+        # 确保提供商存在，否则回退到第一个
+        providers = llm_registry.list_providers()
+        if llm_name not in providers:
+            llm_name = next(iter(providers.keys()), "tool-agent")
         self._current_llm = llm_registry.get_llm(llm_name)
         self._current_tools = mode_config.get("tools", list(TOOL_MAP.keys()))
-        provider = global_config["llm_providers"].get(llm_name, {})
-        self._current_model_name = provider.get("model", llm_name)
+        provider = llm_registry.get_provider_config(llm_name)
+        self._current_model_name = llm_name
         if hasattr(self, 'chat_view'):
             self.chat_view.set_mode(mode_name)
             self.chat_view.set_header(
                 mode_name,
-                self._current_model_name,
+                llm_name,
                 self._sessions[self._current_session]["title"]
             )
-        self._log_message(f"🔄 切换模式: {mode_name} / {self._current_model_name}")
+            self.chat_view.populate_models(providers, llm_name)
+        self._log_message(f"🔄 切换模式: {mode_name} / {llm_name}")
 
     def _on_mode_clicked(self, mode_name):
         self._init_mode(mode_name)
+
+    def _on_model_changed(self, llm_name):
+        """用户在工具栏下拉框中切换模型"""
+        self._current_llm = llm_registry.get_llm(llm_name)
+        self._current_model_name = llm_name
+        # 持久化到当前模式的 current_model
+        global_config["manual_modes"][self._current_mode]["current_model"] = llm_name
+        llm_registry._save()
+        provider = llm_registry.get_provider_config(llm_name)
+        self.chat_view.set_header(
+            self._current_mode,
+            llm_name,
+            self._sessions[self._current_session]["title"]
+        )
+        self._log_message(f"🔄 切换模型: {llm_name} ({provider.get('model', '?')})")
+        self.status_label.setText(f"模型: {llm_name}")
+
+    def _open_settings(self):
+        """打开模型设置对话框"""
+        dlg = SettingsDialog(llm_registry, self)
+        dlg.providers_changed.connect(self._on_settings_changed)
+        dlg.exec()
+
+    def _on_settings_changed(self):
+        """设置变更后刷新 UI"""
+        providers = llm_registry.list_providers()
+        # 如果当前模型被删除，回退到第一个
+        if self._current_model_name not in providers:
+            self._current_model_name = next(iter(providers.keys()), "tool-agent")
+            self._current_llm = llm_registry.get_llm(self._current_model_name)
+        self.chat_view.populate_models(providers, self._current_model_name)
+        self.chat_view.set_header(
+            self._current_mode,
+            self._current_model_name,
+            self._sessions[self._current_session]["title"]
+        )
+        self._log_message("🔧 模型设置已更新")
 
     def _init_default_session(self):
         self.conversation_list.add_conversation("default", "默认会话", active=True)
