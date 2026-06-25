@@ -10,3 +10,4 @@ storage/*.json
 storage/vector_store/
 .env
 *.spec.bak
+.trae/
