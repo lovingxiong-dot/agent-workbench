@@ -9,9 +9,10 @@ from datetime import datetime
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QSplitter, QStatusBar, QStackedWidget, QTextEdit, QMessageBox,
+    QStyleFactory,
 )
 from PySide6.QtCore import Qt, Slot, QTimer
-from PySide6.QtGui import QFont, QPalette, QColor, QStyleFactory
+from PySide6.QtGui import QFont, QPalette, QColor
 
 from agent_engine import ModeManager, LLMRegistry, MemoryManager
 from services.config_service import ConfigService
@@ -25,6 +26,9 @@ from ui.widgets import (
 from ui.dialogs import SettingsDialog, ProviderFormDialog
 from ui.chat_view import ChatView
 from tools.system import run_command, run_as_admin
+from tools.system import read_file, write_file, list_dir, web_fetch
+from tools.system import clipboard_read, clipboard_write, send_notification
+from tools.system import list_processes, kill_process
 from tools.quant import fetch_stock_data, run_backtest
 from tools.mt5 import mt5_get_price, mt5_place_order
 from tools.external_apis import fetch_financial_news, fetch_macro_data
@@ -34,6 +38,15 @@ from tools.external_apis import fetch_financial_news, fetch_macro_data
 TOOL_MAP = {
     "run_command": run_command,
     "run_as_admin": run_as_admin,
+    "read_file": read_file,
+    "write_file": write_file,
+    "list_dir": list_dir,
+    "web_fetch": web_fetch,
+    "clipboard_read": clipboard_read,
+    "clipboard_write": clipboard_write,
+    "send_notification": send_notification,
+    "list_processes": list_processes,
+    "kill_process": kill_process,
     "fetch_stock_data": fetch_stock_data,
     "run_backtest": run_backtest,
     "mt5_get_price": mt5_get_price,
@@ -357,17 +370,33 @@ class MainWindow(QMainWindow):
         session = self._sessions[session_id]
         self.chat_view.clear()
         self.chat_view.set_header(self._current_mode, self._current_model_name, session["title"])
+        # ★ 注入 LangChain 上下文
+        history = self.memory_manager.get_session_history(session_id)
+        history.clear()
+        from langchain_core.messages import HumanMessage, AIMessage
         for msg in session["messages"]:
             self._render_stored_message(msg)
+            if msg["role"] == "user":
+                history.add_message(HumanMessage(content=msg["content"]))
+            elif msg["role"] == "ai":
+                history.add_message(AIMessage(content=msg["content"]))
         self._log_message(f"📂 切换会话: {session['title']}")
 
     def _render_stored_message(self, msg):
+        content = msg["content"]
+        # Strip any leaked tool_call XML from historical messages
+        if "</tool_calls>" in content or "<invoke name=" in content:
+            import re
+            content = re.sub(r'\s*<tool_calls>.*?</tool_calls>', '', content, flags=re.DOTALL)
+            content = content.strip()
+            if not content:
+                content = "[tool executed]"
         if msg["role"] == "user":
-            self.chat_view.append_user(msg["content"])
+            self.chat_view.append_user(content)
         elif msg["role"] == "ai":
-            self.chat_view.append_ai(msg["content"])
+            self.chat_view.append_ai(content)
         else:
-            self.chat_view.append_system(msg["content"])
+            self.chat_view.append_system(content)
 
     def _delete_conversation(self, session_id):
         if session_id == "default" and len(self._sessions) == 1:
@@ -398,6 +427,11 @@ class MainWindow(QMainWindow):
         self.chat_view.append_user(user_text)
         # 持久化
         self.session_service.add_message(self._current_session, "user", user_text)
+        # ★ 注入 LangChain 记忆
+        from langchain_core.messages import HumanMessage
+        self.memory_manager.get_session_history(self._current_session).add_message(
+            HumanMessage(content=user_text)
+        )
 
         session = self._sessions[self._current_session]
         if len(session["messages"]) == 1:
@@ -412,6 +446,8 @@ class MainWindow(QMainWindow):
         system_prompt = mode_config.get("system_prompt", "你是全能 AI 助手。")
 
         # 启动流式 Worker
+        history = self.memory_manager.get_session_history(self._current_session)
+        user_rules = self.config_service.get("user_rules", [])
         self._worker = AgentWorker(
             user_text=user_text,
             mode_name=self._current_mode,
@@ -422,6 +458,8 @@ class MainWindow(QMainWindow):
             tool_map=TOOL_MAP,
             tool_definitions=TOOL_DEFINITIONS,
             enable_streaming=True,
+            chat_history=list(history.messages),
+            user_rules=user_rules,
         )
         self._worker.chunk_ready.connect(self._on_chunk)
         self._worker.result_ready.connect(self._on_reply)
@@ -454,6 +492,11 @@ class MainWindow(QMainWindow):
         self._sessions[self._current_session]["messages"].append({"role": "ai", "content": text})
         self.session_service.add_message(self._current_session, "ai", text)
         self.status_indicator.set_tokens("")
+        # ★ 注入 LangChain 记忆
+        from langchain_core.messages import AIMessage
+        self.memory_manager.get_session_history(self._current_session).add_message(
+            AIMessage(content=text)
+        )
 
     @Slot(str)
     def _log_message(self, text):

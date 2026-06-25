@@ -1,6 +1,5 @@
-from PySide6.QtWidgets import QToolButton, QWidget, QVBoxLayout, QLabel, QTreeView
+from PySide6.QtWidgets import QToolButton, QWidget, QVBoxLayout, QLabel, QTreeView, QFileSystemModel
 from PySide6.QtCore import Qt, QDir, Signal
-from PySide6.QtGui import QFileSystemModel
 from PySide6.QtWidgets import QAbstractItemView
 
 
@@ -27,7 +26,7 @@ class FileTreeWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
-        header = QLabel("资源管理器")
+        header = QLabel("\u8d44\u6e90\u7ba1\u7406\u5668")
         header.setObjectName("panelHeader")
         layout.addWidget(header)
         self.model = QFileSystemModel()

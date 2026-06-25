@@ -33,7 +33,7 @@ class StatusIndicator(QWidget):
         self.model_label.setText(name)
     
     def set_mode(self, mode):
-        mode_colors = {"ask": "#3FB950", "plan": "#D29922", "act": "#F85149"}
+        mode_colors = {"ask": "#3FB950", "plan": "#D29922", "craft": "#F85149"}
         color = mode_colors.get(mode, "#58A6FF")
         self.mode_label.setStyleSheet(f"color: {color}; font-size: 11px; font-weight: bold;")
         self.mode_label.setText(mode.capitalize())

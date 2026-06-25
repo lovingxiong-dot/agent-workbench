@@ -3,121 +3,27 @@ import asyncio
 import threading
 from datetime import datetime
 from PySide6.QtCore import QThread, Signal
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
 
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-
-
-# Tool definitions - kept in worker for now
+# Tiered tool definitions with explicit priority hints
 TOOL_DEFINITIONS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "run_command",
-            "description": "以当前权限执行系统命令、启动程序或打开文件/文件夹",
-            "parameters": {
-                "type": "object",
-                "properties": {"command": {"type": "string", "description": "要执行的命令"}},
-                "required": ["command"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "run_as_admin",
-            "description": "以管理员权限执行命令（会弹出 UAC 窗口等待用户确认）",
-            "parameters": {
-                "type": "object",
-                "properties": {"command": {"type": "string", "description": "要执行的命令"}},
-                "required": ["command"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "fetch_stock_data",
-            "description": "获取股票历史数据，支持A股/港股/美股",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "ticker": {"type": "string", "description": "股票代码，如 000001 或 AAPL"},
-                    "start_date": {"type": "string", "description": "开始日期 yyyy-mm-dd"},
-                    "end_date": {"type": "string", "description": "结束日期 yyyy-mm-dd"}
-                },
-                "required": ["ticker"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "run_backtest",
-            "description": "运行量化策略回测",
-            "parameters": {
-                "type": "object",
-                "properties": {"strategy_code": {"type": "string", "description": "策略代码"}},
-                "required": ["strategy_code"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "mt5_get_price",
-            "description": "获取 MT5 实时报价",
-            "parameters": {
-                "type": "object",
-                "properties": {"symbol": {"type": "string", "description": "交易品种"}},
-                "required": ["symbol"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "mt5_place_order",
-            "description": "MT5 下单（需二次确认）",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "symbol": {"type": "string", "description": "交易品种"},
-                    "volume": {"type": "number", "description": "手数"},
-                    "order_type": {"type": "string", "description": "buy/sell"}
-                },
-                "required": ["symbol", "volume", "order_type"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "fetch_financial_news",
-            "description": "获取财经新闻和全球市场快讯",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "搜索关键词（可选，不填则获取全球快讯）"},
-                    "limit": {"type": "number", "description": "返回条数，默认5"}
-                },
-                "required": []
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "fetch_macro_data",
-            "description": "获取宏观经济数据：cpi(CPI), gdp(GDP), pmi(PMI)",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "indicator": {"type": "string", "description": "经济指标: cpi, gdp, pmi"}
-                },
-                "required": ["indicator"]
-            }
-        }
-    },
+    {"type":"function","function":{"name":"web_fetch","description":"[PRIORITY-1] Fetch webpage content as text summary. USE FIRST for: prices, weather, news, facts, general queries. NOT for stocks or economic data.","parameters":{"type":"object","properties":{"url":{"type":"string","description":"URL to fetch"}},"required":["url"]}}},
+    {"type":"function","function":{"name":"fetch_financial_news","description":"[PRIORITY-1] Get financial news headlines. Use for market news, hot topics.","parameters":{"type":"object","properties":{"query":{"type":"string","description":"Search keyword"},"limit":{"type":"number","description":"Default 5"}},"required":[]}}},
+    {"type":"function","function":{"name":"fetch_macro_data","description":"[PRIORITY-1] Get CPI/GDP/PMI economic data. Use ONLY when user asks for these specific indicators.","parameters":{"type":"object","properties":{"indicator":{"type":"string","description":"cpi, gdp, or pmi"}},"required":["indicator"]}}},
+    {"type":"function","function":{"name":"fetch_stock_data","description":"[PRIORITY-1] Get stock OHLCV history (A-share/HK/US). Use for stock price, trend, charts.","parameters":{"type":"object","properties":{"ticker":{"type":"string","description":"e.g. 000001, AAPL"},"start_date":{"type":"string"},"end_date":{"type":"string"}},"required":["ticker"]}}},
+    {"type":"function","function":{"name":"read_file","description":"[PRIORITY-2] Read text file (first 5000 chars). Use to view file contents.","parameters":{"type":"object","properties":{"path":{"type":"string","description":"File path"},"encoding":{"type":"string","description":"Default utf-8"}},"required":["path"]}}},
+    {"type":"function","function":{"name":"list_dir","description":"[PRIORITY-2] List directory contents. Use to browse folders.","parameters":{"type":"object","properties":{"path":{"type":"string","description":"Directory path"}},"required":[]}}},
+    {"type":"function","function":{"name":"run_command","description":"[PRIORITY-2] Execute shell command or launch program. Use for: opening apps, running scripts.","parameters":{"type":"object","properties":{"command":{"type":"string","description":"Command"}},"required":["command"]}}},
+    {"type":"function","function":{"name":"clipboard_read","description":"[PRIORITY-2] Read Windows clipboard text.","parameters":{"type":"object","properties":{},"required":[]}}},
+    {"type":"function","function":{"name":"clipboard_write","description":"[PRIORITY-2] Write text to Windows clipboard.","parameters":{"type":"object","properties":{"text":{"type":"string","description":"Text"}},"required":["text"]}}},
+    {"type":"function","function":{"name":"send_notification","description":"[PRIORITY-2] Windows desktop toast notification.","parameters":{"type":"object","properties":{"title":{"type":"string"},"message":{"type":"string"}},"required":["title"]}}},
+    {"type":"function","function":{"name":"mt5_get_price","description":"[PRIORITY-3-MT5] Get MetaTrader5 forex/commodity bid-ask spread. ONLY use when user says 'MT5', 'forex', or specifies currency pair like EURUSD/XAUUSD. For gold/oil GENERAL prices use web_fetch instead.","parameters":{"type":"object","properties":{"symbol":{"type":"string","description":"Symbol e.g. EURUSD, XAUUSD"}},"required":["symbol"]}}},
+    {"type":"function","function":{"name":"mt5_place_order","description":"[PRIORITY-3-MT5] Place trade order via MetaTrader5 (needs confirmation). ONLY use for explicit trading: 'order', 'buy', 'sell', 'open position'.","parameters":{"type":"object","properties":{"symbol":{"type":"string"},"volume":{"type":"number"},"order_type":{"type":"string","description":"buy or sell"}},"required":["symbol","volume","order_type"]}}},
+    {"type":"function","function":{"name":"run_backtest","description":"[PRIORITY-3-QUANT] Run strategy backtest. ONLY use when user says 'backtest', 'strategy', or 'historical simulation'.","parameters":{"type":"object","properties":{"strategy_code":{"type":"string"}},"required":["strategy_code"]}}},
+    {"type":"function","function":{"name":"write_file","description":"[PRIORITY-3-DESTRUCTIVE] Overwrite file. ONLY use when user says 'save', 'write', 'create file', 'export'.","parameters":{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"},"encoding":{"type":"string","description":"Default utf-8"}},"required":["path","content"]}}},
+    {"type":"function","function":{"name":"run_as_admin","description":"[PRIORITY-3-DESTRUCTIVE] Run command as admin (UAC popup). ONLY use for 'admin', 'sudo', 'elevated'.","parameters":{"type":"object","properties":{"command":{"type":"string"}},"required":["command"]}}},
+    {"type":"function","function":{"name":"kill_process","description":"[PRIORITY-3-DESTRUCTIVE] Terminate process (needs confirmation). ONLY use for 'kill', 'stop', 'terminate'.","parameters":{"type":"object","properties":{"name":{"type":"string","description":"e.g. notepad.exe"}},"required":["name"]}}},
+    {"type":"function","function":{"name":"list_processes","description":"[PRIORITY-3-UTIL] List running processes by memory. Use for system status.","parameters":{"type":"object","properties":{},"required":[]}}},
 ]
 
 DANGEROUS_KEYWORDS = [
@@ -127,18 +33,17 @@ DANGEROUS_KEYWORDS = [
 
 
 class AgentWorker(QThread):
-    """后台 Agent 推理线程，支持流式输出"""
-    chunk_ready = Signal(str)          # Streaming chunk
-    result_ready = Signal(str)         # Final complete result
+    chunk_ready = Signal(str)
+    result_ready = Signal(str)
     log_message = Signal(str)
-    task_created = Signal(str, str)    # task_id, description
-    task_finished = Signal(str, str)   # task_id, result
-    confirm_required = Signal(str, str) # tool_name, command
-    token_used = Signal(str, str, int, int)  # provider, model, input, output
+    task_created = Signal(str, str)
+    task_finished = Signal(str, str)
+    confirm_required = Signal(str, str)
+    token_used = Signal(str, str, int, int)
 
     def __init__(self, user_text, mode_name, current_llm, current_tools,
                  session_id, system_prompt="", tool_map=None, tool_definitions=None,
-                 enable_streaming=True):
+                 enable_streaming=True, chat_history=None, user_rules=None):
         super().__init__()
         self.user_text = user_text
         self.mode_name = mode_name
@@ -149,12 +54,13 @@ class AgentWorker(QThread):
         self.tool_map = tool_map or {}
         self.tool_definitions = tool_definitions or []
         self.enable_streaming = enable_streaming
+        self.chat_history = chat_history or []
+        self.user_rules = user_rules or []
         self.confirm_event = threading.Event()
         self.confirm_result = False
         self._stop_flag = False
 
     def stop(self):
-        """请求停止生成"""
         self._stop_flag = True
 
     def run(self):
@@ -166,65 +72,66 @@ class AgentWorker(QThread):
             loop.close()
 
     async def _process(self):
-        system_msg = SystemMessage(content=self.system_prompt or "你是全能 AI 助手。")
-        messages = [system_msg, HumanMessage(content=self.user_text)]
+        prompt = self.system_prompt or "You are a helpful AI assistant."
+        model_id = str(self.current_llm.model) if hasattr(self.current_llm, 'model') else "unknown"
+        prompt += f"\n\n## YOUR IDENTITY\nYou are AI Agent Workbench v2 running on model '{model_id}'. When asked who/what model you are, state: 'I am AI Agent Workbench v2, powered by {model_id}.' Never claim to be Claude, GPT, Gemini, or any other brand."
+        if self.user_rules:
+            rule_lines = "\n".join(f"{i+1}. {r}" for i, r in enumerate(self.user_rules))
+            prompt += f"\n\n## USER RULES (MUST FOLLOW)\n{rule_lines}"
+        system_msg = SystemMessage(content=prompt)
+        messages = [system_msg] + list(self.chat_history) + [HumanMessage(content=self.user_text)]
 
         try:
             allowed_defs = [d for d in self.tool_definitions if d["function"]["name"] in self.current_tools]
-            llm_with_tools = self.current_llm.bind_tools(allowed_defs) if allowed_defs else self.current_llm
+            model_name = str(self.current_llm.model) if hasattr(self.current_llm, 'model') else ""
+            skip_tools = any(m in model_name for m in ("gemma2", "gemma:"))
+            llm = self.current_llm.bind_tools(allowed_defs) if (allowed_defs and not skip_tools) else self.current_llm
 
-            if self.enable_streaming:
-                # Streaming with tool calls support
-                full_reply = ""
-                async for chunk in llm_with_tools.astream(messages):
-                    if self._stop_flag:
-                        self.chunk_ready.emit("\n\n[已停止生成]")
-                        return
-                    if chunk.content:
-                        full_reply += chunk.content
-                        self.chunk_ready.emit(chunk.content)
-                    if hasattr(chunk, 'usage_metadata') and chunk.usage_metadata:
-                        input_tokens = chunk.usage_metadata.get('input_tokens', 0)
-                        output_tokens = chunk.usage_metadata.get('output_tokens', 0)
-                        provider = self.current_llm.model_name if hasattr(self.current_llm, 'model_name') else "unknown"
-                        self.token_used.emit(provider, str(self.current_llm.model), input_tokens, output_tokens)
+            response = await llm.ainvoke(messages)
 
-                if full_reply.strip():
-                    self.result_ready.emit(full_reply.strip())
-                else:
-                    # Fallback to non-streaming if streaming produced nothing
-                    response = await llm_with_tools.ainvoke(messages)
-                    reply = response.content
-                    self.result_ready.emit(reply)
+            if hasattr(response, "tool_calls") and response.tool_calls:
+                self.log_message.emit(f"[TOOL] Calling: {[tc['name'] for tc in response.tool_calls]}")
+                response.content = ""
+                messages.append(response)
+
+                for tc in response.tool_calls:
+                    tool_name = tc["name"]
+                    tool_args = tc["args"]
+                    task_id = f"{tool_name}_{datetime.now().strftime('%H%M%S')}"
+                    self.task_created.emit(task_id, f"Running {tool_name}")
+                    result = await asyncio.to_thread(self._sync_call_tool, tool_name, tool_args)
+                    self.task_finished.emit(task_id, str(result)[:200])
+                    self.log_message.emit(f"[OK] {tool_name}")
+                    messages.append(ToolMessage(content=str(result), tool_call_id=tc["id"]))
+
+                final_resp = await self.current_llm.ainvoke(messages)
+                reply = final_resp.content or ""
+                # Fallback: if LLM summary is empty, emit raw tool results
+                if not reply:
+                    results = [msg.content for msg in messages if isinstance(msg, ToolMessage)]
+                    reply = "\n\n".join(results) if results else "[Tool executed]"
+
+                if self.enable_streaming and reply:
+                    for line in reply.replace('\r\n', '\n').split('\n'):
+                        self.chunk_ready.emit(line + '\n')
+                self.result_ready.emit(reply.strip() if reply else "[Tool executed]")
             else:
-                response = await llm_with_tools.ainvoke(messages)
-                
-                if hasattr(response, "tool_calls") and response.tool_calls:
-                    self.log_message.emit(f"🔧 调用工具: {[tc['name'] for tc in response.tool_calls]}")
-                    for tc in response.tool_calls:
-                        tool_name = tc["name"]
-                        tool_args = tc["args"]
-                        task_id = f"{tool_name}_{datetime.now().strftime('%H%M%S')}"
-                        self.task_created.emit(task_id, f"执行工具 {tool_name}")
-                        result = await asyncio.to_thread(self._sync_call_tool, tool_name, tool_args)
-                        self.task_finished.emit(task_id, str(result)[:200])
-                        messages.append(AIMessage(content=f"工具 {tool_name} 结果: {result}"))
-                        self.log_message.emit(f"✅ {tool_name}")
-                    final_response = await self.current_llm.ainvoke(messages)
-                    reply = final_response.content
-                else:
-                    reply = response.content
-
-                self.result_ready.emit(reply)
+                reply = response.content or ""
+                if self.enable_streaming and reply:
+                    for line in reply.replace('\r\n', '\n').split('\n'):
+                        if self._stop_flag:
+                            break
+                        self.chunk_ready.emit(line + '\n')
+                self.result_ready.emit(reply.strip())
 
         except Exception as ex:
-            self.result_ready.emit(f"❌ 错误: {str(ex)}")
-            self.log_message.emit(f"❌ {ex}")
+            self.result_ready.emit(f"Error: {str(ex)}")
+            self.log_message.emit(f"[ERR] {ex}")
 
     def _sync_call_tool(self, name, args):
         tool_func = self.tool_map.get(name)
         if not tool_func:
-            return f"工具 {name} 不存在"
+            return f"Tool {name} not found"
         try:
             if isinstance(args, str):
                 args = json.loads(args)
@@ -234,10 +141,10 @@ class AgentWorker(QThread):
                     self.confirm_required.emit(name, command)
                     self.confirm_event.wait()
                     if not self.confirm_result:
-                        return "用户取消了敏感操作"
+                        return "User cancelled sensitive operation"
             return tool_func.run(args)
         except Exception as e:
-            return f"工具执行失败: {str(e)}"
+            return f"Tool error: {str(e)}"
 
     def _is_dangerous(self, command: str) -> bool:
         cmd_lower = command.lower()

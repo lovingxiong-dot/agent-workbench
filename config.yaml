@@ -1,38 +1,97 @@
-# 全局配置
 manual_modes:
   ask:
     current_model: tool-agent
-    tools: [run_command, run_as_admin, fetch_stock_data, run_backtest, mt5_get_price, mt5_place_order, fetch_financial_news, fetch_macro_data]
-    system_prompt: "你是知识渊博的 AI 助手。当前处于 Ask（问答）模式，优先回答用户问题，仅在用户明确要求执行操作时才调用工具。"
+    tools:
+    - web_fetch
+    - fetch_financial_news
+    - fetch_macro_data
+    - fetch_stock_data
+    - read_file
+    - list_dir
+    - run_command
+    - clipboard_read
+    - clipboard_write
+    - send_notification
+    - list_processes
+    system_prompt: |
+      You are an AI assistant in Ask mode. Call tools when user requests information.
+
+      TOOL PRIORITY (MUST FOLLOW):
+      1. For prices/news/weather/facts: use web_fetch FIRST
+      2. For stocks: fetch_stock_data. For economic data: fetch_macro_data
+      3. For files: read_file or list_dir
+      4. NEVER call mt5_get_price for gold/silver/oil prices - use web_fetch instead. mt5 tools are NOT available in Ask mode.
+      5. Do NOT use destructive tools (run_as_admin, write_file, kill_process). Suggest Craft mode if needed.
+      6. After tool result arrives, summarize immediately. Never say "let me check" without calling a tool.
+
   plan:
     current_model: tool-agent
-    tools: [run_command, run_as_admin, fetch_stock_data, run_backtest, mt5_get_price, mt5_place_order, fetch_financial_news, fetch_macro_data]
-    system_prompt: "你是系统规划师。当前处于 Plan（规划）模式，请为用户制定详细、可执行的计划，谨慎使用系统命令，优先给出步骤和代码。"
-  act:
-    current_model: tool-agent
-    tools: [run_command, run_as_admin, fetch_stock_data, run_backtest, mt5_get_price, mt5_place_order, fetch_financial_news, fetch_macro_data]
-    system_prompt: "你是精确的执行者。当前处于 Act（执行）模式，严格按照用户指令调用工具完成操作；涉及管理员权限或敏感命令时，会自动请求用户确认。"
+    tools:
+    - web_fetch
+    - fetch_financial_news
+    - fetch_macro_data
+    - fetch_stock_data
+    - read_file
+    - list_dir
+    - run_command
+    - clipboard_read
+    - clipboard_write
+    - send_notification
+    - list_processes
+    - run_backtest
+    - write_file
+    system_prompt: |
+      You are a planning expert in Plan mode. Gather facts with tools first, then output structured plan.
 
-# LLM 提供商
+      TOOL RULES: web_fetch/read_file for research. fetch_stock_data for stocks. fetch_macro_data for economics. run_backtest for strategy validation. Output: Current State -> Goals -> Step-by-step (resources/time/risks) -> Alternatives. No destructive execution.
+
+  craft:
+    current_model: tool-agent
+    tools:
+    - web_fetch
+    - fetch_financial_news
+    - fetch_macro_data
+    - fetch_stock_data
+    - run_backtest
+    - mt5_get_price
+    - mt5_place_order
+    - read_file
+    - write_file
+    - list_dir
+    - run_command
+    - run_as_admin
+    - clipboard_read
+    - clipboard_write
+    - send_notification
+    - list_processes
+    - kill_process
+    system_prompt: |
+      You are an execution engine in Craft mode. Execute user commands directly with tools.
+
+      TOOL RULES: Call tools immediately, report results concisely. Confirm for sensitive ops: run_as_admin, mt5_place_order, write_file, kill_process. Never just say "OK" - always call the tool.
+
 llm_providers:
-  fast-chat:                        # 极速对话模型（暂不支持工具调用）
+  fast-chat:
     base_url: http://localhost:11434/v1
     api_key: not-needed
     model: gemma2:2b
-  tool-agent:                       # 工具执行模型
+  tool-agent:
     base_url: http://localhost:11434/v1
     api_key: not-needed
     model: qwen3:4b
-  deepseek:                         # 云端备用（V4 Flash） — API Key 在 .env 中
+  deepseek:
     base_url: https://api.deepseek.com/v1
     api_key: ${DEEPSEEK_API_KEY}
     model: deepseek-v4-flash
-  deepseek-pro:                     # 云端旗舰（V4 Pro） — API Key 在 .env 中
+  deepseek-pro:
     base_url: https://api.deepseek.com/v1
     api_key: ${DEEPSEEK_PRO_API_KEY}
     model: deepseek-v4-pro
 
-# 默认记忆配置
+user_rules:
+  - Always respond in Chinese
+  - Summarize key findings and data sources at end
+
 memory:
   short_term_db: F:/Agent/agent_workbench/storage/short_term.db
   user_profile: F:/Agent/agent_workbench/storage/user_profile.json

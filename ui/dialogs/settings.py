@@ -1,7 +1,9 @@
 from PySide6.QtWidgets import (QDialog, QFormLayout, QLineEdit, QPushButton, QHBoxLayout, QVBoxLayout,
                                 QLabel, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-                                QWidget, QMessageBox)
+                                QWidget, QMessageBox, QTabWidget, QTextEdit)
 from PySide6.QtCore import Signal
+import yaml
+import os
 
 
 class ProviderFormDialog(QDialog):
@@ -86,11 +88,12 @@ class ProviderFormDialog(QDialog):
 class SettingsDialog(QDialog):
     providers_changed = Signal()
 
-    def __init__(self, llm_registry, parent=None):
+    def __init__(self, llm_registry, parent=None, config_path=None):
         super().__init__(parent)
         self.llm_registry = llm_registry
+        self.config_path = config_path or "config.yaml"
         self.setWindowTitle("模型设置")
-        self.resize(720, 480)
+        self.resize(720, 520)
         self._setup_ui()
         self._load_table()
 
@@ -99,13 +102,26 @@ class SettingsDialog(QDialog):
         layout.setSpacing(12)
         layout.setContentsMargins(20, 16, 20, 16)
 
-        title = QLabel("LLM 提供商管理")
+        title = QLabel("设置")
         title.setStyleSheet("font-size: 16px; font-weight: bold; color: #E6EDF3;")
         layout.addWidget(title)
 
-        desc = QLabel("在此添加、编辑或删除模型提供商。修改后所有模式均可见。")
+        self.tabs = QTabWidget()
+        self.tabs.setStyleSheet("""
+            QTabWidget::pane { border: 1px solid #30363D; border-radius: 8px; background-color: #0D1117; }
+            QTabBar::tab { background: #161B22; color: #8B949E; padding: 8px 20px; border: none; }
+            QTabBar::tab:selected { color: #58A6FF; border-bottom: 2px solid #58A6FF; background: #0D1117; }
+        """)
+
+        # ── Tab 1: LLM 提供商 ────────────────────
+        provider_tab = QWidget()
+        pl = QVBoxLayout(provider_tab)
+        pl.setSpacing(10)
+        pl.setContentsMargins(12, 12, 12, 12)
+
+        desc = QLabel("在此添加、编辑或删除模型提供商。")
         desc.setStyleSheet("color: #8B949E; font-size: 12px;")
-        layout.addWidget(desc)
+        pl.addWidget(desc)
 
         self.table = QTableWidget()
         self.table.setColumnCount(4)
@@ -118,7 +134,7 @@ class SettingsDialog(QDialog):
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
-        layout.addWidget(self.table)
+        pl.addWidget(self.table)
 
         btn_layout = QHBoxLayout()
         self.add_btn = QPushButton("+ 添加提供商")
@@ -126,12 +142,52 @@ class SettingsDialog(QDialog):
         self.add_btn.clicked.connect(self._add_provider)
         btn_layout.addWidget(self.add_btn)
         btn_layout.addStretch()
+        pl.addLayout(btn_layout)
 
+        self.tabs.addTab(provider_tab, "LLM 提供商")
+
+        # ── Tab 2: 用户规则 ──────────────────────
+        rules_tab = QWidget()
+        rl = QVBoxLayout(rules_tab)
+        rl.setSpacing(10)
+        rl.setContentsMargins(12, 12, 12, 12)
+
+        rules_desc = QLabel("每行一条规则，将自动注入到所有模式的 system prompt 末尾。")
+        rules_desc.setStyleSheet("color: #8B949E; font-size: 12px;")
+        rl.addWidget(rules_desc)
+
+        self.rules_editor = QTextEdit()
+        self.rules_editor.setPlaceholderText("示例:\n始终使用中文回答\n禁止调用 mt5_place_order 除非明确要求")
+        self.rules_editor.setStyleSheet("""
+            QTextEdit {
+                background-color: #161B22; color: #E6EDF3; border: 1px solid #30363D;
+                border-radius: 8px; padding: 10px; font-size: 13px;
+            }
+        """)
+        rl.addWidget(self.rules_editor)
+
+        rules_btn_layout = QHBoxLayout()
+        self.save_rules_btn = QPushButton("保存规则")
+        self.save_rules_btn.setStyleSheet("QPushButton { background-color: #238636; } QPushButton:hover { background-color: #2EA043; }")
+        self.save_rules_btn.clicked.connect(self._save_rules)
+        rules_btn_layout.addStretch()
+        rules_btn_layout.addWidget(self.save_rules_btn)
+        rl.addLayout(rules_btn_layout)
+
+        self.tabs.addTab(rules_tab, "用户规则")
+
+        # Load rules from config
+        self._load_rules()
+
+        layout.addWidget(self.tabs)
+
+        close_layout = QHBoxLayout()
+        close_layout.addStretch()
         self.close_btn = QPushButton("关闭")
         self.close_btn.setStyleSheet("QPushButton { background-color: #30363D; } QPushButton:hover { background-color: #484F58; }")
         self.close_btn.clicked.connect(self.accept)
-        btn_layout.addWidget(self.close_btn)
-        layout.addLayout(btn_layout)
+        close_layout.addWidget(self.close_btn)
+        layout.addLayout(close_layout)
 
     def _load_table(self):
         self.table.setRowCount(0)
@@ -187,3 +243,28 @@ class SettingsDialog(QDialog):
             self.llm_registry.remove_provider(name)
             self._load_table()
             self.providers_changed.emit()
+
+    def _load_rules(self):
+        """从 config.yaml 加载用户规则"""
+        try:
+            import yaml
+            with open(self.config_path, "r", encoding="utf-8") as f:
+                cfg = yaml.safe_load(f)
+            rules = cfg.get("user_rules", [])
+            self.rules_editor.setPlainText("\n".join(rules))
+        except Exception:
+            pass
+
+    def _save_rules(self):
+        """保存用户规则到 config.yaml"""
+        try:
+            text = self.rules_editor.toPlainText().strip()
+            rules = [line.strip() for line in text.split("\n") if line.strip()]
+            with open(self.config_path, "r", encoding="utf-8") as f:
+                cfg = yaml.safe_load(f)
+            cfg["user_rules"] = rules
+            with open(self.config_path, "w", encoding="utf-8") as f:
+                yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+            QMessageBox.information(self, "已保存", f"已保存 {len(rules)} 条规则。")
+        except Exception as e:
+            QMessageBox.warning(self, "保存失败", str(e))

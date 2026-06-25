@@ -1,3 +1,35 @@
+## v3 (2026-06-25) — 生产级工具编排、身份系统、UI/UX 全栈修复
+
+### feat
+- **工具层级编排**: 17 个工具按 [PRIORITY-1/2/3] 分级，web_fetch 优先于 MT5
+- **工具按模式分配**: Ask=11 个(无MT5/破坏性)，Plan=13个(+回测)，Craft=17个(全量)
+- **AI 身份声明**: system_prompt 注入 "YOUR IDENTITY"，不再冒充 Claude/GPT
+- **系统工具库扩展**: +9个工具(read_file/write_file/list_dir/web_fetch/clipboard/clipboard_write/send_notification/list_processes/kill_process)
+- **用户规则系统**: config.yaml user_rules + SettingsDialog 规则编辑标签页
+- **桌面快捷方式**: .lnk + app.ico 图标，rebuild.ps1 自动刷新
+- **用户画像注入**: user_profile.json → system_prompt 自动合并
+- **工具描述标准化**: 全部 17 个工具 description 带 [PRIORITY-X] + 触发词约束
+
+### fix
+- **工具调用不执行**: astream() → ainvoke()，tool_calls 正确检测和执行
+- **<tool_calls> XML 泄露**: response.content 归零 + 历史消息渲染过滤
+- **API Key 回写泄露**: LLMRegistry._save() 自动替换为 ${VAR} 占位符
+- **SSL 证书缺失**: certifi/cacert.pem 嵌入 + runtime_hook.py 自动设置
+- **Ollama 内存溢出**: OLLAMA_CONTEXT_LENGTH=4096 环境变量
+- **gemma2 工具调用异常**: AgentWorker 跳过 bind_tools
+- **会话记忆丢失**: LangChain 历史注入(切换/发送/回复三处)
+- **中文编码损坏**: sidebar.py QLabel 重写
+
+### refactor
+- Act → Craft 重命名(main.py/chat_view/status_indicator/PROJECT_BLUEPRINT)
+- ChatView 布局重构: 底部控件栏(模式按钮左/发送右) + 多行输入
+- system_prompt 英文化 + 精简(3种模式各 ≤6行)
+- PyInstaller excludes: 排除20+未用Qt模块(setuptools/QtWebEngine等)
+
+### chore
+- Ollama 环境: OLLAMA_CONTEXT_LENGTH=4096, OLLAMA_NUM_PARALLEL=1
+- rebuild.ps1 自动刷新桌面 .lnk 快捷方式
+
 ## v0.3 (2026-06-25) — v2生产级重构：模块化架构、8工具实现、流式UI
 
 ### feat

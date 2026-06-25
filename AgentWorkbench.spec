@@ -8,6 +8,7 @@ a = Analysis(
     datas=[
         ('config.yaml', '.'),
         ('resources/themes/dark_github.qss', 'resources/themes'),
+        (r'venv\Lib\site-packages\certifi\cacert.pem', 'certifi'),
     ],
     hiddenimports=[
         'yaml',
@@ -18,6 +19,7 @@ a = Analysis(
         'markdown.extensions.codehilite',
         'dotenv',
         'sqlite3',
+        'certifi',
         'agent_engine',
         'agent_engine.mode_manager',
         'agent_engine.llm_registry',
@@ -49,8 +51,20 @@ a = Analysis(
     ],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
-    excludes=[],
+    runtime_hooks=['runtime_hook.py'],
+    excludes=[
+        'PySide6.QtWebEngine', 'PySide6.QtWebEngineCore', 'PySide6.QtWebEngineWidgets',
+        'PySide6.QtWebSockets', 'PySide6.QtWebChannel',
+        'PySide6.QtSql', 'PySide6.QtQml', 'PySide6.QtQuick',
+        'PySide6.QtMultimedia', 'PySide6.QtMultimediaWidgets',
+        'PySide6.QtBluetooth', 'PySide6.QtNfc',
+        'PySide6.QtSensors', 'PySide6.QtSerialPort',
+        'PySide6.QtPositioning', 'PySide6.QtLocation',
+        'PySide6.QtTextToSpeech', 'PySide6.QtHelp',
+        'PySide6.QtAxContainer', 'PySide6.QtQuickWidgets',
+        'PySide6.QtQuickControls2', 'PySide6.QtDataVisualization',
+        'setuptools', 'pip', 'wheel', 'pkg_resources',
+    ],
     noarchive=False,
     optimize=0,
 )

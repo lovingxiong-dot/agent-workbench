@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 AI Agent 工作台 v2 · 手动模式专业版 (PySide6)
-模式：Ask（问答） / Plan（规划） / Act（执行）
+模式：Ask（问答） / Plan（规划） / Craft（执行）
 所有模式均拥有完整工具权限，敏感操作二次确认。
 
 v2 特性:

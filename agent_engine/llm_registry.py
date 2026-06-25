@@ -11,7 +11,31 @@ class LLMRegistry:
         read_path = self._writable_path if os.path.exists(self._writable_path) else config_path
         with open(read_path, "r", encoding="utf-8") as f:
             self.config = yaml.safe_load(f)
+        self._resolve_env_vars(self.config)
         self._instances = {}
+
+    def _resolve_env_vars(self, data, seen=None):
+        """递归替换 ${ENV_VAR} 占位符"""
+        if seen is None:
+            seen = set()
+        obj_id = id(data)
+        if obj_id in seen:
+            return
+        seen.add(obj_id)
+        if isinstance(data, dict):
+            for key, value in data.items():
+                if isinstance(value, str) and value.startswith("${"):
+                    var_name = value.strip("${}")
+                    data[key] = os.environ.get(var_name, value)
+                elif isinstance(value, (dict, list)):
+                    self._resolve_env_vars(value, seen)
+        elif isinstance(data, list):
+            for i, item in enumerate(data):
+                if isinstance(item, str) and item.startswith("${"):
+                    var_name = item.strip("${}")
+                    data[i] = os.environ.get(var_name, item)
+                elif isinstance(item, (dict, list)):
+                    self._resolve_env_vars(item, seen)
 
     # ── 查询 ──────────────────────────────────────
     def list_providers(self) -> dict:
@@ -58,7 +82,15 @@ class LLMRegistry:
         self._save()
 
     def _save(self):
-        """将当前配置写入可写路径"""
+        """保存配置，自动将 API Key 替换回 ${VAR} 占位符以防泄露"""
+        import copy
+        cfg = copy.deepcopy(self.config)
+        for name, provider in cfg.get("llm_providers", {}).items():
+            api_key = provider.get("api_key", "")
+            env_key = f"{name.upper().replace('-', '_')}_API_KEY"
+            if os.environ.get(env_key) and os.environ.get(env_key) == api_key:
+                provider[env_key.lower()] = f"${{{env_key}}}"
+                provider["api_key"] = f"${{{env_key}}}"
         os.makedirs(os.path.dirname(self._writable_path) or ".", exist_ok=True)
         with open(self._writable_path, "w", encoding="utf-8") as f:
-            yaml.dump(self.config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+            yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
