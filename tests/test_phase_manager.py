@@ -45,9 +45,10 @@ class TestPhaseManager(unittest.TestCase):
     def test_ask_flow_analyze_to_archive(self):
         self.pm.start("hello", "ask")
         self.pm.on_analyze_complete([TaskItem("1", "say hi")])
-        # Ask skips confirm/execute/verify, goes directly to archive
-        self.assertEqual(self.pm.current_phase(), "idle")
+        self.assertEqual(self.pm.current_phase(), "archive")
         self.assertIn(("archive_required", "ask"), self.events)
+        self.pm.on_archive_complete(True, "工作流完成")
+        self.assertEqual(self.pm.current_phase(), "idle")
         self.assertIn(("flow_finished", True, "工作流完成"), self.events)
 
     def test_plan_flow_requires_confirm(self):
@@ -60,8 +61,10 @@ class TestPhaseManager(unittest.TestCase):
         self.pm.start("plan it", "plan")
         self.pm.on_analyze_complete([TaskItem("1", "step 1")])
         self.pm.on_user_confirm(True)
-        self.assertEqual(self.pm.current_phase(), "idle")
+        self.assertEqual(self.pm.current_phase(), "archive")
         self.assertIn(("archive_required", "plan"), self.events)
+        self.pm.on_archive_complete(True, "工作流完成")
+        self.assertEqual(self.pm.current_phase(), "idle")
 
     def test_craft_flow_full_cycle(self):
         self.pm.start("do it", "craft")
@@ -71,6 +74,9 @@ class TestPhaseManager(unittest.TestCase):
         self.pm.on_execute_complete([{"task": "step 1", "result": "ok"}])
         self.assertEqual(self.pm.current_phase(), "verify")
         self.pm.on_verify_complete(True, "all good")
+        self.assertEqual(self.pm.current_phase(), "archive")
+        self.assertIn(("archive_required", "craft"), self.events)
+        self.pm.on_archive_complete(True, "工作流完成")
         self.assertEqual(self.pm.current_phase(), "idle")
         self.assertIn(("flow_finished", True, "工作流完成"), self.events)
 

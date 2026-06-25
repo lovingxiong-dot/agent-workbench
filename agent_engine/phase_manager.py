@@ -287,9 +287,8 @@ class PhaseManager(QObject):
         elif phase == Phase.VERIFY:
             self.verify_required.emit(self._context.execution_results, self._context.mode)
         elif phase == Phase.ARCHIVE:
-            # Archive 阶段默认自动收尾；同时通知外部以便执行实际存档操作
+            # Archive 阶段不自动完成，由 MainWindow 执行可选存档后再调用 on_archive_complete
             self.archive_required.emit(self._context.mode)
-            self.on_archive_complete(True, "工作流完成")
 
     def _check_hard_checkpoint(self, phase: Phase) -> bool:
         """硬门控：不满足则停留在当前阶段并报错"""

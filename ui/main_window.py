@@ -784,8 +784,8 @@ class MainWindow(QMainWindow):
             # analyze/verify 阶段如果未收到 chunk，也显示原始文本
             if self._current_phase in ("analyze", "verify"):
                 self.chat_view.append_ai(text)
-        # execute 阶段在内容下方追加 metrics footer
-        if self._current_phase == "execute" and self._pending_metrics:
+        # 任何产生 LLM 输出的阶段都在内容下方追加 metrics footer
+        if self._pending_metrics:
             self.chat_view.append_ai_metrics_footer(self._pending_metrics.format_brief())
             self._pending_metrics = None
         self._chunks_received = False
