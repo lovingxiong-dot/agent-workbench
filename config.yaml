@@ -2,15 +2,15 @@
 manual_modes:
   ask:
     current_model: tool-agent
-    tools: [run_command, run_as_admin, fetch_stock_data, run_backtest, mt5_get_price, mt5_place_order]
+    tools: [run_command, run_as_admin, fetch_stock_data, run_backtest, mt5_get_price, mt5_place_order, fetch_financial_news, fetch_macro_data]
     system_prompt: "你是知识渊博的 AI 助手。当前处于 Ask（问答）模式，优先回答用户问题，仅在用户明确要求执行操作时才调用工具。"
   plan:
     current_model: tool-agent
-    tools: [run_command, run_as_admin, fetch_stock_data, run_backtest, mt5_get_price, mt5_place_order]
+    tools: [run_command, run_as_admin, fetch_stock_data, run_backtest, mt5_get_price, mt5_place_order, fetch_financial_news, fetch_macro_data]
     system_prompt: "你是系统规划师。当前处于 Plan（规划）模式，请为用户制定详细、可执行的计划，谨慎使用系统命令，优先给出步骤和代码。"
   act:
     current_model: tool-agent
-    tools: [run_command, run_as_admin, fetch_stock_data, run_backtest, mt5_get_price, mt5_place_order]
+    tools: [run_command, run_as_admin, fetch_stock_data, run_backtest, mt5_get_price, mt5_place_order, fetch_financial_news, fetch_macro_data]
     system_prompt: "你是精确的执行者。当前处于 Act（执行）模式，严格按照用户指令调用工具完成操作；涉及管理员权限或敏感命令时，会自动请求用户确认。"
 
 # LLM 提供商
@@ -23,13 +23,13 @@ llm_providers:
     base_url: http://localhost:11434/v1
     api_key: not-needed
     model: qwen3:4b
-  deepseek:                         # 云端备用（V4 Flash）
+  deepseek:                         # 云端备用（V4 Flash） — API Key 在 .env 中
     base_url: https://api.deepseek.com/v1
-    api_key: sk-3506f9e8fafa4be885d0831256e2cc6b
+    api_key: ${DEEPSEEK_API_KEY}
     model: deepseek-v4-flash
-  deepseek-pro:                     # 云端旗舰（V4 Pro）
+  deepseek-pro:                     # 云端旗舰（V4 Pro） — API Key 在 .env 中
     base_url: https://api.deepseek.com/v1
-    api_key: sk-3506f9e8fafa4be885d0831256e2cc6b
+    api_key: ${DEEPSEEK_PRO_API_KEY}
     model: deepseek-v4-pro
 
 # 默认记忆配置

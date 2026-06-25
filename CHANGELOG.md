@@ -1,3 +1,37 @@
+## v0.3 (2026-06-25) — v2生产级重构：模块化架构、8工具实现、流式UI
+
+### feat
+- **模块化架构重构**: main.py 从 1546 行拆分为 45 行入口 + 18 个模块文件（ui/widgets/, ui/dialogs/, workers/, services/）
+- **流式输出**: AgentWorker 基于 astream() 逐 token 渲染，打字机效果
+- **停止生成**: 新增 Stop 按钮 + Escape 快捷键
+- **键盘快捷键**: Ctrl+Enter 发送 / Ctrl+L 清空 / Escape 停止
+- **外部 QSS 主题**: resources/themes/dark_github.qss，GitHub 深色风格
+- **对话持久化**: SQLite 三表（conversations/messages/token_usage），重启不丢失
+- **Token 追踪**: 按 provider/model 统计用量，状态栏实时显示
+- **终端命令历史**: TerminalWidget 支持 ↑↓ 导航历史命令
+- **状态指示器**: StatusIndicator 显示连接状态、当前模式、Token 计数
+- **新增工具**: fetch_financial_news（全球财经快讯）、fetch_macro_data（CPI/GDP/PMI）
+- **工具升级**: fetch_stock_data（akshare A股/港股/美股）、run_backtest（backtrader 均线策略）、mt5_get_price/place_order（MT5 + Forex API 双通道）
+- **模型选择**: QComboBox 下拉 + ⚙ 齿轮按钮进入 SettingsDialog
+
+### refactor
+- AgentWorker → workers/agent_worker.py（流式 + 工具调用）
+- TerminalWorker → workers/terminal_worker.py
+- ChatView → ui/chat_view.py（流式渲染 + 模型下拉 + 快捷键）
+- SettingsDialog / ProviderFormDialog → ui/dialogs/settings.py
+- SidebarButton / FileTreeWidget → ui/widgets/sidebar.py
+- ConversationListWidget → ui/widgets/conversation.py
+- TaskListWidget → ui/widgets/tasks.py
+- TerminalWidget → ui/widgets/terminal.py
+- MainWindow → ui/main_window.py
+
+### chore
+- .env 密钥管理：API Keys 从 config.yaml 移至 .env（加入 .gitignore）
+- ConfigService：.env 优先 → config.yaml 回退的统一配置层
+- SessionService：SQLite 对话持久化服务
+- ThemeService：QSS 主题加载与切换服务
+- PyInstaller spec 更新：新增 hiddenimports 和 datas 路径
+
 ## v0.2 (2026-06-25) — DeepSeek密钥修复与模型选择下拉功能
 ### fix
 - 修复 DeepSeek API key 为占位符导致的 401 认证失败

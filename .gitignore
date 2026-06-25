@@ -8,3 +8,5 @@ __pycache__/
 storage/*.db
 storage/*.json
 storage/vector_store/
+.env
+*.spec.bak
