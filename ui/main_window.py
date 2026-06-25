@@ -115,6 +115,7 @@ class MainWindow(QMainWindow):
         self._current_model_name = "tool-agent"
         self._worker = None  # Active AgentWorker
         self._chunks_received = False
+        self._pending_metrics = None  # 等待 AI 回复完成后显示的 metrics
 
         # ── UI 构建 ─────────────────────────────
         self._apply_theme()
@@ -653,6 +654,10 @@ class MainWindow(QMainWindow):
             self.memory_manager.get_session_history(self._current_session).add_message(
                 AIMessage(content=text)
             )
+        # 在 AI 内容渲染完成后，再追加 metrics footer，确保它出现在内容下方
+        if self._pending_metrics:
+            self.chat_view.append_ai_metrics_footer(self._pending_metrics.format_brief())
+            self._pending_metrics = None
         self._chunks_received = False
         self.status_indicator.set_tokens("")
 
@@ -737,14 +742,13 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _on_turn_metrics_ready(self, metrics: TurnMetrics):
-        """接收到本轮指标：在气泡下方显示 brief 格式，在日志输出详细统计"""
+        """接收到本轮指标：缓存 brief 格式，等 result_ready 后显示在内容下方"""
         try:
-            # 1. 在 AI 气泡下方显示 "33546tok/34ms"
-            self.chat_view.append_ai_metrics_footer(metrics.format_brief())
-            # 2. 详细指标写入日志
+            self._pending_metrics = metrics
+            # 详细指标先写入日志
             self._on_log_message(f"📊 {metrics.format_detail()}", is_header=False)
         except Exception as e:
-            self._on_log_message(f"[WARN] 指标展示失败: {e}")
+            self._on_log_message(f"[WARN] 指标处理失败: {e}")
 
     @Slot(str, str)
     def _add_task(self, task_id, description):
