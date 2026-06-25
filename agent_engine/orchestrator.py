@@ -94,7 +94,16 @@ class AgentOrchestrator:
             while round_count < self.max_tool_rounds:
                 _check_cancel()
 
+                _emit("metrics_start")
                 response = await llm.ainvoke(messages)
+
+                # 提取 token 用量（部分 provider/streaming 模式下可能缺失）
+                usage_metadata = getattr(response, "usage_metadata", None) or {}
+                usage_payload = {
+                    "provider": model_name,
+                    "input_tokens": int(usage_metadata.get("input_tokens", 0) or 0),
+                    "output_tokens": int(usage_metadata.get("output_tokens", 0) or 0),
+                }
 
                 if hasattr(response, "tool_calls") and response.tool_calls:
                     _emit("log", f"[TOOL] Calling: {[tc['name'] for tc in response.tool_calls]} (round {round_count + 1})")
@@ -141,6 +150,9 @@ class AgentOrchestrator:
                 if not reply:
                     results = [msg.content for msg in messages if isinstance(msg, ToolMessage)]
                     reply = "\n\n".join(results) if results else "[Tool executed]"
+
+                _emit("metrics_first_token")
+                _emit("token_usage", usage_payload)
 
                 if self.enable_streaming and reply:
                     for line in reply.replace('\r\n', '\n').split('\n'):

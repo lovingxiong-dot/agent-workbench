@@ -6,6 +6,7 @@ from langchain_core.messages import HumanMessage
 
 from workers.base_worker import BaseWorker, WorkerCancelledError
 from agent_engine.orchestrator import AgentOrchestrator
+from services.metrics_collector import MetricsCollector
 from tools import system as system_tools
 
 # Tiered tool definitions with explicit priority hints
@@ -57,6 +58,7 @@ class AgentWorker(BaseWorker):
         self.workspace_context = workspace_context or ""
         self.confirm_event = threading.Event()
         self.confirm_result = False
+        self.metrics = MetricsCollector()
 
     async def _process(self):
         """AgentWorker 现在只是 Orchestrator 的薄封装：负责生命周期和信号转换。"""
@@ -81,8 +83,11 @@ class AgentWorker(BaseWorker):
                 "log": self.log_message.emit,
                 "tool_start": self.task_created.emit,
                 "tool_end": self.task_finished.emit,
-                "chunk": self.chunk_ready.emit,
+                "chunk": self._emit_chunk_with_first_token,
                 "round": self.round_advanced.emit,
+                "metrics_start": self.metrics.start_turn,
+                "metrics_first_token": self.metrics.mark_first_token,
+                "token_usage": self._on_token_usage,
                 "error": lambda code, detail: self._report_error(code, detail),
             }
 
@@ -100,6 +105,26 @@ class AgentWorker(BaseWorker):
         except Exception as ex:
             self._report_error("AGENT_PROCESS", str(ex))
             self.result_ready.emit(f"Error: {str(ex)}")
+
+    def _emit_chunk_with_first_token(self, chunk: str):
+        """转发 chunk，并在第一次时标记首 token 时间"""
+        self.metrics.mark_first_token()
+        self.chunk_ready.emit(chunk)
+
+    def _on_token_usage(self, usage: dict):
+        """收到最终 token 用量后：完成本轮指标并发出信号"""
+        try:
+            input_tokens = int(usage.get("input_tokens", 0) or 0)
+            output_tokens = int(usage.get("output_tokens", 0) or 0)
+            metrics = self.metrics.finish_turn(input_tokens, output_tokens)
+
+            provider = usage.get("provider") or ""
+            model = str(self.current_llm.model) if hasattr(self.current_llm, "model") else ""
+            self.token_used.emit(provider, model, input_tokens, output_tokens)
+            self.turn_metrics_ready.emit(metrics)
+        except Exception as e:
+            # 指标收集失败不应中断主流程
+            self.log_message.emit(f"[WARN] metrics collection failed: {e}")
 
     def _sync_call_tool(self, name, args):
         tool_func = self.tool_map.get(name)

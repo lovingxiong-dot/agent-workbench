@@ -58,6 +58,7 @@ a = Analysis(
         'services.activity_service',
         'services.context_service',
         'services.path_resolver',
+        'services.metrics_collector',
     ],
     hookspath=[],
     hooksconfig={},

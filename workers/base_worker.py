@@ -18,6 +18,7 @@ BaseWorker — Agent 任务 Worker 的抽象基类
 - task_created(str, str): (task_id, description)
 - task_finished(str, str): (task_id, result_summary)
 - token_used(str, str, int, int): (provider, model, input_tokens, output_tokens)
+- turn_metrics_ready(object): TurnMetrics 指标对象（含 token/时间）
 - confirm_required(str, str): (tool_name, command)
 - round_advanced(int): 当前 ReAct 轮次
 """
@@ -43,6 +44,7 @@ class BaseWorker(QThread):
 
     # 资源/确认
     token_used = Signal(str, str, int, int)
+    turn_metrics_ready = Signal(object)
     confirm_required = Signal(str, str)
 
     def __init__(self, session_id: str, task_timeout: float = 120.0):

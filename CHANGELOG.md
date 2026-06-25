@@ -1,3 +1,37 @@
+## v3.5 (2026-06-26) — 推理指标：Token 与响应时间可视化
+
+### feat
+- **单轮指标收集**：新增 `MetricsCollector`，基于 `time.perf_counter()` 在 `AgentWorker` 线程内零额外线程地记录 TTFT、总耗时、input/output tokens。
+- **AI 气泡指标 footer**：每次 AI 回复气泡右下角显示 `33546tok/34ms` 格式。
+- **Orchestrator metrics callback**：`metrics_start` / `metrics_first_token` / `token_usage` 三个 callback 接入指标采集。
+
+### refactor
+- `BaseWorker` 新增 `turn_metrics_ready` 信号，将 `TurnMetrics` 从 worker 线程传回主线程。
+- `AgentWorker` 转发 chunk 时自动标记首 token 时间；最终 usage_metadata 提取后统一 emit `token_used` + `turn_metrics_ready`。
+- `MainWindow._on_token_used` 仅保留持久化，UI 展示与详细日志由 `_on_turn_metrics_ready` 统一处理，状态栏不再显示 token。
+
+### chore
+- 新增 `services/metrics_collector.py` 单元测试与 DeepSeek 集成测试。
+- 更新 `AgentWorkbench.spec` hiddenimports。
+
+## v3.4 (2026-06-26) — 工作空间上下文感知
+
+### feat
+- **项目目录自动检测**：启动时基于当前工作目录或最近活动自动检测 Project Root。
+- **右侧文件上下文注入**：活动文件自动提取前 500 字符摘要，随 prompt 注入 Agent。
+- **文件工具相对路径解析**：新增 `PathResolver`，基于项目根目录解析相对路径。
+- **工作空间上下文服务**：新增 `ContextService`，统一管理项目根目录、活动文档、打开文档、选中项。
+- **资源管理器最近项目**：顶部新增「打开文件夹」按钮 + 最近项目下拉切换。
+
+### refactor
+- `tools/system.py` 文件工具接入项目根目录解析。
+- `AgentWorker` 向系统工具注入当前项目根目录。
+- `orchestrator` system prompt 接入 workspace_context。
+
+### chore
+- 新增 `tests/test_context_service.py` 单元测试。
+- 更新 `AgentWorkbench.spec` hiddenimports。
+
 ## v3.3 (2026-06-25) — 精细化：文件预览、纯对话、分栏与活动面板
 
 ### feat

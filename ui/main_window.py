@@ -21,6 +21,7 @@ from services.theme_service import ThemeService
 from services.project_service import ProjectService
 from services.activity_service import ActivityService
 from services.context_service import ContextService
+from services.metrics_collector import MetricsCollector, TurnMetrics
 from workers.agent_worker import AgentWorker, TOOL_DEFINITIONS
 from ui.widgets import (
     SidebarButton, FileTreeWidget, ConversationListWidget,
@@ -617,6 +618,7 @@ class MainWindow(QMainWindow):
         worker.task_finished.connect(current_only(self._finish_task))
         worker.confirm_required.connect(current_only(self._on_confirm_required))
         worker.token_used.connect(current_only(self._on_token_used))
+        worker.turn_metrics_ready.connect(current_only(self._on_turn_metrics_ready))
         worker.finished.connect(worker.deleteLater)
         worker.start()
 
@@ -730,9 +732,19 @@ class MainWindow(QMainWindow):
 
     @Slot(str, str, int, int)
     def _on_token_used(self, provider, model, input_tokens, output_tokens):
+        """token 持久化（metrics UI 由 _on_turn_metrics_ready 处理）"""
         self.session_service.log_token_usage(provider, model, input_tokens, output_tokens)
-        total = input_tokens + output_tokens
-        self.status_indicator.set_tokens(f"Tokens: {total}")
+
+    @Slot(object)
+    def _on_turn_metrics_ready(self, metrics: TurnMetrics):
+        """接收到本轮指标：在气泡下方显示 brief 格式，在日志输出详细统计"""
+        try:
+            # 1. 在 AI 气泡下方显示 "33546tok/34ms"
+            self.chat_view.append_ai_metrics_footer(metrics.format_brief())
+            # 2. 详细指标写入日志
+            self._on_log_message(f"📊 {metrics.format_detail()}", is_header=False)
+        except Exception as e:
+            self._on_log_message(f"[WARN] 指标展示失败: {e}")
 
     @Slot(str, str)
     def _add_task(self, task_id, description):

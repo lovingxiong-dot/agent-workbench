@@ -261,6 +261,20 @@ class ChatView(QWidget):
     def append_ai(self, text):
         self._append_message("ai", text)
 
+    def append_ai_metrics_footer(self, text: str):
+        """在最后一个 AI 气泡下方追加 metrics 小字（如 33546tok/34ms）"""
+        if not text:
+            return
+        html_block = (
+            f"<div style='color:#8B949E;font-size:10px;text-align:right;"
+            f"margin:2px 48px 10px 8px;font-family:\"Segoe UI\",\"Microsoft YaHei\",sans-serif;'>"
+            f"{html.escape(text)}"
+            f"</div>"
+        )
+        self.chat_area.moveCursor(QTextCursor.End)
+        self.chat_area.insertHtml(html_block)
+        self.chat_area.moveCursor(QTextCursor.End)
+
     def append_system(self, text):
         self._append_message("system", text)
 
