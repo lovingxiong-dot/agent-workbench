@@ -141,3 +141,5 @@ ui:
   explorer:
     project_root: F:\Agent\agent_workbench
     recent_projects: []
+app:
+  version: v3.7

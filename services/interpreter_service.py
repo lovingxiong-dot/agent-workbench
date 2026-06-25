@@ -127,12 +127,21 @@ class InterpreterService:
                     found.append(system_py)
         return found
 
+    @staticmethod
+    def _run_hidden_command(cmd: List[str], timeout: int = 5) -> subprocess.CompletedProcess:
+        """在隐藏窗口中执行命令，避免启动时弹出 PowerShell/CMD 等控制台窗口"""
+        kwargs = {
+            "capture_output": True,
+            "text": True,
+            "timeout": timeout,
+        }
+        if sys.platform == "win32":
+            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+        return subprocess.run(cmd, **kwargs)
+
     def _get_python_version(self, python_path: str) -> str:
         try:
-            result = subprocess.run(
-                [python_path, "--version"],
-                capture_output=True, text=True, timeout=5
-            )
+            result = self._run_hidden_command([python_path, "--version"], timeout=5)
             ver = result.stdout.strip() or result.stderr.strip()
             if ver.startswith("Python "):
                 return ver.split()[1]
@@ -143,16 +152,13 @@ class InterpreterService:
     def _get_shell_version(self, shell_path: str) -> str:
         try:
             if "powershell" in shell_path.lower():
-                result = subprocess.run(
+                result = self._run_hidden_command(
                     [shell_path, "-Command", "$PSVersionTable.PSVersion.ToString()"],
-                    capture_output=True, text=True, timeout=10
+                    timeout=10,
                 )
                 return result.stdout.strip()
             if "pwsh" in shell_path.lower():
-                result = subprocess.run(
-                    [shell_path, "--version"],
-                    capture_output=True, text=True, timeout=5
-                )
+                result = self._run_hidden_command([shell_path, "--version"], timeout=5)
                 return result.stdout.strip()
         except Exception:
             pass

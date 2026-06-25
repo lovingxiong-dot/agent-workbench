@@ -1,7 +1,20 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QPlainTextEdit, QLineEdit, QScrollBar, QComboBox
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QPlainTextEdit, QLineEdit, QComboBox
 from PySide6.QtGui import QFont
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, Qt
 from workers.terminal_worker import TerminalWorker
+
+
+class TerminalInput(QLineEdit):
+    """自定义终端输入框：保留默认编辑行为，同时支持 ↑↓ 历史切换"""
+    history_requested = Signal(int)  # +1 表示上一条（Up），-1 表示下一条（Down）
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Up:
+            self.history_requested.emit(1)
+        elif event.key() == Qt.Key_Down:
+            self.history_requested.emit(-1)
+        else:
+            super().keyPressEvent(event)
 
 
 class TerminalWidget(QWidget):
@@ -52,11 +65,20 @@ class TerminalWidget(QWidget):
         self.prompt = QLabel("$")
         self.prompt.setObjectName("terminalPrompt")
         input_layout.addWidget(self.prompt)
-        self.input = QLineEdit()
+        self.input = TerminalInput()
         self.input.setPlaceholderText("输入命令并回车执行 (↑↓ 历史)...")
         self.input.returnPressed.connect(self._execute_command)
+        self.input.history_requested.connect(self._on_history_request)
+        input_layout.addWidget(self.input)
         layout.addLayout(input_layout)
-        self.input.keyPressEvent = self._input_key_press
+
+        # 点击输出区时把焦点还给输入框，提升终端体验
+        self.output.mousePressEvent = self._on_output_mouse_press
+
+    def _on_output_mouse_press(self, event):
+        self.input.setFocus()
+        # 调用原始的鼠标按下事件，保持选择、滚动等默认行为
+        QPlainTextEdit.mousePressEvent(self.output, event)
 
     def _populate_interpreters(self):
         """从 InterpreterService 填充下拉框"""
@@ -100,21 +122,19 @@ class TerminalWidget(QWidget):
         else:
             self.prompt.setText("$")
 
-    def _input_key_press(self, event):
-        from PySide6.QtCore import Qt as QtCore
-        if event.key() == QtCore.Key_Up:
+    def _on_history_request(self, direction: int):
+        """处理 ↑↓ 历史请求"""
+        if direction > 0:  # Up
             if self._history_index < len(self._history) - 1:
                 self._history_index += 1
                 self.input.setText(self._history[self._history_index])
-        elif event.key() == QtCore.Key_Down:
+        else:  # Down
             if self._history_index > 0:
                 self._history_index -= 1
                 self.input.setText(self._history[self._history_index])
             elif self._history_index == 0:
                 self._history_index = -1
                 self.input.clear()
-        else:
-            QLineEdit.keyPressEvent(self.input, event)
 
     def _execute_command(self):
         command = self.input.text().strip()

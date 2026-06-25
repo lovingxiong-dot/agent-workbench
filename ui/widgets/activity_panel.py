@@ -4,15 +4,16 @@ ActivityWidget — 结构化活动面板
 - 以中文标题 + 类别 + 时间展示关键事件
 - 分栏：当前项目活动 / 全局活动
 - 点击活动条目在下方详情区显示完整内容
+- 右键支持：全选 / 复制
 """
 from datetime import datetime
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QListWidget, QListWidgetItem, QTextEdit, QFrame,
+    QListWidget, QListWidgetItem, QTextEdit, QFrame, QMenu,
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QColor
+from PySide6.QtGui import QFont, QColor, QAction
 
 
 # 类别 -> 显示颜色
@@ -65,6 +66,10 @@ class ActivityWidget(QWidget):
         project_header.setStyleSheet("color: #58A6FF; font-size: 11px; font-weight: bold; padding: 4px 8px;")
         layout.addWidget(project_header)
 
+        project_hint = QLabel("绑定到当前打开目录的活动（文件、对话、工具执行等）")
+        project_hint.setStyleSheet("color: #8B949E; font-size: 10px; padding: 0 8px 4px 8px;")
+        layout.addWidget(project_hint)
+
         self.project_list = QListWidget()
         self.project_list.setObjectName("activityList")
         self.project_list.itemClicked.connect(self._on_item_clicked)
@@ -83,6 +88,10 @@ class ActivityWidget(QWidget):
         global_header.setStyleSheet("color: #8B949E; font-size: 11px; font-weight: bold; padding: 4px 8px;")
         layout.addWidget(global_header)
 
+        global_hint = QLabel("不绑定任何项目的系统级活动（模式/模型切换、设置更新、系统通知等）")
+        global_hint.setStyleSheet("color: #8B949E; font-size: 10px; padding: 0 8px 4px 8px;")
+        layout.addWidget(global_hint)
+
         self.global_list = QListWidget()
         self.global_list.setObjectName("activityList")
         self.global_list.itemClicked.connect(self._on_item_clicked)
@@ -98,8 +107,45 @@ class ActivityWidget(QWidget):
         self.detail_edit.setReadOnly(True)
         self.detail_edit.setFont(QFont("Cascadia Code", 10))
         self.detail_edit.setObjectName("activityDetail")
-        self.detail_edit.setPlaceholderText("点击上方活动查看详细内容")
+        self.detail_edit.setPlaceholderText("点击上方活动查看详细内容；右键可复制")
         layout.addWidget(self.detail_edit, 1)
+
+        # ── 右键菜单 ─────────────────────────────
+        self._setup_context_menus()
+
+    def _setup_context_menus(self):
+        """为列表和详情区配置右键菜单"""
+        for widget in (self.project_list, self.global_list):
+            widget.setContextMenuPolicy(Qt.CustomContextMenu)
+            widget.customContextMenuRequested.connect(self._show_list_context_menu)
+
+        self.detail_edit.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.detail_edit.customContextMenuRequested.connect(self._show_detail_context_menu)
+
+    def _show_list_context_menu(self, pos):
+        sender = self.sender()
+        item = sender.itemAt(pos)
+        if not item:
+            return
+        menu = QMenu(self)
+        copy_action = QAction("复制", self)
+        copy_action.triggered.connect(lambda: self._copy_list_item(item))
+        menu.addAction(copy_action)
+        menu.exec(sender.mapToGlobal(pos))
+
+    def _show_detail_context_menu(self, pos):
+        menu = QMenu(self)
+        select_all_action = QAction("全选", self)
+        select_all_action.triggered.connect(self.detail_edit.selectAll)
+        copy_action = QAction("复制", self)
+        copy_action.triggered.connect(self.detail_edit.copy)
+        menu.addAction(select_all_action)
+        menu.addAction(copy_action)
+        menu.exec(self.detail_edit.mapToGlobal(pos))
+
+    def _copy_list_item(self, item: QListWidgetItem):
+        from PySide6.QtWidgets import QApplication
+        QApplication.clipboard().setText(item.text())
 
     def set_project_path(self, path: str):
         self._project_path = path or ""
@@ -144,9 +190,12 @@ class ActivityWidget(QWidget):
         title = activity.get("title", "")
         category = activity.get("category", "")
         ts = activity.get("timestamp", "")
+        project_path = activity.get("project_path", "")
+        scope = "全局" if project_path == "" else f"项目: {project_path}"
         self.detail_edit.setPlainText(
             f"标题: {title}\n"
             f"类别: {category}\n"
+            f"范围: {scope}\n"
             f"时间: {ts}\n"
             f"{'='*40}\n"
             f"{detail}"

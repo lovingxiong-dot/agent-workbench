@@ -75,7 +75,8 @@ def resource_path(relative_path):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("AI Agent 工作台 v2 · 手动模式")
+        app_version = self.config_service.get("app.version", "v3.x")
+        self.setWindowTitle(f"AI Agent 工作台 {app_version} · 手动模式")
         self.resize(1600, 950)
 
         # ── 基础路径与配置 ──────────────────────
@@ -171,6 +172,9 @@ class MainWindow(QMainWindow):
 
         # ── 持久化恢复 ──────────────────────────
         self._restore_conversations()
+
+        # ── 全局启动事件 ─────────────────────────
+        self._on_log_message(f"🚀 程序启动: {self.windowTitle()}", is_header=True, is_global=True)
 
     # ═══════════════════════════════════════════════════
     # 主题
@@ -332,7 +336,7 @@ class MainWindow(QMainWindow):
         self.chat_view.populate_models(providers, llm_name)
         self.status_indicator.set_mode(mode_name)
         self.status_indicator.set_model(llm_name)
-        self._on_log_message(f"🔄 切换模式: {mode_name} / {llm_name}", is_header=True)
+        self._on_log_message(f"🔄 切换模式: {mode_name} / {llm_name}", is_header=True, is_global=True)
 
     def _on_mode_clicked(self, mode_name):
         self._init_mode(mode_name)
@@ -350,7 +354,7 @@ class MainWindow(QMainWindow):
         current_title = self._sessions.get(self._current_session, {}).get("title", "未命名会话")
         self.chat_view.set_header(self._current_mode, llm_name, current_title)
         self.status_indicator.set_model(llm_name)
-        self._on_log_message(f"🔄 切换模型: {llm_name} ({provider.get('model', '?')})")
+        self._on_log_message(f"🔄 切换模型: {llm_name} ({provider.get('model', '?')})", is_global=True)
 
     # ═══════════════════════════════════════════════════
     # 设置对话框
@@ -369,7 +373,7 @@ class MainWindow(QMainWindow):
         self.chat_view.populate_models(providers, self._current_model_name)
         current_title = self._sessions.get(self._current_session, {}).get("title", "未命名会话")
         self.chat_view.set_header(self._current_mode, self._current_model_name, current_title)
-        self._on_log_message("🔧 模型设置已更新")
+        self._on_log_message("🔧 模型设置已更新", is_global=True)
 
     # ═══════════════════════════════════════════════════
     # 项目目录管理
@@ -399,7 +403,7 @@ class MainWindow(QMainWindow):
         self.context_service.update_interpreter_context()
         current = self.interpreter_service.get_current()
         name = current.name if current else interpreter_type
-        self._on_log_message(f"🖥 切换解释器: {name}", is_header=True)
+        self._on_log_message(f"🖥 切换解释器: {name}", is_header=True, is_global=True)
         self._on_context_changed()
 
     @Slot(str, str, int)
@@ -702,7 +706,7 @@ class MainWindow(QMainWindow):
         self._current_phase = "idle"
         self.chat_view.clear_phase_ui()
         self.chat_view.append_system(f"❌ Phase 错误 [{code}]: {detail}")
-        self._on_log_message(f"[ERR] Phase {code}: {detail}")
+        self._on_log_message(f"[ERR] Phase {code}: {detail}", is_global=True)
 
     def _on_phase_confirmed(self):
         """用户点击确认执行"""
@@ -805,6 +809,9 @@ class MainWindow(QMainWindow):
             # analyze/verify 阶段如果未收到 chunk，也显示原始文本
             if self._current_phase in ("analyze", "verify"):
                 self.chat_view.append_ai(text)
+        # 持久化 AI 回复：execute 阶段由 _on_execute_result 单独保存，避免重复
+        if text and text.strip() and self._current_phase != "execute":
+            self._append_ai_message(text, persist_to_memory=False)
         # 任何产生 LLM 输出的阶段都在内容下方追加 metrics footer
         if self._pending_metrics:
             self.chat_view.append_ai_metrics_footer(self._pending_metrics.format_brief())
@@ -813,14 +820,15 @@ class MainWindow(QMainWindow):
         self.status_indicator.set_tokens("")
         on_result(text)
 
-    def _append_ai_message(self, text):
-        """把 AI 回复持久化到 session 和记忆"""
+    def _append_ai_message(self, text, persist_to_memory=True):
+        """把 AI 回复持久化到 session 和数据库；可选是否写入 LangChain memory"""
         if not text or not text.strip():
             return
         self._sessions[self._current_session]["messages"].append({"role": "ai", "content": text})
         self.session_service.add_message(self._current_session, "ai", text)
-        from langchain_core.messages import AIMessage
-        self.memory_manager.get_session_history(self._current_session).add_message(AIMessage(content=text))
+        if persist_to_memory:
+            from langchain_core.messages import AIMessage
+            self.memory_manager.get_session_history(self._current_session).add_message(AIMessage(content=text))
 
     def _run_local_verification(self) -> str:
         """运行本地语法检查和单元测试"""
@@ -870,7 +878,7 @@ class MainWindow(QMainWindow):
         if self._worker and self._worker.isRunning():
             self._worker.stop()
             self.chat_view.finalize_stream()
-            self._on_log_message("⏹ 用户停止了生成")
+            self._on_log_message("⏹ 用户停止了生成", is_global=True)
 
     @Slot(str)
     def _on_chunk(self, chunk):
@@ -879,28 +887,33 @@ class MainWindow(QMainWindow):
         self.chat_view.append_chunk(chunk)
 
     @Slot(str)
-    def _on_log_message(self, text, is_header=False):
+    def _on_log_message(self, text, is_header=False, is_global=False):
         """原始日志追加 + 结构化活动记录"""
         self.workspace.add_log(text, is_header=is_header)
-        self._add_activity_from_log(text, is_header)
+        self._add_activity_from_log(text, is_header, is_global)
 
-    def _add_activity(self, title: str, category: str, detail: str = ""):
-        """添加结构化活动并刷新面板"""
+    def _add_activity(self, title: str, category: str, detail: str = "", is_global: bool = False):
+        """添加结构化活动并刷新面板
+
+        :param is_global: True 表示不绑定当前项目，归入全局活动列表
+        """
+        project_path = "" if is_global else self._project_root
         self.activity_service.add(
             title=title,
             category=category,
-            project_path=self._project_root,
+            project_path=project_path,
             summary=detail[:60] if detail else title,
             detail=detail or title,
         )
         self._refresh_activities()
 
     def _refresh_activities(self):
+        """刷新活动面板：显示当前项目活动 + 全局活动"""
         self.workspace.refresh_activities(
             self.activity_service.list_by_project(self._project_root)
         )
 
-    def _add_activity_from_log(self, text: str, is_header: bool = False):
+    def _add_activity_from_log(self, text: str, is_header: bool = False, is_global: bool = False):
         """从日志文本推断活动类别并记录"""
         category = "系统"
         title = text
@@ -933,8 +946,14 @@ class MainWindow(QMainWindow):
         elif text.startswith("🔧"):
             category = "系统"
             title = "设置更新"
+        elif text.startswith("🖥 切换解释器"):
+            category = "系统"
+            title = "切换解释器"
+        elif text.startswith("[ERR]") or text.startswith("⏹") or text.startswith("[STOP]"):
+            category = "系统"
+            title = "系统事件"
 
-        self._add_activity(title, category, detail)
+        self._add_activity(title, category, detail, is_global=is_global)
 
     def _toggle_log_panel(self, visible: bool):
         self._log_panel_visible = visible
