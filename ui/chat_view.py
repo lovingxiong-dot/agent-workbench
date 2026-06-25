@@ -262,12 +262,12 @@ class ChatView(QWidget):
         self._append_message("ai", text)
 
     def append_ai_metrics_footer(self, text: str):
-        """在最后一个 AI 气泡下方追加 metrics 小字（如 33546tok/34ms）"""
+        """在最后一个 AI 气泡左下角追加 metrics 小字（如 33546tok/34ms）"""
         if not text:
             return
         html_block = (
-            f"<div style='color:#8B949E;font-size:10px;text-align:right;"
-            f"margin:2px 48px 10px 8px;font-family:\"Segoe UI\",\"Microsoft YaHei\",sans-serif;'>"
+            f"<div style='color:#8B949E;font-size:10px;text-align:left;"
+            f"margin:2px 8px 10px 48px;font-family:\"Segoe UI\",\"Microsoft YaHei\",sans-serif;'>"
             f"{html.escape(text)}"
             f"</div>"
         )
@@ -306,7 +306,7 @@ class ChatView(QWidget):
             content_align = "right"
             row = f"""
             <td align="right" valign="top" style="padding:2px 8px 8px 48px;">
-                {self._md_content(text)}
+                {self._md_content(text, align="right")}
             </td>
             {avatar}
             """
@@ -316,7 +316,7 @@ class ChatView(QWidget):
             row = f"""
             {avatar}
             <td align="left" valign="top" style="padding:2px 48px 8px 8px;">
-                {self._md_content(text)}
+                {self._md_content(text, align="left")}
             </td>
             """
 
@@ -329,12 +329,12 @@ class ChatView(QWidget):
         <div style="clear:both;"></div>
         """
 
-    def _md_content(self, text: str) -> str:
+    def _md_content(self, text: str, align: str = "left") -> str:
         html_content = md_to_html(text)
         return f"""
         <div style="display:inline-block;color:#E6EDF3;
                     font-family:'Segoe UI','Microsoft YaHei',sans-serif;
-                    font-size:13px;line-height:1.6;text-align:left;">
+                    font-size:13px;line-height:1.6;text-align:{align};">
             {html_content}
         </div>
         """
