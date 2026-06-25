@@ -46,12 +46,20 @@ class ChatView(QWidget):
     settings_clicked = Signal()
     stop_requested = Signal()
     log_panel_toggled = Signal(bool)
+    confirm_clicked = Signal()      # 用户确认 task list
+    reanalyze_clicked = Signal()    # 用户要求重新分析
+    skip_verify_clicked = Signal()  # 用户跳过验证
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._streaming_active = False
         self._streaming_buffer = ""
         self._has_received_chunks = False
+        self._phase_indicator = None
+        self._confirm_btn = None
+        self._reanalyze_btn = None
+        self._skip_verify_btn = None
+        self._task_progress_label = None
         self._setup_ui()
         self._setup_shortcuts()
 
@@ -113,6 +121,65 @@ class ChatView(QWidget):
         """)
         self.log_btn.clicked.connect(self._on_log_btn_clicked)
         bar.addWidget(self.log_btn)
+
+        bar.addSpacing(12)
+
+        # Phase 指示器
+        self._phase_indicator = QLabel("")
+        self._phase_indicator.setStyleSheet(
+            "color: #8B949E; font-size: 11px; font-weight: 600; padding: 2px 8px;"
+        )
+        bar.addWidget(self._phase_indicator)
+
+        # 任务进度
+        self._task_progress_label = QLabel("")
+        self._task_progress_label.setStyleSheet(
+            "color: #58A6FF; font-size: 11px; padding: 2px 8px;"
+        )
+        bar.addWidget(self._task_progress_label)
+
+        # 确认 / 重新分析 / 跳过验证（默认隐藏）
+        self._confirm_btn = QPushButton("\u786e\u8ba4\u6267\u884c")
+        self._confirm_btn.setObjectName("confirmBtn")
+        self._confirm_btn.setVisible(False)
+        self._confirm_btn.setCursor(Qt.PointingHandCursor)
+        self._confirm_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #238636; color: #FFFFFF; border: 1px solid #238636;
+                padding: 3px 12px; border-radius: 6px; font-weight: 600; font-size: 11px;
+            }
+            QPushButton:hover { background-color: #2EA043; }
+        """)
+        self._confirm_btn.clicked.connect(self.confirm_clicked.emit)
+        bar.addWidget(self._confirm_btn)
+
+        self._reanalyze_btn = QPushButton("\u91cd\u65b0\u5206\u6790")
+        self._reanalyze_btn.setObjectName("reanalyzeBtn")
+        self._reanalyze_btn.setVisible(False)
+        self._reanalyze_btn.setCursor(Qt.PointingHandCursor)
+        self._reanalyze_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #21262D; color: #E6EDF3; border: 1px solid #30363D;
+                padding: 3px 12px; border-radius: 6px; font-weight: 600; font-size: 11px;
+            }
+            QPushButton:hover { background-color: #30363D; }
+        """)
+        self._reanalyze_btn.clicked.connect(self.reanalyze_clicked.emit)
+        bar.addWidget(self._reanalyze_btn)
+
+        self._skip_verify_btn = QPushButton("\u8df3\u8fc7\u9a8c\u8bc1")
+        self._skip_verify_btn.setObjectName("skipVerifyBtn")
+        self._skip_verify_btn.setVisible(False)
+        self._skip_verify_btn.setCursor(Qt.PointingHandCursor)
+        self._skip_verify_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #21262D; color: #8B949E; border: 1px solid #30363D;
+                padding: 3px 12px; border-radius: 6px; font-weight: 600; font-size: 11px;
+            }
+            QPushButton:hover { background-color: #30363D; color: #E6EDF3; }
+        """)
+        self._skip_verify_btn.clicked.connect(self.skip_verify_clicked.emit)
+        bar.addWidget(self._skip_verify_btn)
 
         bar.addSpacing(12)
 
@@ -368,5 +435,73 @@ class ChatView(QWidget):
         if name:
             self.model_changed.emit(name)
 
+    # ═══════════════════════════════════════════════════
+    # Phase UI 控制
+    # ═══════════════════════════════════════════════════
+    def set_phase_indicator(self, phase: str, task_count: int = 0, current: int = 0):
+        """设置底部阶段指示器文本"""
+        labels = {
+            "analyze": "[分析中]",
+            "confirm": "[等待确认]",
+            "execute": f"[执行中 {current}/{task_count}]" if task_count else "[执行中]",
+            "verify": "[验证中]",
+            "archive": "[存档中]",
+            "idle": "",
+        }
+        text = labels.get((phase or "").lower(), f"[{phase}]")
+        self._phase_indicator.setText(text)
+
+    def set_task_progress(self, current: int, total: int):
+        """设置任务进度文本"""
+        if total <= 0:
+            self._task_progress_label.setText("")
+        else:
+            self._task_progress_label.setText(f"任务 {current}/{total}")
+
+    def show_confirmation(self, task_list: list):
+        """显示确认/重新分析按钮"""
+        self._confirm_btn.setVisible(True)
+        self._reanalyze_btn.setVisible(True)
+        self._skip_verify_btn.setVisible(False)
+        # 在对话区显示任务清单等待确认
+        if task_list:
+            lines = ["### 任务清单（请确认）"]
+            for idx, task in enumerate(task_list, 1):
+                desc = task.description if hasattr(task, "description") else str(task)
+                lines.append(f"{idx}. {desc}")
+            lines.append("\n点击下方「确认执行」开始执行，或「重新分析」调整需求。")
+            self.append_system("\n".join(lines))
+
+    def hide_confirmation(self):
+        """隐藏确认相关按钮"""
+        self._confirm_btn.setVisible(False)
+        self._reanalyze_btn.setVisible(False)
+
+    def show_skip_verify(self):
+        """验证阶段显示跳过按钮"""
+        self._skip_verify_btn.setVisible(True)
+
+    def hide_skip_verify(self):
+        self._skip_verify_btn.setVisible(False)
+
+    def clear_phase_ui(self):
+        """清空 phase 相关 UI 状态"""
+        self.set_phase_indicator("idle")
+        self.set_task_progress(0, 0)
+        self.hide_confirmation()
+        self.hide_skip_verify()
+
+    def append_phase_message(self, phase: str, text: str):
+        """按 phase 追加系统消息，带阶段前缀"""
+        prefix = {
+            "analyze": "🔍 ",
+            "confirm": "⏸ ",
+            "execute": "⚙️ ",
+            "verify": "✅ ",
+            "archive": "📦 ",
+        }.get((phase or "").lower(), "")
+        self.append_system(f"{prefix}{text}")
+
     def clear(self):
         self.chat_area.clear()
+        self.clear_phase_ui()

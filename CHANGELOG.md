@@ -32,6 +32,25 @@
 - 新增 `tests/test_context_service.py` 单元测试。
 - 更新 `AgentWorkbench.spec` hiddenimports。
 
+## v3.6 (2026-06-26) — Phase-Driven Workflow Engine
+
+### feat
+- **阶段驱动工作流**：新增 `PhaseManager`，将每次请求按 Mode 切分为 Analyze → Confirm → Execute → Verify → Archive。
+- **Mode × Phase 矩阵**：Ask 只分析/归档；Plan 分析+确认+归档；Craft 完整五阶段。
+- **任务清单驱动**：Analyze 阶段让 LLM 输出结构化任务清单，经用户确认后进入 Execute。
+- **软硬 Checkpoint 分离**：用户确认、危险命令等为硬门控；语法检查、单元测试为可跳过软提示。
+- **Phase 上下文切换**：`ContextService.get_phase_context()` 按阶段注入不同上下文。
+- **UI 阶段指示器**：底部状态栏显示 `[分析中]` `[等待确认]` `[执行中 N/M]` `[验证中]` 等阶段标签。
+- **确认门控**：对话区显示任务清单 + 「确认执行」/「重新分析」按钮，防止 AI 直接写错代码。
+- **Orchestrator.run_phase()**：新增 phase-aware 入口，Analyze/Verify 阶段不绑定工具，输出结构化结果。
+
+### refactor
+- `AgentWorker` 增加 `phase` 参数，复用同一 worker 完成不同阶段调用。
+- `MainWindow._send_message()` 改为启动 `PhaseManager` 工作流，而非直接创建 worker。
+
+### test
+- 新增 `tests/test_phase_manager.py`，覆盖 Mode×Phase 矩阵、软硬 checkpoint、阶段流转、任务解析。
+
 ## v3.3 (2026-06-25) — 精细化：文件预览、纯对话、分栏与活动面板
 
 ### feat

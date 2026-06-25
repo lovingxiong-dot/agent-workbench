@@ -40,7 +40,8 @@ class AgentOrchestrator:
         self.llm = llm
         self.tool_map = tool_map or {}
         self.tool_definitions = tool_definitions or []
-        self.system_prompt = system_prompt or "You are a helpful AI assistant."
+        self.base_system_prompt = system_prompt or "You are a helpful AI assistant."
+        self.system_prompt = self.base_system_prompt
         self.user_rules = user_rules or []
         self.max_tool_rounds = max(1, int(max_tool_rounds))
         self.enable_streaming = enable_streaming
@@ -199,6 +200,143 @@ class AgentOrchestrator:
             _emit("error", "ORCHESTRATOR", str(ex))
             _emit("log", f"[ERR] {ex}")
             return f"Error: {str(ex)}"
+
+    async def run_phase(
+        self,
+        phase: str,
+        mode: str,
+        user_input: str,
+        context: str = "",
+        chat_history: Optional[List] = None,
+        callbacks: Optional[Dict[str, Callable]] = None,
+        cancel_event=None,
+    ) -> str:
+        """
+        按 phase 执行 LLM 调用。
+
+        - analyze: 让 LLM 输出任务清单（JSON 或 Markdown 列表）
+        - execute: 复用 run() 完整执行
+        - verify: 让 LLM 检查执行结果并返回验证结论
+        """
+        phase = (phase or "").lower()
+        mode = (mode or "").lower()
+
+        # 保存原始 prompt，执行完恢复
+        original_prompt = self.system_prompt
+        original_workspace_context = self.workspace_context
+
+        try:
+            self.workspace_context = context or self.workspace_context
+
+            if phase == "analyze":
+                self.system_prompt = self._build_analyze_prompt(mode)
+                # analyze 阶段不绑定工具，让 LLM 纯输出任务清单
+                return await self._run_without_tools(user_input, chat_history, callbacks, cancel_event)
+            elif phase == "verify":
+                self.system_prompt = self._build_verify_prompt(mode)
+                return await self._run_without_tools(user_input, chat_history, callbacks, cancel_event)
+            elif phase in ("execute", "confirm", "archive"):
+                # execute 用默认 system_prompt；confirm/archive 由 UI/框架处理，不调用 LLM
+                return await self.run(user_input, chat_history, callbacks, cancel_event)
+            else:
+                return await self.run(user_input, chat_history, callbacks, cancel_event)
+        finally:
+            self.system_prompt = original_prompt
+            self.workspace_context = original_workspace_context
+
+    async def _run_without_tools(
+        self,
+        user_input: str,
+        chat_history: Optional[List] = None,
+        callbacks: Optional[Dict[str, Callable]] = None,
+        cancel_event=None,
+    ) -> str:
+        """不绑定工具的 LLM 调用，用于 analyze/verify 阶段"""
+        callbacks = callbacks or {}
+        chat_history = list(chat_history) if chat_history else []
+
+        def _emit(name: str, *args):
+            cb = callbacks.get(name)
+            if cb:
+                try:
+                    cb(*args)
+                except Exception as e:
+                    self._log(callbacks, f"[ORCH_CALLBACK_ERR] {name}: {e}")
+
+        def _check_cancel():
+            if cancel_event and cancel_event.is_set():
+                raise OrchestratorCancelledError("任务已取消")
+
+        messages = self._build_messages(user_input, chat_history)
+
+        try:
+            _check_cancel()
+            _emit("metrics_start")
+            response = await self.llm.ainvoke(messages)
+
+            usage_metadata = getattr(response, "usage_metadata", None) or {}
+            usage_payload = {
+                "provider": str(self.llm.model) if hasattr(self.llm, "model") else "",
+                "input_tokens": int(usage_metadata.get("input_tokens", 0) or 0),
+                "output_tokens": int(usage_metadata.get("output_tokens", 0) or 0),
+            }
+
+            reply = response.content or ""
+            _emit("metrics_first_token")
+            _emit("token_usage", usage_payload)
+
+            if self.enable_streaming and reply:
+                for line in reply.replace("\r\n", "\n").split("\n"):
+                    _check_cancel()
+                    _emit("chunk", line + "\n")
+            _emit("log", f"[RESULT] phase_result length={len(reply.strip() if reply else '')}")
+            return reply.strip() if reply else ""
+
+        except OrchestratorCancelledError:
+            _emit("log", "[STOP] 任务已取消")
+            raise
+        except Exception as ex:
+            _emit("error", "ORCHESTRATOR", str(ex))
+            _emit("log", f"[ERR] {ex}")
+            return f"Error: {str(ex)}"
+
+    def _build_analyze_prompt(self, mode: str) -> str:
+        """Analyze 阶段的 system prompt"""
+        base = (
+            "你是 AI Agent Workbench 的分析专家。请仔细分析用户需求，"
+            "输出一个可执行的任务清单。"
+        )
+        if mode == "ask":
+            base += (
+                "\n\nAsk 模式只分析、不执行。请给出：1) 用户意图；2) 需要查看/确认的信息；"
+                "3) 建议的后续操作。输出格式为 Markdown 列表。"
+            )
+        elif mode == "plan":
+            base += (
+                "\n\nPlan 模式需要制定执行计划。请输出任务清单，每个任务包含具体描述。"
+                "输出格式为 JSON 数组或 Markdown 列表，例如：\n"
+                '[{"description": "步骤1: xxx"}, {"description": "步骤2: yyy"}]'
+            )
+        elif mode == "craft":
+            base += (
+                "\n\nCraft 模式需要生成可执行的任务清单。请把用户需求拆分为 3-7 个具体任务，"
+                "每个任务应该是独立的执行单元。输出格式为 JSON 数组或 Markdown 列表，例如：\n"
+                '[{"description": "读取文件 xxx"}, {"description": "修改文件 yyy"}, {"description": "运行测试"}]'
+            )
+        else:
+            base += "\n\n请输出任务清单，格式为 Markdown 列表。"
+        return base
+
+    def _build_verify_prompt(self, mode: str) -> str:
+        """Verify 阶段的 system prompt"""
+        return (
+            "你是 AI Agent Workbench 的验证专家。请根据下方的执行结果，"
+            "判断任务是否完成、是否存在明显错误。"
+            "\n\n输出要求："
+            "\n1. 首先给出结论：通过 / 未通过"
+            "\n2. 简要说明理由"
+            "\n3. 如果未通过，给出修复建议"
+        )
 
     def _build_messages(self, user_input: str, chat_history: List):
         model_id = str(self.llm.model) if hasattr(self.llm, 'model') else "unknown"

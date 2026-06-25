@@ -41,7 +41,7 @@ class AgentWorker(BaseWorker):
                  session_id, system_prompt="", tool_map=None, tool_definitions=None,
                  enable_streaming=True, chat_history=None, user_rules=None,
                  max_tool_rounds=8, task_timeout=120.0, project_root="",
-                 workspace_context=""):
+                 workspace_context="", phase="execute"):
         super().__init__(session_id=session_id, task_timeout=task_timeout)
         self.user_text = user_text
         self.mode_name = mode_name
@@ -56,6 +56,7 @@ class AgentWorker(BaseWorker):
         self.max_tool_rounds = max(1, int(max_tool_rounds)) if max_tool_rounds else 8
         self.project_root = project_root or ""
         self.workspace_context = workspace_context or ""
+        self.phase = (phase or "execute").lower()
         self.confirm_event = threading.Event()
         self.confirm_result = False
         self.metrics = MetricsCollector()
@@ -91,8 +92,11 @@ class AgentWorker(BaseWorker):
                 "error": lambda code, detail: self._report_error(code, detail),
             }
 
-            final_text = await orchestrator.run(
+            final_text = await orchestrator.run_phase(
+                phase=self.phase,
+                mode=self.mode_name,
                 user_input=self.user_text,
+                context=self.workspace_context,
                 chat_history=self.chat_history,
                 callbacks=callbacks,
                 cancel_event=self._cancel_event,

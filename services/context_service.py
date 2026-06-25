@@ -145,8 +145,27 @@ class ContextService(QObject):
     # ═══════════════════════════════════════════════════
     def build_prompt_context(self) -> str:
         """构建注入到 LLM prompt 的当前环境摘要"""
-        lines = ["[当前工作环境]"]
+        return self.get_phase_context("default")
 
+    def get_phase_context(self, phase: str) -> str:
+        """
+        按当前 phase 构建不同的上下文摘要。
+
+        - default / analyze: 完整环境摘要（项目、活动文件、打开文件、选中项）
+        - execute: 侧重当前任务相关上下文，附带活动文件
+        - verify: 侧重项目根目录和最近修改痕迹
+        """
+        phase = (phase or "default").lower()
+
+        if phase == "execute":
+            return self._build_execute_context()
+        if phase == "verify":
+            return self._build_verify_context()
+        return self._build_default_context()
+
+    def _build_default_context(self) -> str:
+        """默认/Analyze 阶段：完整环境摘要"""
+        lines = ["[当前工作环境]"]
         project_root = self._project_root or "未设置"
         lines.append(f"项目目录: {project_root}")
 
@@ -170,6 +189,35 @@ class ContextService(QObject):
             rel_paths = [self._relative_path(p) for p in self._selected_paths]
             lines.append(f"选中项: {', '.join(rel_paths)}")
 
+        lines.append("")
+        return "\n".join(lines)
+
+    def _build_execute_context(self) -> str:
+        """Execute 阶段：精简，只保留项目根目录和活动文件"""
+        lines = ["[执行上下文]"]
+        project_root = self._project_root or "未设置"
+        lines.append(f"项目目录: {project_root}")
+
+        active = self._active_document
+        if active:
+            rel_path = self._relative_path(active.path)
+            lines.append(f"当前操作文件: {rel_path}")
+            if active.preview:
+                lines.append("文件摘要:")
+                lines.append("---")
+                lines.append(active.preview[:300])
+                lines.append("---")
+        lines.append("")
+        return "\n".join(lines)
+
+    def _build_verify_context(self) -> str:
+        """Verify 阶段：侧重项目信息"""
+        lines = ["[验证上下文]"]
+        project_root = self._project_root or "未设置"
+        lines.append(f"项目目录: {project_root}")
+        if self._open_documents:
+            rel_paths = [self._relative_path(d.path) for d in self._open_documents]
+            lines.append(f"已修改/打开文件: {', '.join(rel_paths)}")
         lines.append("")
         return "\n".join(lines)
 

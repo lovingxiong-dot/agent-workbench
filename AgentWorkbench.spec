@@ -28,6 +28,7 @@ a = Analysis(
         'agent_engine.llm_registry',
         'agent_engine.memory_manager',
         'agent_engine.proactive_engine',
+        'agent_engine.phase_manager',
         'tools',
         'tools.system',
         'tools.quant',

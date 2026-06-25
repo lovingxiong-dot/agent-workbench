@@ -1,10 +1,10 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v3.5 | 存档次数 | 10 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v3.6 | 存档次数 | 11 |
 
 ## 项目概要
-AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、MT5 交易、网页抓取、剪贴板管理等能力。v3.1 完成右侧工作区重构；v3.2 引入项目目录上下文；v3.3 对文件预览、对话分栏、活动面板、文档编辑进行精细化打磨；v3.4 让 Agent 具备工作空间感知能力，能自动识别当前项目目录、右侧打开文件，并基于项目根目录解析工具相对路径。
+AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、MT5 交易、网页抓取、剪贴板管理等能力。v3.1 完成右侧工作区重构；v3.2 引入项目目录上下文；v3.3 对文件预览、对话分栏、活动面板、文档编辑进行精细化打磨；v3.4 让 Agent 具备工作空间感知能力，能自动识别当前项目目录、右侧打开文件，并基于项目根目录解析工具相对路径。v3.5 引入请求级指标（token/耗时）并在 AI 气泡下方显示。v3.6 引入 Phase-Driven Workflow Engine：将每次请求按 Mode 切分为 Analyze → Confirm → Execute → Verify → Archive 阶段，Mode 与 Phase 正交，硬门控/软提示分离，任务清单驱动执行。
 
 ## 技术栈
 | 类别 | 技术 | 版本 | 用途 |
@@ -26,11 +26,12 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ├── agent_engine/           # 引擎层
 │   ├── __init__.py
 │   ├── classifier.py       # 意图分类
-│   ├── llm_registry.py     # LLM 提供商注册与持久化
-│   ├── memory_manager.py   # 会话记忆管理
-│   ├── mode_manager.py     # 手动模式管理
-│   ├── orchestrator.py     # 编排器
-│   └── proactive_engine.py # 主动引擎
+    ├── llm_registry.py     # LLM 提供商注册与持久化
+    ├── memory_manager.py   # 会话记忆管理
+    ├── mode_manager.py     # 手动模式管理
+    ├── orchestrator.py     # 编排器
+    ├── phase_manager.py    # Phase-Driven Workflow Engine
+    └── proactive_engine.py # 主动引擎
 ├── tools/                  # 工具层
 │   ├── __init__.py
 │   ├── system.py           # 系统命令 / 文件读写 / 网络 / 剪贴板 / 通知 / 进程
@@ -97,6 +98,8 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v3.6 | 2026-06-26 | Phase-Driven Workflow Engine：Mode×Phase 矩阵、Analyze→Confirm→Execute→Verify→Archive 阶段流转、软硬 Checkpoint、任务清单驱动、UI 阶段指示器与确认门控 | feat | agent_engine/phase_manager.py, agent_engine/orchestrator.py, services/context_service.py, ui/main_window.py, ui/chat_view.py, workers/agent_worker.py, AgentWorkbench.spec, tests/test_phase_manager.py |
+| v3.5 | 2026-06-26 | 请求级指标：token/耗时收集、AI 气泡下方显示 metrics、日志输出 TTFT 详情 | feat | services/metrics_collector.py, agent_engine/orchestrator.py, workers/agent_worker.py, workers/base_worker.py, ui/main_window.py, ui/chat_view.py |
 | v3.4 | 2026-06-26 | 工作空间上下文感知：自动检测项目目录、右侧文件摘要注入 prompt、文件工具相对路径解析、最近项目下拉 | feat | services/context_service.py, services/path_resolver.py, services/project_service.py, agent_engine/orchestrator.py, tools/system.py, ui/main_window.py, ui/widgets/document_editor.py, ui/widgets/workspace.py, ui/widgets/sidebar.py, ui/widgets/status_indicator.py, workers/agent_worker.py, config.yaml, AgentWorkbench.spec, tests/test_context_service.py |
 | v3.3 | 2026-06-25 | 精细化打磨：任意格式文件预览、对话/活动分栏、文档编辑快捷键、修复模型持久化与活动重复记录 | feat/fix | ui/widgets/document_editor.py, ui/widgets/conversation.py, ui/widgets/activity_panel.py, services/activity_service.py, ui/main_window.py, resources/themes/dark_github.qss, AgentWorkbench.spec |
 | v3.2 | 2026-06-25 | 项目目录与对话上下文：资源管理器切换/打开文件夹、按目录组织会话、目录下开启新对话 | feat/refactor | services/project_service.py, services/session_service.py, ui/widgets/sidebar.py, ui/widgets/conversation.py, ui/main_window.py, config.yaml, resources/themes/dark_github.qss |
@@ -112,5 +115,5 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 3. git commit + git tag vX.Y
 4. git push + git push --tags
 
-_更新于 2026-06-26 06:45:00 by AI-Kimi-K2.7-Code_
+_更新于 2026-06-26 07:30:00 by AI-Kimi-K2.7-Code_
 ---
