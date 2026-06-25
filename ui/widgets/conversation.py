@@ -79,3 +79,7 @@ class ConversationListWidget(QWidget):
             if item.data(Qt.UserRole) == session_id:
                 self.list.takeItem(i)
                 return
+
+    def clear_conversations(self):
+        """清空对话列表（用于按项目目录切换时刷新）"""
+        self.list.clear()

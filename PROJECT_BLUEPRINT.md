@@ -1,10 +1,10 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v3.1 | 存档次数 | 6 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v3.2 | 存档次数 | 7 |
 
 ## 项目概要
-AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、MT5 交易、网页抓取、剪贴板管理等能力。v3.1 完成右侧工作区重构：终端 / 日志 / 文档以顶部标签页形式集中管理，左侧资源管理器选中文件可在右侧文档编辑器中查看与编辑。
+AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、MT5 交易、网页抓取、剪贴板管理等能力。v3.1 完成右侧工作区重构；v3.2 引入项目目录上下文：左侧资源管理器支持切换/打开文件夹，每个目录下拥有独立会话列表，切换目录自动加载对应历史对话。
 
 ## 技术栈
 | 类别 | 技术 | 版本 | 用途 |
@@ -42,7 +42,8 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │   ├── __init__.py
 │   ├── config_service.py   # 配置读取与持久化
 │   ├── session_service.py  # SQLite 对话 + Token 用量持久化
-│   └── theme_service.py    # QSS 主题加载
+│   ├── theme_service.py    # QSS 主题加载
+│   └── project_service.py  # 项目目录与会话关联管理
 ├── workers/                # 后台线程
 │   ├── __init__.py
 │   ├── agent_worker.py     # 流式 Agent 推理 + 工具调用
@@ -91,6 +92,7 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v3.2 | 2026-06-25 | 项目目录与对话上下文：资源管理器切换/打开文件夹、按目录组织会话、目录下开启新对话 | feat/refactor | services/project_service.py, services/session_service.py, ui/widgets/sidebar.py, ui/widgets/conversation.py, ui/main_window.py, config.yaml, resources/themes/dark_github.qss |
 | v3.1 | 2026-06-25 | 重建右侧工作区：终端/日志/文档标签页、左侧文件树联动文档编辑器、文本文件编辑模式 | feat/refactor | ui/widgets/workspace.py, ui/widgets/document_editor.py, ui/main_window.py, resources/themes/dark_github.qss, AgentWorkbench.spec |
 | v3 | 2026-06-25 | 工具分层编排、AI身份系统、17工具库、UI全栈修复 | feat/fix | agent_worker, config, main_window, tools/* |
 | v0.3 | 2026-06-25 | v2生产级重构：模块化架构、8工具、流式UI | feat/refactor | 全部模块 |

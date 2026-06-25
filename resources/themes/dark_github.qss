@@ -36,6 +36,29 @@ QToolButton#sidebarBtn:checked { background-color: #1C2128; color: #58A6FF; }
     border-right: 1px solid #30363D; 
 }
 
+/* ── File Tree Toolbar ────────────────────────────── */
+QPushButton#fileTreeToolBtn {
+    background-color: #161B22;
+    color: #E6EDF3;
+    border: 1px solid #30363D;
+    border-radius: 5px;
+    font-size: 12px;
+    padding: 2px;
+}
+QPushButton#fileTreeToolBtn:hover {
+    background-color: #21262D;
+    border: 1px solid #58A6FF;
+}
+QPushButton#fileTreeToolBtn:pressed {
+    background-color: #1C2128;
+}
+
+QLabel#fileTreePath {
+    color: #8B949E;
+    font-size: 10px;
+    padding: 0px 8px 4px 8px;
+}
+
 /* ── Right Workspace ─────────────────────────────── */
 #workspace {
     background-color: #0D1117;

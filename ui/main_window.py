@@ -18,6 +18,7 @@ from agent_engine import ModeManager, LLMRegistry, MemoryManager
 from services.config_service import ConfigService
 from services.session_service import SessionService
 from services.theme_service import ThemeService
+from services.project_service import ProjectService
 from workers.agent_worker import AgentWorker, TOOL_DEFINITIONS
 from ui.widgets import (
     SidebarButton, FileTreeWidget, ConversationListWidget,
@@ -81,6 +82,7 @@ class MainWindow(QMainWindow):
         )
         self.config_service = ConfigService(config_path, writable_path=config_write)
         self.session_service = SessionService()
+        self.project_service = ProjectService(self.session_service, self.config_service)
         self.theme_service = ThemeService()
         self.mode_manager = ModeManager(config_path)
         self.llm_registry = LLMRegistry(config_path, config_write)
@@ -92,8 +94,9 @@ class MainWindow(QMainWindow):
         self._log_max_lines = ui_cfg.get("max_lines", 500)
 
         # ── 全局状态 ────────────────────────────
-        self._current_session = "default"
-        self._sessions = {"default": {"title": "默认会话", "messages": []}}
+        self._project_root = self.project_service.get_current_project()
+        self._current_session = ""
+        self._sessions = {}
         self._current_mode = "ask"
         self._current_llm = None
         self._current_tools = []
@@ -190,10 +193,15 @@ class MainWindow(QMainWindow):
         left_layout.setSpacing(0)
 
         self.left_stack = QStackedWidget()
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        # 若配置中无项目目录，默认使用应用根目录
+        if not self._project_root:
+            self._project_root = self.project_service.set_current_project(app_root)
 
-        self.file_tree = FileTreeWidget(project_root)
+        self.file_tree = FileTreeWidget(self._project_root)
         self.file_tree.file_selected.connect(self._on_file_selected)
+        self.file_tree.folder_changed.connect(self._on_folder_changed)
+        self.file_tree.new_conversation_requested.connect(self._on_new_conversation_in_folder)
 
         self.conversation_list = ConversationListWidget()
         self.conversation_list.new_conversation.connect(self._new_conversation)
@@ -275,7 +283,8 @@ class MainWindow(QMainWindow):
         self._current_model_name = llm_name
 
         self.chat_view.set_mode(mode_name)
-        self.chat_view.set_header(mode_name, llm_name, self._sessions[self._current_session]["title"])
+        current_title = self._sessions.get(self._current_session, {}).get("title", "未命名会话")
+        self.chat_view.set_header(mode_name, llm_name, current_title)
         self.chat_view.populate_models(providers, llm_name)
         self.status_indicator.set_mode(mode_name)
         self.status_indicator.set_model(llm_name)
@@ -293,7 +302,8 @@ class MainWindow(QMainWindow):
         self.llm_registry._save()
 
         provider = self.llm_registry.get_provider_config(llm_name)
-        self.chat_view.set_header(self._current_mode, llm_name, self._sessions[self._current_session]["title"])
+        current_title = self._sessions.get(self._current_session, {}).get("title", "未命名会话")
+        self.chat_view.set_header(self._current_mode, llm_name, current_title)
         self.status_indicator.set_model(llm_name)
         self._on_log_message(f"🔄 切换模型: {llm_name} ({provider.get('model', '?')})")
 
@@ -312,72 +322,103 @@ class MainWindow(QMainWindow):
             self._current_model_name = next(iter(providers.keys()), "tool-agent")
             self._current_llm = self.llm_registry.get_llm(self._current_model_name)
         self.chat_view.populate_models(providers, self._current_model_name)
-        self.chat_view.set_header(self._current_mode, self._current_model_name, self._sessions[self._current_session]["title"])
+        current_title = self._sessions.get(self._current_session, {}).get("title", "未命名会话")
+        self.chat_view.set_header(self._current_mode, self._current_model_name, current_title)
         self._on_log_message("🔧 模型设置已更新")
+
+    # ═══════════════════════════════════════════════════
+    # 项目目录管理
+    # ═══════════════════════════════════════════════════
+    def _on_folder_changed(self, path: str):
+        """用户通过资源管理器切换项目目录"""
+        if not path or path == self._project_root:
+            return
+        self._project_root = self.project_service.set_current_project(path)
+        self._on_log_message(f"📂 切换项目目录: {path}", is_header=True)
+        self._switch_project(path)
+
+    def _on_new_conversation_in_folder(self, path: str):
+        """在指定目录下开启新对话（右键菜单 / 工具栏触发）"""
+        if path and path != self._project_root:
+            self._project_root = self.project_service.set_current_project(path)
+            self.file_tree.set_root_path(path)
+        self._new_conversation(project_path=self._project_root)
+
+    def _switch_project(self, project_path: str, is_init=False):
+        """切换项目目录上下文：加载该目录下会话，无则自动创建"""
+        project_path = self.project_service.normalize_path(project_path)
+        self._project_root = project_path
+        self._sessions = {}
+        self.conversation_list.clear_conversations()
+        self.memory_manager.store.clear()
+        self.chat_view.clear()
+
+        sessions = self.project_service.list_sessions(project_path)
+        if sessions:
+            # 恢复该目录下所有会话
+            for conv in sessions:
+                self._sessions[conv["id"]] = {"title": conv["title"], "messages": []}
+                msgs = self.session_service.get_messages(conv["id"])
+                self._sessions[conv["id"]]["messages"] = msgs
+                self.conversation_list.add_conversation(conv["id"], conv["title"])
+            # 激活最新会话
+            first = sessions[0]
+            self._switch_conversation(first["id"])
+            if not is_init:
+                self._on_log_message(
+                    f"📂 已加载项目: {project_path} ({len(sessions)} 个会话)", is_header=True
+                )
+        else:
+            # 无会话则自动创建一个默认会话
+            session_id = self.project_service.create_session(
+                project_path=project_path,
+                mode=self._current_mode,
+                model=self._current_model_name,
+                title="新对话",
+            )
+            self._sessions[session_id] = {"title": "新对话", "messages": []}
+            self.conversation_list.add_conversation(session_id, "新对话", active=True)
+            self._current_session = session_id
+            self.chat_view.set_header(self._current_mode, self._current_model_name, "新对话")
+            if not is_init:
+                self.chat_view.append_system(
+                    f"已切换到项目目录: {project_path}\n当前无历史会话，已自动创建新对话。"
+                )
+                self._on_log_message(f"📂 新建项目会话: {project_path}", is_header=True)
 
     # ═══════════════════════════════════════════════════
     # 对话管理
     # ═══════════════════════════════════════════════════
     def _init_default_session(self):
-        self.conversation_list.add_conversation("default", "默认会话", active=True)
-        # Restore default session messages from DB if they exist
-        try:
-            msgs = self.session_service.get_messages("default")
-            if msgs:
-                self._sessions["default"]["messages"] = msgs
-                # 同时注入 LangChain 记忆，保证 LLM 能看到完整上下文
-                from langchain_core.messages import HumanMessage, AIMessage
-                history = self.memory_manager.get_session_history("default")
-                history.clear()
-                for msg in msgs:
-                    self._render_stored_message(msg)
-                    if msg["role"] == "user":
-                        history.add_message(HumanMessage(content=msg["content"]))
-                    elif msg["role"] == "ai":
-                        history.add_message(AIMessage(content=msg["content"]))
-                # Restore title if set by first message
-                if msgs and len(msgs) > 0:
-                    first = msgs[0]
-                    title = first["content"][:30]
-                    self._sessions["default"]["title"] = title
-                    self._update_conversation_title("default", title)
-                self.chat_view.set_header(self._current_mode, self._current_model_name,
-                                          self._sessions["default"]["title"])
-                self._on_log_message(f"Restored {len(msgs)} messages from last session")
-                return
-        except Exception:
-            pass
-        self.chat_view.set_header(self._current_mode, self._current_model_name, "默认会话")
-        self.chat_view.append_system(f"欢迎使用 AI Agent Workbench v2。当前模式：{self._current_mode.capitalize()}。")
-        self.chat_view.append_system("新特性：流式输出 · 模型管理 · 对话持久化 · 键盘快捷键")
+        """启动时根据当前项目目录初始化默认会话"""
+        self._switch_project(self._project_root, is_init=True)
+        if not self._sessions:
+            self.chat_view.append_system(
+                f"欢迎使用 AI Agent Workbench。当前项目：{self._project_root}\n当前模式：{self._current_mode.capitalize()}"
+            )
+            self.chat_view.append_system("新特性：项目目录 · 流式输出 · 模型管理 · 对话持久化 · 键盘快捷键")
 
     def _restore_conversations(self):
-        """从 SQLite 恢复对话列表"""
-        try:
-            saved = self.session_service.list_conversations()
-            for conv in saved:
-                if conv["id"] != "default":
-                    self._sessions[conv["id"]] = {"title": conv["title"], "messages": []}
-                    self.conversation_list.add_conversation(conv["id"], conv["title"])
-                    # Load messages
-                    msgs = self.session_service.get_messages(conv["id"])
-                    for msg in msgs:
-                        self._sessions[conv["id"]]["messages"].append(msg)
-        except Exception as e:
-            pass  # Silently handle - DB might not exist yet
+        """启动恢复：由 _init_default_session -> _switch_project 统一处理"""
+        pass
 
-    def _new_conversation(self):
-        session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        title = f"新对话 {len(self._sessions)}"
-        self._sessions[session_id] = {"title": title, "messages": []}
+    def _new_conversation(self, project_path=""):
+        """创建新对话；未指定 project_path 时默认关联当前项目目录"""
+        if not project_path:
+            project_path = self._project_root
+        session_id = self.project_service.create_session(
+            project_path=project_path,
+            mode=self._current_mode,
+            model=self._current_model_name,
+            title="新对话",
+        )
+        self._sessions[session_id] = {"title": "新对话", "messages": []}
         self.memory_manager.get_session_history(session_id)
-        self.conversation_list.add_conversation(session_id, title, active=True)
+        self.conversation_list.add_conversation(session_id, "新对话", active=True)
         self._current_session = session_id
         self.chat_view.clear()
-        self.chat_view.set_header(self._current_mode, self._current_model_name, title)
-        # 持久化
-        self.session_service.create_conversation(session_id, title, self._current_mode, self._current_model_name)
-        self._on_log_message(f"📝 新会话 {title}", is_header=True)
+        self.chat_view.set_header(self._current_mode, self._current_model_name, "新对话")
+        self._on_log_message(f"📝 新会话 @ {project_path or '全局'}", is_header=True)
 
     def _switch_conversation(self, session_id):
         self._current_session = session_id
@@ -413,8 +454,8 @@ class MainWindow(QMainWindow):
             self.chat_view.append_system(content)
 
     def _delete_conversation(self, session_id):
-        if session_id == "default" and len(self._sessions) == 1:
-            QMessageBox.information(self, "提示", "不能删除唯一的默认会话")
+        if len(self._sessions) <= 1:
+            QMessageBox.information(self, "提示", "不能删除唯一的会话")
             return
         self.conversation_list.remove_conversation(session_id)
         self._sessions.pop(session_id, None)
@@ -422,8 +463,9 @@ class MainWindow(QMainWindow):
         # 持久化
         self.session_service.delete_conversation(session_id)
         if self._current_session == session_id:
-            first = next(iter(self._sessions.keys()), "default")
-            self._switch_conversation(first)
+            first = next(iter(self._sessions.keys()), "")
+            if first:
+                self._switch_conversation(first)
 
     def _update_conversation_title(self, session_id, title):
         for i in range(self.conversation_list.list.count()):

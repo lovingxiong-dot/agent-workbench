@@ -13,19 +13,34 @@ manual_modes:
     - clipboard_write
     - send_notification
     - list_processes
-    system_prompt: |
-      You are an AI assistant in Ask mode. Call tools when user requests information.
+    system_prompt: 'You are an AI assistant in Ask mode. Call tools when user requests
+      information.
+
 
       TOOL PRIORITY (MUST FOLLOW):
-      1. For prices/news/weather/facts: use web_fetch FIRST
-      2. For stocks: fetch_stock_data. For economic data: fetch_macro_data
-      3. For files: read_file or list_dir
-      4. NEVER call mt5_get_price for gold/silver/oil prices - use web_fetch instead. mt5 tools are NOT available in Ask mode.
-      5. Do NOT use destructive tools (run_as_admin, write_file, kill_process). Suggest Craft mode if needed.
-      6. After tool result arrives, summarize immediately. Never say "let me check" without calling a tool.
-      7. Do NOT make more than 2 web_fetch calls for the same question. If the first result is insufficient, answer with what you have.
-      8. When max tool rounds is almost reached, you MUST stop calling tools and provide a final answer based on existing results.
 
+      1. For prices/news/weather/facts: use web_fetch FIRST
+
+      2. For stocks: fetch_stock_data. For economic data: fetch_macro_data
+
+      3. For files: read_file or list_dir
+
+      4. NEVER call mt5_get_price for gold/silver/oil prices - use web_fetch instead.
+      mt5 tools are NOT available in Ask mode.
+
+      5. Do NOT use destructive tools (run_as_admin, write_file, kill_process). Suggest
+      Craft mode if needed.
+
+      6. After tool result arrives, summarize immediately. Never say "let me check"
+      without calling a tool.
+
+      7. Do NOT make more than 2 web_fetch calls for the same question. If the first
+      result is insufficient, answer with what you have.
+
+      8. When max tool rounds is almost reached, you MUST stop calling tools and provide
+      a final answer based on existing results.
+
+      '
   plan:
     current_model: tool-agent
     tools:
@@ -42,11 +57,16 @@ manual_modes:
     - list_processes
     - run_backtest
     - write_file
-    system_prompt: |
-      You are a planning expert in Plan mode. Gather facts with tools first, then output structured plan.
+    system_prompt: 'You are a planning expert in Plan mode. Gather facts with tools
+      first, then output structured plan.
 
-      TOOL RULES: web_fetch/read_file for research. fetch_stock_data for stocks. fetch_macro_data for economics. run_backtest for strategy validation. Output: Current State -> Goals -> Step-by-step (resources/time/risks) -> Alternatives. No destructive execution.
 
+      TOOL RULES: web_fetch/read_file for research. fetch_stock_data for stocks. fetch_macro_data
+      for economics. run_backtest for strategy validation. Output: Current State ->
+      Goals -> Step-by-step (resources/time/risks) -> Alternatives. No destructive
+      execution.
+
+      '
   craft:
     current_model: tool-agent
     tools:
@@ -67,21 +87,24 @@ manual_modes:
     - send_notification
     - list_processes
     - kill_process
-    system_prompt: |
-      You are an execution engine in Craft mode. Execute user commands directly with tools.
+    system_prompt: 'You are an execution engine in Craft mode. Execute user commands
+      directly with tools.
 
-      TOOL RULES: Call tools immediately, report results concisely. Confirm for sensitive ops: run_as_admin, mt5_place_order, write_file, kill_process. Never just say "OK" - always call the tool.
 
+      TOOL RULES: Call tools immediately, report results concisely. Confirm for sensitive
+      ops: run_as_admin, mt5_place_order, write_file, kill_process. Never just say
+      "OK" - always call the tool.
+
+      '
 agent:
   defaults:
-    max_tool_rounds: 8          # 全局默认上限
+    max_tool_rounds: 8
   ask:
-    max_tool_rounds: 5          # Ask 模式保守一些
+    max_tool_rounds: 5
   plan:
-    max_tool_rounds: 8          # Plan 模式与全局一致
+    max_tool_rounds: 8
   craft:
-    max_tool_rounds: 12         # Craft 模式允许更长工具链
-
+    max_tool_rounds: 12
 llm_providers:
   fast-chat:
     base_url: http://localhost:11434/v1
@@ -99,17 +122,16 @@ llm_providers:
     base_url: https://api.deepseek.com/v1
     api_key: ${DEEPSEEK_PRO_API_KEY}
     model: deepseek-v4-pro
-
 user_rules:
-  - Always respond in Chinese
-  - Summarize key findings and data sources at end
-
+- Always respond in Chinese
+- Summarize key findings and data sources at end
 memory:
   short_term_db: F:/Agent/agent_workbench/storage/short_term.db
   user_profile: F:/Agent/agent_workbench/storage/user_profile.json
   vector_store: F:/Agent/agent_workbench/storage/vector_store
-
 ui:
   log_panel:
-    visible: true      # 右侧 Agent 日志面板默认显示
-    max_lines: 500     # 超过此行数自动清理旧日志
+    visible: true
+    max_lines: 500
+  explorer:
+    project_root: F:\Agent\agent_workbench

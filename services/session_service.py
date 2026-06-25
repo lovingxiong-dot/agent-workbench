@@ -7,7 +7,7 @@ DB_PATH = "storage/conversations.db"
 
 
 class SessionService:
-    """对话持久化服务"""
+    """对话持久化服务（支持 project_path 维度）"""
 
     def __init__(self, db_path=DB_PATH):
         self.db_path = db_path
@@ -22,7 +22,8 @@ class SessionService:
             mode TEXT,
             model TEXT,
             created_at TEXT,
-            updated_at TEXT
+            updated_at TEXT,
+            project_path TEXT DEFAULT ''
         )''')
         conn.execute('''CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,7 +35,6 @@ class SessionService:
             created_at TEXT,
             FOREIGN KEY(conversation_id) REFERENCES conversations(id)
         )''')
-        # Token usage tracking table
         conn.execute('''CREATE TABLE IF NOT EXISTS token_usage (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             provider TEXT,
@@ -45,24 +45,69 @@ class SessionService:
         )''')
         conn.commit()
         conn.close()
+        # 迁移旧数据库，添加 project_path 列
+        self._ensure_project_path_column()
 
-    def list_conversations(self) -> list:
+    def _ensure_project_path_column(self):
+        """Schema 迁移：为旧表增加 project_path 列"""
+        conn = sqlite3.connect(self.db_path)
+        try:
+            cols = [row[1] for row in conn.execute("PRAGMA table_info(conversations)").fetchall()]
+            if "project_path" not in cols:
+                conn.execute("ALTER TABLE conversations ADD COLUMN project_path TEXT DEFAULT ''")
+                conn.commit()
+        except Exception:
+            pass
+        finally:
+            conn.close()
+
+    def list_conversations(self, project_path=None) -> list:
+        """列出会话；传入 project_path 则按目录过滤"""
+        conn = sqlite3.connect(self.db_path)
+        if project_path is not None:
+            rows = conn.execute(
+                "SELECT id, title, mode, model, created_at, project_path FROM conversations "
+                "WHERE project_path=? ORDER BY updated_at DESC",
+                (project_path,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, title, mode, model, created_at, project_path FROM conversations "
+                "ORDER BY updated_at DESC"
+            ).fetchall()
+        conn.close()
+        return [
+            {"id": r[0], "title": r[1], "mode": r[2], "model": r[3], "created_at": r[4], "project_path": r[5] or ""}
+            for r in rows
+        ]
+
+    def list_projects(self) -> list:
+        """列出所有有会话记录的目录"""
         conn = sqlite3.connect(self.db_path)
         rows = conn.execute(
-            "SELECT id, title, mode, model, created_at FROM conversations ORDER BY updated_at DESC"
+            "SELECT project_path, MAX(updated_at) AS last_at FROM conversations "
+            "WHERE project_path != '' GROUP BY project_path ORDER BY last_at DESC"
         ).fetchall()
         conn.close()
-        return [{"id": r[0], "title": r[1], "mode": r[2], "model": r[3], "created_at": r[4]} for r in rows]
+        return [{"path": r[0], "updated_at": r[1]} for r in rows]
 
-    def create_conversation(self, conv_id, title, mode="ask", model="tool-agent"):
+    def create_conversation(self, conv_id, title, mode="ask", model="tool-agent", project_path=""):
         conn = sqlite3.connect(self.db_path)
         now = datetime.now().isoformat()
         conn.execute(
-            "INSERT OR REPLACE INTO conversations VALUES (?,?,?,?,?,?)",
-            (conv_id, title, mode, model, now, now),
+            "INSERT OR REPLACE INTO conversations VALUES (?,?,?,?,?,?,?)",
+            (conv_id, title, mode, model, now, now, project_path or ""),
         )
         conn.commit()
         conn.close()
+
+    def get_conversation_project_path(self, conversation_id) -> str:
+        conn = sqlite3.connect(self.db_path)
+        row = conn.execute(
+            "SELECT project_path FROM conversations WHERE id=?", (conversation_id,)
+        ).fetchone()
+        conn.close()
+        return row[0] if row else ""
 
     def get_messages(self, conversation_id) -> list:
         conn = sqlite3.connect(self.db_path)
