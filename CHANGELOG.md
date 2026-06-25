@@ -1,4 +1,23 @@
-## v3.6 (2026-06-26) — Phase-Driven Workflow Engine + 终端解释器管理
+## v3.7 (2026-06-26) — 终端解释器管理与 AI 上下文感知
+
+### feat
+- **终端解释器管理**：新增 `InterpreterService`，自动发现 Python(venv/系统)/PowerShell/CMD/Git Bash，支持手动下拉切换与持久化。
+- **终端 UI 增强**：`TerminalWidget` 顶部新增解释器选择下拉框，切换时自动清空终端。
+- **解释器上下文注入**：`ContextService` 将当前终端解释器信息注入 prompt，Agent 可知悉可用解释器。
+- **解释器专用工具**：`tools/system.py` 新增 `run_python` / `run_powershell` / `run_bash`，AI 可直接调用指定解释器执行命令。
+
+### refactor
+- `TerminalWorker` 同时支持 str（shell=True）与 list（shell=False）命令执行。
+
+### fix
+- 修复 `workers/terminal_worker.py` 缩进错误导致的模块无法导入问题。
+- 修复 `MainWindow` 中 `_project_root` 未初始化就传给 `InterpreterService` 的顺序错误。
+- 修复 `TerminalWidget` 创建时未传入 `interpreter_service` 导致下拉框为空的问题。
+
+### test
+- 新增 `tests/test_interpreter_service.py`，覆盖解释器发现、选择、命令构造。
+
+## v3.6 (2026-06-26) — Phase-Driven Workflow Engine
 
 ### feat
 - **阶段驱动工作流**：新增 `PhaseManager`，将每次请求按 Mode 切分为 Analyze → Confirm → Execute → Verify → Archive。
@@ -9,25 +28,16 @@
 - **UI 阶段指示器**：底部状态栏显示 `[分析中]` `[等待确认]` `[执行中 N/M]` `[验证中]` 等阶段标签。
 - **确认门控**：对话区显示任务清单 + 「确认执行」/「重新分析」按钮，防止 AI 直接写错代码。
 - **Orchestrator.run_phase()**：新增 phase-aware 入口，Analyze/Verify 阶段不绑定工具，输出结构化结果。
-- **终端解释器管理**：新增 `InterpreterService`，自动发现 Python(venv/系统)/PowerShell/CMD/Git Bash，支持手动下拉切换与持久化。
-- **终端 UI 增强**：`TerminalWidget` 顶部新增解释器选择下拉框，切换时自动清空终端。
-- **解释器上下文注入**：`ContextService` 将当前终端解释器信息注入 prompt，Agent 可知悉可用解释器。
-- **解释器专用工具**：`tools/system.py` 新增 `run_python` / `run_powershell` / `run_bash`，AI 可直接调用指定解释器执行命令。
 
 ### refactor
 - `AgentWorker` 增加 `phase` 参数，复用同一 worker 完成不同阶段调用。
 - `MainWindow._send_message()` 改为启动 `PhaseManager` 工作流，而非直接创建 worker。
-- `TerminalWorker` 同时支持 str（shell=True）与 list（shell=False）命令执行。
 
 ### fix
-- 修复 `workers/terminal_worker.py` 缩进错误导致的模块无法导入问题。
 - 修复 `AgentWorkbench.spec` 文件头 BOM/零宽字符污染。
-- 修复 `MainWindow` 中 `_project_root` 未初始化就传给 `InterpreterService` 的顺序错误。
-- 修复 `TerminalWidget` 创建时未传入 `interpreter_service` 导致下拉框为空的问题。
 
 ### test
 - 新增 `tests/test_phase_manager.py`，覆盖 Mode×Phase 矩阵、软硬 checkpoint、阶段流转、任务解析。
-- 新增 `tests/test_interpreter_service.py`，覆盖解释器发现、选择、命令构造。
 
 ## v3.5 (2026-06-26) — 推理指标：Token 与响应时间可视化
 
