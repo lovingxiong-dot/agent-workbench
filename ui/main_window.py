@@ -75,8 +75,6 @@ def resource_path(relative_path):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        app_version = self.config_service.get("app.version", "v3.x")
-        self.setWindowTitle(f"AI Agent 工作台 {app_version} · 手动模式")
         self.resize(1600, 950)
 
         # ── 基础路径与配置 ──────────────────────
@@ -87,6 +85,10 @@ class MainWindow(QMainWindow):
             else config_path
         )
         self.config_service = ConfigService(config_path, writable_path=config_write)
+
+        # 窗口标题动态读取版本号（必须在 config_service 初始化之后）
+        app_version = self.config_service.get("app.version", "v3.x")
+        self.setWindowTitle(f"AI Agent 工作台 {app_version} · 手动模式")
 
         # ── 服务初始化 ──────────────────────────
         self.session_service = SessionService()
