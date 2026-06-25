@@ -19,6 +19,7 @@ from services.config_service import ConfigService
 from services.session_service import SessionService
 from services.theme_service import ThemeService
 from services.project_service import ProjectService
+from services.activity_service import ActivityService
 from workers.agent_worker import AgentWorker, TOOL_DEFINITIONS
 from ui.widgets import (
     SidebarButton, FileTreeWidget, ConversationListWidget,
@@ -83,6 +84,13 @@ class MainWindow(QMainWindow):
         self.config_service = ConfigService(config_path, writable_path=config_write)
         self.session_service = SessionService()
         self.project_service = ProjectService(self.session_service, self.config_service)
+        # 活动记录持久化到可写目录（兼容 PyInstaller）
+        activity_storage_path = (
+            os.path.join(os.path.dirname(sys.executable), "storage", "activities.json")
+            if getattr(sys, 'frozen', False)
+            else "storage/activities.json"
+        )
+        self.activity_service = ActivityService(activity_storage_path)
         self.theme_service = ThemeService()
         self.mode_manager = ModeManager(config_path)
         self.llm_registry = LLMRegistry(config_path, config_write)
@@ -204,7 +212,7 @@ class MainWindow(QMainWindow):
         self.file_tree.new_conversation_requested.connect(self._on_new_conversation_in_folder)
 
         self.conversation_list = ConversationListWidget()
-        self.conversation_list.new_conversation.connect(self._new_conversation)
+        self.conversation_list.new_conversation.connect(self._on_new_conversation_requested)
         self.conversation_list.conversation_selected.connect(self._switch_conversation)
         self.conversation_list.conversation_deleted.connect(self._delete_conversation)
 
@@ -226,6 +234,7 @@ class MainWindow(QMainWindow):
         self.workspace = WorkspaceWidget()
         self.workspace.setMinimumWidth(300)
         self.workspace.set_logs_max_lines(self._log_max_lines)
+        self.workspace.set_project_path(self._project_root)
         self.workspace.setVisible(self._log_panel_visible)
         main_layout.addWidget(self.workspace)
 
@@ -296,10 +305,11 @@ class MainWindow(QMainWindow):
     def _on_model_changed(self, llm_name):
         self._current_llm = self.llm_registry.get_llm(llm_name)
         self._current_model_name = llm_name
-        llm_registry_config = self.config_service.get("manual_modes", {})
+        # 持久化当前模式选用的模型到 config.yaml
+        llm_registry_config = self.config_service.config.setdefault("manual_modes", {})
         llm_registry_config[self._current_mode] = llm_registry_config.get(self._current_mode, {})
         llm_registry_config[self._current_mode]["current_model"] = llm_name
-        self.llm_registry._save()
+        self.config_service.save()
 
         provider = self.llm_registry.get_provider_config(llm_name)
         current_title = self._sessions.get(self._current_session, {}).get("title", "未命名会话")
@@ -344,32 +354,54 @@ class MainWindow(QMainWindow):
             self.file_tree.set_root_path(path)
         self._new_conversation(project_path=self._project_root)
 
+    def _on_new_conversation_requested(self, project_flag: str):
+        """对话列表新建按钮：'<project>' 表示当前项目，'' 表示全局纯对话"""
+        if project_flag == "<project>":
+            self._new_conversation(project_path=self._project_root)
+        else:
+            self._new_conversation(project_path="")
+
     def _switch_project(self, project_path: str, is_init=False):
-        """切换项目目录上下文：加载该目录下会话，无则自动创建"""
+        """切换项目目录上下文：加载该目录下会话与全局纯对话"""
         project_path = self.project_service.normalize_path(project_path)
         self._project_root = project_path
         self._sessions = {}
         self.conversation_list.clear_conversations()
+        self.conversation_list.set_project_label(project_path)
         self.memory_manager.store.clear()
         self.chat_view.clear()
 
-        sessions = self.project_service.list_sessions(project_path)
-        if sessions:
-            # 恢复该目录下所有会话
-            for conv in sessions:
-                self._sessions[conv["id"]] = {"title": conv["title"], "messages": []}
-                msgs = self.session_service.get_messages(conv["id"])
-                self._sessions[conv["id"]]["messages"] = msgs
-                self.conversation_list.add_conversation(conv["id"], conv["title"])
-            # 激活最新会话
-            first = sessions[0]
+        has_any = False
+
+        # 1) 加载全局纯对话
+        global_sessions = self.project_service.list_sessions("")
+        for conv in global_sessions:
+            self._sessions[conv["id"]] = {"title": conv["title"], "messages": []}
+            msgs = self.session_service.get_messages(conv["id"])
+            self._sessions[conv["id"]]["messages"] = msgs
+            self.conversation_list.add_conversation(conv["id"], conv["title"], project_path="")
+            has_any = True
+
+        # 2) 加载当前项目目录下会话
+        project_sessions = self.project_service.list_sessions(project_path)
+        for conv in project_sessions:
+            self._sessions[conv["id"]] = {"title": conv["title"], "messages": []}
+            msgs = self.session_service.get_messages(conv["id"])
+            self._sessions[conv["id"]]["messages"] = msgs
+            self.conversation_list.add_conversation(conv["id"], conv["title"], project_path=project_path)
+            has_any = True
+
+        if has_any:
+            # 优先激活项目会话；无则激活全局会话
+            first = project_sessions[0] if project_sessions else global_sessions[0]
             self._switch_conversation(first["id"])
             if not is_init:
                 self._on_log_message(
-                    f"📂 已加载项目: {project_path} ({len(sessions)} 个会话)", is_header=True
+                    f"📂 已加载项目: {project_path} ({len(project_sessions)} 个项目会话, {len(global_sessions)} 个全局会话)",
+                    is_header=True,
                 )
         else:
-            # 无会话则自动创建一个默认会话
+            # 无任何会话时，自动在当前项目创建一个默认会话
             session_id = self.project_service.create_session(
                 project_path=project_path,
                 mode=self._current_mode,
@@ -377,7 +409,7 @@ class MainWindow(QMainWindow):
                 title="新对话",
             )
             self._sessions[session_id] = {"title": "新对话", "messages": []}
-            self.conversation_list.add_conversation(session_id, "新对话", active=True)
+            self.conversation_list.add_conversation(session_id, "新对话", project_path=project_path, active=True)
             self._current_session = session_id
             self.chat_view.set_header(self._current_mode, self._current_model_name, "新对话")
             if not is_init:
@@ -385,6 +417,10 @@ class MainWindow(QMainWindow):
                     f"已切换到项目目录: {project_path}\n当前无历史会话，已自动创建新对话。"
                 )
                 self._on_log_message(f"📂 新建项目会话: {project_path}", is_header=True)
+
+        # 同步活动面板的项目路径过滤
+        self.workspace.set_project_path(project_path)
+        self._refresh_activities()
 
     # ═══════════════════════════════════════════════════
     # 对话管理
@@ -403,9 +439,7 @@ class MainWindow(QMainWindow):
         pass
 
     def _new_conversation(self, project_path=""):
-        """创建新对话；未指定 project_path 时默认关联当前项目目录"""
-        if not project_path:
-            project_path = self._project_root
+        """创建新对话；project_path='' 表示全局纯对话，否则关联项目目录"""
         session_id = self.project_service.create_session(
             project_path=project_path,
             mode=self._current_mode,
@@ -414,11 +448,12 @@ class MainWindow(QMainWindow):
         )
         self._sessions[session_id] = {"title": "新对话", "messages": []}
         self.memory_manager.get_session_history(session_id)
-        self.conversation_list.add_conversation(session_id, "新对话", active=True)
+        self.conversation_list.add_conversation(session_id, "新对话", project_path=project_path, active=True)
         self._current_session = session_id
         self.chat_view.clear()
         self.chat_view.set_header(self._current_mode, self._current_model_name, "新对话")
-        self._on_log_message(f"📝 新会话 @ {project_path or '全局'}", is_header=True)
+        label = "全局" if project_path == "" else project_path
+        self._on_log_message(f"📝 新会话 @ {label}", is_header=True)
 
     def _switch_conversation(self, session_id):
         self._current_session = session_id
@@ -468,12 +503,13 @@ class MainWindow(QMainWindow):
                 self._switch_conversation(first)
 
     def _update_conversation_title(self, session_id, title):
-        for i in range(self.conversation_list.list.count()):
-            item = self.conversation_list.list.item(i)
-            if item.data(Qt.UserRole) == session_id:
-                item.setText(title)
-                item.setToolTip(title)
-                return
+        for lst in (self.conversation_list.project_list, self.conversation_list.global_list):
+            for i in range(lst.count()):
+                item = lst.item(i)
+                if item.data(Qt.UserRole) == session_id:
+                    item.setText(title)
+                    item.setToolTip(title)
+                    return
 
     # ═══════════════════════════════════════════════════
     # 消息发送
@@ -494,7 +530,11 @@ class MainWindow(QMainWindow):
             session["title"] = title
             self._update_conversation_title(self._current_session, title)
             self.chat_view.set_header(self._current_mode, self._current_model_name, title)
-            self.session_service.create_conversation(self._current_session, title, self._current_mode, self._current_model_name)
+            project_path = self.project_service.get_session_project(self._current_session)
+            self.session_service.create_conversation(
+                self._current_session, title, self._current_mode, self._current_model_name,
+                project_path=project_path
+            )
 
         # 2. 系统提示与记忆
         mode_config = self.config_service.get_mode_config(self._current_mode)
@@ -584,7 +624,61 @@ class MainWindow(QMainWindow):
 
     @Slot(str)
     def _on_log_message(self, text, is_header=False):
+        """原始日志追加 + 结构化活动记录"""
         self.workspace.add_log(text, is_header=is_header)
+        self._add_activity_from_log(text, is_header)
+
+    def _add_activity(self, title: str, category: str, detail: str = ""):
+        """添加结构化活动并刷新面板"""
+        self.activity_service.add(
+            title=title,
+            category=category,
+            project_path=self._project_root,
+            summary=detail[:60] if detail else title,
+            detail=detail or title,
+        )
+        self._refresh_activities()
+
+    def _refresh_activities(self):
+        self.workspace.refresh_activities(
+            self.activity_service.list_by_project(self._project_root)
+        )
+
+    def _add_activity_from_log(self, text: str, is_header: bool = False):
+        """从日志文本推断活动类别并记录"""
+        category = "系统"
+        title = text
+        detail = text
+
+        if text.startswith("📂 切换项目目录") or text.startswith("📂 已加载项目") or text.startswith("📂 新建项目会话"):
+            category = "项目"
+            title = "切换项目目录"
+        elif text.startswith("📁 资源管理器"):
+            category = "文件"
+            title = "打开文件"
+            path_part = text[len("📁 资源管理器"):].strip()
+            try:
+                size = os.path.getsize(path_part) if os.path.exists(path_part) else 0
+                detail = f"路径: {path_part}\n大小: {size} bytes"
+            except Exception:
+                detail = text
+        elif text.startswith("📝 新会话"):
+            category = "对话"
+            title = "新建对话"
+        elif text.startswith("📂 切换会话"):
+            category = "对话"
+            title = "切换对话"
+        elif text.startswith("▶ 用户:"):
+            category = "对话"
+            title = "用户输入"
+        elif text.startswith("🔄 切换模式") or text.startswith("🔄 切换模型"):
+            category = "系统"
+            title = "模式/模型切换"
+        elif text.startswith("🔧"):
+            category = "系统"
+            title = "设置更新"
+
+        self._add_activity(title, category, detail)
 
     def _toggle_log_panel(self, visible: bool):
         self._log_panel_visible = visible

@@ -106,12 +106,53 @@ QTextEdit#logArea {
     color: #8B949E;
     font-size: 11px;
 }
+QPushButton#docEditorEditBtn {
+    background-color: #21262D; color: #E6EDF3; border: 1px solid #30363D;
+    padding: 3px 12px; border-radius: 5px; font-size: 11px;
+}
+QPushButton#docEditorEditBtn:hover { background-color: #30363D; border: 1px solid #58A6FF; }
+QPushButton#docEditorCancelBtn {
+    background-color: #21262D; color: #E6EDF3; border: 1px solid #30363D;
+    padding: 3px 12px; border-radius: 5px; font-size: 11px;
+}
+QPushButton#docEditorCancelBtn:hover { background-color: #DA3633; border: 1px solid #DA3633; }
+QPushButton#docEditorSaveBtn {
+    background-color: #238636; color: #FFFFFF; border: 1px solid #238636;
+    padding: 3px 12px; border-radius: 5px; font-size: 11px;
+}
+QPushButton#docEditorSaveBtn:hover { background-color: #2EA043; }
 QTextEdit#docEditor {
     background-color: #0D1117;
     border: none;
     padding: 12px;
     font-family: "Cascadia Code", "Consolas", monospace;
     font-size: 12px;
+}
+
+/* ── Activity Panel ───────────────────────────────── */
+QListWidget#activityList {
+    background-color: transparent;
+    border: none;
+    color: #E6EDF3;
+    font-size: 12px;
+    outline: none;
+}
+QListWidget#activityList::item {
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin: 2px 6px;
+    border-bottom: 1px solid #21262D;
+}
+QListWidget#activityList::item:hover { background-color: #21262D; }
+QListWidget#activityList::item:selected { background-color: #1F6FEB33; }
+QTextEdit#activityDetail {
+    background-color: #161B22;
+    border: 1px solid #30363D;
+    border-radius: 6px;
+    padding: 10px;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 11px;
+    color: #E6EDF3;
 }
 
 #panelHeader {

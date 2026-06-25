@@ -1,10 +1,8 @@
 """
 右侧工作区组件
-- 顶部标签栏：终端 / 日志 / 文档
-- 集中管理终端、日志、文档编辑器的显示与交互
+- 顶部标签栏：终端 / 活动 / 文档
+- 集中管理终端、结构化活动、文档编辑器的显示与交互
 """
-from datetime import datetime
-
 from PySide6.QtWidgets import (
     QTabWidget, QWidget, QVBoxLayout, QTextEdit,
 )
@@ -13,6 +11,7 @@ from PySide6.QtCore import Qt
 
 from .terminal import TerminalWidget
 from .document_editor import DocumentEditor
+from .activity_panel import ActivityWidget
 
 
 class WorkspaceWidget(QTabWidget):
@@ -28,23 +27,23 @@ class WorkspaceWidget(QTabWidget):
         self.terminal = TerminalWidget()
         self.addTab(self.terminal, "终端")
 
-        # ── 日志 ────────────────────────────────
-        log_widget = QWidget()
-        log_layout = QVBoxLayout(log_widget)
-        log_layout.setContentsMargins(0, 0, 0, 0)
-        log_layout.setSpacing(0)
+        # ── 活动 ────────────────────────────────
+        self.activity_panel = ActivityWidget()
+        self.addTab(self.activity_panel, "活动")
+
+        # ── 保留一个最小化的原始日志区（用于调试，不加入 Tab）──
         self.log_area = QTextEdit()
         self.log_area.setReadOnly(True)
         self.log_area.setFont(QFont("Cascadia Code", 9))
         self.log_area.setObjectName("logArea")
-        log_layout.addWidget(self.log_area)
-        self.addTab(log_widget, "日志")
 
         # ── 文档 ────────────────────────────────
         self.document_editor = DocumentEditor()
         self.addTab(self.document_editor, "文档")
 
     def add_log(self, text: str, is_header: bool = False):
+        """保留原始日志追加能力，用于内部调试"""
+        from datetime import datetime
         timestamp = datetime.now().strftime("%H:%M:%S")
         if is_header:
             self.log_area.append("")
@@ -83,3 +82,11 @@ class WorkspaceWidget(QTabWidget):
 
     def set_document_editable(self, editable: bool):
         self.document_editor.set_editable(editable)
+
+    def set_project_path(self, path: str):
+        """同步当前项目路径到活动面板"""
+        self.activity_panel.set_project_path(path)
+
+    def refresh_activities(self, activities: list):
+        """刷新活动面板数据"""
+        self.activity_panel.set_activities(activities)
