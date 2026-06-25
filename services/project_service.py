@@ -80,3 +80,93 @@ class ProjectService:
     def has_sessions(self, project_path: str) -> bool:
         """指定目录下是否已有会话"""
         return len(self.list_sessions(project_path)) > 0
+
+    def detect_current_project(self, fallback_path: str = "") -> str:
+        """启动时自动检测当前用户最可能正在操作的目录。
+
+        优先级：
+        1. config 中持久化的 project_root（若目录仍存在）。
+        2. SessionService 中最近有会话记录的目录。
+        3. ActivityService 中最近一条 project_path 非空的活动目录。
+        4. fallback_path（通常传应用根目录）。
+        """
+        # 1) config 持久化值
+        configured = self.get_current_project()
+        if configured and os.path.isdir(configured):
+            return configured
+
+        # 2) 最近有会话的目录
+        try:
+            projects = self.list_projects()
+            if projects:
+                latest = projects[0].get("path", "")
+                if latest and os.path.isdir(latest):
+                    return self.set_current_project(latest)
+        except Exception:
+            pass
+
+        # 3) 最近活动记录中的 project_path
+        try:
+            from services.activity_service import ActivityService
+            activity_storage_path = (
+                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "storage", "activities.json")
+            )
+            activity_service = ActivityService(activity_storage_path)
+            for activity in activity_service.list_all():
+                path = activity.get("project_path", "")
+                if path and os.path.isdir(path):
+                    return self.set_current_project(path)
+        except Exception:
+            pass
+
+        # 4) 回退
+        fallback = fallback_path or os.getcwd()
+        return self.set_current_project(fallback)
+
+    def list_recent_projects(self, limit: int = 10) -> List[Dict]:
+        """返回最近项目列表，供 UI 下拉使用。
+
+        来源合并：
+        - config 中的 recent_projects（按顺序）。
+        - 有会话记录的目录（按最近更新时间）。
+        """
+        recent = []
+        seen = set()
+
+        # config 中显式保存的最近项目
+        cfg_recent = (
+            self._config_service.get("ui", {})
+            .get("explorer", {})
+            .get("recent_projects", [])
+        )
+        for path in cfg_recent:
+            path = self.normalize_path(path)
+            if path and os.path.isdir(path) and path not in seen:
+                seen.add(path)
+                recent.append({"path": path, "source": "recent"})
+
+        # 有会话记录的目录
+        try:
+            for item in self.list_projects():
+                path = self.normalize_path(item.get("path", ""))
+                if path and os.path.isdir(path) and path not in seen:
+                    seen.add(path)
+                    recent.append({"path": path, "source": "session", "updated_at": item.get("updated_at", "")})
+        except Exception:
+            pass
+
+        return recent[:limit]
+
+    def add_recent_project(self, path: str, max_count: int = 10):
+        """把目录加入最近项目列表并持久化到 config.yaml"""
+        path = self.normalize_path(path)
+        if not path or not os.path.isdir(path):
+            return
+        ui_cfg = self._config_service.config.setdefault("ui", {})
+        explorer_cfg = ui_cfg.setdefault("explorer", {})
+        recent = explorer_cfg.get("recent_projects", [])
+        # 去重并移到最前
+        recent = [self.normalize_path(p) for p in recent if self.normalize_path(p) != path]
+        recent.insert(0, path)
+        explorer_cfg["recent_projects"] = recent[:max_count]
+        self._config_service.save()

@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QTextEdit, QMessageBox,
 )
 from PySide6.QtGui import QFont, QImageReader, QPixmap, QKeySequence, QAction
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 
 
 def _detect_text_encoding(data: bytes) -> tuple[str, bool]:
@@ -51,6 +51,9 @@ def _format_hex_preview(data: bytes, max_bytes: int = 512) -> str:
 
 
 class DocumentEditor(QWidget):
+    document_opened = Signal(str, str, int)   # path, preview, size
+    document_closed = Signal(str)             # path
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._path = ""
@@ -217,9 +220,21 @@ class DocumentEditor(QWidget):
         # 文本 vs 二进制
         text, is_binary = _detect_text_encoding(data)
         if is_binary:
-            return self._open_binary(path, mime, size, data)
+            ok = self._open_binary(path, mime, size, data)
+            self._emit_document_opened(path, "", size)
+            return ok
 
-        return self._open_text(path, text, size)
+        ok = self._open_text(path, text, size)
+        preview = text[:500] if ok else ""
+        self._emit_document_opened(path, preview, size)
+        return ok
+
+    def _emit_document_opened(self, path: str, preview: str, size: int):
+        """统一发射文档打开信号"""
+        try:
+            self.document_opened.emit(path, preview, size)
+        except Exception:
+            pass
 
     def _open_text(self, path: str, text: str, size: int) -> bool:
         self._file_type = "text"
@@ -237,11 +252,15 @@ class DocumentEditor(QWidget):
         self._file_type = "image"
         reader = QImageReader(path)
         if not reader.canRead():
-            return self._open_binary(path, mime, size, b"")
+            ok = self._open_binary(path, mime, size, b"")
+            self._emit_document_opened(path, "", size)
+            return ok
         # 在 QTextEdit 中显示图片，限制最大宽度为编辑区宽度
         pixmap = QPixmap.fromImageReader(reader)
         if pixmap.isNull():
-            return self._open_binary(path, mime, size, b"")
+            ok = self._open_binary(path, mime, size, b"")
+            self._emit_document_opened(path, "", size)
+            return ok
 
         max_width = 800
         if pixmap.width() > max_width:
@@ -256,6 +275,7 @@ class DocumentEditor(QWidget):
         )
         self.status_label.setText(f"[图片] {size} bytes")
         self._update_button_state()
+        self._emit_document_opened(path, "", size)
         return True
 
     def _open_binary(self, path: str, mime: str, size: int, data: bytes) -> bool:
@@ -302,6 +322,7 @@ class DocumentEditor(QWidget):
             QMessageBox.warning(self, "保存失败", str(e))
 
     def clear(self):
+        closed_path = self._path
         self._path = ""
         self._encoding = "utf-8"
         self._file_type = "none"
@@ -313,3 +334,8 @@ class DocumentEditor(QWidget):
         self.path_label.setToolTip("")
         self.status_label.setText("")
         self._update_button_state()
+        if closed_path:
+            try:
+                self.document_closed.emit(closed_path)
+            except Exception:
+                pass

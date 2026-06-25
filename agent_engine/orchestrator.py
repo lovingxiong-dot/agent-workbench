@@ -35,6 +35,7 @@ class AgentOrchestrator:
         max_tool_rounds: int = 8,
         enable_streaming: bool = True,
         tool_executor: Optional[Callable[[str, Any], str]] = None,
+        workspace_context: str = "",
     ):
         self.llm = llm
         self.tool_map = tool_map or {}
@@ -44,6 +45,7 @@ class AgentOrchestrator:
         self.max_tool_rounds = max(1, int(max_tool_rounds))
         self.enable_streaming = enable_streaming
         self.tool_executor = tool_executor or self._default_tool_executor
+        self.workspace_context = workspace_context or ""
 
     async def run(
         self,
@@ -193,6 +195,8 @@ class AgentOrchestrator:
         if self.user_rules:
             rule_lines = "\n".join(f"{i+1}. {r}" for i, r in enumerate(self.user_rules))
             prompt += f"\n\n## USER RULES (MUST FOLLOW)\n{rule_lines}"
+        if self.workspace_context:
+            prompt += f"\n\n## CURRENT WORKSPACE CONTEXT (MUST USE THIS WHEN ANSWERING)\n{self.workspace_context}"
         return [SystemMessage(content=prompt)] + chat_history + [HumanMessage(content=user_input)]
 
     def _build_fallback_reply(self, results: List[str]) -> str:

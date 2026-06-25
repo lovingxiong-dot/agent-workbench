@@ -20,6 +20,7 @@ from services.session_service import SessionService
 from services.theme_service import ThemeService
 from services.project_service import ProjectService
 from services.activity_service import ActivityService
+from services.context_service import ContextService
 from workers.agent_worker import AgentWorker, TOOL_DEFINITIONS
 from ui.widgets import (
     SidebarButton, FileTreeWidget, ConversationListWidget,
@@ -84,6 +85,7 @@ class MainWindow(QMainWindow):
         self.config_service = ConfigService(config_path, writable_path=config_write)
         self.session_service = SessionService()
         self.project_service = ProjectService(self.session_service, self.config_service)
+        self.context_service = ContextService(self.project_service, self)
         # 活动记录持久化到可写目录（兼容 PyInstaller）
         activity_storage_path = (
             os.path.join(os.path.dirname(sys.executable), "storage", "activities.json")
@@ -102,7 +104,8 @@ class MainWindow(QMainWindow):
         self._log_max_lines = ui_cfg.get("max_lines", 500)
 
         # ── 全局状态 ────────────────────────────
-        self._project_root = self.project_service.get_current_project()
+        app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self._project_root = self.project_service.detect_current_project(app_root)
         self._current_session = ""
         self._sessions = {}
         self._current_mode = "ask"
@@ -122,6 +125,9 @@ class MainWindow(QMainWindow):
         self.chat_view.stop_requested.connect(self._on_stop_generation)
         self.chat_view.log_panel_toggled.connect(self._toggle_log_panel)
         self.chat_view.set_log_panel_checked(self._log_panel_visible)
+        self.context_service.context_changed.connect(self._on_context_changed)
+        self.workspace.document_opened.connect(self._on_document_opened)
+        self.workspace.document_closed.connect(self._on_document_closed)
 
         # ── 初始化 ──────────────────────────────
         self._init_mode("ask")
@@ -201,15 +207,12 @@ class MainWindow(QMainWindow):
         left_layout.setSpacing(0)
 
         self.left_stack = QStackedWidget()
-        app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        # 若配置中无项目目录，默认使用应用根目录
-        if not self._project_root:
-            self._project_root = self.project_service.set_current_project(app_root)
 
         self.file_tree = FileTreeWidget(self._project_root)
         self.file_tree.file_selected.connect(self._on_file_selected)
         self.file_tree.folder_changed.connect(self._on_folder_changed)
         self.file_tree.new_conversation_requested.connect(self._on_new_conversation_in_folder)
+        self.file_tree.set_recent_projects(self.project_service.list_recent_projects())
 
         self.conversation_list = ConversationListWidget()
         self.conversation_list.new_conversation.connect(self._on_new_conversation_requested)
@@ -344,8 +347,29 @@ class MainWindow(QMainWindow):
         if not path or path == self._project_root:
             return
         self._project_root = self.project_service.set_current_project(path)
+        self.context_service.set_project_root(path)
+        self.project_service.add_recent_project(path)
+        self.file_tree.set_recent_projects(self.project_service.list_recent_projects())
         self._on_log_message(f"📂 切换项目目录: {path}", is_header=True)
         self._switch_project(path)
+
+    @Slot()
+    def _on_context_changed(self):
+        """上下文变化时更新状态栏"""
+        project_root = self.context_service.get_project_root()
+        active_doc = self.context_service.get_active_document()
+        active_file = os.path.basename(active_doc.path) if active_doc else ""
+        self.status_indicator.set_workspace_context(project_root, active_file)
+
+    @Slot(str, str, int)
+    def _on_document_opened(self, path: str, preview: str, size: int):
+        """右侧文档打开/切换时更新上下文"""
+        self.context_service.set_active_document(path, preview, size)
+
+    @Slot(str)
+    def _on_document_closed(self, path: str):
+        """右侧文档关闭时更新上下文"""
+        self.context_service.remove_open_document(path)
 
     def _on_new_conversation_in_folder(self, path: str):
         """在指定目录下开启新对话（右键菜单 / 工具栏触发）"""
@@ -365,6 +389,8 @@ class MainWindow(QMainWindow):
         """切换项目目录上下文：加载该目录下会话与全局纯对话"""
         project_path = self.project_service.normalize_path(project_path)
         self._project_root = project_path
+        self.context_service.set_project_root(project_path)
+        self.file_tree.set_root_path(project_path)
         self._sessions = {}
         self.conversation_list.clear_conversations()
         self.conversation_list.set_project_label(project_path)
@@ -520,6 +546,7 @@ class MainWindow(QMainWindow):
         self._on_log_message(f"▶ 用户: {display_text}", is_header=True)
 
         # 1. UI 和 session 持久化（记忆稍后再注入，避免 worker 内部重复追加）
+        #    保存原始用户消息，历史记录中不混入上下文摘要
         self._sessions[self._current_session]["messages"].append({"role": "user", "content": user_text})
         self.chat_view.append_user(user_text)
         self.session_service.add_message(self._current_session, "user", user_text)
@@ -536,7 +563,11 @@ class MainWindow(QMainWindow):
                 project_path=project_path
             )
 
-        # 2. 系统提示与记忆
+        # 2. 组装当前工作环境上下文 + 用户问题（注入 LLM 但不在 UI/历史显示）
+        context_text = self.context_service.build_prompt_context()
+        final_user_text = context_text + "\n" + user_text
+
+        # 3. 系统提示与记忆
         mode_config = self.config_service.get_mode_config(self._current_mode)
         system_prompt = mode_config.get("system_prompt", "你是全能 AI 助手。")
         user_rules = self.config_service.get("user_rules", [])
@@ -547,14 +578,14 @@ class MainWindow(QMainWindow):
 
         history = self.memory_manager.get_session_history(self._current_session)
         from langchain_core.messages import HumanMessage
-        history.add_message(HumanMessage(content=user_text))  # 仅在此处加入一次
-        # 3. 重置流式状态；时 worker 由槽函数的 sender 校验自动忽略）
+        history.add_message(HumanMessage(content=final_user_text))  # 仅在此处加入一次
+        # 4. 重置流式状态；时 worker 由槽函数的 sender 校验自动忽略）
         #    不主动 stop/disconnect，避免中断即将生成的最终回复
         self._chunks_received = False
 
-        # 4. 启动新 worker
+        # 5. 启动新 worker
         worker = AgentWorker(
-            user_text=user_text,
+            user_text=final_user_text,
             mode_name=self._current_mode,
             current_llm=self._current_llm,
             current_tools=self._current_tools,
@@ -563,10 +594,11 @@ class MainWindow(QMainWindow):
             tool_map=TOOL_MAP,
             tool_definitions=TOOL_DEFINITIONS,
             enable_streaming=True,
-            chat_history=list(history.messages),  # 已包含当前用户消息
+            chat_history=list(history.messages),  # 已包含当前用户消息（含上下文）
             user_rules=user_rules,
             max_tool_rounds=max_tool_rounds,
             task_timeout=task_timeout,
+            project_root=self.context_service.get_project_root(),
         )
         self._worker = worker
 
@@ -725,6 +757,7 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _on_file_selected(self, path):
         self._on_log_message(f"📁 资源管理器 {path}")
+        self.context_service.set_selected_paths([path])
         self.workspace.open_document(path)
 
     def closeEvent(self, event):

@@ -1,10 +1,10 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v3.3 | 存档次数 | 8 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v3.4 | 存档次数 | 9 |
 
 ## 项目概要
-AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、MT5 交易、网页抓取、剪贴板管理等能力。v3.1 完成右侧工作区重构；v3.2 引入项目目录上下文；v3.3 对文件预览、对话分栏、活动面板、文档编辑进行精细化打磨，并修复模型持久化等细节问题。
+AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、MT5 交易、网页抓取、剪贴板管理等能力。v3.1 完成右侧工作区重构；v3.2 引入项目目录上下文；v3.3 对文件预览、对话分栏、活动面板、文档编辑进行精细化打磨；v3.4 让 Agent 具备工作空间感知能力，能自动识别当前项目目录、右侧打开文件，并基于项目根目录解析工具相对路径。
 
 ## 技术栈
 | 类别 | 技术 | 版本 | 用途 |
@@ -44,7 +44,9 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │   ├── session_service.py  # SQLite 对话 + Token 用量持久化
 │   ├── theme_service.py    # QSS 主题加载
 │   ├── project_service.py  # 项目目录与会话关联管理
-│   └── activity_service.py # 结构化活动记录与持久化
+│   ├── activity_service.py # 结构化活动记录与持久化
+│   ├── context_service.py  # 当前工作空间上下文维护
+│   └── path_resolver.py    # 基于项目根目录的路径解析
 ├── workers/                # 后台线程
 │   ├── __init__.py
 │   ├── agent_worker.py     # 流式 Agent 推理 + 工具调用
@@ -59,7 +61,7 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │   ├── tools_panel.py      # 工具面板
 │   ├── widgets/            # 可复用组件
 │   │   ├── __init__.py
-│   │   ├── sidebar.py      # 图标栏 + 文件树
+│   │   ├── sidebar.py      # 图标栏 + 文件树 + 最近项目
 │   │   ├── conversation.py # 分栏对话列表（当前项目 / 全局）
 │   │   ├── tasks.py        # 任务面板
 │   │   ├── terminal.py     # 终端控制台
@@ -75,7 +77,8 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │       └── dark_github.qss # GitHub Dark 主题
 ├── tests/                  # 单元测试
 │   ├── __init__.py
-│   └── test_agent_worker.py
+│   ├── test_agent_worker.py
+│   └── test_context_service.py
 ├── main.py                 # 程序入口
 ├── config.yaml             # 全局配置
 ├── .env                    # 环境变量（API Keys，不提交）
@@ -94,6 +97,7 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v3.4 | 2026-06-26 | 工作空间上下文感知：自动检测项目目录、右侧文件摘要注入 prompt、文件工具相对路径解析、最近项目下拉 | feat | services/context_service.py, services/path_resolver.py, services/project_service.py, agent_engine/orchestrator.py, tools/system.py, ui/main_window.py, ui/widgets/document_editor.py, ui/widgets/workspace.py, ui/widgets/sidebar.py, ui/widgets/status_indicator.py, workers/agent_worker.py, config.yaml, AgentWorkbench.spec, tests/test_context_service.py |
 | v3.3 | 2026-06-25 | 精细化打磨：任意格式文件预览、对话/活动分栏、文档编辑快捷键、修复模型持久化与活动重复记录 | feat/fix | ui/widgets/document_editor.py, ui/widgets/conversation.py, ui/widgets/activity_panel.py, services/activity_service.py, ui/main_window.py, resources/themes/dark_github.qss, AgentWorkbench.spec |
 | v3.2 | 2026-06-25 | 项目目录与对话上下文：资源管理器切换/打开文件夹、按目录组织会话、目录下开启新对话 | feat/refactor | services/project_service.py, services/session_service.py, ui/widgets/sidebar.py, ui/widgets/conversation.py, ui/main_window.py, config.yaml, resources/themes/dark_github.qss |
 | v3.1 | 2026-06-25 | 重建右侧工作区：终端/日志/文档标签页、左侧文件树联动文档编辑器、文本文件编辑模式 | feat/refactor | ui/widgets/workspace.py, ui/widgets/document_editor.py, ui/main_window.py, resources/themes/dark_github.qss, AgentWorkbench.spec |
@@ -108,5 +112,5 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 3. git commit + git tag vX.Y
 4. git push + git push --tags
 
-_更新于 2026-06-25 21:50:36 by AI-Kimi-K2.7-Code_
+_更新于 2026-06-26 06:35:00 by AI-Kimi-K2.7-Code_
 ---

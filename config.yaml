@@ -135,3 +135,4 @@ ui:
     max_lines: 500
   explorer:
     project_root: F:\Agent\agent_workbench
+    recent_projects: []

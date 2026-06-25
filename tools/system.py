@@ -6,6 +6,17 @@ import subprocess
 import ctypes
 from langchain.tools import tool
 
+from services.path_resolver import resolve_path
+
+# 模块级项目根目录，由 AgentWorker 在每次任务前设置
+_project_root = ""
+
+
+def set_project_root(path: str):
+    """设置当前任务的项目根目录，供文件工具解析相对路径"""
+    global _project_root
+    _project_root = os.path.normpath(os.path.abspath(os.path.expandvars(path))) if path else ""
+
 
 # ═══════════════════════════════════════════════════════
 # 命令执行
@@ -70,7 +81,7 @@ def run_as_admin(command: str) -> str:
 def read_file(path: str, encoding: str = "utf-8") -> str:
     """读取文件内容（文本文件），返回前5000字符"""
     try:
-        path = os.path.expandvars(path.strip())
+        path = resolve_path(path, _project_root)
         if not os.path.exists(path):
             return f"\u6587\u4ef6\u4e0d\u5b58\u5728: {path}"
         if os.path.isdir(path):
@@ -89,11 +100,11 @@ def read_file(path: str, encoding: str = "utf-8") -> str:
 def write_file(path: str, content: str, encoding: str = "utf-8") -> str:
     """写入内容到文件（覆盖模式）"""
     try:
-        path = os.path.expandvars(path.strip())
+        path = resolve_path(path, _project_root)
         if not path:
             return "\u8def\u5f84\u4e0d\u80fd\u4e3a\u7a7a"
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        with open(path, "w", encoding=encoding) as f:
+        with open(path, "w", encoding=encoding, errors="replace") as f:
             f.write(content)
         size = os.path.getsize(path)
         return f"\u5df2\u5199\u5165: {path} ({size} bytes)"
@@ -105,7 +116,7 @@ def write_file(path: str, content: str, encoding: str = "utf-8") -> str:
 def list_dir(path: str = ".") -> str:
     """列出目录内容（文件和子目录）"""
     try:
-        path = os.path.expandvars(path.strip()) or "."
+        path = resolve_path(path, _project_root)
         if not os.path.exists(path):
             return f"\u76ee\u5f55\u4e0d\u5b58\u5728: {path}"
         if not os.path.isdir(path):

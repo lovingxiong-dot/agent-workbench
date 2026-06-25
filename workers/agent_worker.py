@@ -6,6 +6,7 @@ from langchain_core.messages import HumanMessage
 
 from workers.base_worker import BaseWorker, WorkerCancelledError
 from agent_engine.orchestrator import AgentOrchestrator
+from tools import system as system_tools
 
 # Tiered tool definitions with explicit priority hints
 TOOL_DEFINITIONS = [
@@ -38,7 +39,8 @@ class AgentWorker(BaseWorker):
     def __init__(self, user_text, mode_name, current_llm, current_tools,
                  session_id, system_prompt="", tool_map=None, tool_definitions=None,
                  enable_streaming=True, chat_history=None, user_rules=None,
-                 max_tool_rounds=8, task_timeout=120.0):
+                 max_tool_rounds=8, task_timeout=120.0, project_root="",
+                 workspace_context=""):
         super().__init__(session_id=session_id, task_timeout=task_timeout)
         self.user_text = user_text
         self.mode_name = mode_name
@@ -51,12 +53,18 @@ class AgentWorker(BaseWorker):
         self.chat_history = chat_history or []
         self.user_rules = user_rules or []
         self.max_tool_rounds = max(1, int(max_tool_rounds)) if max_tool_rounds else 8
+        self.project_root = project_root or ""
+        self.workspace_context = workspace_context or ""
         self.confirm_event = threading.Event()
         self.confirm_result = False
 
     async def _process(self):
         """AgentWorker 现在只是 Orchestrator 的薄封装：负责生命周期和信号转换。"""
         try:
+            # 同步 project_root 到文件工具模块
+            if self.project_root and hasattr(system_tools, "set_project_root"):
+                system_tools.set_project_root(self.project_root)
+
             orchestrator = AgentOrchestrator(
                 llm=self.current_llm,
                 tool_map=self.tool_map,
@@ -66,6 +74,7 @@ class AgentWorker(BaseWorker):
                 max_tool_rounds=self.max_tool_rounds,
                 enable_streaming=self.enable_streaming,
                 tool_executor=self._sync_call_tool,
+                workspace_context=self.workspace_context,
             )
 
             callbacks = {

@@ -3,7 +3,7 @@ import os
 from PySide6.QtWidgets import (
     QToolButton, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QTreeView, QFileSystemModel, QPushButton, QMenu, QFileDialog,
-    QAbstractItemView, QFrame,
+    QAbstractItemView, QFrame, QComboBox,
 )
 from PySide6.QtCore import Qt, QDir, Signal, QModelIndex
 from PySide6.QtGui import QAction, QFont
@@ -37,14 +37,22 @@ class FileTreeWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
 
-        # ── 标题栏 + 工具按钮 ──────────────────────
+        # ── 标题栏 + 最近项目 + 工具按钮 ────────────
         header_row = QHBoxLayout()
         header_row.setContentsMargins(8, 0, 8, 0)
         header_row.setSpacing(6)
 
         header = QLabel("资源管理器")
         header.setObjectName("panelHeader")
-        header_row.addWidget(header, 1)
+        header_row.addWidget(header)
+
+        self.recent_combo = QComboBox()
+        self.recent_combo.setObjectName("recentProjectCombo")
+        self.recent_combo.setToolTip("最近项目")
+        self.recent_combo.setMinimumWidth(80)
+        self.recent_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.recent_combo.currentIndexChanged.connect(self._on_recent_project_selected)
+        header_row.addWidget(self.recent_combo, 1)
 
         self.open_folder_btn = QPushButton("📂")
         self.open_folder_btn.setToolTip("打开文件夹 (Ctrl+O)")
@@ -125,6 +133,31 @@ class FileTreeWidget(QWidget):
         self.model.setRootPath(path)
         self.tree.setRootIndex(self.model.index(path) if path and os.path.exists(path) else QModelIndex())
         self.folder_changed.emit(path)
+
+    def set_recent_projects(self, projects: list):
+        """设置最近项目下拉列表
+
+        projects: List[Dict]，每个元素至少包含 'path' 键。
+        """
+        self.recent_combo.blockSignals(True)
+        self.recent_combo.clear()
+        self.recent_combo.addItem("最近项目", "")
+        for project in projects:
+            path = project.get("path", "")
+            if not path:
+                continue
+            display = self._display_path(path)
+            self.recent_combo.addItem(display, path)
+            self.recent_combo.setItemData(self.recent_combo.count() - 1, path, Qt.ToolTipRole)
+        self.recent_combo.blockSignals(False)
+
+    def _on_recent_project_selected(self, index: int):
+        """用户从最近项目下拉中选择"""
+        if index <= 0:
+            return
+        path = self.recent_combo.itemData(index)
+        if path and path != self.root_path:
+            self.set_root_path(path)
 
     def _on_open_folder(self):
         start_dir = self.root_path or os.path.expanduser("~")
