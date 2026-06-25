@@ -1,3 +1,4 @@
+import copy
 import os
 import re
 import yaml
@@ -6,8 +7,9 @@ import yaml
 class ConfigService:
     """ConfigService: os.environ > .env file > config.yaml placeholders"""
 
-    def __init__(self, config_path="config.yaml", env_path=".env"):
+    def __init__(self, config_path="config.yaml", env_path=".env", writable_path=None):
         self.config_path = config_path
+        self._writable_path = writable_path or config_path
         self.env_path = env_path
         self.config = {}
         self.reload()
@@ -69,3 +71,42 @@ class ConfigService:
 
     def get(self, key, default=None):
         return self.config.get(key, default)
+
+    def get_mode_config(self, mode_name):
+        """获取指定手动模式的完整配置（system_prompt、tools、current_model 等）"""
+        return self.config.get("manual_modes", {}).get(mode_name, {})
+
+    def get_agent_config(self, mode_name=None):
+        """
+        获取 agent 配置段。
+        若指定 mode_name，返回 mode 级配置与 defaults 的合并结果（mode 优先）。
+        """
+        agent_cfg = self.config.get("agent", {})
+        defaults = agent_cfg.get("defaults", {})
+        if not mode_name:
+            return defaults
+        mode_cfg = agent_cfg.get(mode_name, {})
+        merged = dict(defaults)
+        merged.update(mode_cfg)
+        return merged
+
+    def get_max_tool_rounds(self, mode_name="ask"):
+        """获取指定模式下 ReAct 工具调用的最大轮数"""
+        return self.get_agent_config(mode_name).get("max_tool_rounds", 8)
+
+    def get_task_timeout(self, mode_name="ask"):
+        """获取指定模式下 Agent 任务总超时（秒）"""
+        return self.get_agent_config(mode_name).get("task_timeout", 120.0)
+
+    def save(self):
+        """将当前配置写回文件；保存前把已解析的 API Key 还原为 ${...} 占位符，避免明文泄露。"""
+        cfg = copy.deepcopy(self.config)
+        for name, provider in cfg.get("llm_providers", {}).items():
+            api_key = provider.get("api_key", "")
+            env_key = f"{name.upper().replace('-', '_')}_API_KEY"
+            env_value = os.environ.get(env_key, "")
+            if env_value and api_key == env_value:
+                provider["api_key"] = f"${{{env_key}}}"
+        os.makedirs(os.path.dirname(self._writable_path) or ".", exist_ok=True)
+        with open(self._writable_path, "w", encoding="utf-8") as f:
+            yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False, sort_keys=False)

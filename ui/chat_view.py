@@ -1,6 +1,8 @@
 """
 ChatView — 底部控件栏版：模式切换/模型选择贴底，Enter 发送 / Shift+Enter 换行
 """
+import html
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTextEdit, QFrame, QButtonGroup, QComboBox,
@@ -12,7 +14,8 @@ from markdown import markdown as md
 
 
 def md_to_html(text: str) -> str:
-    return md(text, extensions=['fenced_code', 'tables', 'nl2br', 'codehilite'])
+    # 先转义原始文本中的 HTML 特殊字符，再由 markdown 生成安全 HTML
+    return md(html.escape(text), extensions=['fenced_code', 'tables', 'nl2br', 'codehilite'])
 
 
 class InputTextEdit(QTextEdit):
@@ -42,11 +45,13 @@ class ChatView(QWidget):
     model_changed = Signal(str)
     settings_clicked = Signal()
     stop_requested = Signal()
+    log_panel_toggled = Signal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._streaming_active = False
         self._streaming_buffer = ""
+        self._has_received_chunks = False
         self._setup_ui()
         self._setup_shortcuts()
 
@@ -88,6 +93,26 @@ class ChatView(QWidget):
         bar.addWidget(self.btn_plan)
         bar.addWidget(self.btn_craft)
         self.btn_ask.setChecked(True)
+
+        bar.addSpacing(12)
+
+        # 日志面板开关
+        self.log_btn = QPushButton("日志")
+        self.log_btn.setCheckable(True)
+        self.log_btn.setChecked(True)
+        self.log_btn.setCursor(Qt.PointingHandCursor)
+        self.log_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #21262D; color: #E6EDF3; border: 1px solid #30363D;
+                padding: 3px 12px; border-radius: 6px; font-weight: 600; font-size: 11px;
+            }
+            QPushButton:checked {
+                background-color: #388BFD26; border: 1px solid #58A6FF; color: #58A6FF;
+            }
+            QPushButton:hover { background-color: #30363D; }
+        """)
+        self.log_btn.clicked.connect(self._on_log_btn_clicked)
+        bar.addWidget(self.log_btn)
 
         bar.addSpacing(12)
 
@@ -183,6 +208,12 @@ class ChatView(QWidget):
             self.input_field.clear()
             self.send_clicked.emit(text)
 
+    def _on_log_btn_clicked(self, checked):
+        self.log_panel_toggled.emit(checked)
+
+    def set_log_panel_checked(self, checked: bool):
+        self.log_btn.setChecked(checked)
+
     def _on_stop(self):
         self.stop_requested.emit()
         self.stop_btn.setVisible(False)
@@ -190,12 +221,16 @@ class ChatView(QWidget):
 
     def set_streaming(self, active: bool):
         self._streaming_active = active
+        self._has_received_chunks = False
         self.stop_btn.setVisible(active)
         self.send_btn.setVisible(not active)
         if active:
             self._streaming_buffer = ""
 
     def append_chunk(self, chunk: str):
+        if not chunk:
+            return
+        self._has_received_chunks = True
         self._streaming_buffer += chunk
         cursor = self.chat_area.textCursor()
         cursor.movePosition(QTextCursor.End)
@@ -205,7 +240,7 @@ class ChatView(QWidget):
             cursor.removeSelectedText()
         else:
             self._streaming_start_pos = cursor.position()
-        html = self._build_bubble("left", "#21262D", "#E6EDF3", self._streaming_buffer)
+        html = self._build_bubble("ai", self._streaming_buffer)
         self.chat_area.moveCursor(QTextCursor.End)
         self.chat_area.insertHtml(html)
         self.chat_area.moveCursor(QTextCursor.End)
@@ -217,6 +252,9 @@ class ChatView(QWidget):
         self.stop_btn.setVisible(False)
         self.send_btn.setVisible(True)
 
+    def has_received_chunks(self) -> bool:
+        return self._has_received_chunks
+
     def append_user(self, text):
         self._append_message("user", text)
 
@@ -227,32 +265,63 @@ class ChatView(QWidget):
         self._append_message("system", text)
 
     def _append_message(self, role, text):
-        if role == "user":
-            html = self._build_bubble("right", "#1F6FEB", "#FFFFFF", text)
-        elif role == "ai":
-            html = self._build_bubble("left", "#21262D", "#E6EDF3", text)
+        if role in ("user", "ai"):
+            html_block = self._build_bubble(role, text)
         else:
-            html = f"<div style='color:#8B949E;font-size:12px;text-align:center;margin:6px 0;'>{text}</div>"
+            html_block = f"<div style='color:#8B949E;font-size:12px;text-align:center;margin:6px 0;'>{html.escape(text)}</div>"
         self.chat_area.moveCursor(QTextCursor.End)
-        self.chat_area.insertHtml(html)
+        self.chat_area.insertHtml(html_block)
         self.chat_area.moveCursor(QTextCursor.End)
 
-    def _build_bubble(self, align, bg, color, text):
-        if align == "right":
-            margin = "margin: 6px 16px 6px 80px;"
-            align_style = "text-align: right;"
+    def _avatar_cell(self, label: str, align: str) -> str:
+        bg = "#10B981" if label == "我" else "#6366F1"
+        return f"""
+        <td valign="top" width="36" style="padding:4px 8px;text-align:{align};">
+            <div style="width:32px;height:32px;line-height:32px;text-align:center;
+                        background-color:{bg};color:#FFFFFF;border-radius:50%;
+                        font-size:12px;font-weight:bold;overflow:hidden;">
+                {label}
+            </div>
+        </td>
+        """
+
+    def _build_bubble(self, role: str, text: str) -> str:
+        """简约风格：头像在左/右，内容无背景色，居左/居右对齐。"""
+        if role == "user":
+            avatar = self._avatar_cell("我", "right")
+            content_align = "right"
+            row = f"""
+            <td align="right" valign="top" style="padding:2px 8px 8px 48px;">
+                {self._md_content(text)}
+            </td>
+            {avatar}
+            """
         else:
-            margin = "margin: 6px 80px 6px 16px;"
-            align_style = "text-align: left;"
+            avatar = self._avatar_cell("AI", "left")
+            content_align = "left"
+            row = f"""
+            {avatar}
+            <td align="left" valign="top" style="padding:2px 48px 8px 8px;">
+                {self._md_content(text)}
+            </td>
+            """
+
+        return f"""
+        <table width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:12px 0;">
+            <tr>
+                {row}
+            </tr>
+        </table>
+        <div style="clear:both;"></div>
+        """
+
+    def _md_content(self, text: str) -> str:
         html_content = md_to_html(text)
         return f"""
-        <div style='{margin}{align_style}'>
-            <div style='display:inline-block;background:{bg};color:{color};padding:10px 14px;
-                        border-radius:12px;max-width:85%;
-                        font-family:"Segoe UI","Microsoft YaHei",sans-serif;
-                        font-size:13px;line-height:1.6;text-align:left;'>
-                {html_content}
-            </div>
+        <div style="display:inline-block;color:#E6EDF3;
+                    font-family:'Segoe UI','Microsoft YaHei',sans-serif;
+                    font-size:13px;line-height:1.6;text-align:left;">
+            {html_content}
         </div>
         """
 

@@ -1,14 +1,13 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v3 | 存档次数 | 5 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v3.1 | 存档次数 | 6 |
 
 ## 项目概要
-AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、MT5 交易等能力。v3 完成生产级模块化重构。
+AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、MT5 交易、网页抓取、剪贴板管理等能力。v3.1 完成右侧工作区重构：终端 / 日志 / 文档以顶部标签页形式集中管理，左侧资源管理器选中文件可在右侧文档编辑器中查看与编辑。
 
 ## 技术栈
 | 类别 | 技术 | 版本 | 用途 |
-|---|---|---|---|
 | 语言 | Python | 3.14 | 主语言 |
 | UI 框架 | PySide6 | 6.21.0 | 桌面界面 (Fusion 深色主题) |
 | LLM 框架 | LangChain + langchain-openai | latest | 工具调用与多模型对话 |
@@ -24,37 +23,67 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 目录结构
 ```
 /
-├── agent_engine/           # 引擎层：ModeManager, LLMRegistry, MemoryManager
-├── tools/                  # 工具层：system, quant(akshare+backtrader), mt5, external_apis
-│   ├── system.py           #   run_command, run_as_admin
-│   ├── quant.py            #   fetch_stock_data, run_backtest
-│   ├── mt5.py              #   mt5_get_price, mt5_place_order
-│   └── external_apis.py    #   fetch_financial_news, fetch_macro_data
-├── services/               # 服务层：配置(env→yaml)、对话持久化、主题管理
-│   ├── config_service.py   #   统一配置 .env 优先 → config.yaml 回退
-│   ├── session_service.py  #   SQLite 对话 + Token 用量持久化
-│   └── theme_service.py    #   QSS 主题加载与切换
-├── workers/                # 后台线程：流式 Agent 推理、终端命令
-│   ├── agent_worker.py     #   流式输出 (astream) + 工具调用 + 敏感确认
-│   └── terminal_worker.py  #   subprocess 管道输出捕获
-├── ui/                     # 界面层：主窗口、聊天视图、组件库
-│   ├── main_window.py      #   MainWindow 全局状态与信号协调
-│   ├── chat_view.py        #   ChatView 流式气泡 + 模型下拉 + 快捷键
-│   ├── widgets/            #   可复用组件
-│   │   ├── sidebar.py      #     图标栏 + 文件树
-│   │   ├── conversation.py #     对话列表（CRUD）
-│   │   ├── tasks.py        #     任务面板（Checklist）
-│   │   ├── terminal.py     #     终端控制台（含命令历史）
-│   │   └── status_indicator.py # 状态栏（连接/模式/Token）
-│   └── dialogs/            #   对话框
-│       └── settings.py     #     模型提供商增删改
+├── agent_engine/           # 引擎层
+│   ├── __init__.py
+│   ├── classifier.py       # 意图分类
+│   ├── llm_registry.py     # LLM 提供商注册与持久化
+│   ├── memory_manager.py   # 会话记忆管理
+│   ├── mode_manager.py     # 手动模式管理
+│   ├── orchestrator.py     # 编排器
+│   └── proactive_engine.py # 主动引擎
+├── tools/                  # 工具层
+│   ├── __init__.py
+│   ├── system.py           # 系统命令 / 文件读写 / 网络 / 剪贴板 / 通知 / 进程
+│   ├── quant.py            # 股票数据 + 回测
+│   ├── mt5.py              # MT5 报价 + 下单
+│   ├── external_apis.py    # 财经新闻 / 宏观数据
+│   └── screen.py           # 屏幕相关工具
+├── services/               # 服务层
+│   ├── __init__.py
+│   ├── config_service.py   # 配置读取与持久化
+│   ├── session_service.py  # SQLite 对话 + Token 用量持久化
+│   └── theme_service.py    # QSS 主题加载
+├── workers/                # 后台线程
+│   ├── __init__.py
+│   ├── agent_worker.py     # 流式 Agent 推理 + 工具调用
+│   ├── base_worker.py      # Worker 基类
+│   └── terminal_worker.py  # 终端命令输出捕获
+├── ui/                     # 界面层
+│   ├── __init__.py
+│   ├── main_window.py      # 主窗口全局状态与信号协调
+│   ├── chat_view.py        # 聊天视图（简约气泡、模型下拉、快捷按钮）
+│   ├── overlay.py          # 覆盖层组件
+│   ├── settings.py         # 设置相关 UI
+│   ├── tools_panel.py      # 工具面板
+│   ├── widgets/            # 可复用组件
+│   │   ├── __init__.py
+│   │   ├── sidebar.py      # 图标栏 + 文件树
+│   │   ├── conversation.py # 对话列表
+│   │   ├── tasks.py        # 任务面板
+│   │   ├── terminal.py     # 终端控制台
+│   │   ├── status_indicator.py # 状态指示器
+│   │   ├── workspace.py    # 右侧工作区（终端/日志/文档标签）
+│   │   └── document_editor.py  # 文档查看与编辑器
+│   └── dialogs/            # 对话框
+│       ├── __init__.py
+│       └── settings.py     # 模型设置 / 规则设置
 ├── resources/              # 静态资源
-│   └── themes/dark_github.qss  # GitHub Dark 主题
-├── main.py                 # 程序入口（45行）
-├── config.yaml             # 全局配置（API Key 在 .env）
+│   └── themes/
+│       └── dark_github.qss # GitHub Dark 主题
+├── tests/                  # 单元测试
+│   ├── __init__.py
+│   └── test_agent_worker.py
+├── main.py                 # 程序入口
+├── config.yaml             # 全局配置
+├── .env                    # 环境变量（API Keys，不提交）
 ├── .env.example            # 环境变量模板
+├── .gitignore              # Git 忽略规则
+├── requirements.txt        # Python 依赖
 ├── AgentWorkbench.spec     # PyInstaller 打包配置
+├── runtime_hook.py         # PyInstaller 运行时钩子
 ├── rebuild.ps1             # 一键打包脚本
+├── start.bat               # 启动脚本
+├── app.ico                 # 应用图标
 ├── CHANGELOG.md            # AI 维护的变更日志
 └── PROJECT_BLUEPRINT.md    # 本文件
 ```
@@ -62,6 +91,7 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v3.1 | 2026-06-25 | 重建右侧工作区：终端/日志/文档标签页、左侧文件树联动文档编辑器、文本文件编辑模式 | feat/refactor | ui/widgets/workspace.py, ui/widgets/document_editor.py, ui/main_window.py, resources/themes/dark_github.qss, AgentWorkbench.spec |
 | v3 | 2026-06-25 | 工具分层编排、AI身份系统、17工具库、UI全栈修复 | feat/fix | agent_worker, config, main_window, tools/* |
 | v0.3 | 2026-06-25 | v2生产级重构：模块化架构、8工具、流式UI | feat/refactor | 全部模块 |
 | v0.2 | 2026-06-25 | DeepSeek密钥修复与模型选择下拉功能 | feat/fix | config.yaml, llm_registry.py, main.py |
@@ -73,5 +103,5 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 3. git commit + git tag vX.Y
 4. git push + git push --tags
 
-_更新于 2026-06-25 by AI-WorkBuddy_
+_更新于 2026-06-25 by AI-Kimi-K2.7-Code_
 ---

@@ -8,11 +8,11 @@ from datetime import datetime
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QSplitter, QStatusBar, QStackedWidget, QTextEdit, QMessageBox,
+    QStatusBar, QStackedWidget, QMessageBox,
     QStyleFactory,
 )
 from PySide6.QtCore import Qt, Slot, QTimer
-from PySide6.QtGui import QFont, QPalette, QColor
+from PySide6.QtGui import QPalette, QColor
 
 from agent_engine import ModeManager, LLMRegistry, MemoryManager
 from services.config_service import ConfigService
@@ -22,6 +22,7 @@ from workers.agent_worker import AgentWorker, TOOL_DEFINITIONS
 from ui.widgets import (
     SidebarButton, FileTreeWidget, ConversationListWidget,
     TaskListWidget, TerminalWidget, StatusIndicator,
+    WorkspaceWidget,
 )
 from ui.dialogs import SettingsDialog, ProviderFormDialog
 from ui.chat_view import ChatView
@@ -78,12 +79,17 @@ class MainWindow(QMainWindow):
             if getattr(sys, 'frozen', False)
             else config_path
         )
-        self.config_service = ConfigService(config_path)
+        self.config_service = ConfigService(config_path, writable_path=config_write)
         self.session_service = SessionService()
         self.theme_service = ThemeService()
         self.mode_manager = ModeManager(config_path)
         self.llm_registry = LLMRegistry(config_path, config_write)
         self.memory_manager = MemoryManager(self.config_service.get("memory", {}))
+
+        # UI 配置
+        ui_cfg = self.config_service.get("ui", {}).get("log_panel", {})
+        self._log_panel_visible = ui_cfg.get("visible", True)
+        self._log_max_lines = ui_cfg.get("max_lines", 500)
 
         # ── 全局状态 ────────────────────────────
         self._current_session = "default"
@@ -93,6 +99,7 @@ class MainWindow(QMainWindow):
         self._current_tools = []
         self._current_model_name = "tool-agent"
         self._worker = None  # Active AgentWorker
+        self._chunks_received = False
 
         # ── UI 构建 ─────────────────────────────
         self._apply_theme()
@@ -102,6 +109,8 @@ class MainWindow(QMainWindow):
         self.chat_view.model_changed.connect(self._on_model_changed)
         self.chat_view.settings_clicked.connect(self._open_settings)
         self.chat_view.stop_requested.connect(self._on_stop_generation)
+        self.chat_view.log_panel_toggled.connect(self._toggle_log_panel)
+        self.chat_view.set_log_panel_checked(self._log_panel_visible)
 
         # ── 初始化 ──────────────────────────────
         self._init_mode("ask")
@@ -199,42 +208,18 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self.left_stack)
         main_layout.addWidget(self.left_panel)
 
-        # ── 中央 + 底部终端 ─────────────────────
-        center_container = QWidget()
-        center_layout = QVBoxLayout(center_container)
-        center_layout.setContentsMargins(0, 0, 0, 0)
-        center_layout.setSpacing(0)
-
-        self.center_splitter = QSplitter(Qt.Vertical)
+        # ── 中央对话区 ──────────────────────────
         self.chat_view = ChatView()
         self.chat_view.send_clicked.connect(self._send_message)
         self.chat_view.mode_clicked.connect(self._on_mode_clicked)
+        main_layout.addWidget(self.chat_view, 1)
 
-        self.terminal = TerminalWidget()
-        self.center_splitter.addWidget(self.chat_view)
-        self.center_splitter.addWidget(self.terminal)
-        self.center_splitter.setSizes([650, 250])
-        center_layout.addWidget(self.center_splitter)
-        main_layout.addWidget(center_container, 1)
-
-        # ── 右侧日志面板 ────────────────────────
-        self.right_panel = QWidget()
-        self.right_panel.setObjectName("leftPanel")
-        self.right_panel.setFixedWidth(280)
-        right_layout = QVBoxLayout(self.right_panel)
-        right_layout.setContentsMargins(0, 8, 0, 8)
-        right_layout.setSpacing(4)
-
-        log_header = QLabel("Agent 日志")
-        log_header.setObjectName("panelHeader")
-        right_layout.addWidget(log_header)
-
-        self.log_area = QTextEdit()
-        self.log_area.setReadOnly(True)
-        self.log_area.setFont(QFont("Cascadia Code", 9))
-        self.log_area.setObjectName("chatArea")
-        right_layout.addWidget(self.log_area)
-        main_layout.addWidget(self.right_panel)
+        # ── 右侧工作区 ──────────────────────────
+        self.workspace = WorkspaceWidget()
+        self.workspace.setMinimumWidth(300)
+        self.workspace.set_logs_max_lines(self._log_max_lines)
+        self.workspace.setVisible(self._log_panel_visible)
+        main_layout.addWidget(self.workspace)
 
         # ── 状态栏 ──────────────────────────────
         self.status_bar = QStatusBar()
@@ -263,11 +248,12 @@ class MainWindow(QMainWindow):
             self.left_stack.setCurrentIndex(0)
         elif view == "chat":
             self.left_stack.setCurrentIndex(1)
+        elif view == "terminal":
+            self.workspace.set_terminal_focus()
+            self.workspace.setVisible(True)
+            self.chat_view.set_log_panel_checked(True)
         elif view == "tasks":
             self.left_stack.setCurrentIndex(2)
-        elif view == "terminal":
-            self.left_stack.setCurrentIndex(1)
-            self.terminal.input.setFocus()
 
     # ═══════════════════════════════════════════════════
     # 模式管理
@@ -293,7 +279,7 @@ class MainWindow(QMainWindow):
         self.chat_view.populate_models(providers, llm_name)
         self.status_indicator.set_mode(mode_name)
         self.status_indicator.set_model(llm_name)
-        self._log_message(f"🔄 切换模式: {mode_name} / {llm_name}")
+        self._on_log_message(f"🔄 切换模式: {mode_name} / {llm_name}", is_header=True)
 
     def _on_mode_clicked(self, mode_name):
         self._init_mode(mode_name)
@@ -309,14 +295,15 @@ class MainWindow(QMainWindow):
         provider = self.llm_registry.get_provider_config(llm_name)
         self.chat_view.set_header(self._current_mode, llm_name, self._sessions[self._current_session]["title"])
         self.status_indicator.set_model(llm_name)
-        self._log_message(f"🔄 切换模型: {llm_name} ({provider.get('model', '?')})")
+        self._on_log_message(f"🔄 切换模型: {llm_name} ({provider.get('model', '?')})")
 
     # ═══════════════════════════════════════════════════
     # 设置对话框
     # ═══════════════════════════════════════════════════
     def _open_settings(self):
-        dlg = SettingsDialog(self.llm_registry, self)
+        dlg = SettingsDialog(self.llm_registry, self, config_service=self.config_service)
         dlg.providers_changed.connect(self._on_settings_changed)
+        dlg.ui_settings_changed.connect(self._apply_ui_settings)
         dlg.exec()
 
     def _on_settings_changed(self):
@@ -326,16 +313,43 @@ class MainWindow(QMainWindow):
             self._current_llm = self.llm_registry.get_llm(self._current_model_name)
         self.chat_view.populate_models(providers, self._current_model_name)
         self.chat_view.set_header(self._current_mode, self._current_model_name, self._sessions[self._current_session]["title"])
-        self._log_message("🔧 模型设置已更新")
+        self._on_log_message("🔧 模型设置已更新")
 
     # ═══════════════════════════════════════════════════
     # 对话管理
     # ═══════════════════════════════════════════════════
     def _init_default_session(self):
         self.conversation_list.add_conversation("default", "默认会话", active=True)
+        # Restore default session messages from DB if they exist
+        try:
+            msgs = self.session_service.get_messages("default")
+            if msgs:
+                self._sessions["default"]["messages"] = msgs
+                # 同时注入 LangChain 记忆，保证 LLM 能看到完整上下文
+                from langchain_core.messages import HumanMessage, AIMessage
+                history = self.memory_manager.get_session_history("default")
+                history.clear()
+                for msg in msgs:
+                    self._render_stored_message(msg)
+                    if msg["role"] == "user":
+                        history.add_message(HumanMessage(content=msg["content"]))
+                    elif msg["role"] == "ai":
+                        history.add_message(AIMessage(content=msg["content"]))
+                # Restore title if set by first message
+                if msgs and len(msgs) > 0:
+                    first = msgs[0]
+                    title = first["content"][:30]
+                    self._sessions["default"]["title"] = title
+                    self._update_conversation_title("default", title)
+                self.chat_view.set_header(self._current_mode, self._current_model_name,
+                                          self._sessions["default"]["title"])
+                self._on_log_message(f"Restored {len(msgs)} messages from last session")
+                return
+        except Exception:
+            pass
         self.chat_view.set_header(self._current_mode, self._current_model_name, "默认会话")
-        self.chat_view.append_system(f"欢迎使用 AI Agent 工作台 v2。当前模式：{self._current_mode.capitalize()}。")
-        self.chat_view.append_system("🆕 新特性: 流式输出 · 模型管理 · 对话持久化 · 键盘快捷键")
+        self.chat_view.append_system(f"欢迎使用 AI Agent Workbench v2。当前模式：{self._current_mode.capitalize()}。")
+        self.chat_view.append_system("新特性：流式输出 · 模型管理 · 对话持久化 · 键盘快捷键")
 
     def _restore_conversations(self):
         """从 SQLite 恢复对话列表"""
@@ -363,7 +377,7 @@ class MainWindow(QMainWindow):
         self.chat_view.set_header(self._current_mode, self._current_model_name, title)
         # 持久化
         self.session_service.create_conversation(session_id, title, self._current_mode, self._current_model_name)
-        self._log_message(f"📝 新会话: {title}")
+        self._on_log_message(f"📝 新会话 {title}", is_header=True)
 
     def _switch_conversation(self, session_id):
         self._current_session = session_id
@@ -380,7 +394,7 @@ class MainWindow(QMainWindow):
                 history.add_message(HumanMessage(content=msg["content"]))
             elif msg["role"] == "ai":
                 history.add_message(AIMessage(content=msg["content"]))
-        self._log_message(f"📂 切换会话: {session['title']}")
+        self._on_log_message(f"📂 切换会话: {session['title']}")
 
     def _render_stored_message(self, msg):
         content = msg["content"]
@@ -423,15 +437,14 @@ class MainWindow(QMainWindow):
     # 消息发送
     # ═══════════════════════════════════════════════════
     def _send_message(self, user_text):
+        # 0. 写入本轮日志标题
+        display_text = user_text[:80] + ("..." if len(user_text) > 80 else "")
+        self._on_log_message(f"▶ 用户: {display_text}", is_header=True)
+
+        # 1. UI 和 session 持久化（记忆稍后再注入，避免 worker 内部重复追加）
         self._sessions[self._current_session]["messages"].append({"role": "user", "content": user_text})
         self.chat_view.append_user(user_text)
-        # 持久化
         self.session_service.add_message(self._current_session, "user", user_text)
-        # ★ 注入 LangChain 记忆
-        from langchain_core.messages import HumanMessage
-        self.memory_manager.get_session_history(self._current_session).add_message(
-            HumanMessage(content=user_text)
-        )
 
         session = self._sessions[self._current_session]
         if len(session["messages"]) == 1:
@@ -441,14 +454,24 @@ class MainWindow(QMainWindow):
             self.chat_view.set_header(self._current_mode, self._current_model_name, title)
             self.session_service.create_conversation(self._current_session, title, self._current_mode, self._current_model_name)
 
-        # 获取系统提示
-        mode_config = self.config_service.get("manual_modes", {}).get(self._current_mode, {})
+        # 2. 系统提示与记忆
+        mode_config = self.config_service.get_mode_config(self._current_mode)
         system_prompt = mode_config.get("system_prompt", "你是全能 AI 助手。")
-
-        # 启动流式 Worker
-        history = self.memory_manager.get_session_history(self._current_session)
         user_rules = self.config_service.get("user_rules", [])
-        self._worker = AgentWorker(
+
+        # 读取多轮工具调用上限和任务超时
+        max_tool_rounds = self.config_service.get_max_tool_rounds(self._current_mode)
+        task_timeout = self.config_service.get_task_timeout(self._current_mode)
+
+        history = self.memory_manager.get_session_history(self._current_session)
+        from langchain_core.messages import HumanMessage
+        history.add_message(HumanMessage(content=user_text))  # 仅在此处加入一次
+        # 3. 重置流式状态；时 worker 由槽函数的 sender 校验自动忽略）
+        #    不主动 stop/disconnect，避免中断即将生成的最终回复
+        self._chunks_received = False
+
+        # 4. 启动新 worker
+        worker = AgentWorker(
             user_text=user_text,
             mode_name=self._current_mode,
             current_llm=self._current_llm,
@@ -458,18 +481,30 @@ class MainWindow(QMainWindow):
             tool_map=TOOL_MAP,
             tool_definitions=TOOL_DEFINITIONS,
             enable_streaming=True,
-            chat_history=list(history.messages),
+            chat_history=list(history.messages),  # 已包含当前用户消息
             user_rules=user_rules,
+            max_tool_rounds=max_tool_rounds,
+            task_timeout=task_timeout,
         )
-        self._worker.chunk_ready.connect(self._on_chunk)
-        self._worker.result_ready.connect(self._on_reply)
-        self._worker.log_message.connect(self._log_message)
-        self._worker.task_created.connect(self._add_task)
-        self._worker.task_finished.connect(self._finish_task)
-        self._worker.confirm_required.connect(self._on_confirm_required)
-        self._worker.token_used.connect(self._on_token_used)
-        self._worker.finished.connect(self._worker.deleteLater)
-        self._worker.start()
+        self._worker = worker
+
+        # 使用闭包捕获当前 worker 引用，避免跨线程 QueuedConnection 中 self.sender() 不可靠
+        def current_only(slot):
+            def wrapper(*args):
+                if worker is not self._worker:
+                    return
+                slot(*args)
+            return wrapper
+
+        worker.chunk_ready.connect(current_only(self._on_chunk))
+        worker.result_ready.connect(current_only(self._on_reply))
+        worker.log_message.connect(current_only(self._on_log_message))
+        worker.task_created.connect(current_only(self._add_task))
+        worker.task_finished.connect(current_only(self._finish_task))
+        worker.confirm_required.connect(current_only(self._on_confirm_required))
+        worker.token_used.connect(current_only(self._on_token_used))
+        worker.finished.connect(worker.deleteLater)
+        worker.start()
 
         self.chat_view.set_streaming(True)
         self.status_indicator.set_tokens("生成中...")
@@ -478,30 +513,52 @@ class MainWindow(QMainWindow):
         """用户点击停止"""
         if self._worker and self._worker.isRunning():
             self._worker.stop()
-            self._log_message("⏹ 用户停止了生成")
+            self.chat_view.finalize_stream()
+            self._on_log_message("⏹ 用户停止了生成")
 
     @Slot(str)
     def _on_chunk(self, chunk):
         """流式输出每个 token"""
+        self._chunks_received = True
         self.chat_view.append_chunk(chunk)
 
     @Slot(str)
     def _on_reply(self, text):
         """完整回复（由 AgentWorker 在流式完成后发射）"""
         self.chat_view.finalize_stream()
-        self._sessions[self._current_session]["messages"].append({"role": "ai", "content": text})
-        self.session_service.add_message(self._current_session, "ai", text)
+        # 流式过程中已经实时渲染，若已收到 chunk 则不再追加完整气泡
+        if text and text.strip():
+            if not self._chunks_received:
+                self.chat_view.append_ai(text)
+            self._sessions[self._current_session]["messages"].append({"role": "ai", "content": text})
+            self.session_service.add_message(self._current_session, "ai", text)
+            # 注入 LangChain 记忆
+            from langchain_core.messages import AIMessage
+            self.memory_manager.get_session_history(self._current_session).add_message(
+                AIMessage(content=text)
+            )
+        self._chunks_received = False
         self.status_indicator.set_tokens("")
-        # ★ 注入 LangChain 记忆
-        from langchain_core.messages import AIMessage
-        self.memory_manager.get_session_history(self._current_session).add_message(
-            AIMessage(content=text)
-        )
 
     @Slot(str)
-    def _log_message(self, text):
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        self.log_area.append(f"[{timestamp}] {text}")
+    def _on_log_message(self, text, is_header=False):
+        self.workspace.add_log(text, is_header=is_header)
+
+    def _toggle_log_panel(self, visible: bool):
+        self._log_panel_visible = visible
+        self.workspace.setVisible(visible)
+        self.chat_view.set_log_panel_checked(visible)
+        ui_cfg = self.config_service.config.setdefault("ui", {}).setdefault("log_panel", {})
+        ui_cfg["visible"] = visible
+        self.config_service.save()
+
+    def _apply_ui_settings(self):
+        ui_cfg = self.config_service.get("ui", {}).get("log_panel", {})
+        self._log_max_lines = ui_cfg.get("max_lines", 500)
+        self.workspace.set_logs_max_lines(self._log_max_lines)
+        visible = ui_cfg.get("visible", True)
+        if visible != self._log_panel_visible:
+            self._toggle_log_panel(visible)
 
     @Slot(str, str, int, int)
     def _on_token_used(self, provider, model, input_tokens, output_tokens):
@@ -527,11 +584,12 @@ class MainWindow(QMainWindow):
         self._worker.confirm_result = (reply == QMessageBox.Yes)
         self._worker.confirm_event.set()
         if not self._worker.confirm_result:
-            self._log_message(f"⛔ 用户取消了敏感操作: {command}")
+            self._on_log_message(f"⛔ 用户取消了敏感操作 {command}")
 
     @Slot(str)
     def _on_file_selected(self, path):
-        self._log_message(f"📁 资源管理器: {path}")
+        self._on_log_message(f"📁 资源管理器 {path}")
+        self.workspace.open_document(path)
 
     def closeEvent(self, event):
         if self._worker and self._worker.isRunning():

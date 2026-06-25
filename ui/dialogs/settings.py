@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (QDialog, QFormLayout, QLineEdit, QPushButton, QHBoxLayout, QVBoxLayout,
                                 QLabel, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-                                QWidget, QMessageBox, QTabWidget, QTextEdit)
+                                QWidget, QMessageBox, QTabWidget, QTextEdit, QCheckBox, QSpinBox)
 from PySide6.QtCore import Signal
 import yaml
 import os
@@ -87,12 +87,14 @@ class ProviderFormDialog(QDialog):
 
 class SettingsDialog(QDialog):
     providers_changed = Signal()
+    ui_settings_changed = Signal()
 
-    def __init__(self, llm_registry, parent=None, config_path=None):
+    def __init__(self, llm_registry, parent=None, config_path=None, config_service=None):
         super().__init__(parent)
         self.llm_registry = llm_registry
         self.config_path = config_path or "config.yaml"
-        self.setWindowTitle("模型设置")
+        self.config_service = config_service
+        self.setWindowTitle("设置")
         self.resize(720, 520)
         self._setup_ui()
         self._load_table()
@@ -176,8 +178,46 @@ class SettingsDialog(QDialog):
 
         self.tabs.addTab(rules_tab, "用户规则")
 
-        # Load rules from config
+        # ── Tab 3: 界面 / 日志 ────────────────────
+        ui_tab = QWidget()
+        ul = QVBoxLayout(ui_tab)
+        ul.setSpacing(14)
+        ul.setContentsMargins(12, 12, 12, 12)
+
+        ui_desc = QLabel("配置日志面板的显示与容量。")
+        ui_desc.setStyleSheet("color: #8B949E; font-size: 12px;")
+        ul.addWidget(ui_desc)
+
+        self.log_visible_cb = QCheckBox("显示右侧 Agent 日志面板")
+        self.log_visible_cb.setStyleSheet("color: #E6EDF3;")
+        ul.addWidget(self.log_visible_cb)
+
+        max_lines_layout = QHBoxLayout()
+        max_lines_label = QLabel("日志最大保留行数:")
+        max_lines_label.setStyleSheet("color: #E6EDF3;")
+        max_lines_layout.addWidget(max_lines_label)
+        self.log_max_lines_spin = QSpinBox()
+        self.log_max_lines_spin.setRange(100, 10000)
+        self.log_max_lines_spin.setSingleStep(100)
+        self.log_max_lines_spin.setFixedWidth(120)
+        max_lines_layout.addWidget(self.log_max_lines_spin)
+        max_lines_layout.addStretch()
+        ul.addLayout(max_lines_layout)
+
+        ui_save_layout = QHBoxLayout()
+        ui_save_layout.addStretch()
+        self.save_ui_btn = QPushButton("保存界面设置")
+        self.save_ui_btn.setStyleSheet("QPushButton { background-color: #238636; } QPushButton:hover { background-color: #2EA043; }")
+        self.save_ui_btn.clicked.connect(self._save_ui_settings)
+        ui_save_layout.addWidget(self.save_ui_btn)
+        ul.addLayout(ui_save_layout)
+        ul.addStretch()
+
+        self.tabs.addTab(ui_tab, "界面 / 日志")
+
+        # Load settings from config
         self._load_rules()
+        self._load_ui_settings()
 
         layout.addWidget(self.tabs)
 
@@ -260,11 +300,38 @@ class SettingsDialog(QDialog):
         try:
             text = self.rules_editor.toPlainText().strip()
             rules = [line.strip() for line in text.split("\n") if line.strip()]
-            with open(self.config_path, "r", encoding="utf-8") as f:
-                cfg = yaml.safe_load(f)
-            cfg["user_rules"] = rules
-            with open(self.config_path, "w", encoding="utf-8") as f:
-                yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+            if self.config_service:
+                self.config_service.config["user_rules"] = rules
+                self.config_service.save()
+            else:
+                with open(self.config_path, "r", encoding="utf-8") as f:
+                    cfg = yaml.safe_load(f)
+                cfg["user_rules"] = rules
+                with open(self.config_path, "w", encoding="utf-8") as f:
+                    yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
             QMessageBox.information(self, "已保存", f"已保存 {len(rules)} 条规则。")
+        except Exception as e:
+            QMessageBox.warning(self, "保存失败", str(e))
+
+    def _load_ui_settings(self):
+        """从 config_service 加载界面/日志设置"""
+        if not self.config_service:
+            return
+        ui_cfg = self.config_service.get("ui", {}).get("log_panel", {})
+        self.log_visible_cb.setChecked(ui_cfg.get("visible", True))
+        self.log_max_lines_spin.setValue(ui_cfg.get("max_lines", 500))
+
+    def _save_ui_settings(self):
+        """保存界面/日志设置"""
+        try:
+            if not self.config_service:
+                QMessageBox.warning(self, "保存失败", "未提供配置服务")
+                return
+            ui_cfg = self.config_service.config.setdefault("ui", {}).setdefault("log_panel", {})
+            ui_cfg["visible"] = self.log_visible_cb.isChecked()
+            ui_cfg["max_lines"] = self.log_max_lines_spin.value()
+            self.config_service.save()
+            self.ui_settings_changed.emit()
+            QMessageBox.information(self, "已保存", "界面设置已保存。")
         except Exception as e:
             QMessageBox.warning(self, "保存失败", str(e))

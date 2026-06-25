@@ -2,8 +2,10 @@ import json
 import asyncio
 import threading
 from datetime import datetime
-from PySide6.QtCore import QThread, Signal
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
+from langchain_core.messages import HumanMessage
+
+from workers.base_worker import BaseWorker, WorkerCancelledError
+from agent_engine.orchestrator import AgentOrchestrator
 
 # Tiered tool definitions with explicit priority hints
 TOOL_DEFINITIONS = [
@@ -32,101 +34,63 @@ DANGEROUS_KEYWORDS = [
 ]
 
 
-class AgentWorker(QThread):
-    chunk_ready = Signal(str)
-    result_ready = Signal(str)
-    log_message = Signal(str)
-    task_created = Signal(str, str)
-    task_finished = Signal(str, str)
-    confirm_required = Signal(str, str)
-    token_used = Signal(str, str, int, int)
-
+class AgentWorker(BaseWorker):
     def __init__(self, user_text, mode_name, current_llm, current_tools,
                  session_id, system_prompt="", tool_map=None, tool_definitions=None,
-                 enable_streaming=True, chat_history=None, user_rules=None):
-        super().__init__()
+                 enable_streaming=True, chat_history=None, user_rules=None,
+                 max_tool_rounds=8, task_timeout=120.0):
+        super().__init__(session_id=session_id, task_timeout=task_timeout)
         self.user_text = user_text
         self.mode_name = mode_name
         self.current_llm = current_llm
         self.current_tools = current_tools or []
-        self.session_id = session_id
         self.system_prompt = system_prompt
         self.tool_map = tool_map or {}
         self.tool_definitions = tool_definitions or []
         self.enable_streaming = enable_streaming
         self.chat_history = chat_history or []
         self.user_rules = user_rules or []
+        self.max_tool_rounds = max(1, int(max_tool_rounds)) if max_tool_rounds else 8
         self.confirm_event = threading.Event()
         self.confirm_result = False
-        self._stop_flag = False
-
-    def stop(self):
-        self._stop_flag = True
-
-    def run(self):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(self._process())
-        finally:
-            loop.close()
 
     async def _process(self):
-        prompt = self.system_prompt or "You are a helpful AI assistant."
-        model_id = str(self.current_llm.model) if hasattr(self.current_llm, 'model') else "unknown"
-        prompt += f"\n\n## YOUR IDENTITY\nYou are AI Agent Workbench v2 running on model '{model_id}'. When asked who/what model you are, state: 'I am AI Agent Workbench v2, powered by {model_id}.' Never claim to be Claude, GPT, Gemini, or any other brand."
-        if self.user_rules:
-            rule_lines = "\n".join(f"{i+1}. {r}" for i, r in enumerate(self.user_rules))
-            prompt += f"\n\n## USER RULES (MUST FOLLOW)\n{rule_lines}"
-        system_msg = SystemMessage(content=prompt)
-        messages = [system_msg] + list(self.chat_history) + [HumanMessage(content=self.user_text)]
-
+        """AgentWorker 现在只是 Orchestrator 的薄封装：负责生命周期和信号转换。"""
         try:
-            allowed_defs = [d for d in self.tool_definitions if d["function"]["name"] in self.current_tools]
-            model_name = str(self.current_llm.model) if hasattr(self.current_llm, 'model') else ""
-            skip_tools = any(m in model_name for m in ("gemma2", "gemma:"))
-            llm = self.current_llm.bind_tools(allowed_defs) if (allowed_defs and not skip_tools) else self.current_llm
+            orchestrator = AgentOrchestrator(
+                llm=self.current_llm,
+                tool_map=self.tool_map,
+                tool_definitions=self.tool_definitions,
+                system_prompt=self.system_prompt,
+                user_rules=self.user_rules,
+                max_tool_rounds=self.max_tool_rounds,
+                enable_streaming=self.enable_streaming,
+                tool_executor=self._sync_call_tool,
+            )
 
-            response = await llm.ainvoke(messages)
+            callbacks = {
+                "log": self.log_message.emit,
+                "tool_start": self.task_created.emit,
+                "tool_end": self.task_finished.emit,
+                "chunk": self.chunk_ready.emit,
+                "round": self.round_advanced.emit,
+                "error": lambda code, detail: self._report_error(code, detail),
+            }
 
-            if hasattr(response, "tool_calls") and response.tool_calls:
-                self.log_message.emit(f"[TOOL] Calling: {[tc['name'] for tc in response.tool_calls]}")
-                response.content = ""
-                messages.append(response)
+            final_text = await orchestrator.run(
+                user_input=self.user_text,
+                chat_history=self.chat_history,
+                callbacks=callbacks,
+                cancel_event=self._cancel_event,
+            )
+            self.result_ready.emit(final_text)
 
-                for tc in response.tool_calls:
-                    tool_name = tc["name"]
-                    tool_args = tc["args"]
-                    task_id = f"{tool_name}_{datetime.now().strftime('%H%M%S')}"
-                    self.task_created.emit(task_id, f"Running {tool_name}")
-                    result = await asyncio.to_thread(self._sync_call_tool, tool_name, tool_args)
-                    self.task_finished.emit(task_id, str(result)[:200])
-                    self.log_message.emit(f"[OK] {tool_name}")
-                    messages.append(ToolMessage(content=str(result), tool_call_id=tc["id"]))
-
-                final_resp = await self.current_llm.ainvoke(messages)
-                reply = final_resp.content or ""
-                # Fallback: if LLM summary is empty, emit raw tool results
-                if not reply:
-                    results = [msg.content for msg in messages if isinstance(msg, ToolMessage)]
-                    reply = "\n\n".join(results) if results else "[Tool executed]"
-
-                if self.enable_streaming and reply:
-                    for line in reply.replace('\r\n', '\n').split('\n'):
-                        self.chunk_ready.emit(line + '\n')
-                self.result_ready.emit(reply.strip() if reply else "[Tool executed]")
-            else:
-                reply = response.content or ""
-                if self.enable_streaming and reply:
-                    for line in reply.replace('\r\n', '\n').split('\n'):
-                        if self._stop_flag:
-                            break
-                        self.chunk_ready.emit(line + '\n')
-                self.result_ready.emit(reply.strip())
-
+        except WorkerCancelledError:
+            self.log_message.emit("[STOP] 任务已取消")
+            raise
         except Exception as ex:
+            self._report_error("AGENT_PROCESS", str(ex))
             self.result_ready.emit(f"Error: {str(ex)}")
-            self.log_message.emit(f"[ERR] {ex}")
 
     def _sync_call_tool(self, name, args):
         tool_func = self.tool_map.get(name)
@@ -138,9 +102,12 @@ class AgentWorker(QThread):
             if name in ("run_command", "run_as_admin"):
                 command = args.get("command", "") if isinstance(args, dict) else str(args)
                 if self._is_dangerous(command):
+                    self.confirm_result = False  # 每次确认前重置
                     self.confirm_required.emit(name, command)
                     self.confirm_event.wait()
-                    if not self.confirm_result:
+                    confirmed = self.confirm_result
+                    self.confirm_result = False  # 使用后重置
+                    if not confirmed:
                         return "User cancelled sensitive operation"
             return tool_func.run(args)
         except Exception as e:

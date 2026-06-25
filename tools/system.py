@@ -131,6 +131,30 @@ def list_dir(path: str = ".") -> str:
 # 网络
 # ═══════════════════════════════════════════════════════
 
+
+def _html_to_text(html: str) -> str:
+    """将 HTML 转为可读纯文本。优先使用 BeautifulSoup，未安装则回退正则。"""
+    try:
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html, "html.parser")
+        # 移除脚本、样式、导航、页脚等噪音节点
+        for tag in soup(["script", "style", "nav", "footer", "header", "aside", "noscript"]):
+            tag.decompose()
+        # 优先取正文区域
+        main = soup.find("main") or soup.find("article") or soup.find("body") or soup
+        text = main.get_text(separator="\n", strip=True)
+    except Exception:
+        import re
+        text = re.sub(r'<script[^>]*>.*?</script>', ' ', html, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'<style[^>]*>.*?</style>', ' ', text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'<[^>]+>', ' ', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+
+    # 压缩空行
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return "\n".join(lines)
+
+
 @tool
 def web_fetch(url: str) -> str:
     """抓取网页内容，返回文本摘要（前2000字符）"""
@@ -155,10 +179,8 @@ def web_fetch(url: str) -> str:
             except Exception:
                 continue
 
-        # Strip HTML tags for plain text
-        import re
-        text = re.sub(r'<[^>]+>', ' ', text)
-        text = re.sub(r'\s+', ' ', text).strip()
+        # Strip HTML tags for plain text. Prefer BeautifulSoup; fallback to regex.
+        text = _html_to_text(text)
 
         if len(text) > 2000:
             text = text[:2000] + f"\n\n[... 已截断，原始长度 {len(text)} 字符]"
