@@ -308,3 +308,62 @@ def kill_process(name: str) -> str:
         return result.stdout.strip() or result.stderr.strip() or f"\u5df2\u7ec8\u6b62: {name}"
     except Exception as e:
         return f"\u7ec8\u6b62\u5931\u8d25: {str(e)}"
+
+
+# ══════════════════════════════════════════════════════
+# 解释器专用工具
+# ══════════════════════════════════════════════════════
+
+@tool
+def run_python(code: str) -> str:
+    """使用 Python 解释器执行代码片段，返回输出结果"""
+    try:
+        import subprocess, os
+        python_path = os.path.join(os.path.dirname(__file__), "..", "venv", "Scripts", "python.exe")
+        python_path = os.path.normpath(python_path)
+        if not os.path.exists(python_path):
+            python_path = "python"
+        result = subprocess.run(
+            [python_path, "-c", code],
+            capture_output=True, text=True, timeout=30,
+            encoding="utf-8", errors="replace"
+        )
+        output = (result.stdout + result.stderr).strip()
+        return output if output else f"Python 执行完成（退出码 {result.returncode}）"
+    except Exception as e:
+        return f"Python 执行失败: {str(e)}"
+
+
+@tool
+def run_powershell(command: str) -> str:
+    """使用 PowerShell 执行命令，返回输出结果"""
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["powershell.exe", "-Command", command],
+            capture_output=True, text=True, timeout=30,
+            encoding="utf-8", errors="replace"
+        )
+        output = (result.stdout + result.stderr).strip()
+        return output if output else f"PowerShell 执行完成（退出码 {result.returncode}）"
+    except Exception as e:
+        return f"PowerShell 执行失败: {str(e)}"
+
+
+@tool
+def run_bash(command: str) -> str:
+    """使用 Git Bash 执行命令，返回输出结果"""
+    try:
+        import subprocess, shutil
+        bash_path = shutil.which("bash.exe")
+        if not bash_path:
+            return "未找到 Git Bash (bash.exe)"
+        result = subprocess.run(
+            [bash_path, "-c", command],
+            capture_output=True, text=True, timeout=30,
+            encoding="utf-8", errors="replace"
+        )
+        output = (result.stdout + result.stderr).strip()
+        return output if output else f"Bash 执行完成（退出码 {result.returncode}）"
+    except Exception as e:
+        return f"Bash 执行失败: {str(e)}"

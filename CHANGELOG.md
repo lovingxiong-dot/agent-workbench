@@ -1,3 +1,34 @@
+## v3.6 (2026-06-26) — Phase-Driven Workflow Engine + 终端解释器管理
+
+### feat
+- **阶段驱动工作流**：新增 `PhaseManager`，将每次请求按 Mode 切分为 Analyze → Confirm → Execute → Verify → Archive。
+- **Mode × Phase 矩阵**：Ask 只分析/归档；Plan 分析+确认+归档；Craft 完整五阶段。
+- **任务清单驱动**：Analyze 阶段让 LLM 输出结构化任务清单，经用户确认后进入 Execute。
+- **软硬 Checkpoint 分离**：用户确认、危险命令等为硬门控；语法检查、单元测试为可跳过软提示。
+- **Phase 上下文切换**：`ContextService.get_phase_context()` 按阶段注入不同上下文。
+- **UI 阶段指示器**：底部状态栏显示 `[分析中]` `[等待确认]` `[执行中 N/M]` `[验证中]` 等阶段标签。
+- **确认门控**：对话区显示任务清单 + 「确认执行」/「重新分析」按钮，防止 AI 直接写错代码。
+- **Orchestrator.run_phase()**：新增 phase-aware 入口，Analyze/Verify 阶段不绑定工具，输出结构化结果。
+- **终端解释器管理**：新增 `InterpreterService`，自动发现 Python(venv/系统)/PowerShell/CMD/Git Bash，支持手动下拉切换与持久化。
+- **终端 UI 增强**：`TerminalWidget` 顶部新增解释器选择下拉框，切换时自动清空终端。
+- **解释器上下文注入**：`ContextService` 将当前终端解释器信息注入 prompt，Agent 可知悉可用解释器。
+- **解释器专用工具**：`tools/system.py` 新增 `run_python` / `run_powershell` / `run_bash`，AI 可直接调用指定解释器执行命令。
+
+### refactor
+- `AgentWorker` 增加 `phase` 参数，复用同一 worker 完成不同阶段调用。
+- `MainWindow._send_message()` 改为启动 `PhaseManager` 工作流，而非直接创建 worker。
+- `TerminalWorker` 同时支持 str（shell=True）与 list（shell=False）命令执行。
+
+### fix
+- 修复 `workers/terminal_worker.py` 缩进错误导致的模块无法导入问题。
+- 修复 `AgentWorkbench.spec` 文件头 BOM/零宽字符污染。
+- 修复 `MainWindow` 中 `_project_root` 未初始化就传给 `InterpreterService` 的顺序错误。
+- 修复 `TerminalWidget` 创建时未传入 `interpreter_service` 导致下拉框为空的问题。
+
+### test
+- 新增 `tests/test_phase_manager.py`，覆盖 Mode×Phase 矩阵、软硬 checkpoint、阶段流转、任务解析。
+- 新增 `tests/test_interpreter_service.py`，覆盖解释器发现、选择、命令构造。
+
 ## v3.5 (2026-06-26) — 推理指标：Token 与响应时间可视化
 
 ### feat
@@ -32,25 +63,6 @@
 - 新增 `tests/test_context_service.py` 单元测试。
 - 更新 `AgentWorkbench.spec` hiddenimports。
 
-## v3.6 (2026-06-26) — Phase-Driven Workflow Engine
-
-### feat
-- **阶段驱动工作流**：新增 `PhaseManager`，将每次请求按 Mode 切分为 Analyze → Confirm → Execute → Verify → Archive。
-- **Mode × Phase 矩阵**：Ask 只分析/归档；Plan 分析+确认+归档；Craft 完整五阶段。
-- **任务清单驱动**：Analyze 阶段让 LLM 输出结构化任务清单，经用户确认后进入 Execute。
-- **软硬 Checkpoint 分离**：用户确认、危险命令等为硬门控；语法检查、单元测试为可跳过软提示。
-- **Phase 上下文切换**：`ContextService.get_phase_context()` 按阶段注入不同上下文。
-- **UI 阶段指示器**：底部状态栏显示 `[分析中]` `[等待确认]` `[执行中 N/M]` `[验证中]` 等阶段标签。
-- **确认门控**：对话区显示任务清单 + 「确认执行」/「重新分析」按钮，防止 AI 直接写错代码。
-- **Orchestrator.run_phase()**：新增 phase-aware 入口，Analyze/Verify 阶段不绑定工具，输出结构化结果。
-
-### refactor
-- `AgentWorker` 增加 `phase` 参数，复用同一 worker 完成不同阶段调用。
-- `MainWindow._send_message()` 改为启动 `PhaseManager` 工作流，而非直接创建 worker。
-
-### test
-- 新增 `tests/test_phase_manager.py`，覆盖 Mode×Phase 矩阵、软硬 checkpoint、阶段流转、任务解析。
-
 ## v3.3 (2026-06-25) — 精细化：文件预览、纯对话、分栏与活动面板
 
 ### feat
@@ -70,7 +82,6 @@
 - 修复模型切换后 `current_model` 未正确持久化到 `config.yaml` 的问题。
 - 修复文件打开时产生重复活动记录的问题，并在活动详情中显示文件大小。
 - 修复对话列表「当前项目」标题在多次切换目录后无法更新的问题。
-- 修复活动记录存储路径未兼容 PyInstaller 打包环境的问题。
 
 ### chore
 - 文档编辑器新增 `Ctrl+S` 保存、`Esc` 取消编辑快捷键。
@@ -143,7 +154,7 @@
 - **流式输出**: AgentWorker 基于 astream() 逐 token 渲染，打字机效果
 - **停止生成**: 新增 Stop 按钮 + Escape 快捷键
 - **键盘快捷键**: Ctrl+Enter 发送 / Ctrl+L 清空 / Escape 停止
-- **外部 QSS 主题**: resources/themes/dark_github.qss，GitHub 深色风格
+- **外部 QSS 主题**: resources/themes/dark_github.qss，GitHub Dark 深色风格
 - **对话持久化**: SQLite 三表（conversations/messages/token_usage），重启不丢失
 - **Token 追踪**: 按 provider/model 统计用量，状态栏实时显示
 - **终端命令历史**: TerminalWidget 支持 ↑↓ 导航历史命令

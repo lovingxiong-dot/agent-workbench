@@ -22,6 +22,7 @@ from services.theme_service import ThemeService
 from services.project_service import ProjectService
 from services.activity_service import ActivityService
 from services.context_service import ContextService
+from services.interpreter_service import InterpreterService
 from services.metrics_collector import MetricsCollector, TurnMetrics
 from workers.agent_worker import AgentWorker, TOOL_DEFINITIONS
 from ui.widgets import (
@@ -77,7 +78,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("AI Agent 工作台 v2 · 手动模式")
         self.resize(1600, 950)
 
-        # ── 服务初始化 ──────────────────────────
+        # ── 基础路径与配置 ──────────────────────
         config_path = resource_path("config.yaml")
         config_write = (
             os.path.join(os.path.dirname(sys.executable), "config.yaml")
@@ -85,9 +86,36 @@ class MainWindow(QMainWindow):
             else config_path
         )
         self.config_service = ConfigService(config_path, writable_path=config_write)
+
+        # ── 服务初始化 ──────────────────────────
         self.session_service = SessionService()
         self.project_service = ProjectService(self.session_service, self.config_service)
+
+        # 先确定项目根目录，后续服务依赖它
+        app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self._project_root = self.project_service.detect_current_project(app_root)
+
         self.context_service = ContextService(self.project_service, self)
+        self.interpreter_service = InterpreterService(self._project_root, self.config_service)
+        self.interpreter_service.discover()
+        self.context_service.set_interpreter_service(self.interpreter_service)
+
+        # 全局状态
+        self._current_session = ""
+        self._sessions = {}
+        self._current_mode = "ask"
+        self._current_llm = None
+        self._current_tools = []
+        self._current_model_name = "tool-agent"
+        self._worker = None  # Active AgentWorker
+        self._chunks_received = False
+        self._pending_metrics = None  # 等待 AI 回复完成后显示的 metrics
+        self._phase_manager = PhaseManager(self)
+        self._current_phase = "idle"
+        self._phase_task_list = []
+        self._phase_results = []
+
+        # 其余服务
         # 活动记录持久化到可写目录（兼容 PyInstaller）
         activity_storage_path = (
             os.path.join(os.path.dirname(sys.executable), "storage", "activities.json")
@@ -105,23 +133,6 @@ class MainWindow(QMainWindow):
         self._log_panel_visible = ui_cfg.get("visible", True)
         self._log_max_lines = ui_cfg.get("max_lines", 500)
 
-        # ── 全局状态 ────────────────────────────
-        app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self._project_root = self.project_service.detect_current_project(app_root)
-        self._current_session = ""
-        self._sessions = {}
-        self._current_mode = "ask"
-        self._current_llm = None
-        self._current_tools = []
-        self._current_model_name = "tool-agent"
-        self._worker = None  # Active AgentWorker
-        self._chunks_received = False
-        self._pending_metrics = None  # 等待 AI 回复完成后显示的 metrics
-        self._phase_manager = PhaseManager(self)
-        self._current_phase = "idle"
-        self._phase_task_list = []
-        self._phase_results = []
-
         # ── UI 构建 ─────────────────────────────
         self._apply_theme()
         self._setup_ui()
@@ -136,6 +147,7 @@ class MainWindow(QMainWindow):
         self.chat_view.reanalyze_clicked.connect(self._on_phase_reanalyze)
         self.chat_view.skip_verify_clicked.connect(self._on_phase_skip_verify)
         self.context_service.context_changed.connect(self._on_context_changed)
+        self.workspace.terminal.interpreter_changed.connect(self._on_interpreter_changed)
         self.workspace.document_opened.connect(self._on_document_opened)
         self.workspace.document_closed.connect(self._on_document_closed)
 
@@ -254,7 +266,7 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.chat_view, 1)
 
         # ── 右侧工作区 ──────────────────────────
-        self.workspace = WorkspaceWidget()
+        self.workspace = WorkspaceWidget(interpreter_service=self.interpreter_service)
         self.workspace.setMinimumWidth(300)
         self.workspace.set_logs_max_lines(self._log_max_lines)
         self.workspace.set_project_path(self._project_root)
@@ -380,6 +392,15 @@ class MainWindow(QMainWindow):
         active_doc = self.context_service.get_active_document()
         active_file = os.path.basename(active_doc.path) if active_doc else ""
         self.status_indicator.set_workspace_context(project_root, active_file)
+
+    @Slot(str)
+    def _on_interpreter_changed(self, interpreter_type: str):
+        """终端解释器切换时更新上下文与状态栏"""
+        self.context_service.update_interpreter_context()
+        current = self.interpreter_service.get_current()
+        name = current.name if current else interpreter_type
+        self._on_log_message(f"🖥 切换解释器: {name}", is_header=True)
+        self._on_context_changed()
 
     @Slot(str, str, int)
     def _on_document_opened(self, path: str, preview: str, size: int):

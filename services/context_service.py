@@ -43,6 +43,7 @@ class ContextService(QObject):
         self._active_document: Optional[DocumentContext] = None
         self._open_documents: List[DocumentContext] = []
         self._selected_paths: List[str] = []
+        self._interpreter_service = None
 
     # ═══════════════════════════════════════════════════
     # 项目根目录
@@ -61,6 +62,23 @@ class ContextService(QObject):
 
     def get_project_root(self) -> str:
         return self._project_root
+
+    # ═══════════════════════════════════════════════════
+    # 终端解释器上下文
+    # ═══════════════════════════════════════════════════
+    def set_interpreter_service(self, service):
+        """注入 InterpreterService，用于在 prompt 中描述当前终端环境"""
+        self._interpreter_service = service
+
+    def update_interpreter_context(self):
+        """解释器切换时通知上下文变化"""
+        self.context_changed.emit()
+
+    def _get_interpreter_context(self) -> str:
+        """生成终端环境描述文本"""
+        if not self._interpreter_service:
+            return "[当前终端环境]\n未发现解释器"
+        return self._interpreter_service.get_context_string()
 
     # ═══════════════════════════════════════════════════
     # 活动文档
@@ -190,6 +208,8 @@ class ContextService(QObject):
             lines.append(f"选中项: {', '.join(rel_paths)}")
 
         lines.append("")
+        lines.append(self._get_interpreter_context())
+        lines.append("")
         return "\n".join(lines)
 
     def _build_execute_context(self) -> str:
@@ -207,6 +227,8 @@ class ContextService(QObject):
                 lines.append("---")
                 lines.append(active.preview[:300])
                 lines.append("---")
+
+        lines.append(self._get_interpreter_context())
         lines.append("")
         return "\n".join(lines)
 

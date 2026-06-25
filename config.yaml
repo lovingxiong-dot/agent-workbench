@@ -129,6 +129,11 @@ memory:
   short_term_db: F:/Agent/agent_workbench/storage/short_term.db
   user_profile: F:/Agent/agent_workbench/storage/user_profile.json
   vector_store: F:/Agent/agent_workbench/storage/vector_store
+terminal:
+  preferred_interpreter:
+    type: python
+    name: Python (venv)
+    path: F:\Agent\agent_workbench\venv\Scripts\python.exe
 ui:
   log_panel:
     visible: true

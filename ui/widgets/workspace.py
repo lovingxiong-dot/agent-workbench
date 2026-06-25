@@ -18,9 +18,10 @@ class WorkspaceWidget(QTabWidget):
     document_opened = Signal(str, str, int)   # path, preview, size
     document_closed = Signal(str)             # path
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, interpreter_service=None):
         super().__init__(parent)
         self._max_log_lines = 500
+        self._interpreter_service = interpreter_service
         self.setObjectName("workspace")
         self.setTabPosition(QTabWidget.North)
         self._setup_tabs()
@@ -28,7 +29,7 @@ class WorkspaceWidget(QTabWidget):
 
     def _setup_tabs(self):
         # ── 终端 ────────────────────────────────
-        self.terminal = TerminalWidget()
+        self.terminal = TerminalWidget(interpreter_service=self._interpreter_service)
         self.addTab(self.terminal, "终端")
 
         # ── 活动 ────────────────────────────────

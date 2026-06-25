@@ -4,7 +4,7 @@
 | 项目名称 | AI Agent 工作台 | 当前版本 | v3.6 | 存档次数 | 11 |
 
 ## 项目概要
-AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、MT5 交易、网页抓取、剪贴板管理等能力。v3.1 完成右侧工作区重构；v3.2 引入项目目录上下文；v3.3 对文件预览、对话分栏、活动面板、文档编辑进行精细化打磨；v3.4 让 Agent 具备工作空间感知能力，能自动识别当前项目目录、右侧打开文件，并基于项目根目录解析工具相对路径。v3.5 引入请求级指标（token/耗时）并在 AI 气泡下方显示。v3.6 引入 Phase-Driven Workflow Engine：将每次请求按 Mode 切分为 Analyze → Confirm → Execute → Verify → Archive 阶段，Mode 与 Phase 正交，硬门控/软提示分离，任务清单驱动执行。
+AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、MT5 交易、网页抓取、剪贴板管理等能力。v3.1 完成右侧工作区重构；v3.2 引入项目目录上下文；v3.3 对文件预览、对话分栏、活动面板、文档编辑进行精细化打磨；v3.4 让 Agent 具备工作空间感知能力，能自动识别当前项目目录、右侧打开文件，并基于项目根目录解析工具相对路径。v3.5 引入请求级指标（token/耗时）并在 AI 气泡下方显示。v3.6 引入 Phase-Driven Workflow Engine：将每次请求按 Mode 切分为 Analyze → Confirm → Execute → Verify → Archive 阶段，Mode 与 Phase 正交，硬门控/软提示分离，任务清单驱动执行；同时引入 InterpreterService，支持终端解释器自动发现、手动切换与 AI 上下文感知。
 
 ## 技术栈
 | 类别 | 技术 | 版本 | 用途 |
@@ -45,9 +45,11 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │   ├── session_service.py  # SQLite 对话 + Token 用量持久化
 │   ├── theme_service.py    # QSS 主题加载
 │   ├── project_service.py  # 项目目录与会话关联管理
-│   ├── activity_service.py # 结构化活动记录与持久化
-│   ├── context_service.py  # 当前工作空间上下文维护
-│   └── path_resolver.py    # 基于项目根目录的路径解析
+│   ├── activity_service.py  # 结构化活动记录与持久化
+│   ├── context_service.py   # 当前工作空间上下文维护
+│   ├── path_resolver.py     # 基于项目根目录的路径解析
+│   ├── metrics_collector.py # 请求级指标收集（token/耗时）
+│   └── interpreter_service.py # 终端解释器发现/选择/持久化
 ├── workers/                # 后台线程
 │   ├── __init__.py
 │   ├── agent_worker.py     # 流式 Agent 推理 + 工具调用
@@ -79,7 +81,10 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ├── tests/                  # 单元测试
 │   ├── __init__.py
 │   ├── test_agent_worker.py
-│   └── test_context_service.py
+│   ├── test_context_service.py
+│   ├── test_metrics_collector.py
+│   ├── test_phase_manager.py
+│   └── test_interpreter_service.py
 ├── main.py                 # 程序入口
 ├── config.yaml             # 全局配置
 ├── .env                    # 环境变量（API Keys，不提交）
@@ -98,7 +103,7 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
-| v3.6 | 2026-06-26 | Phase-Driven Workflow Engine：Mode×Phase 矩阵、Analyze→Confirm→Execute→Verify→Archive 阶段流转、软硬 Checkpoint、任务清单驱动、UI 阶段指示器与确认门控 | feat | agent_engine/phase_manager.py, agent_engine/orchestrator.py, services/context_service.py, ui/main_window.py, ui/chat_view.py, workers/agent_worker.py, AgentWorkbench.spec, tests/test_phase_manager.py |
+| v3.6 | 2026-06-26 | Phase-Driven Workflow Engine：Mode×Phase 矩阵、Analyze→Confirm→Execute→Verify→Archive 阶段流转、软硬 Checkpoint、任务清单驱动、UI 阶段指示器与确认门控；InterpreterService 终端解释器自动发现/切换/AI 上下文感知 | feat | agent_engine/phase_manager.py, agent_engine/orchestrator.py, services/context_service.py, services/interpreter_service.py, ui/main_window.py, ui/chat_view.py, ui/widgets/terminal.py, ui/widgets/workspace.py, workers/agent_worker.py, workers/terminal_worker.py, tools/system.py, AgentWorkbench.spec, config.yaml, tests/test_phase_manager.py, tests/test_interpreter_service.py |
 | v3.5 | 2026-06-26 | 请求级指标：token/耗时收集、AI 气泡下方显示 metrics、日志输出 TTFT 详情 | feat | services/metrics_collector.py, agent_engine/orchestrator.py, workers/agent_worker.py, workers/base_worker.py, ui/main_window.py, ui/chat_view.py |
 | v3.4 | 2026-06-26 | 工作空间上下文感知：自动检测项目目录、右侧文件摘要注入 prompt、文件工具相对路径解析、最近项目下拉 | feat | services/context_service.py, services/path_resolver.py, services/project_service.py, agent_engine/orchestrator.py, tools/system.py, ui/main_window.py, ui/widgets/document_editor.py, ui/widgets/workspace.py, ui/widgets/sidebar.py, ui/widgets/status_indicator.py, workers/agent_worker.py, config.yaml, AgentWorkbench.spec, tests/test_context_service.py |
 | v3.3 | 2026-06-25 | 精细化打磨：任意格式文件预览、对话/活动分栏、文档编辑快捷键、修复模型持久化与活动重复记录 | feat/fix | ui/widgets/document_editor.py, ui/widgets/conversation.py, ui/widgets/activity_panel.py, services/activity_service.py, ui/main_window.py, resources/themes/dark_github.qss, AgentWorkbench.spec |

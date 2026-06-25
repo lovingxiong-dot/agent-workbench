@@ -1,5 +1,6 @@
 import os
 import subprocess
+import shlex
 from PySide6.QtCore import QThread, Signal
 
 
@@ -8,6 +9,11 @@ class TerminalWorker(QThread):
     finished_cmd = Signal(int)
 
     def __init__(self, command, cwd=None):
+        """
+        command: str 或 list。
+        - str 时保持 shell=True 执行（兼容旧调用）。
+        - list 时直接作为 argv 执行，shell=False，更安全。
+        """
         super().__init__()
         self.command = command
         self.cwd = cwd or os.getcwd()
@@ -15,10 +21,17 @@ class TerminalWorker(QThread):
 
     def run(self):
         try:
+            if isinstance(self.command, list):
+                cmd = list(self.command)
+                shell = False
+            else:
+                cmd = str(self.command)
+                shell = True
+
             self._process = subprocess.Popen(
-                self.command,
+                cmd,
                 cwd=self.cwd,
-                shell=True,
+                shell=shell,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
