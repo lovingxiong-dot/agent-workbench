@@ -16,6 +16,7 @@ from PySide6.QtGui import QPalette, QColor
 
 from agent_engine import ModeManager, LLMRegistry, MemoryManager
 from agent_engine.phase_manager import PhaseManager, TaskItem
+from services.app_context import AppContext
 from services.config_service import ConfigService
 from services.session_service import SessionService
 from services.theme_service import ThemeService
@@ -24,6 +25,7 @@ from services.activity_service import ActivityService
 from services.context_service import ContextService
 from services.interpreter_service import InterpreterService
 from services.metrics_collector import MetricsCollector, TurnMetrics
+from services.persistence_service import PersistenceService
 from services.mcp_service import MCPRegistry
 from agent_engine.tool_gateway import ToolGateway
 from workers.agent_worker import AgentWorker, TOOL_DEFINITIONS
@@ -88,6 +90,7 @@ class MainWindow(QMainWindow):
             else config_path
         )
         self.config_service = ConfigService(config_path, writable_path=config_write)
+        self.persistence_service = PersistenceService(self.config_service)
 
         # 窗口标题动态读取版本号（必须在 config_service 初始化之后）
         app_version = self.config_service.get("app.version", "v3.x")
@@ -181,14 +184,13 @@ class MainWindow(QMainWindow):
 
         # ── 初始化 ──────────────────────────────
         # 从配置恢复上次选择的模式和模型；若无效则回退到 ask/tool-agent
-        last_mode = self.config_service.get("app.last_mode", "ask")
-        last_model = self.config_service.get("app.last_model", "tool-agent")
         available_modes = list(self.config_service.get("manual_modes", {}).keys())
-        if last_mode not in available_modes:
-            last_mode = "ask"
         providers = self.llm_registry.list_providers()
-        if last_model not in providers:
-            last_model = next(iter(providers.keys()), "tool-agent")
+        last_mode, last_model = self.persistence_service.resolve_start_mode_model(
+            available_modes,
+            list(providers.keys()),
+            defaults=("ask", next(iter(providers.keys()), "tool-agent")),
+        )
         self._init_mode(last_mode, last_model)
         self._init_default_session()
         self.chat_view.populate_models(
@@ -368,20 +370,13 @@ class MainWindow(QMainWindow):
         # 切换模式时保留当前选择的模型（全局模型记忆，不因模式切换而重置）
         self._init_mode(mode_name, self._current_model_name)
         # 持久化当前模式
-        app_cfg = self.config_service.config.setdefault("app", {})
-        app_cfg["last_mode"] = mode_name
-        self.config_service.save()
+        self.persistence_service.save_mode(mode_name)
 
     def _on_model_changed(self, llm_name):
         self._current_llm = self.llm_registry.get_llm(llm_name)
         self._current_model_name = llm_name
         # 持久化当前模式选用的模型，以及全局 last_model
-        manual_cfg = self.config_service.config.setdefault("manual_modes", {})
-        manual_cfg[self._current_mode] = manual_cfg.get(self._current_mode, {})
-        manual_cfg[self._current_mode]["current_model"] = llm_name
-        app_cfg = self.config_service.config.setdefault("app", {})
-        app_cfg["last_model"] = llm_name
-        self.config_service.save()
+        self.persistence_service.save_model(self._current_mode, llm_name)
 
         provider = self.llm_registry.get_provider_config(llm_name)
         current_title = self._sessions.get(self._current_session, {}).get("title", "未命名会话")
@@ -407,9 +402,7 @@ class MainWindow(QMainWindow):
             model_changed = True
         # 如因设置变更导致模型回退，同步保存 last_model，避免下次启动丢失
         if model_changed:
-            app_cfg = self.config_service.config.setdefault("app", {})
-            app_cfg["last_model"] = self._current_model_name
-            self.config_service.save()
+            self.persistence_service.save_model(self._current_mode, self._current_model_name)
         self.chat_view.populate_models(providers, self._current_model_name)
         current_title = self._sessions.get(self._current_session, {}).get("title", "未命名会话")
         self.chat_view.set_header(self._current_mode, self._current_model_name, current_title)
