@@ -85,3 +85,13 @@ class PersistenceService:
             self._config.config["app"] = app_cfg
         app_cfg.update(state)
         self._config.save()
+
+    def update_nested(self, key: str, updates: Dict[str, Any]):
+        """更新嵌套配置，保留原有兄弟字段（如 ui.log_panel.visible 不覆盖 max_lines）"""
+        existing = self._config.get(key, {})
+        if not isinstance(existing, dict):
+            existing = {}
+        merged = dict(existing)
+        merged.update(updates)
+        self._config.set(key, merged)
+        self._config.save()

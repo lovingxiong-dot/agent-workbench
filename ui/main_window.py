@@ -1033,9 +1033,7 @@ class MainWindow(QMainWindow):
         self._log_panel_visible = visible
         self.workspace.setVisible(visible)
         self.chat_view.set_log_panel_checked(visible)
-        ui_cfg = self.config_service.config.setdefault("ui", {}).setdefault("log_panel", {})
-        ui_cfg["visible"] = visible
-        self.config_service.save()
+        self.persistence_service.update_nested("ui.log_panel", {"visible": visible})
 
     def _apply_ui_settings(self):
         ui_cfg = self.config_service.get("ui", {}).get("log_panel", {})

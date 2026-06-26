@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v3.7.4 | 存档次数 | 16 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v3.8.0 | 存档次数 | 17 |
 
 ## 项目概要
 AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、MT5 交易、网页抓取、剪贴板管理等能力。v3.1 完成右侧工作区重构；v3.2 引入项目目录上下文；v3.3 对文件预览、对话分栏、活动面板、文档编辑进行精细化打磨；v3.4 让 Agent 具备工作空间感知能力，能自动识别当前项目目录、右侧打开文件，并基于项目根目录解析工具相对路径。v3.5 引入请求级指标（token/耗时）并在 AI 气泡下方显示。v3.6 引入 Phase-Driven Workflow Engine：将每次请求按 Mode 切分为 Analyze → Confirm → Execute → Verify → Archive 阶段，Mode 与 Phase 正交，硬门控/软提示分离，任务清单驱动执行。v3.7 引入 InterpreterService，支持终端解释器自动发现、手动切换与 AI 上下文感知。v3.7.1 修复启动时解释器检测弹窗、历史会话 AI 回复丢失、终端输入框无法编辑等问题，并增强活动面板交互与窗口标题版本可持续迭代。v3.7.2 修复 v3.7.1 中窗口标题初始化顺序导致的打包启动崩溃。
@@ -114,6 +114,7 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v3.8.0 | 2026-06-27 | MVC资源管理器、PersistenceService持久化、MemoryManager画像schema、工具注册与依赖对齐 | feat/fix | ui/models/explorer_tree_model.py, ui/widgets/explorer_view.py, ui/widgets/explorer.py, services/persistence_service.py, agent_engine/memory_manager.py, config.yaml, workers/agent_worker.py, requirements.txt, AgentWorkbench.spec, tests/* |
 | v3.7.4 | 2026-06-27 | Analyze 阶段强制只读工具与结果截断对齐 | fix/feat | agent_engine/orchestrator.py, agent_engine/agent_session.py |
 | v3.7.3 | 2026-06-26 | 分级超时与持久化路径修复 | fix/feat | agent_engine/orchestrator.py, agent_engine/memory_manager.py, workers/agent_worker.py, services/config_service.py, tools/system.py, ui/main_window.py, config.yaml |
 | v3.7.2 | 2026-06-26 | 修复 v3.7.1 中窗口标题初始化顺序导致的打包启动崩溃 | fix | ui/main_window.py |
@@ -136,5 +137,5 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 3. git commit + git tag vX.Y
 4. git push + git push --tags
 
-_更新于 2026-06-27 02:10:00 by AI-Kimi-K2.7-Code_
+_更新于 2026-06-27 10:50:00 by AI-Kimi-K2.7-Code_
 ---

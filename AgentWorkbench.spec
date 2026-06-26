@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for AI Agent Workbench v2"""
+"""PyInstaller spec for AI Agent Workbench v3.8"""
 
 a = Analysis(
     ['main.py'],
@@ -65,6 +65,11 @@ a = Analysis(
         'services.path_resolver',
         'services.metrics_collector',
         'services.interpreter_service',
+        'services.persistence_service',
+        'services.mcp_service',
+        'ui.models.explorer_tree_model',
+        'ui.widgets.explorer_view',
+        'ui.widgets.explorer',
     ],
     hookspath=[],
     hooksconfig={},

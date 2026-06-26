@@ -138,6 +138,15 @@ memory:
   short_term_db: short_term.db
   user_profile: user_profile.json
   vector_store: vector_store
+  user_profile_defaults:
+    schema_version: 1
+    language: zh-CN
+    response_style: detailed
+    preferred_quant_source: akshare
+    default_python_env: ""
+    risk_tolerance: medium
+    frequent_tickers: []
+    custom_terms: {}
 terminal:
   preferred_interpreter:
     type: python
@@ -156,6 +165,6 @@ feature_flags:
   shared_orchestrator: true
   shared_output_panel: true
 app:
-  version: v3.7.4
+  version: v3.8.0
   last_mode: craft
   last_model: deepseek

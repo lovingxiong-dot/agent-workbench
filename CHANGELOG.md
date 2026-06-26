@@ -1,3 +1,20 @@
+## v3.8.0 (2026-06-27) — MVC 资源管理器、持久化服务与生产修复
+
+### feat
+- **MVC 资源管理器**：新增 `ui/models/explorer_tree_model.py`（QAbstractItemModel）、`ui/widgets/explorer_view.py`（QTreeView + emoji 委托），重构 `ui/widgets/explorer.py` 为 Controller，支持懒加载与过滤。
+- **PersistenceService**：新增 `services/persistence_service.py`，集中处理 mode/model/UI 状态持久化，替换 `MainWindow` 中分散的 `config_service` 直接访问。
+- **MemoryManager 画像 schema**：`config.yaml` 新增 `memory.user_profile_defaults`（含 `schema_version`）；`agent_engine/memory_manager.py` 实现双边版本判断、安全合并与迁移钩子，运行时画像仅补齐缺失字段，不覆盖用户已有值。
+- **模式/模型持久化边界测试**：新增空模型列表、损坏 mode 配置自动修复、跨 mode 隔离、空 config 文件启动回退等 4 个高/中高风险边界 case。
+
+### fix
+- **依赖补全**：`requirements.txt` 补充 `python-dotenv`，避免新环境 `ModuleNotFoundError`。
+- **PyInstaller hiddenimports 对齐**：`AgentWorkbench.spec` 补充 `services.persistence_service`、`services.mcp_service`、`ui.models.explorer_tree_model`、`ui.widgets.explorer_view`、`ui.widgets.explorer`，并修正版本注释为 v3.8。
+- **工具定义对齐**：`workers/agent_worker.py` 的 `TOOL_DEFINITIONS` 补齐 `run_python`、`run_powershell`、`run_bash`，与 `tools/__init__.py` 的 `TOOL_MAP` 一一对应，确保 LLM 可见。
+
+### test
+- 新增 `tests/test_memory_manager.py`，覆盖默认值初始化、缺失字段补齐、嵌套 dict 不覆盖、版本迁移触发、`schema_version` 防覆盖。
+- 补充 `tests/test_persistence_service.py` 4 个模式/模型持久化边界 case。
+
 ## v3.7.4 (2026-06-27) — Analyze 阶段强制只读工具
 
 ### feat

@@ -20,6 +20,7 @@ markdown>=3.5
 # Utilities
 tiktoken>=0.5
 tenacity>=8.2
+python-dotenv>=1.0.0
 
 # Packaging
 pyinstaller>=6.0
