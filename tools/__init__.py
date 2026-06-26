@@ -25,6 +25,7 @@ from .quant import fetch_stock_data, run_backtest, arun_fetch_stock_data
 from .mt5 import mt5_get_price, mt5_place_order
 from .external_apis import fetch_financial_news, fetch_macro_data
 from .external_apis import arun_fetch_financial_news, arun_fetch_macro_data
+from .screen import screen_capture, screen_info, arun_screen_capture
 
 TOOL_MAP = {
     "run_command": run_command,
@@ -47,6 +48,8 @@ TOOL_MAP = {
     "run_python": run_python,
     "run_powershell": run_powershell,
     "run_bash": run_bash,
+    "screen_capture": screen_capture,
+    "screen_info": screen_info,
 }
 
 ARUN_MAP = {
@@ -65,4 +68,5 @@ ARUN_MAP = {
     "run_python": arun_run_python,
     "run_powershell": arun_run_powershell,
     "run_bash": arun_run_bash,
+    "screen_capture": arun_screen_capture,
 }

@@ -50,6 +50,8 @@ TOOL_DEFINITIONS = [
     {"type":"function","function":{"name":"run_as_admin","description":"[PRIORITY-3-DESTRUCTIVE] Run command as admin (UAC popup). ONLY use for 'admin', 'sudo', 'elevated'.","parameters":{"type":"object","properties":{"command":{"type":"string"}},"required":["command"]}}},
     {"type":"function","function":{"name":"kill_process","description":"[PRIORITY-3-DESTRUCTIVE] Terminate process (needs confirmation). ONLY use when user says 'kill', 'stop', 'terminate'.","parameters":{"type":"object","properties":{"name":{"type":"string","description":"e.g. notepad.exe"}},"required":["name"]}}},
     {"type":"function","function":{"name":"list_processes","description":"[PRIORITY-3-UTIL] List running processes by memory. Use for system status.","parameters":{"type":"object","properties":{},"required":[]}}},
+    {"type":"function","function":{"name":"screen_info","description":"[PRIORITY-3-UTIL] Get primary screen resolution. Use when user asks about display/screen size.","parameters":{"type":"object","properties":{},"required":[]}}},
+    {"type":"function","function":{"name":"screen_capture","description":"[PRIORITY-3-UTIL] Capture the primary screen and save as a BMP image. Use when user asks for a screenshot.","parameters":{"type":"object","properties":{"path":{"type":"string","description":"Output file path, default screenshot.bmp"}},"required":[]}}},
 ]
 
 

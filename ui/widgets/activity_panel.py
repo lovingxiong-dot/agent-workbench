@@ -11,9 +11,10 @@ from datetime import datetime
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QListWidget, QListWidgetItem, QTextEdit, QFrame, QMenu,
+    QAbstractItemView,
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QColor, QAction
+from PySide6.QtGui import QFont, QColor, QAction, QKeySequence, QShortcut
 
 
 # 类别 -> 显示颜色
@@ -72,6 +73,7 @@ class ActivityWidget(QWidget):
 
         self.project_list = QListWidget()
         self.project_list.setObjectName("activityList")
+        self.project_list.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.project_list.itemClicked.connect(self._on_item_clicked)
         layout.addWidget(self.project_list, 1)
 
@@ -94,6 +96,7 @@ class ActivityWidget(QWidget):
 
         self.global_list = QListWidget()
         self.global_list.setObjectName("activityList")
+        self.global_list.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.global_list.itemClicked.connect(self._on_item_clicked)
         layout.addWidget(self.global_list, 1)
 
@@ -112,6 +115,7 @@ class ActivityWidget(QWidget):
 
         # ── 右键菜单 ─────────────────────────────
         self._setup_context_menus()
+        self._setup_shortcuts()
 
     def _setup_context_menus(self):
         """为列表和详情区配置右键菜单"""
@@ -122,15 +126,23 @@ class ActivityWidget(QWidget):
         self.detail_edit.setContextMenuPolicy(Qt.CustomContextMenu)
         self.detail_edit.customContextMenuRequested.connect(self._show_detail_context_menu)
 
+    def _setup_shortcuts(self):
+        """为两个列表绑定 Ctrl+A 全选快捷键。"""
+        for widget in (self.project_list, self.global_list):
+            QShortcut(QKeySequence("Ctrl+A"), widget).activated.connect(widget.selectAll)
+
     def _show_list_context_menu(self, pos):
         sender = self.sender()
         item = sender.itemAt(pos)
         if not item:
             return
         menu = QMenu(self)
-        copy_action = QAction("复制", self)
-        copy_action.triggered.connect(lambda: self._copy_list_item(item))
+        copy_action = QAction("复制选中项", self)
+        copy_action.triggered.connect(lambda: self._copy_selected_items(sender))
         menu.addAction(copy_action)
+        select_all_action = QAction("全选", self)
+        select_all_action.triggered.connect(sender.selectAll)
+        menu.addAction(select_all_action)
         menu.exec(sender.mapToGlobal(pos))
 
     def _show_detail_context_menu(self, pos):
@@ -143,9 +155,12 @@ class ActivityWidget(QWidget):
         menu.addAction(copy_action)
         menu.exec(self.detail_edit.mapToGlobal(pos))
 
-    def _copy_list_item(self, item: QListWidgetItem):
+    def _copy_selected_items(self, widget: QListWidget):
+        """复制列表中所有选中项的文本，按换行分隔。"""
         from PySide6.QtWidgets import QApplication
-        QApplication.clipboard().setText(item.text())
+        texts = [item.text() for item in widget.selectedItems()]
+        if texts:
+            QApplication.clipboard().setText("\n".join(texts))
 
     def set_project_path(self, path: str):
         self._project_path = path or ""

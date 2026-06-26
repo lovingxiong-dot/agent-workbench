@@ -1,3 +1,18 @@
+## v3.8.1 (2026-06-27) — 填充架构占位 + 对话气泡与活动面板交互优化
+
+### feat
+- **填充 4 个架构占位文件**：
+  - `tools/screen.py`：基于 ctypes + gdi32 的屏幕截图与显示器信息，无 Pillow 外部依赖。
+  - `ui/overlay.py`：`OverlayWidget` 全局半透明遮罩层，支持淡入淡出动画与进度条。
+  - `ui/settings.py`：`SettingsPage` 嵌入式设置页，含 LLM 提供商 / 用户规则 / 界面日志三栏。
+  - `ui/tools_panel.py`：`ToolsPanel` 工具开关面板，按分类展示并允许启用/禁用。
+- **屏幕工具注册**：`tools/__init__.py` 与 `workers/agent_worker.py` 的 `TOOL_DEFINITIONS` 已注册 `screen_capture`、`screen_info`。
+- **活动面板多选增强**：右侧「当前项目 / 全局」列表开启 `ExtendedSelection`，支持 Ctrl+A 全选、Ctrl/Shift 连选、右键「复制选中项」。
+
+### fix
+- **对话气泡排版**：`ui/chat_view.py` 改为圆角矩形气泡，用户气泡右对齐、文本统一左对齐，最大宽度 85%，解决多行文本边缘不齐问题。
+- **确认卡片排版**：系统/确认消息改为居中卡片样式，任务清单与操作提示使用有序/无序列表工整呈现。
+
 ## v3.8.0 (2026-06-27) — MVC 资源管理器、持久化服务与生产修复
 
 ### feat
@@ -48,7 +63,7 @@
 - **终端输入框无法编辑**：重构 `TerminalWidget`，使用 `TerminalInput(QLineEdit)` 子类重写 `keyPressEvent`，恢复默认文本编辑并保留 ↑↓ 历史切换。
 
 ### feat
-- **窗口标题可持续迭代**：`config.yaml` 新增 `app.version`，主窗口标题动态读取，后续升级无需改代码。
+- **窗口可持续迭代**：`config.yaml` 新增 `app.version`，主窗口标题动态读取，后续升级无需改代码。
 - **活动面板增强**：增加「当前项目 / 全局」说明文字；系统级活动（模式/模型切换、设置更新、解释器切换等）归入全局；列表与详情区右键支持「复制」「全选」。
 
 ## v3.7 (2026-06-26) — 终端解释器管理与 AI 上下文感知

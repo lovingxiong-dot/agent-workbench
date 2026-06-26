@@ -353,10 +353,31 @@ class ChatView(QWidget):
         if role in ("user", "ai"):
             html_block = self._build_bubble(role, text)
         else:
-            html_block = f"<div style='color:#8B949E;font-size:12px;text-align:center;margin:6px 0;'>{html.escape(text)}</div>"
+            html_block = self._build_system_card(text)
         self.chat_area.moveCursor(QTextCursor.End)
         self.chat_area.insertHtml(html_block)
         self.chat_area.moveCursor(QTextCursor.End)
+
+    def _build_system_card(self, text: str) -> str:
+        """系统消息 / 确认卡片：居中卡片，支持 Markdown 列表工整排版。"""
+        html_content = md_to_html(text)
+        return f"""
+        <table width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:10px 0;">
+            <tr>
+                <td align="center" style="padding:0 64px;">
+                    <div style="display:inline-block;max-width:80%;min-width:280px;
+                                background-color:#161B22;border:1px solid #30363D;
+                                border-radius:12px;padding:14px 18px;text-align:left;">
+                        <div style="color:#E6EDF3;font-family:'Segoe UI','Microsoft YaHei',sans-serif;
+                                    font-size:13px;line-height:1.7;">
+                            {html_content}
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        </table>
+        <div style="clear:both;"></div>
+        """
 
     def _avatar_cell(self, label: str, align: str) -> str:
         bg = "#10B981" if label == "我" else "#6366F1"
@@ -371,28 +392,30 @@ class ChatView(QWidget):
         """
 
     def _build_bubble(self, role: str, text: str) -> str:
-        """简约风格：头像在左/右，内容无背景色，居左/居右对齐。"""
+        """对话气泡：头像在左/右，内容包裹在自适应圆角矩形内，文本统一左对齐。"""
         if role == "user":
             avatar = self._avatar_cell("我", "right")
-            content_align = "right"
+            bubble_bg = "#1F6FEB33"
+            bubble_border = "#388BFD"
             row = f"""
-            <td align="right" valign="top" style="padding:2px 8px 8px 48px;">
-                {self._md_content(text, align="right")}
+            <td align="right" valign="top" style="padding:2px 8px 10px 64px;">
+                {self._md_content(text, bubble_bg=bubble_bg, bubble_border=bubble_border)}
             </td>
             {avatar}
             """
         else:
             avatar = self._avatar_cell("AI", "left")
-            content_align = "left"
+            bubble_bg = "#21262D"
+            bubble_border = "#30363D"
             row = f"""
             {avatar}
-            <td align="left" valign="top" style="padding:2px 48px 8px 8px;">
-                {self._md_content(text, align="left")}
+            <td align="left" valign="top" style="padding:2px 64px 10px 8px;">
+                {self._md_content(text, bubble_bg=bubble_bg, bubble_border=bubble_border)}
             </td>
             """
 
         return f"""
-        <table width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:12px 0;">
+        <table width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:10px 0;">
             <tr>
                 {row}
             </tr>
@@ -400,12 +423,14 @@ class ChatView(QWidget):
         <div style="clear:both;"></div>
         """
 
-    def _md_content(self, text: str, align: str = "left") -> str:
+    def _md_content(self, text: str, bubble_bg: str = "#21262D", bubble_border: str = "#30363D") -> str:
         html_content = md_to_html(text)
         return f"""
-        <div style="display:inline-block;color:#E6EDF3;
+        <div style="display:inline-block;max-width:85%;color:#E6EDF3;
+                    background-color:{bubble_bg};border:1px solid {bubble_border};
+                    border-radius:14px;padding:10px 14px;
                     font-family:'Segoe UI','Microsoft YaHei',sans-serif;
-                    font-size:13px;line-height:1.6;text-align:{align};">
+                    font-size:13px;line-height:1.65;text-align:left;">
             {html_content}
         </div>
         """
@@ -470,15 +495,17 @@ class ChatView(QWidget):
         self.set_confirm_active(True)
         # 在对话区显示任务清单等待确认
         if task_list:
-            lines = ["### ✅ 任务清单已生成，请确认是否执行"]
+            lines = ["### ✅ 任务清单已生成，请确认是否执行", ""]
             display_tasks = list(task_list)[:7]
             hidden_count = len(task_list) - len(display_tasks)
             for idx, task in enumerate(display_tasks, 1):
                 desc = task.description if hasattr(task, "description") else str(task)
                 lines.append(f"{idx}. {desc}")
             if hidden_count > 0:
-                lines.append(f"\n*... 还有 {hidden_count} 个任务已折叠 ...*")
-            lines.append("\n💡 **操作方式**：")
+                lines.append("")
+                lines.append(f"*... 还有 {hidden_count} 个任务已折叠 ...*")
+            lines.append("")
+            lines.append("**操作方式**：")
             lines.append("- 按 **Enter** 或点击「确认执行」立即执行")
             lines.append("- 按 **Esc** 或点击「重新分析」调整需求")
             self.append_system("\n".join(lines))

@@ -165,6 +165,6 @@ feature_flags:
   shared_orchestrator: true
   shared_output_panel: true
 app:
-  version: v3.8.0
+  version: v3.8.1
   last_mode: craft
   last_model: deepseek
