@@ -109,6 +109,15 @@ class SessionService:
         conn.close()
         return row[0] if row else ""
 
+    def get_conversation_mode_model(self, conversation_id) -> tuple:
+        """返回会话保存的 (mode, model)，若不存在则返回 ('', '')"""
+        conn = sqlite3.connect(self.db_path)
+        row = conn.execute(
+            "SELECT mode, model FROM conversations WHERE id=?", (conversation_id,)
+        ).fetchone()
+        conn.close()
+        return (row[0], row[1]) if row else ("", "")
+
     def get_messages(self, conversation_id) -> list:
         conn = sqlite3.connect(self.db_path)
         rows = conn.execute(

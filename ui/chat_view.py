@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTextEdit, QFrame, QButtonGroup, QComboBox,
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QEvent
 from PySide6.QtGui import QFont, QTextCursor, QKeySequence, QShortcut
 
 from markdown import markdown as md
@@ -62,8 +62,10 @@ class ChatView(QWidget):
         self._reanalyze_btn = None
         self._skip_verify_btn = None
         self._task_progress_label = None
+        self._confirm_active = False
         self._setup_ui()
         self._setup_shortcuts()
+        self.installEventFilter(self)
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -461,25 +463,31 @@ class ChatView(QWidget):
             self._task_progress_label.setText(f"任务 {current}/{total}")
 
     def show_confirmation(self, task_list: list):
-        """显示确认/重新分析按钮"""
+        """在对话区显示内联确认卡片，并激活 Enter/Esc 快捷键"""
         self._confirm_btn.setVisible(True)
         self._reanalyze_btn.setVisible(True)
         self._skip_verify_btn.setVisible(False)
+        self.set_confirm_active(True)
         # 在对话区显示任务清单等待确认
         if task_list:
             lines = ["### ✅ 任务清单已生成，请确认是否执行"]
-            for idx, task in enumerate(task_list, 1):
+            display_tasks = list(task_list)[:7]
+            hidden_count = len(task_list) - len(display_tasks)
+            for idx, task in enumerate(display_tasks, 1):
                 desc = task.description if hasattr(task, "description") else str(task)
                 lines.append(f"{idx}. {desc}")
+            if hidden_count > 0:
+                lines.append(f"\n*... 还有 {hidden_count} 个任务已折叠 ...*")
             lines.append("\n💡 **操作方式**：")
-            lines.append("- 点击下方「确认执行」或按 Enter 继续")
-            lines.append("- 点击下方「重新分析」或输入「重新分析」调整需求")
+            lines.append("- 按 **Enter** 或点击「确认执行」立即执行")
+            lines.append("- 按 **Esc** 或点击「重新分析」调整需求")
             self.append_system("\n".join(lines))
 
     def hide_confirmation(self):
-        """隐藏确认相关按钮"""
+        """隐藏确认相关按钮，关闭 Enter/Esc 快捷键"""
         self._confirm_btn.setVisible(False)
         self._reanalyze_btn.setVisible(False)
+        self.set_confirm_active(False)
 
     def show_skip_verify(self):
         """验证阶段显示跳过按钮"""
@@ -494,6 +502,25 @@ class ChatView(QWidget):
         self.set_task_progress(0, 0)
         self.hide_confirmation()
         self.hide_skip_verify()
+
+    def eventFilter(self, obj, event):
+        """Confirm 阶段监听 Enter/Esc 快捷键"""
+        if event.type() == QEvent.KeyPress and self._confirm_active:
+            key = event.key()
+            if key in (Qt.Key_Return, Qt.Key_Enter):
+                self.confirm_clicked.emit()
+                return True
+            if key == Qt.Key_Escape:
+                self.reanalyze_clicked.emit()
+                return True
+        return super().eventFilter(obj, event)
+
+    def set_confirm_active(self, active: bool):
+        """设置是否处于 Confirm 阶段，控制 Enter/Esc 快捷键"""
+        self._confirm_active = active
+        if active and self._confirm_btn:
+            self._confirm_btn.setDefault(True)
+            self._confirm_btn.setFocus()
 
     def append_phase_message(self, phase: str, text: str):
         """按 phase 追加系统消息，带阶段前缀"""

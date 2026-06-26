@@ -81,6 +81,19 @@ class ConfigService:
                 return default
         return value if value is not None else default
 
+    def set(self, key: str, value):
+        """支持点号路径写入嵌套配置，例如 terminal.preferred_interpreter"""
+        if not isinstance(key, str) or "." not in key:
+            self.config[key] = value
+            return
+        parts = key.split(".")
+        d = self.config
+        for p in parts[:-1]:
+            if p not in d or not isinstance(d[p], dict):
+                d[p] = {}
+            d = d[p]
+        d[parts[-1]] = value
+
     def get_mode_config(self, mode_name):
         """获取指定手动模式的完整配置（system_prompt、tools、current_model 等）"""
         return self.config.get("manual_modes", {}).get(mode_name, {})

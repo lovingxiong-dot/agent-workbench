@@ -1,6 +1,5 @@
 manual_modes:
   ask:
-    current_model: tool-agent
     tools:
     - web_fetch
     - fetch_financial_news
@@ -42,7 +41,6 @@ manual_modes:
 
       '
   plan:
-    current_model: tool-agent
     tools:
     - web_fetch
     - fetch_financial_news
@@ -68,7 +66,6 @@ manual_modes:
 
       '
   craft:
-    current_model: tool-agent
     tools:
     - web_fetch
     - fetch_financial_news
@@ -153,7 +150,12 @@ ui:
   explorer:
     project_root: F:\Agent\agent_workbench
     recent_projects: []
+feature_flags:
+  use_new_explorer: true
+  use_async_tools: true
+  shared_orchestrator: true
+  shared_output_panel: true
 app:
-  version: v3.7.3
-  last_mode: ask
-  last_model: tool-agent
+  version: v3.7.4
+  last_mode: craft
+  last_model: deepseek

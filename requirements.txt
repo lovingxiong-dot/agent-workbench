@@ -1,0 +1,28 @@
+# Core framework
+PySide6>=6.6,<7.0
+PyYAML>=6.0
+
+# LangChain / LLM
+langchain>=1.0
+langchain-core>=1.0
+langchain-openai>=1.0
+openai>=1.0
+
+# Web / parsing
+aiohttp>=3.9
+aiofiles>=23.0
+requests>=2.31
+beautifulsoup4>=4.12
+lxml>=4.9
+html5lib>=1.1
+markdown>=3.5
+
+# Utilities
+tiktoken>=0.5
+tenacity>=8.2
+
+# Packaging
+pyinstaller>=6.0
+
+# Optional data sources (install manually if needed)
+# akshare

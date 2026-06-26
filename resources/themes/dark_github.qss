@@ -21,14 +21,14 @@ QToolTip {
 QToolButton#sidebarBtn {
     background-color: transparent;
     color: #8B949E;
-    border: none;
+    border: 2px solid transparent;
     border-radius: 8px;
     font-size: 18px;
     margin: 4px;
     padding: 4px;
 }
 QToolButton#sidebarBtn:hover { background-color: #21262D; color: #E6EDF3; }
-QToolButton#sidebarBtn:checked { background-color: #1C2128; color: #58A6FF; }
+QToolButton#sidebarBtn:checked { background-color: #1F6FEB33; color: #58A6FF; border: 2px solid #58A6FF; }
 
 /* ── Left Panel ───────────────────────────────────── */
 #leftPanel { 
@@ -247,6 +247,27 @@ QTreeView::branch:has-children:!has-siblings:closed,
 QTreeView::branch:closed:has-children:has-siblings { image: none; }
 QTreeView::branch:open:has-children:!has-siblings,
 QTreeView::branch:open:has-children:has-siblings { image: none; }
+
+/* ── Project Explorer ─────────────────────────────── */
+QTreeWidget#projectExplorer {
+    background-color: transparent;
+    border: none;
+    color: #E6EDF3;
+    font-size: 12px;
+    outline: none;
+}
+QTreeWidget#projectExplorer::item {
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+QTreeWidget#projectExplorer::item:hover { background-color: #21262D; }
+QTreeWidget#projectExplorer::item:selected { background-color: #1F6FEB33; color: #58A6FF; }
+QTreeWidget#projectExplorer::branch:closed:has-children {
+    image: none;
+}
+QTreeWidget#projectExplorer::branch:open:has-children {
+    image: none;
+}
 
 /* ── Chat Area ────────────────────────────────────── */
 QTextEdit#chatArea {

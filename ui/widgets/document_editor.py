@@ -52,6 +52,7 @@ def _format_hex_preview(data: bytes, max_bytes: int = 512) -> str:
 
 class DocumentEditor(QWidget):
     document_opened = Signal(str, str, int)   # path, preview, size
+    document_activated = Signal(str)          # path（已打开文件被激活/重新聚焦）
     document_closed = Signal(str)             # path
 
     def __init__(self, parent=None):
@@ -176,7 +177,9 @@ class DocumentEditor(QWidget):
             self.save_btn.setEnabled(False)
 
     def open_file(self, path: str) -> bool:
-        self.clear()
+        is_reactivation = self._path == path
+        if not is_reactivation:
+            self.clear()
         self._path = path
         self.path_label.setText(path)
         self.path_label.setToolTip(path)
@@ -230,9 +233,10 @@ class DocumentEditor(QWidget):
         return ok
 
     def _emit_document_opened(self, path: str, preview: str, size: int):
-        """统一发射文档打开信号"""
+        """统一发射文档打开信号与激活信号"""
         try:
             self.document_opened.emit(path, preview, size)
+            self.document_activated.emit(path)
         except Exception:
             pass
 

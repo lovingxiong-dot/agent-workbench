@@ -663,14 +663,11 @@ class MainWindow(QMainWindow):
 
     @Slot(str, str, str)
     def _on_analyze_required(self, user_text, mode, context):
-        """Analyze 阶段：启动一个不绑定工具的 worker 生成 task list"""
+        """Analyze 阶段：请求 AgentWorker 生成 task list"""
         self.chat_view.append_phase_message("analyze", "正在分析需求...")
-        self._run_phase_worker(
-            user_text=user_text,
-            phase="analyze",
-            context_text=context,
-            on_result=self._on_analyze_result,
-        )
+        self._ensure_phase_worker()
+        self._worker.reset_cancel()
+        self._worker.request_analyze(user_text, context)
 
     @Slot(list)
     def _on_confirm_required(self, task_list):
@@ -682,46 +679,26 @@ class MainWindow(QMainWindow):
 
     @Slot(list)
     def _on_execute_required(self, task_list):
-        """Execute 阶段：绑定工具执行用户请求"""
+        """Execute 阶段：请求 AgentWorker 绑定工具执行用户请求"""
         self._phase_task_list = list(task_list)
         self.chat_view.hide_confirmation()
         self.chat_view.append_phase_message("execute", "开始执行任务")
-        # 组装 execute 阶段上下文
         context_text = self.context_service.get_phase_context("execute")
-        # 把 task list 简要注入，让 LLM 知道执行范围
-        task_summary = "\n".join(f"- {t.description}" for t in self._phase_task_list)
-        user_text = f"请按以下任务清单执行：\n{task_summary}\n\n原始需求：\n{self._phase_manager.current_context().user_text}"
-        self._run_phase_worker(
-            user_text=user_text,
-            phase="execute",
-            context_text=context_text,
-            on_result=self._on_execute_result,
-        )
+        original_text = self._phase_manager.current_context().user_text
+        self._ensure_phase_worker()
+        self._worker.reset_cancel()
+        self._worker.request_execute(self._phase_task_list, original_text, context_text)
 
     @Slot(list, str)
     def _on_verify_required(self, execution_results, mode):
-        """Verify 阶段：运行测试 + LLM 验证"""
+        """Verify 阶段：请求 AgentWorker 运行 LLM 验证"""
         self.chat_view.append_phase_message("verify", "正在验证执行结果...")
         self.chat_view.show_skip_verify()
-        # 运行本地检查（语法检查 + 单元测试）
-        verification_details = self._run_local_verification()
-        # 让 LLM 检查执行结果
+        self._verification_details = self._run_local_verification()
         context_text = self.context_service.get_phase_context("verify")
-        result_summary = "\n".join(
-            f"- {r.get('task', '')}: {r.get('result', '')[:200]}"
-            for r in execution_results
-        ) if execution_results else "无执行结果"
-        user_text = (
-            f"执行结果摘要：\n{result_summary}\n\n"
-            f"本地验证结果：\n{verification_details}\n\n"
-            "请判断任务是否完成，是否存在明显错误。"
-        )
-        self._run_phase_worker(
-            user_text=user_text,
-            phase="verify",
-            context_text=context_text,
-            on_result=lambda text: self._on_verify_result(text, verification_details),
-        )
+        self._ensure_phase_worker()
+        self._worker.reset_cancel()
+        self._worker.request_verify(execution_results, self._verification_details, context_text)
 
     @Slot(str)
     def _on_archive_required(self, mode):
@@ -735,12 +712,19 @@ class MainWindow(QMainWindow):
 
     @Slot(bool, str)
     def _on_phase_flow_finished(self, success, message):
+        print("[DIAG] _on_phase_flow_finished: stopping worker...", flush=True)
         self._current_phase = "idle"
         self._phase_task_list = []
         self._phase_results = []
         self.chat_view.clear_phase_ui()
         if not success:
             self.chat_view.append_system(f"⚠️ {message}")
+
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.stop()
+            self._worker.wait(3000)
+        print("[DIAG] _on_phase_flow_finished: worker cleared", flush=True)
+        self._worker = None
 
     @Slot(str, str)
     def _on_phase_error(self, code, detail):
@@ -767,12 +751,13 @@ class MainWindow(QMainWindow):
         self.chat_view.hide_skip_verify()
         self._phase_manager.on_verify_complete(True, "用户跳过验证")
 
-    def _on_analyze_result(self, text):
-        """Analyze 阶段结果：解析 task list；Plan/Craft 模式下兜底为单任务"""
-        task_list = PhaseManager.parse_task_list(text)
+    def _on_analyze_result(self, task_list):
+        """Analyze 阶段结果：已解析为 task list"""
         if not task_list and self._current_mode in ("plan", "craft"):
-            # LLM 没有输出标准清单时，把完整回复作为单一任务兜底
-            fallback_desc = text.strip()[:300] if text.strip() else "执行用户请求"
+            # LLM 没有输出标准清单时，把原始需求作为单一任务兜底
+            original = self._phase_manager.current_context().user_text
+            fallback_desc = original.strip()[:300] if original.strip() else "执行用户请求"
+            from agent_engine.agent_session import TaskItem
             task_list = [TaskItem(id="task-1", description=fallback_desc)]
         self._phase_task_list = task_list
         self.chat_view.set_task_progress(0, len(task_list))
@@ -780,21 +765,43 @@ class MainWindow(QMainWindow):
 
     def _on_execute_result(self, text):
         """Execute 阶段结果：显示并保存到 session"""
+        self.chat_view.finalize_stream()
         if text and text.strip():
+            self.chat_view.append_ai(text)
             self._append_ai_message(text)
             self._phase_results.append({"task": "execute", "result": text})
+        self._append_metrics_footer_if_any()
+        self._chunks_received = False
+        self.status_indicator.set_tokens("")
         self._phase_manager.on_execute_complete(self._phase_results)
 
-    def _on_verify_result(self, text, local_details):
+    def _on_verify_result(self, text):
         """Verify 阶段结果：显示验证结论"""
+        self.chat_view.finalize_stream()
         self.chat_view.hide_skip_verify()
         if text and text.strip():
             self.chat_view.append_ai(f"**验证结果**\n\n{text}")
+        self._append_metrics_footer_if_any()
+        self._chunks_received = False
+        self.status_indicator.set_tokens("")
+        local_details = getattr(self, "_verification_details", "")
         passed = "通过" in text or "passed" in text.lower() or "未通过" not in text
         self._phase_manager.on_verify_complete(passed, f"{local_details}\n\n{text}")
 
-    def _run_phase_worker(self, user_text, phase, context_text, on_result, system_prompt=None):
-        """通用 Phase Worker 创建与启动"""
+    def _on_worker_error(self, code, detail):
+        """AgentWorker 报告错误"""
+        self.chat_view.finalize_stream()
+        self._append_metrics_footer_if_any()
+        self._chunks_received = False
+        self.status_indicator.set_tokens("")
+        self.chat_view.append_system(f"❌ Worker 错误 [{code}]: {detail}")
+        self._on_log_message(f"[ERR] Worker {code}: {detail}", is_global=True)
+
+    def _ensure_phase_worker(self):
+        """确保存在一个已启动并就绪的 AgentWorker（跨 Phase 复用 AgentSession）"""
+        if self._worker is not None and self._worker.isRunning():
+            return
+
         mode_config = self.config_service.get_mode_config(self._current_mode)
         default_prompt = mode_config.get("system_prompt", "你是全能 AI 助手。")
         user_rules = self.config_service.get("user_rules", [])
@@ -802,30 +809,23 @@ class MainWindow(QMainWindow):
         task_timeout = self.config_service.get_task_timeout(self._current_mode)
         llm_timeout = self.config_service.get_llm_timeout(self._current_mode)
         tool_timeout = self.config_service.get_tool_timeout(self._current_mode)
-        history = self.memory_manager.get_session_history(self._current_session)
-
-        # execute 阶段才需要把用户消息保留在历史中
-        chat_history = list(history.messages) if phase == "execute" else []
 
         worker = AgentWorker(
-            user_text=user_text,
             mode_name=self._current_mode,
             current_llm=self._current_llm,
-            current_tools=self._current_tools if phase == "execute" else [],
+            current_tools=self._current_tools,
             session_id=self._current_session,
-            system_prompt=system_prompt or default_prompt,
+            system_prompt=default_prompt,
             tool_map=TOOL_MAP,
-            tool_definitions=TOOL_DEFINITIONS if phase == "execute" else [],
+            tool_definitions=TOOL_DEFINITIONS,
             enable_streaming=True,
-            chat_history=chat_history,
             user_rules=user_rules,
             max_tool_rounds=max_tool_rounds,
             task_timeout=task_timeout,
             llm_timeout=llm_timeout,
             tool_timeout=tool_timeout,
             project_root=self.context_service.get_project_root(),
-            workspace_context=context_text,
-            phase=phase,
+            workspace_context=self.context_service.build_prompt_context(),
             app_version=self.config_service.get("app.version", "v3.x"),
         )
         self._worker = worker
@@ -839,36 +839,30 @@ class MainWindow(QMainWindow):
             return wrapper
 
         worker.chunk_ready.connect(current_only(self._on_chunk))
-        worker.result_ready.connect(current_only(lambda text: self._on_phase_result(text, on_result)))
         worker.log_message.connect(current_only(self._on_log_message))
         worker.task_created.connect(current_only(self._add_task))
         worker.task_finished.connect(current_only(self._finish_task))
-        worker.confirm_required.connect(current_only(self._on_confirm_required))
+        worker.confirm_required.connect(current_only(self._on_tool_confirm_required))
         worker.token_used.connect(current_only(self._on_token_used))
         worker.turn_metrics_ready.connect(current_only(self._on_turn_metrics_ready))
-        worker.finished.connect(worker.deleteLater)
+        worker.analyze_result_ready.connect(current_only(self._on_analyze_result))
+        worker.execute_result_ready.connect(current_only(self._on_execute_result))
+        worker.verify_result_ready.connect(current_only(self._on_verify_result))
+        worker.error_occurred.connect(current_only(self._on_worker_error))
         worker.start()
+
+        # 等待 Worker 线程的事件循环完全就绪，避免启动时序竞态
+        ready = worker._loop_ready.wait(timeout=5.0)
+        print(f"[DIAG] _ensure_phase_worker: loop_ready={ready}", flush=True)
 
         self.chat_view.set_streaming(True)
         self.status_indicator.set_tokens("生成中...")
 
-    def _on_phase_result(self, text, on_result):
-        """通用 phase result 分发"""
-        self.chat_view.finalize_stream()
-        if text and text.strip() and not self._chunks_received:
-            # analyze/verify 阶段如果未收到 chunk，也显示原始文本
-            if self._current_phase in ("analyze", "verify"):
-                self.chat_view.append_ai(text)
-        # 持久化 AI 回复：execute 阶段由 _on_execute_result 单独保存，避免重复
-        if text and text.strip() and self._current_phase != "execute":
-            self._append_ai_message(text, persist_to_memory=False)
-        # 任何产生 LLM 输出的阶段都在内容下方追加 metrics footer
+    def _append_metrics_footer_if_any(self):
+        """如果有待显示的 metrics，追加到 AI 内容下方"""
         if self._pending_metrics:
             self.chat_view.append_ai_metrics_footer(self._pending_metrics.format_brief())
             self._pending_metrics = None
-        self._chunks_received = False
-        self.status_indicator.set_tokens("")
-        on_result(text)
 
     def _append_ai_message(self, text, persist_to_memory=True):
         """把 AI 回复持久化到 session 和数据库；可选是否写入 LangChain memory"""
@@ -1072,15 +1066,16 @@ class MainWindow(QMainWindow):
         self.task_list.finish_task(task_id, result)
 
     @Slot(str, str)
-    def _on_confirm_required(self, tool_name, command):
+    def _on_tool_confirm_required(self, tool_name, command):
         reply = QMessageBox.warning(
             self, "敏感操作确认",
             f"工具 <b>{tool_name}</b> 即将执行以下命令：\n\n{command}\n\n是否继续？",
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No
         )
-        self._worker.confirm_result = (reply == QMessageBox.Yes)
-        self._worker.confirm_event.set()
-        if not self._worker.confirm_result:
+        confirmed = (reply == QMessageBox.Yes)
+        if self._worker is not None:
+            self._worker.set_confirm_result(confirmed)
+        if not confirmed:
             self._on_log_message(f"⛔ 用户取消了敏感操作 {command}")
 
     @Slot(str)
@@ -1091,6 +1086,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         if self._worker and self._worker.isRunning():
+            print("[DIAG] closeEvent: stopping worker...", flush=True)
             self._worker.stop()
-            self._worker.wait(2000)
+            self._worker.wait(3000)
+            print("[DIAG] closeEvent: worker stopped", flush=True)
         event.accept()

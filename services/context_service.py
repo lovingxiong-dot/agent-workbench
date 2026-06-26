@@ -75,28 +75,65 @@ class ContextService(QObject):
         self.context_changed.emit()
 
     def _get_interpreter_context(self) -> str:
-        """生成终端环境描述文本"""
+        """生成终端环境描述文本，并附带 AI 调用工具时的解释器指引"""
         if not self._interpreter_service:
             return "[当前终端环境]\n未发现解释器"
-        return self._interpreter_service.get_context_string()
+
+        base = self._interpreter_service.get_context_string()
+        project_python = self._resolve_project_python()
+        if project_python:
+            base += (
+                f"\n\n[AI 工具执行指引]\n"
+                f"项目优先 Python: {project_python}\n"
+                f"当你需要运行 Python 代码时，优先调用 run_python 工具；"
+                f"当需要执行命令时，可直接使用 'python ...' 开头的命令，系统会自动解析为上述项目 Python。"
+            )
+        else:
+            base += (
+                "\n\n[AI 工具执行指引]\n"
+                "未检测到项目虚拟环境 Python，运行 Python 代码时请使用 run_python 工具。"
+            )
+        return base
+
+    def _resolve_project_python(self) -> str:
+        """解析项目应使用的 Python 路径，供 prompt 使用"""
+        try:
+            from services.python_resolver import resolve_project_python
+            return resolve_project_python(
+                project_root=self._project_root,
+                interpreter_service=self._interpreter_service,
+            ) or ""
+        except Exception:
+            return ""
 
     # ═══════════════════════════════════════════════════
     # 活动文档
     # ═══════════════════════════════════════════════════
-    def set_active_document(self, path: str, preview: str = "", size: int = 0):
-        """设置当前活动文档（右侧当前显示的文件）"""
+    def set_active_document(self, path: str, preview: Optional[str] = None, size: Optional[int] = None):
+        """设置当前活动文档（右侧当前显示的文件）
+
+        preview/size 为 None 时保留已有值，避免激活操作覆盖首次打开时获取的摘要和大小。
+        """
         path = self._normalize(path)
         if not path:
             return
-        preview = self._truncate_preview(preview)
+        if preview is not None:
+            preview = self._truncate_preview(preview)
         # 如果已经在打开列表中，更新它并标记为 active
         existing = self._find_doc(path)
         if existing:
-            existing.preview = preview
-            existing.size = size
+            if preview is not None:
+                existing.preview = preview
+            if size is not None:
+                existing.size = size
             existing.is_active = True
         else:
-            doc = DocumentContext(path=path, size=size, preview=preview, is_active=True)
+            doc = DocumentContext(
+                path=path,
+                size=size if size is not None else 0,
+                preview=preview if preview is not None else "",
+                is_active=True,
+            )
             self._open_documents.append(doc)
         # 取消其他文档的 active 标记
         for doc in self._open_documents:
@@ -136,6 +173,18 @@ class ContextService(QObject):
                 self._active_document = self._open_documents[-1]
             else:
                 self._active_document = None
+        self.context_changed.emit()
+
+    def rename_open_document(self, old_path: str, new_path: str):
+        """文件重命名后同步更新打开文档列表中的路径"""
+        old_path = self._normalize(old_path)
+        new_path = self._normalize(new_path)
+        for doc in self._open_documents:
+            if doc.path == old_path:
+                doc.path = new_path
+                if self._active_document and self._active_document.path == old_path:
+                    self._active_document.path = new_path
+                break
         self.context_changed.emit()
 
     def get_active_document(self) -> Optional[DocumentContext]:

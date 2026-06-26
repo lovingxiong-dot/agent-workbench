@@ -12,8 +12,10 @@ AgentOrchestrator — Agent 执行管道编排器
 - 不依赖 PySide6 / UI，只通过 callbacks 与外部通信
 - 不直接读取文件，所有配置由调用方传入
 - 可被 AgentWorker、后台任务、测试代码复用
+- 支持 Phase 切换：Analyze / Execute / Verify 共享同一 Orchestrator 实例
 """
 import asyncio
+import inspect
 from datetime import datetime
 from typing import Callable, Dict, List, Optional, Any
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
@@ -21,13 +23,26 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, Tool
 
 class AgentOrchestrator:
     # 工具结果回传给 LLM 的最大长度，防止原始 HTML/错误信息撑爆上下文
-    TOOL_RESULT_MAX_LEN = 3000
+    TOOL_RESULT_MAX_LEN = 5000
     # 接近上限时，给 LLM 追加强制总结提示
     FORCE_ANSWER_THRESHOLD = 1
 
     # 默认超时（秒）：LLM 单次调用、单轮工具执行、任务总超时由外部控制
     DEFAULT_LLM_TIMEOUT = 90.0
     DEFAULT_TOOL_TIMEOUT = 30.0
+
+    # Phase 默认可用工具集合：Analyze/Verify 只保留读/查类工具，Execute 开放全部
+    DEFAULT_PHASE_TOOLS: Dict[str, Optional[Any]] = {
+        "analyze": {
+            "web_fetch", "fetch_financial_news", "fetch_macro_data", "fetch_stock_data",
+            "read_file", "list_dir", "clipboard_read", "list_processes",
+        },
+        "verify": {
+            "web_fetch", "fetch_financial_news", "fetch_macro_data", "fetch_stock_data",
+            "read_file", "list_dir", "clipboard_read", "list_processes",
+        },
+        "execute": None,  # None 表示不限制，使用全部工具
+    }
 
     def __init__(
         self,
@@ -43,6 +58,10 @@ class AgentOrchestrator:
         app_version: str = "v3.x",
         llm_timeout: float = DEFAULT_LLM_TIMEOUT,
         tool_timeout: float = DEFAULT_TOOL_TIMEOUT,
+        cpu_executor=None,
+        arun_map: Optional[Dict[str, Callable]] = None,
+        confirm_callback: Optional[Callable[[str, Any], Any]] = None,
+        phase_tool_allowlists: Optional[Dict[str, Optional[Any]]] = None,
     ):
         self.llm = llm
         self.tool_map = tool_map or {}
@@ -57,27 +76,135 @@ class AgentOrchestrator:
         self.app_version = app_version or "v3.x"
         self.llm_timeout = max(5.0, float(llm_timeout or self.DEFAULT_LLM_TIMEOUT))
         self.tool_timeout = max(5.0, float(tool_timeout or self.DEFAULT_TOOL_TIMEOUT))
+        self.cpu_executor = cpu_executor
+        self.arun_map = arun_map or {}
+        self.confirm_callback = confirm_callback
+        self._current_phase = "execute"
+        # 合并自定义 Phase 工具白名单；None 表示该 Phase 不限制
+        self.phase_tool_allowlists: Dict[str, Optional[Any]] = dict(self.DEFAULT_PHASE_TOOLS)
+        if phase_tool_allowlists:
+            self.phase_tool_allowlists.update(phase_tool_allowlists)
 
-    async def run(
+    # ═══════════════════════════════════════════════════════
+    # Phase 切换（P0-2 新增）
+    # ═══════════════════════════════════════════════════════
+    def set_phase(self, phase: str, mode: str = "", context: str = ""):
+        """切换当前 Phase，更新 system_prompt 与 workspace_context
+
+        Args:
+            phase: 目标阶段 (analyze/execute/verify)
+            mode: 当前模式 (ask/plan/craft)，用于生成对应阶段的 prompt
+            context: 工作区上下文
+        """
+        phase = (phase or "execute").lower()
+        mode = (mode or "craft").lower()
+        self._current_phase = phase
+        if phase == "analyze":
+            self.system_prompt = self._build_analyze_prompt(mode)
+        elif phase == "verify":
+            self.system_prompt = self._build_verify_prompt(mode)
+        elif phase == "execute":
+            self.system_prompt = self.base_system_prompt
+        if context:
+            self.workspace_context = context
+
+    def bind_tools_for_phase(self, phase: str):
+        """根据 phase 决定绑定哪些工具；返回绑定后的 LLM
+
+        Analyze / Verify 默认只绑定读/查类工具，避免在分析/验证阶段执行写入、命令等副作用操作。
+        Execute 阶段开放全部工具。可通过 phase_tool_allowlists 自定义。
+        """
+        phase = (phase or "execute").lower()
+        allowed_names = self.phase_tool_allowlists.get(phase)
+
+        def _is_allowed(name: str) -> bool:
+            if name not in self.tool_map:
+                return False
+            if allowed_names is None:
+                return True
+            return name in allowed_names
+
+        allowed_defs = [d for d in self.tool_definitions if _is_allowed(d["function"]["name"])]
+        if not allowed_defs:
+            return self.llm
+        model_name = str(self.llm.model) if hasattr(self.llm, 'model') else ""
+        skip_tools = any(m in model_name for m in ("gemma2", "gemma:"))
+        return self.llm.bind_tools(allowed_defs) if not skip_tools else self.llm
+
+    def _is_tool_allowed_in_phase(self, name: str, phase: str) -> bool:
+        """运行时校验工具是否在当前 Phase 白名单中"""
+        allowed_names = self.phase_tool_allowlists.get(phase)
+        if allowed_names is None:
+            return True
+        return name in allowed_names
+
+    # ═══════════════════════════════════════════════════════
+    # 公共执行接口
+    # ═══════════════════════════════════════════════════════
+    def run(
         self,
         user_input: str,
         chat_history: Optional[List] = None,
         callbacks: Optional[Dict[str, Callable]] = None,
         cancel_event=None,
     ) -> str:
-        """
-        执行一次完整的 Agent 推理流程。
+        """同步兼容包装"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # 已在事件循环中，创建新任务
+                return loop.create_task(
+                    self.arun(user_input, chat_history, callbacks, cancel_event)
+                )
+            return loop.run_until_complete(
+                self.arun(user_input, chat_history, callbacks, cancel_event)
+            )
+        except RuntimeError:
+            return asyncio.run(
+                self.arun(user_input, chat_history, callbacks, cancel_event)
+            )
 
-        callbacks 可选键：
-          - log(str): 日志文本
-          - tool_start(str, str): (task_id, description)
-          - tool_end(str, str): (task_id, result_summary)
-          - chunk(str): 流式文本片段
-          - round(int): 当前 ReAct 轮次
-          - error(str, str): (error_code, detail)
+    async def _invoke_llm_with_cancel(
+        self,
+        llm,
+        messages,
+        timeout: float,
+        cancel_event,
+    ):
+        """调用 LLM，支持超时和取消事件轮询。
 
-        返回最终文本（即便出错也会返回描述文本）。
+        通过每 500ms 检查一次 cancel_event，确保用户点击停止按钮后，
+        即使 LLM 响应缓慢也能被及时中断，避免事件循环被长期阻塞。
         """
+        if cancel_event is None:
+            return await asyncio.wait_for(llm.ainvoke(messages), timeout=timeout)
+
+        llm_task = asyncio.create_task(llm.ainvoke(messages))
+        try:
+            while not llm_task.done():
+                if cancel_event.is_set():
+                    llm_task.cancel()
+                    try:
+                        await llm_task
+                    except asyncio.CancelledError:
+                        pass
+                    raise OrchestratorCancelledError("任务已取消")
+                try:
+                    await asyncio.wait_for(asyncio.shield(llm_task), timeout=0.5)
+                except asyncio.TimeoutError:
+                    continue
+            return llm_task.result()
+        except asyncio.CancelledError:
+            raise OrchestratorCancelledError("任务已取消")
+
+    async def arun(
+        self,
+        user_input: str,
+        chat_history: Optional[List] = None,
+        callbacks: Optional[Dict[str, Callable]] = None,
+        cancel_event=None,
+    ) -> str:
+        """执行一次完整的 Agent 推理流程（异步原生）。"""
         callbacks = callbacks or {}
         chat_history = list(chat_history) if chat_history else []
 
@@ -96,10 +223,7 @@ class AgentOrchestrator:
         messages = self._build_messages(user_input, chat_history)
 
         try:
-            allowed_defs = [d for d in self.tool_definitions if d["function"]["name"] in self.tool_map]
-            model_name = str(self.llm.model) if hasattr(self.llm, 'model') else ""
-            skip_tools = any(m in model_name for m in ("gemma2", "gemma:"))
-            llm = self.llm.bind_tools(allowed_defs) if (allowed_defs and not skip_tools) else self.llm
+            llm = self.bind_tools_for_phase(self._current_phase)
 
             round_count = 0
             while round_count < self.max_tool_rounds:
@@ -107,7 +231,9 @@ class AgentOrchestrator:
 
                 _emit("metrics_start")
                 try:
-                    response = await asyncio.wait_for(llm.ainvoke(messages), timeout=self.llm_timeout)
+                    response = await self._invoke_llm_with_cancel(
+                        llm, messages, self.llm_timeout, cancel_event
+                    )
                 except asyncio.TimeoutError:
                     elapsed = self.llm_timeout
                     _emit("error", "LLM_TIMEOUT", f"LLM 响应超过 {elapsed:.0f} 秒未返回")
@@ -117,7 +243,7 @@ class AgentOrchestrator:
                 # 提取 token 用量（部分 provider/streaming 模式下可能缺失）
                 usage_metadata = getattr(response, "usage_metadata", None) or {}
                 usage_payload = {
-                    "provider": model_name,
+                    "provider": str(self.llm.model) if hasattr(self.llm, 'model') else "",
                     "input_tokens": int(usage_metadata.get("input_tokens", 0) or 0),
                     "output_tokens": int(usage_metadata.get("output_tokens", 0) or 0),
                 }
@@ -133,9 +259,10 @@ class AgentOrchestrator:
                         tool_args = tc["args"]
                         task_id = f"{tool_name}_{datetime.now().strftime('%H%M%S')}"
                         _emit("tool_start", task_id, f"Running {tool_name}")
+                        tool_start_at = datetime.now()
                         try:
                             result = await asyncio.wait_for(
-                                asyncio.to_thread(self.tool_executor, tool_name, tool_args),
+                                self._call_tool(tool_name, tool_args),
                                 timeout=self.tool_timeout
                             )
                         except asyncio.TimeoutError:
@@ -143,13 +270,16 @@ class AgentOrchestrator:
                             _emit("error", "TOOL_TIMEOUT", f"工具 {tool_name} 执行超过 {elapsed:.0f} 秒")
                             _emit("log", f"[ERR] TOOL_TIMEOUT: {tool_name} 执行超过 {elapsed:.0f} 秒")
                             result = f"[工具超时] {tool_name} 执行超过 {elapsed:.0f} 秒，已中断。"
+                        elapsed_ms = int((datetime.now() - tool_start_at).total_seconds() * 1000)
                         result_text = str(result) if result is not None else ""
                         # 截断过长的工具结果，避免 LLM 上下文被原始 HTML 撑爆
+                        raw_len = len(result_text)
                         if len(result_text) > self.TOOL_RESULT_MAX_LEN:
                             result_text = result_text[:self.TOOL_RESULT_MAX_LEN] + (
-                                f"\n\n[... 工具结果已截断，原始长度 {len(str(result))} 字符]"
+                                f"\n\n[... 工具结果已截断，原始长度 {raw_len} 字符]"
                             )
                         _emit("tool_end", task_id, result_text[:200])
+                        _emit("tool_executed", tool_name, tool_args, result_text, elapsed_ms)
                         _emit("log", f"[OK] {tool_name}")
                         messages.append(ToolMessage(
                             content=result_text,
@@ -197,7 +327,9 @@ class AgentOrchestrator:
                 )
             ))
             try:
-                final_response = await asyncio.wait_for(self.llm.ainvoke(final_messages), timeout=self.llm_timeout)
+                final_response = await self._invoke_llm_with_cancel(
+                    self.llm, final_messages, self.llm_timeout, cancel_event
+                )
                 reply = final_response.content or ""
                 if reply:
                     if self.enable_streaming:
@@ -229,6 +361,62 @@ class AgentOrchestrator:
             _emit("log", f"[ERR] {ex}")
             return f"Error: {str(ex)}"
 
+    async def _call_tool(self, name: str, args: Any) -> str:
+        """调用工具：优先使用 ARUN_MAP 中的协程，否则显式进入 cpu_executor 执行同步 run"""
+        tool_func = self.tool_map.get(name)
+        if not tool_func:
+            return f"Tool {name} not found"
+        if isinstance(args, str):
+            import json
+            try:
+                args = json.loads(args)
+            except Exception:
+                pass
+
+        # 敏感操作二次确认
+        if name in ("run_command", "run_as_admin"):
+            command = args.get("command", "") if isinstance(args, dict) else str(args)
+            if self._is_dangerous(command):
+                if self.confirm_callback:
+                    try:
+                        confirmed = await self.confirm_callback(name, args)
+                    except Exception:
+                        confirmed = False
+                    if not confirmed:
+                        return "User cancelled sensitive operation"
+                else:
+                    return "Sensitive operation blocked: no confirm callback configured"
+
+        # Phase 级工具白名单：即使 LLM 意外请求，运行时也拒绝执行非白名单工具
+        if not self._is_tool_allowed_in_phase(name, self._current_phase):
+            return f"Tool {name} is not allowed in {self._current_phase} phase"
+
+        # P0-3 原生异步：优先从 ARUN_MAP 取 arun 协程
+        arun_func = self.arun_map.get(name)
+        if arun_func and callable(arun_func):
+            return await arun_func(args)
+        # 若工具函数本身是协程函数
+        if inspect.iscoroutinefunction(tool_func):
+            return await tool_func(args)
+        # 同步工具回退：显式使用 cpu_executor，禁止使用 asyncio.to_thread（避免绕过线程池）
+        loop = asyncio.get_running_loop()
+        executor = self.cpu_executor
+        if executor is None:
+            raise RuntimeError("Orchestrator.cpu_executor is not set for synchronous tool fallback")
+        return await loop.run_in_executor(executor, tool_func.run, args)
+
+    @staticmethod
+    def _is_dangerous(command: str) -> bool:
+        """判断命令是否包含危险关键词"""
+        if not command:
+            return False
+        dangerous_keywords = (
+            "del ", "delete", "rm -", "rd /s", "rmdir /s", "format ",
+            "mkfs", "shutdown", "reg delete", "reg add", "diskpart",
+        )
+        cmd_lower = command.lower()
+        return any(kw in cmd_lower for kw in dangerous_keywords)
+
     async def run_phase(
         self,
         phase: str,
@@ -239,101 +427,13 @@ class AgentOrchestrator:
         callbacks: Optional[Dict[str, Callable]] = None,
         cancel_event=None,
     ) -> str:
-        """
-        按 phase 执行 LLM 调用。
+        """按 phase 执行 LLM 调用（兼容旧接口，内部复用 arun）"""
+        self.set_phase(phase, mode, context)
+        return await self.arun(user_input, chat_history, callbacks, cancel_event)
 
-        - analyze: 让 LLM 输出任务清单（JSON 或 Markdown 列表）
-        - execute: 复用 run() 完整执行
-        - verify: 让 LLM 检查执行结果并返回验证结论
-        """
-        phase = (phase or "").lower()
-        mode = (mode or "").lower()
-
-        # 保存原始 prompt，执行完恢复
-        original_prompt = self.system_prompt
-        original_workspace_context = self.workspace_context
-
-        try:
-            self.workspace_context = context or self.workspace_context
-
-            if phase == "analyze":
-                self.system_prompt = self._build_analyze_prompt(mode)
-                # analyze 阶段不绑定工具，让 LLM 纯输出任务清单
-                return await self._run_without_tools(user_input, chat_history, callbacks, cancel_event)
-            elif phase == "verify":
-                self.system_prompt = self._build_verify_prompt(mode)
-                return await self._run_without_tools(user_input, chat_history, callbacks, cancel_event)
-            elif phase in ("execute", "confirm", "archive"):
-                # execute 用默认 system_prompt；confirm/archive 由 UI/框架处理，不调用 LLM
-                return await self.run(user_input, chat_history, callbacks, cancel_event)
-            else:
-                return await self.run(user_input, chat_history, callbacks, cancel_event)
-        finally:
-            self.system_prompt = original_prompt
-            self.workspace_context = original_workspace_context
-
-    async def _run_without_tools(
-        self,
-        user_input: str,
-        chat_history: Optional[List] = None,
-        callbacks: Optional[Dict[str, Callable]] = None,
-        cancel_event=None,
-    ) -> str:
-        """不绑定工具的 LLM 调用，用于 analyze/verify 阶段"""
-        callbacks = callbacks or {}
-        chat_history = list(chat_history) if chat_history else []
-
-        def _emit(name: str, *args):
-            cb = callbacks.get(name)
-            if cb:
-                try:
-                    cb(*args)
-                except Exception as e:
-                    self._log(callbacks, f"[ORCH_CALLBACK_ERR] {name}: {e}")
-
-        def _check_cancel():
-            if cancel_event and cancel_event.is_set():
-                raise OrchestratorCancelledError("任务已取消")
-
-        messages = self._build_messages(user_input, chat_history)
-
-        try:
-            _check_cancel()
-            _emit("metrics_start")
-            try:
-                response = await asyncio.wait_for(self.llm.ainvoke(messages), timeout=self.llm_timeout)
-            except asyncio.TimeoutError:
-                elapsed = self.llm_timeout
-                _emit("error", "LLM_TIMEOUT", f"LLM 响应超过 {elapsed:.0f} 秒未返回")
-                _emit("log", f"[ERR] LLM_TIMEOUT: LLM 响应超过 {elapsed:.0f} 秒")
-                return f"Error: LLM 响应超时（>{elapsed:.0f}s）。请检查模型服务是否正常运行，或稍后重试。"
-
-            usage_metadata = getattr(response, "usage_metadata", None) or {}
-            usage_payload = {
-                "provider": str(self.llm.model) if hasattr(self.llm, "model") else "",
-                "input_tokens": int(usage_metadata.get("input_tokens", 0) or 0),
-                "output_tokens": int(usage_metadata.get("output_tokens", 0) or 0),
-            }
-
-            reply = response.content or ""
-            _emit("metrics_first_token")
-            _emit("token_usage", usage_payload)
-
-            if self.enable_streaming and reply:
-                for line in reply.replace("\r\n", "\n").split("\n"):
-                    _check_cancel()
-                    _emit("chunk", line + "\n")
-            _emit("log", f"[RESULT] phase_result length={len(reply.strip() if reply else '')}")
-            return reply.strip() if reply else ""
-
-        except OrchestratorCancelledError:
-            _emit("log", "[STOP] 任务已取消")
-            raise
-        except Exception as ex:
-            _emit("error", "ORCHESTRATOR", str(ex))
-            _emit("log", f"[ERR] {ex}")
-            return f"Error: {str(ex)}"
-
+    # ═══════════════════════════════════════════════════════
+    # Prompt 构建
+    # ═══════════════════════════════════════════════════════
     def _build_analyze_prompt(self, mode: str) -> str:
         """Analyze 阶段的 system prompt"""
         base = (
@@ -347,18 +447,31 @@ class AgentOrchestrator:
             )
         elif mode == "plan":
             base += (
-                "\n\nPlan 模式需要制定执行计划。请输出任务清单，每个任务包含具体描述。"
-                "输出格式为 JSON 数组或 Markdown 列表，例如：\n"
-                '[{"description": "步骤1: xxx"}, {"description": "步骤2: yyy"}]'
+                "\n\nPlan 模式需要制定执行计划。请把用户需求拆分为 3-7 个具体任务，"
+                "每个任务应该是独立的规划单元。"
+                "\n\n工具调用要求："
+                "\n在输出任务清单前，必须先使用 read_file、list_dir、web_fetch 等只读工具收集完成任务所必需的信息。"
+                "不要直接编造文件内容或假设目录结构。"
+                "\n\n输出格式要求："
+                "\n1. 只输出任务清单，不要输出分析过程、解释、建议或总结。"
+                "\n2. 优先使用 JSON 数组格式：[{\"description\": \"步骤1: xxx\"}, {\"description\": \"步骤2: yyy\"}]"
+                "\n3. 每个任务描述必须包含具体可执行动作，但应优先使用工作台内置工具，"
+                "例如 '使用 list_dir 列出 xxx 目录'、'使用 read_file 读取 xxx 文件'、'使用 write_file 写入 xxx 文件'。"
+                "\n4. 只有在没有对应专用工具时才使用 run_command，避免把 PowerShell / cmd / shell 命令直接写入任务描述。"
             )
         elif mode == "craft":
             base += (
                 "\n\nCraft 模式需要生成可执行的任务清单。请把用户需求拆分为 3-7 个具体任务，"
                 "每个任务应该是独立的执行单元。"
+                "\n\n工具调用要求："
+                "\n在输出任务清单前，必须先使用 read_file、list_dir、web_fetch 等只读工具收集完成任务所必需的信息。"
+                "不要直接编造文件内容或假设目录结构。"
                 "\n\n输出格式要求："
                 "\n1. 只输出任务清单，不要输出分析过程、解释、建议或总结。"
                 "\n2. 优先使用 JSON 数组格式：[{\"description\": \"步骤1: xxx\"}, {\"description\": \"步骤2: yyy\"}]"
-                "\n3. 每个任务描述必须包含具体可执行动作，例如 '运行 xxx 命令'、'读取 xxx 文件'、'修改 xxx 文件'。"
+                "\n3. 每个任务描述必须包含具体可执行动作，但应优先使用工作台内置工具，"
+                "例如 '使用 list_dir 列出 xxx 目录'、'使用 read_file 读取 xxx 文件'、'使用 write_file 写入 xxx 文件'。"
+                "\n4. 只有在没有对应专用工具时才使用 run_command，避免把 PowerShell / cmd / shell 命令直接写入任务描述。"
             )
         else:
             base += "\n\n请输出任务清单，格式为 Markdown 列表。"

@@ -26,6 +26,7 @@ import asyncio
 import threading
 import uuid
 from abc import abstractmethod
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from PySide6.QtCore import QThread, Signal
 
@@ -47,6 +48,9 @@ class BaseWorker(QThread):
     turn_metrics_ready = Signal(object)
     confirm_required = Signal(str, str)
 
+    # 工具执行回传（共享输出面板）
+    tool_executed = Signal(str, dict, str, int)  # name, args, result, elapsed_ms
+
     def __init__(self, session_id: str, task_timeout: float = 120.0):
         super().__init__()
         self.worker_id = uuid.uuid4().hex[:8]
@@ -55,6 +59,7 @@ class BaseWorker(QThread):
         self._cancel_event = threading.Event()
         self._error_code = None
         self._error_detail = None
+        self._cpu_executor = None
 
     # ═══════════════════════════════════════════════════════
     # 取消与超时控制
@@ -79,12 +84,22 @@ class BaseWorker(QThread):
         self.log_message.emit(f"[ERR:{code}] {detail}")
         self.error_occurred.emit(code, detail)
 
+    def get_cpu_executor(self):
+        """返回 CPU/同步任务线程池，供子类/Orchestrator 使用"""
+        return self._cpu_executor
+
     # ═══════════════════════════════════════════════════════
     # QThread 入口
     # ═══════════════════════════════════════════════════════
     def run(self):
+        # CPU/同步兜底线程池：仅用于 run_backtest、MT5、akshare 等无法 async 的任务
+        self._cpu_executor = ThreadPoolExecutor(
+            max_workers=4,
+            thread_name_prefix=f"cpu_{self.worker_id}_",
+        )
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
+        # 注意：不调用 loop.set_default_executor，让原生协程在事件循环中执行
         try:
             loop.run_until_complete(self._run_with_timeout())
         except Exception as ex:
@@ -92,6 +107,13 @@ class BaseWorker(QThread):
             self.result_ready.emit(f"Error: {str(ex)}")
         finally:
             loop.close()
+            if self._cpu_executor is not None:
+                # 用户取消/异常时快速释放；正常结束时等待已提交任务完成
+                if self._cancel_event.is_set():
+                    self._cpu_executor.shutdown(wait=False, cancel_futures=True)
+                else:
+                    self._cpu_executor.shutdown(wait=True)
+                self._cpu_executor = None
 
     async def _run_with_timeout(self):
         """带总超时的任务执行包装"""

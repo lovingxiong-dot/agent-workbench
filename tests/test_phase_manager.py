@@ -11,8 +11,9 @@ from agent_engine.phase_manager import PhaseManager, Phase, TaskItem
 class TestPhaseManager(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # Qt 信号需要 QCoreApplication
-        cls.app = QCoreApplication([])
+        # Qt 信号需要 QCoreApplication；与其他测试共享单例
+        app = QCoreApplication.instance()
+        cls.app = app if app is not None else QCoreApplication([])
 
     def setUp(self):
         self.pm = PhaseManager()

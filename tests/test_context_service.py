@@ -78,6 +78,24 @@ class ContextServiceTest(unittest.TestCase):
         self.assertIsNone(self.ctx.get_active_document())
         self.assertEqual(len(self.ctx.get_selected_paths()), 0)
 
+    def test_activate_preserves_preview_and_size(self):
+        """激活文档时若未提供 preview/size，应保留首次打开时的值"""
+        self.ctx.set_project_root("D:/projects/app")
+        self.ctx.set_active_document("D:/projects/app/readme.md", "# Hello", 100)
+        self.ctx.set_active_document("D:/projects/app/readme.md")  # 仅激活
+        active = self.ctx.get_active_document()
+        self.assertEqual(active.preview, "# Hello")
+        self.assertEqual(active.size, 100)
+
+    def test_rename_open_document(self):
+        """重命名后应同步更新打开文档列表中的路径"""
+        self.ctx.set_project_root("D:/projects/app")
+        self.ctx.set_active_document("D:/projects/app/readme.md", "# Hello", 100)
+        self.ctx.rename_open_document("D:/projects/app/readme.md", "D:/projects/app/README.md")
+        active = self.ctx.get_active_document()
+        self.assertEqual(active.path, "D:\\projects\\app\\README.md")
+        self.assertEqual(self.ctx.get_open_documents()[0].path, "D:\\projects\\app\\README.md")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -12,10 +12,12 @@ from PySide6.QtCore import Qt, Signal
 from .terminal import TerminalWidget
 from .document_editor import DocumentEditor
 from .activity_panel import ActivityWidget
+from .shared_output import SharedOutputWidget
 
 
 class WorkspaceWidget(QTabWidget):
     document_opened = Signal(str, str, int)   # path, preview, size
+    document_activated = Signal(str)          # path（已打开文件被激活/重新聚焦）
     document_closed = Signal(str)             # path
 
     def __init__(self, parent=None, interpreter_service=None):
@@ -32,6 +34,10 @@ class WorkspaceWidget(QTabWidget):
         self.terminal = TerminalWidget(interpreter_service=self._interpreter_service)
         self.addTab(self.terminal, "终端")
 
+        # ── 执行输出（共享文档）───────────────────
+        self.shared_output = SharedOutputWidget()
+        self.addTab(self.shared_output, "执行输出")
+
         # ── 活动 ────────────────────────────────
         self.activity_panel = ActivityWidget()
         self.addTab(self.activity_panel, "活动")
@@ -45,15 +51,15 @@ class WorkspaceWidget(QTabWidget):
         # ── 文档 ────────────────────────────────
         self.document_editor = DocumentEditor()
         self.document_editor.document_opened.connect(self.document_opened.emit)
+        self.document_editor.document_activated.connect(self.document_activated.emit)
         self.document_editor.document_closed.connect(self.document_closed.emit)
         self.addTab(self.document_editor, "文档")
 
     def _on_tab_changed(self, index):
         """切换到文档标签时，把当前文档标记为 active"""
-        if index == 2 and self.document_editor._path:
-            self.document_opened.emit(
-                self.document_editor._path, "", 0
-            )
+        widget = self.widget(index)
+        if widget is self.document_editor and self.document_editor._path:
+            self.document_activated.emit(self.document_editor._path)
 
     def add_log(self, text: str, is_header: bool = False):
         """保留原始日志追加能力，用于内部调试"""
@@ -107,7 +113,7 @@ class WorkspaceWidget(QTabWidget):
 
     def get_active_document_path(self) -> str:
         """返回当前文档编辑器打开的文件路径；若当前不是文档标签则返回空"""
-        if self.currentIndex() == 2:
+        if self.currentWidget() is self.document_editor:
             return self.document_editor._path or ""
         return ""
 
