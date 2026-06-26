@@ -24,7 +24,10 @@ from services.activity_service import ActivityService
 from services.context_service import ContextService
 from services.interpreter_service import InterpreterService
 from services.metrics_collector import MetricsCollector, TurnMetrics
+from services.mcp_service import MCPRegistry
+from agent_engine.tool_gateway import ToolGateway
 from workers.agent_worker import AgentWorker, TOOL_DEFINITIONS
+from tools import ARUN_MAP
 from ui.widgets import (
     SidebarButton, FileTreeWidget, ConversationListWidget,
     TaskListWidget, TerminalWidget, StatusIndicator,
@@ -136,6 +139,12 @@ class MainWindow(QMainWindow):
             self.config_service.get("memory", {}),
             storage_dir=self._app_storage_dir,
         )
+
+        # ── 工具网关与外部能力接入点 ─────────────────────────────
+        self.tool_gateway = ToolGateway()
+        self.tool_gateway.register_local_tools(TOOL_MAP, ARUN_MAP, TOOL_DEFINITIONS)
+        self.mcp_registry = MCPRegistry()
+        self.tool_gateway.register_mcp_registry(self.mcp_registry)
 
         # UI 配置
         ui_cfg = self.config_service.get("ui", {}).get("log_panel", {})
@@ -845,6 +854,7 @@ class MainWindow(QMainWindow):
         worker.confirm_required.connect(current_only(self._on_tool_confirm_required))
         worker.token_used.connect(current_only(self._on_token_used))
         worker.turn_metrics_ready.connect(current_only(self._on_turn_metrics_ready))
+        worker.tool_executed.connect(current_only(self._on_tool_executed))
         worker.analyze_result_ready.connect(current_only(self._on_analyze_result))
         worker.execute_result_ready.connect(current_only(self._on_execute_result))
         worker.verify_result_ready.connect(current_only(self._on_verify_result))
@@ -1056,6 +1066,14 @@ class MainWindow(QMainWindow):
             self._on_log_message(f"📊 {metrics.format_detail()}", is_header=False)
         except Exception as e:
             self._on_log_message(f"[WARN] 指标处理失败: {e}")
+
+    @Slot(str, dict, str, int)
+    def _on_tool_executed(self, name: str, args: dict, result: str, elapsed_ms: int):
+        """工具执行回传：追加到共享输出面板"""
+        try:
+            self.workspace.shared_output.append_execution(name, args, result, elapsed_ms=elapsed_ms)
+        except Exception as e:
+            self._on_log_message(f"[WARN] 共享输出面板追加失败: {e}")
 
     @Slot(str, str)
     def _add_task(self, task_id, description):

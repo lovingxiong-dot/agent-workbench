@@ -17,6 +17,8 @@ from services.activity_service import ActivityService
 from services.theme_service import ThemeService
 from services.metrics_collector import MetricsCollector
 from agent_engine import ModeManager, LLMRegistry, MemoryManager
+from agent_engine.tool_gateway import ToolGateway
+from services.mcp_service import MCPRegistry
 
 
 class AppContext:
@@ -88,6 +90,10 @@ class AppContext:
             storage_dir=self.storage_dir,
         )
         self.metrics_collector = MetricsCollector()
+
+        # ── 工具网关与外部能力接入点 ─────────────────────────────
+        self.tool_gateway = ToolGateway()
+        self.mcp_registry = MCPRegistry()
 
     # ═══════════════════════════════════════════════════════
     # 公共访问接口
