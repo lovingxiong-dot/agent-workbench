@@ -25,6 +25,10 @@ class AgentOrchestrator:
     # 接近上限时，给 LLM 追加强制总结提示
     FORCE_ANSWER_THRESHOLD = 1
 
+    # 默认超时（秒）：LLM 单次调用、单轮工具执行、任务总超时由外部控制
+    DEFAULT_LLM_TIMEOUT = 90.0
+    DEFAULT_TOOL_TIMEOUT = 30.0
+
     def __init__(
         self,
         llm,
@@ -36,6 +40,9 @@ class AgentOrchestrator:
         enable_streaming: bool = True,
         tool_executor: Optional[Callable[[str, Any], str]] = None,
         workspace_context: str = "",
+        app_version: str = "v3.x",
+        llm_timeout: float = DEFAULT_LLM_TIMEOUT,
+        tool_timeout: float = DEFAULT_TOOL_TIMEOUT,
     ):
         self.llm = llm
         self.tool_map = tool_map or {}
@@ -47,6 +54,9 @@ class AgentOrchestrator:
         self.enable_streaming = enable_streaming
         self.tool_executor = tool_executor or self._default_tool_executor
         self.workspace_context = workspace_context or ""
+        self.app_version = app_version or "v3.x"
+        self.llm_timeout = max(5.0, float(llm_timeout or self.DEFAULT_LLM_TIMEOUT))
+        self.tool_timeout = max(5.0, float(tool_timeout or self.DEFAULT_TOOL_TIMEOUT))
 
     async def run(
         self,
@@ -96,7 +106,13 @@ class AgentOrchestrator:
                 _check_cancel()
 
                 _emit("metrics_start")
-                response = await llm.ainvoke(messages)
+                try:
+                    response = await asyncio.wait_for(llm.ainvoke(messages), timeout=self.llm_timeout)
+                except asyncio.TimeoutError:
+                    elapsed = self.llm_timeout
+                    _emit("error", "LLM_TIMEOUT", f"LLM 响应超过 {elapsed:.0f} 秒未返回")
+                    _emit("log", f"[ERR] LLM_TIMEOUT: LLM 响应超过 {elapsed:.0f} 秒")
+                    return f"Error: LLM 响应超时（>{elapsed:.0f}s）。请检查模型服务是否正常运行，或稍后重试。"
 
                 # 提取 token 用量（部分 provider/streaming 模式下可能缺失）
                 usage_metadata = getattr(response, "usage_metadata", None) or {}
@@ -117,7 +133,16 @@ class AgentOrchestrator:
                         tool_args = tc["args"]
                         task_id = f"{tool_name}_{datetime.now().strftime('%H%M%S')}"
                         _emit("tool_start", task_id, f"Running {tool_name}")
-                        result = await asyncio.to_thread(self.tool_executor, tool_name, tool_args)
+                        try:
+                            result = await asyncio.wait_for(
+                                asyncio.to_thread(self.tool_executor, tool_name, tool_args),
+                                timeout=self.tool_timeout
+                            )
+                        except asyncio.TimeoutError:
+                            elapsed = self.tool_timeout
+                            _emit("error", "TOOL_TIMEOUT", f"工具 {tool_name} 执行超过 {elapsed:.0f} 秒")
+                            _emit("log", f"[ERR] TOOL_TIMEOUT: {tool_name} 执行超过 {elapsed:.0f} 秒")
+                            result = f"[工具超时] {tool_name} 执行超过 {elapsed:.0f} 秒，已中断。"
                         result_text = str(result) if result is not None else ""
                         # 截断过长的工具结果，避免 LLM 上下文被原始 HTML 撑爆
                         if len(result_text) > self.TOOL_RESULT_MAX_LEN:
@@ -172,7 +197,7 @@ class AgentOrchestrator:
                 )
             ))
             try:
-                final_response = await self.llm.ainvoke(final_messages)
+                final_response = await asyncio.wait_for(self.llm.ainvoke(final_messages), timeout=self.llm_timeout)
                 reply = final_response.content or ""
                 if reply:
                     if self.enable_streaming:
@@ -181,6 +206,9 @@ class AgentOrchestrator:
                             _emit("chunk", line + '\n')
                     _emit("log", f"[RESULT] forced summary length={len(reply.strip())}")
                     return reply.strip()
+            except asyncio.TimeoutError:
+                _emit("error", "LLM_TIMEOUT", f"最终总结 LLM 响应超过 {self.llm_timeout:.0f} 秒")
+                _emit("log", f"[ERR] LLM_TIMEOUT: 最终总结超时")
             except Exception as ex:
                 _emit("log", f"[WARN] Final summary failed: {ex}")
 
@@ -272,7 +300,13 @@ class AgentOrchestrator:
         try:
             _check_cancel()
             _emit("metrics_start")
-            response = await self.llm.ainvoke(messages)
+            try:
+                response = await asyncio.wait_for(self.llm.ainvoke(messages), timeout=self.llm_timeout)
+            except asyncio.TimeoutError:
+                elapsed = self.llm_timeout
+                _emit("error", "LLM_TIMEOUT", f"LLM 响应超过 {elapsed:.0f} 秒未返回")
+                _emit("log", f"[ERR] LLM_TIMEOUT: LLM 响应超过 {elapsed:.0f} 秒")
+                return f"Error: LLM 响应超时（>{elapsed:.0f}s）。请检查模型服务是否正常运行，或稍后重试。"
 
             usage_metadata = getattr(response, "usage_metadata", None) or {}
             usage_payload = {
@@ -320,8 +354,11 @@ class AgentOrchestrator:
         elif mode == "craft":
             base += (
                 "\n\nCraft 模式需要生成可执行的任务清单。请把用户需求拆分为 3-7 个具体任务，"
-                "每个任务应该是独立的执行单元。输出格式为 JSON 数组或 Markdown 列表，例如：\n"
-                '[{"description": "读取文件 xxx"}, {"description": "修改文件 yyy"}, {"description": "运行测试"}]'
+                "每个任务应该是独立的执行单元。"
+                "\n\n输出格式要求："
+                "\n1. 只输出任务清单，不要输出分析过程、解释、建议或总结。"
+                "\n2. 优先使用 JSON 数组格式：[{\"description\": \"步骤1: xxx\"}, {\"description\": \"步骤2: yyy\"}]"
+                "\n3. 每个任务描述必须包含具体可执行动作，例如 '运行 xxx 命令'、'读取 xxx 文件'、'修改 xxx 文件'。"
             )
         else:
             base += "\n\n请输出任务清单，格式为 Markdown 列表。"
@@ -341,7 +378,7 @@ class AgentOrchestrator:
     def _build_messages(self, user_input: str, chat_history: List):
         model_id = str(self.llm.model) if hasattr(self.llm, 'model') else "unknown"
         prompt = self.system_prompt
-        prompt += f"\n\n## YOUR IDENTITY\nYou are AI Agent Workbench v2 running on model '{model_id}'. When asked who/what model you are, state: 'I am AI Agent Workbench v2, powered by {model_id}.' Never claim to be Claude, GPT, Gemini, or any other brand."
+        prompt += f"\n\n## YOUR IDENTITY\nYou are AI Agent Workbench {self.app_version} running on model '{model_id}'. When asked who/what model you are, state: 'I am AI Agent Workbench {self.app_version}, powered by {model_id}.' Never claim to be Claude, GPT, Gemini, or any other brand."
         if self.user_rules:
             rule_lines = "\n".join(f"{i+1}. {r}" for i, r in enumerate(self.user_rules))
             prompt += f"\n\n## USER RULES (MUST FOLLOW)\n{rule_lines}"

@@ -6,16 +6,27 @@ from langchain_core.chat_history import InMemoryChatMessageHistory
 
 class MemoryManager:
     """三层记忆管理器：工作记忆（LangChain内置）、短期记忆（SQLite）、长期画像（JSON）"""
-    
-    def __init__(self, config: dict):
-        self.short_term_db = config.get("short_term_db", "storage/short_term.db")
-        self.user_profile_path = config.get("user_profile", "storage/user_profile.json")
-        self.vector_store_path = config.get("vector_store", "storage/vector_store")
-        
+
+    def __init__(self, config: dict, storage_dir: str = ""):
+        self.short_term_db = self._resolve_path(config.get("short_term_db", "storage/short_term.db"), storage_dir)
+        self.user_profile_path = self._resolve_path(config.get("user_profile", "storage/user_profile.json"), storage_dir)
+        self.vector_store_path = self._resolve_path(config.get("vector_store", "storage/vector_store"), storage_dir)
+
         # 工作记忆存储（按 session_id）
         self.store = {}
         self._init_short_term_db()
         self._init_user_profile()
+
+    @staticmethod
+    def _resolve_path(path: str, storage_dir: str) -> str:
+        """如果 path 是相对路径且提供了 storage_dir，则解析为绝对路径"""
+        if not path:
+            return path
+        if os.path.isabs(path):
+            return os.path.normpath(path)
+        if storage_dir:
+            return os.path.normpath(os.path.join(storage_dir, path))
+        return os.path.normpath(path)
     
     def _init_short_term_db(self):
         os.makedirs(os.path.dirname(self.short_term_db), exist_ok=True)

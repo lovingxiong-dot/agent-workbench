@@ -41,7 +41,8 @@ class AgentWorker(BaseWorker):
                  session_id, system_prompt="", tool_map=None, tool_definitions=None,
                  enable_streaming=True, chat_history=None, user_rules=None,
                  max_tool_rounds=8, task_timeout=120.0, project_root="",
-                 workspace_context="", phase="execute"):
+                 workspace_context="", phase="execute", app_version="v3.x",
+                 llm_timeout=90.0, tool_timeout=30.0):
         super().__init__(session_id=session_id, task_timeout=task_timeout)
         self.user_text = user_text
         self.mode_name = mode_name
@@ -57,6 +58,9 @@ class AgentWorker(BaseWorker):
         self.project_root = project_root or ""
         self.workspace_context = workspace_context or ""
         self.phase = (phase or "execute").lower()
+        self.app_version = app_version or "v3.x"
+        self.llm_timeout = max(5.0, float(llm_timeout or 90.0))
+        self.tool_timeout = max(5.0, float(tool_timeout or 30.0))
         self.confirm_event = threading.Event()
         self.confirm_result = False
         self.metrics = MetricsCollector()
@@ -78,6 +82,9 @@ class AgentWorker(BaseWorker):
                 enable_streaming=self.enable_streaming,
                 tool_executor=self._sync_call_tool,
                 workspace_context=self.workspace_context,
+                app_version=self.app_version,
+                llm_timeout=self.llm_timeout,
+                tool_timeout=self.tool_timeout,
             )
 
             callbacks = {

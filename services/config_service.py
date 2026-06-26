@@ -70,7 +70,16 @@ class ConfigService:
         return provider.get("model", "")
 
     def get(self, key, default=None):
-        return self.config.get(key, default)
+        """支持点号路径访问嵌套配置，例如 app.version"""
+        if not isinstance(key, str) or "." not in key:
+            return self.config.get(key, default)
+        value = self.config
+        for part in key.split("."):
+            if isinstance(value, dict) and part in value:
+                value = value[part]
+            else:
+                return default
+        return value if value is not None else default
 
     def get_mode_config(self, mode_name):
         """获取指定手动模式的完整配置（system_prompt、tools、current_model 等）"""
@@ -97,6 +106,14 @@ class ConfigService:
     def get_task_timeout(self, mode_name="ask"):
         """获取指定模式下 Agent 任务总超时（秒）"""
         return self.get_agent_config(mode_name).get("task_timeout", 120.0)
+
+    def get_llm_timeout(self, mode_name="ask"):
+        """获取指定模式下单次 LLM 调用超时（秒）"""
+        return self.get_agent_config(mode_name).get("llm_timeout", 90.0)
+
+    def get_tool_timeout(self, mode_name="ask"):
+        """获取指定模式下单轮工具执行超时（秒）"""
+        return self.get_agent_config(mode_name).get("tool_timeout", 30.0)
 
     def save(self):
         """将当前配置写回文件；保存前把已解析的 API Key 还原为 ${...} 占位符，避免明文泄露。"""

@@ -99,12 +99,24 @@ manual_modes:
 agent:
   defaults:
     max_tool_rounds: 8
+    task_timeout: 120.0
+    llm_timeout: 90.0
+    tool_timeout: 30.0
   ask:
     max_tool_rounds: 5
+    task_timeout: 120.0
+    llm_timeout: 90.0
+    tool_timeout: 30.0
   plan:
     max_tool_rounds: 8
+    task_timeout: 120.0
+    llm_timeout: 90.0
+    tool_timeout: 30.0
   craft:
     max_tool_rounds: 12
+    task_timeout: 180.0
+    llm_timeout: 120.0
+    tool_timeout: 60.0
 llm_providers:
   fast-chat:
     base_url: http://localhost:11434/v1
@@ -126,9 +138,9 @@ user_rules:
 - Always respond in Chinese
 - Summarize key findings and data sources at end
 memory:
-  short_term_db: F:/Agent/agent_workbench/storage/short_term.db
-  user_profile: F:/Agent/agent_workbench/storage/user_profile.json
-  vector_store: F:/Agent/agent_workbench/storage/vector_store
+  short_term_db: short_term.db
+  user_profile: user_profile.json
+  vector_store: vector_store
 terminal:
   preferred_interpreter:
     type: python
@@ -142,4 +154,6 @@ ui:
     project_root: F:\Agent\agent_workbench
     recent_projects: []
 app:
-  version: v3.7
+  version: v3.7.3
+  last_mode: ask
+  last_model: tool-agent

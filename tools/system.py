@@ -2,6 +2,7 @@
 系统工具：命令执行 / 文件操作 / 网络 / 剪贴板 / 通知 / 进程管理
 """
 import os
+import sys
 import subprocess
 import ctypes
 from langchain.tools import tool
@@ -16,6 +17,18 @@ def set_project_root(path: str):
     """设置当前任务的项目根目录，供文件工具解析相对路径"""
     global _project_root
     _project_root = os.path.normpath(os.path.abspath(os.path.expandvars(path))) if path else ""
+
+
+def _subprocess_kwargs(timeout: float = None, extra: dict = None) -> dict:
+    """构建跨平台的 subprocess 参数：Windows 下隐藏控制台窗口"""
+    kwargs = {}
+    if timeout is not None:
+        kwargs["timeout"] = timeout
+    if sys.platform == "win32":
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    if extra:
+        kwargs.update(extra)
+    return kwargs
 
 
 # ═══════════════════════════════════════════════════════
@@ -51,11 +64,12 @@ def run_command(command: str) -> str:
             os.startfile(os.path.expandvars(path))
             return f"\u5df2\u6253\u5f00: {path}"
         if _is_launch_command(command):
-            subprocess.Popen(command, shell=True)
+            subprocess.Popen(command, shell=True, **_subprocess_kwargs())
             return f"\u5df2\u542f\u52a8: {command}"
         result = subprocess.run(
             command, shell=True, capture_output=True, text=True,
-            timeout=30, encoding="utf-8", errors="replace"
+            encoding="utf-8", errors="replace",
+            **_subprocess_kwargs(timeout=30)
         )
         output = (result.stdout + result.stderr).strip()
         return output if output else f"\u547d\u4ee4\u6267\u884c\u5b8c\u6210\uff08\u9000\u51fa\u7801 {result.returncode}\uff09"
@@ -214,10 +228,10 @@ def web_fetch(url: str) -> str:
 def clipboard_read() -> str:
     """读取 Windows 剪贴板文本内容"""
     try:
-        import subprocess
         result = subprocess.run(
             ["powershell", "-Command", "Get-Clipboard"],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, text=True,
+            **_subprocess_kwargs(timeout=5)
         )
         text = result.stdout.strip()
         return text if text else "\u526a\u8d34\u677f\u4e3a\u7a7a\u6216\u65e0\u6587\u5b57\u5185\u5bb9"
@@ -229,10 +243,10 @@ def clipboard_read() -> str:
 def clipboard_write(text: str) -> str:
     """将文本写入 Windows 剪贴板"""
     try:
-        import subprocess
         proc = subprocess.Popen(
             ["powershell", "-Command", "Set-Clipboard -Value $input"],
-            stdin=subprocess.PIPE, text=True
+            stdin=subprocess.PIPE, text=True,
+            **_subprocess_kwargs()
         )
         proc.communicate(input=text, timeout=5)
         return f"\u5df2\u5199\u5165\u526a\u8d34\u677f ({len(text)} \u5b57\u7b26)"
@@ -263,7 +277,8 @@ def send_notification(title: str, message: str = "") -> str:
             subprocess.run(
                 ["powershell", "-Command",
                  f"New-BurntToastNotification -Text '{title}', '{message}'"],
-                capture_output=True, timeout=5
+                capture_output=True,
+                **_subprocess_kwargs(timeout=5)
             )
             return f"\u5df2\u53d1\u9001\u901a\u77e5: {title}"
         except Exception:
@@ -280,12 +295,12 @@ def send_notification(title: str, message: str = "") -> str:
 def list_processes() -> str:
     """列出当前运行的主要进程（按内存使用排序，前15个）"""
     try:
-        import subprocess
         result = subprocess.run(
             ["powershell", "-Command",
              "Get-Process | Sort-Object WS -Descending | Select-Object -First 15 | "
              "ForEach-Object { '{0,-30} PID:{1,6}  RAM:{2,10:N0}KB' -f $_.ProcessName, $_.Id, ($_.WS/1KB) }"],
-            capture_output=True, text=True, timeout=10
+            capture_output=True, text=True,
+            **_subprocess_kwargs(timeout=10)
         )
         output = result.stdout.strip()
         return f"\u8fdb\u7a0b\u5217\u8868 (\u6309\u5185\u5b58\u6392\u5e8f):\n{output}" if output else "\u65e0\u6cd5\u83b7\u53d6\u8fdb\u7a0b\u5217\u8868"
@@ -297,13 +312,13 @@ def list_processes() -> str:
 def kill_process(name: str) -> str:
     """按名称终止进程（需确认，模糊匹配）"""
     try:
-        import subprocess
         name = name.strip()
         if not name:
             return "\u8fdb\u7a0b\u540d\u4e0d\u80fd\u4e3a\u7a7a"
         result = subprocess.run(
             ["taskkill", "/f", "/im", f"{name}.exe" if not name.endswith(".exe") else name],
-            capture_output=True, text=True, timeout=10
+            capture_output=True, text=True,
+            **_subprocess_kwargs(timeout=10)
         )
         return result.stdout.strip() or result.stderr.strip() or f"\u5df2\u7ec8\u6b62: {name}"
     except Exception as e:
@@ -316,17 +331,27 @@ def kill_process(name: str) -> str:
 
 @tool
 def run_python(code: str) -> str:
-    """使用 Python 解释器执行代码片段，返回输出结果"""
+    """使用项目 venv 或系统 Python 解释器执行代码片段，返回输出结果"""
     try:
-        import subprocess, os
-        python_path = os.path.join(os.path.dirname(__file__), "..", "venv", "Scripts", "python.exe")
-        python_path = os.path.normpath(python_path)
-        if not os.path.exists(python_path):
-            python_path = "python"
+        import shutil
+        # 优先使用项目 venv Python（AgentWorker 已通过 set_project_root 注入）
+        candidates = []
+        if _project_root:
+            candidates.append(os.path.join(_project_root, "venv", "Scripts", "python.exe"))
+        # 兼容旧路径：工具模块上一级目录的 venv
+        candidates.append(os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "venv", "Scripts", "python.exe")))
+        python_path = None
+        for c in candidates:
+            if c and os.path.exists(c):
+                python_path = c
+                break
+        if not python_path:
+            python_path = shutil.which("python") or "python"
         result = subprocess.run(
             [python_path, "-c", code],
-            capture_output=True, text=True, timeout=30,
-            encoding="utf-8", errors="replace"
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            **_subprocess_kwargs(timeout=30)
         )
         output = (result.stdout + result.stderr).strip()
         return output if output else f"Python 执行完成（退出码 {result.returncode}）"
@@ -338,11 +363,11 @@ def run_python(code: str) -> str:
 def run_powershell(command: str) -> str:
     """使用 PowerShell 执行命令，返回输出结果"""
     try:
-        import subprocess
         result = subprocess.run(
             ["powershell.exe", "-Command", command],
-            capture_output=True, text=True, timeout=30,
-            encoding="utf-8", errors="replace"
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            **_subprocess_kwargs(timeout=30)
         )
         output = (result.stdout + result.stderr).strip()
         return output if output else f"PowerShell 执行完成（退出码 {result.returncode}）"
@@ -354,14 +379,15 @@ def run_powershell(command: str) -> str:
 def run_bash(command: str) -> str:
     """使用 Git Bash 执行命令，返回输出结果"""
     try:
-        import subprocess, shutil
+        import shutil
         bash_path = shutil.which("bash.exe")
         if not bash_path:
             return "未找到 Git Bash (bash.exe)"
         result = subprocess.run(
             [bash_path, "-c", command],
-            capture_output=True, text=True, timeout=30,
-            encoding="utf-8", errors="replace"
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            **_subprocess_kwargs(timeout=30)
         )
         output = (result.stdout + result.stderr).strip()
         return output if output else f"Bash 执行完成（退出码 {result.returncode}）"

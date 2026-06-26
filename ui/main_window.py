@@ -90,12 +90,20 @@ class MainWindow(QMainWindow):
         app_version = self.config_service.get("app.version", "v3.x")
         self.setWindowTitle(f"AI Agent 工作台 {app_version} · 手动模式")
 
+        # 统一持久化根目录：开发时用项目根目录/storage，打包时用 exe 同级/storage
+        app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self._app_storage_dir = (
+            os.path.join(os.path.dirname(sys.executable), "storage")
+            if getattr(sys, 'frozen', False)
+            else os.path.join(app_root, "storage")
+        )
+        os.makedirs(self._app_storage_dir, exist_ok=True)
+
         # ── 服务初始化 ──────────────────────────
-        self.session_service = SessionService()
+        self.session_service = SessionService(os.path.join(self._app_storage_dir, "conversations.db"))
         self.project_service = ProjectService(self.session_service, self.config_service)
 
         # 先确定项目根目录，后续服务依赖它
-        app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self._project_root = self.project_service.detect_current_project(app_root)
 
         self.context_service = ContextService(self.project_service, self)
@@ -119,17 +127,15 @@ class MainWindow(QMainWindow):
         self._phase_results = []
 
         # 其余服务
-        # 活动记录持久化到可写目录（兼容 PyInstaller）
-        activity_storage_path = (
-            os.path.join(os.path.dirname(sys.executable), "storage", "activities.json")
-            if getattr(sys, 'frozen', False)
-            else "storage/activities.json"
-        )
-        self.activity_service = ActivityService(activity_storage_path)
+        # 活动记录持久化到统一 storage 目录
+        self.activity_service = ActivityService(os.path.join(self._app_storage_dir, "activities.json"))
         self.theme_service = ThemeService()
         self.mode_manager = ModeManager(config_path)
         self.llm_registry = LLMRegistry(config_path, config_write)
-        self.memory_manager = MemoryManager(self.config_service.get("memory", {}))
+        self.memory_manager = MemoryManager(
+            self.config_service.get("memory", {}),
+            storage_dir=self._app_storage_dir,
+        )
 
         # UI 配置
         ui_cfg = self.config_service.get("ui", {}).get("log_panel", {})
@@ -165,7 +171,16 @@ class MainWindow(QMainWindow):
         self._phase_manager.error_occurred.connect(self._on_phase_error)
 
         # ── 初始化 ──────────────────────────────
-        self._init_mode("ask")
+        # 从配置恢复上次选择的模式和模型；若无效则回退到 ask/tool-agent
+        last_mode = self.config_service.get("app.last_mode", "ask")
+        last_model = self.config_service.get("app.last_model", "tool-agent")
+        available_modes = list(self.config_service.get("manual_modes", {}).keys())
+        if last_mode not in available_modes:
+            last_mode = "ask"
+        providers = self.llm_registry.list_providers()
+        if last_model not in providers:
+            last_model = next(iter(providers.keys()), "tool-agent")
+        self._init_mode(last_mode, last_model)
         self._init_default_session()
         self.chat_view.populate_models(
             self.llm_registry.list_providers(),
@@ -341,15 +356,22 @@ class MainWindow(QMainWindow):
         self._on_log_message(f"🔄 切换模式: {mode_name} / {llm_name}", is_header=True, is_global=True)
 
     def _on_mode_clicked(self, mode_name):
-        self._init_mode(mode_name)
+        # 切换模式时保留当前选择的模型（全局模型记忆，不因模式切换而重置）
+        self._init_mode(mode_name, self._current_model_name)
+        # 持久化当前模式
+        app_cfg = self.config_service.config.setdefault("app", {})
+        app_cfg["last_mode"] = mode_name
+        self.config_service.save()
 
     def _on_model_changed(self, llm_name):
         self._current_llm = self.llm_registry.get_llm(llm_name)
         self._current_model_name = llm_name
-        # 持久化当前模式选用的模型到 config.yaml
-        llm_registry_config = self.config_service.config.setdefault("manual_modes", {})
-        llm_registry_config[self._current_mode] = llm_registry_config.get(self._current_mode, {})
-        llm_registry_config[self._current_mode]["current_model"] = llm_name
+        # 持久化当前模式选用的模型，以及全局 last_model
+        manual_cfg = self.config_service.config.setdefault("manual_modes", {})
+        manual_cfg[self._current_mode] = manual_cfg.get(self._current_mode, {})
+        manual_cfg[self._current_mode]["current_model"] = llm_name
+        app_cfg = self.config_service.config.setdefault("app", {})
+        app_cfg["last_model"] = llm_name
         self.config_service.save()
 
         provider = self.llm_registry.get_provider_config(llm_name)
@@ -369,9 +391,16 @@ class MainWindow(QMainWindow):
 
     def _on_settings_changed(self):
         providers = self.llm_registry.list_providers()
+        model_changed = False
         if self._current_model_name not in providers:
             self._current_model_name = next(iter(providers.keys()), "tool-agent")
             self._current_llm = self.llm_registry.get_llm(self._current_model_name)
+            model_changed = True
+        # 如因设置变更导致模型回退，同步保存 last_model，避免下次启动丢失
+        if model_changed:
+            app_cfg = self.config_service.config.setdefault("app", {})
+            app_cfg["last_model"] = self._current_model_name
+            self.config_service.save()
         self.chat_view.populate_models(providers, self._current_model_name)
         current_title = self._sessions.get(self._current_session, {}).get("title", "未命名会话")
         self.chat_view.set_header(self._current_mode, self._current_model_name, current_title)
@@ -588,6 +617,16 @@ class MainWindow(QMainWindow):
     # 消息发送
     # ═══════════════════════════════════════════════════
     def _send_message(self, user_text):
+        # 0. Phase 状态拦截：CONFIRM 阶段用户输入视为对任务清单的反馈
+        if self._current_phase == "confirm":
+            lowered = user_text.lower()
+            if "重新分析" in user_text or "取消" in user_text or "cancel" in lowered or "no" in lowered:
+                self._on_phase_reanalyze()
+            else:
+                # 默认视为「确认执行」（包括输入 "?"、"ok"、"执行" 或直接回车）
+                self._on_phase_confirmed()
+            return
+
         # 0. 写入本轮日志标题
         display_text = user_text[:80] + ("..." if len(user_text) > 80 else "")
         self._on_log_message(f"▶ 用户: {display_text}", is_header=True)
@@ -729,8 +768,12 @@ class MainWindow(QMainWindow):
         self._phase_manager.on_verify_complete(True, "用户跳过验证")
 
     def _on_analyze_result(self, text):
-        """Analyze 阶段结果：解析 task list"""
+        """Analyze 阶段结果：解析 task list；Plan/Craft 模式下兜底为单任务"""
         task_list = PhaseManager.parse_task_list(text)
+        if not task_list and self._current_mode in ("plan", "craft"):
+            # LLM 没有输出标准清单时，把完整回复作为单一任务兜底
+            fallback_desc = text.strip()[:300] if text.strip() else "执行用户请求"
+            task_list = [TaskItem(id="task-1", description=fallback_desc)]
         self._phase_task_list = task_list
         self.chat_view.set_task_progress(0, len(task_list))
         self._phase_manager.on_analyze_complete(task_list)
@@ -757,6 +800,8 @@ class MainWindow(QMainWindow):
         user_rules = self.config_service.get("user_rules", [])
         max_tool_rounds = self.config_service.get_max_tool_rounds(self._current_mode)
         task_timeout = self.config_service.get_task_timeout(self._current_mode)
+        llm_timeout = self.config_service.get_llm_timeout(self._current_mode)
+        tool_timeout = self.config_service.get_tool_timeout(self._current_mode)
         history = self.memory_manager.get_session_history(self._current_session)
 
         # execute 阶段才需要把用户消息保留在历史中
@@ -776,9 +821,12 @@ class MainWindow(QMainWindow):
             user_rules=user_rules,
             max_tool_rounds=max_tool_rounds,
             task_timeout=task_timeout,
+            llm_timeout=llm_timeout,
+            tool_timeout=tool_timeout,
             project_root=self.context_service.get_project_root(),
             workspace_context=context_text,
             phase=phase,
+            app_version=self.config_service.get("app.version", "v3.x"),
         )
         self._worker = worker
         self._chunks_received = False
@@ -833,18 +881,26 @@ class MainWindow(QMainWindow):
             self.memory_manager.get_session_history(self._current_session).add_message(AIMessage(content=text))
 
     def _run_local_verification(self) -> str:
-        """运行本地语法检查和单元测试"""
+        """运行本地语法检查和单元测试，优先使用项目 venv Python"""
         import subprocess
+        import shutil
         lines = []
+
+        # 优先选择项目 venv Python
+        python_path = self._resolve_venv_python()
+        if not python_path:
+            python_path = shutil.which("python") or "python"
+
         # 语法检查
         try:
             result = subprocess.run(
-                ["python", "-m", "py_compile", "main.py"],
+                [python_path, "-m", "py_compile", "main.py"],
                 cwd=self._project_root or None,
-                capture_output=True, text=True, timeout=30
+                capture_output=True, text=True, timeout=30,
+                creationflags=subprocess.CREATE_NO_WINDOW,
             )
             if result.returncode == 0:
-                lines.append("✅ 语法检查通过 (main.py)")
+                lines.append(f"✅ 语法检查通过 (main.py) — 使用 {python_path}")
             else:
                 lines.append(f"❌ 语法检查失败: {result.stderr}")
         except Exception as e:
@@ -853,9 +909,10 @@ class MainWindow(QMainWindow):
         # 单元测试
         try:
             result = subprocess.run(
-                ["python", "-m", "unittest", "discover", "-s", "tests", "-v"],
+                [python_path, "-m", "unittest", "discover", "-s", "tests", "-v"],
                 cwd=self._project_root or None,
-                capture_output=True, text=True, timeout=120
+                capture_output=True, text=True, timeout=120,
+                creationflags=subprocess.CREATE_NO_WINDOW,
             )
             if result.returncode == 0:
                 lines.append("✅ 单元测试通过")
@@ -864,6 +921,24 @@ class MainWindow(QMainWindow):
         except Exception as e:
             lines.append(f"⚠️ 单元测试异常: {e}")
         return "\n".join(lines)
+
+    def _resolve_venv_python(self) -> str:
+        """从 interpreter_service 中优先挑选 venv Python"""
+        if not self.interpreter_service:
+            return ""
+        # 当前解释器如果是 python 则直接使用
+        current = self.interpreter_service.get_current()
+        if current and current.type == "python" and os.path.exists(current.path):
+            return current.path
+        # 否则从发现列表中优先选 venv
+        for interp in self.interpreter_service.list_all():
+            if interp.type == "python" and "venv" in interp.name.lower() and os.path.exists(interp.path):
+                return interp.path
+        # 最后任选一个 python
+        for interp in self.interpreter_service.list_all():
+            if interp.type == "python" and os.path.exists(interp.path):
+                return interp.path
+        return ""
 
     def _is_archive_request(self, user_text: str) -> bool:
         """判断用户输入是否触发存档流程"""

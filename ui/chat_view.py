@@ -14,8 +14,10 @@ from markdown import markdown as md
 
 
 def md_to_html(text: str) -> str:
-    # 先转义原始文本中的 HTML 特殊字符，再由 markdown 生成安全 HTML
-    return md(html.escape(text), extensions=['fenced_code', 'tables', 'nl2br', 'codehilite'])
+    # 先转义原始文本防止被当作 HTML 标签，markdown 生成后还原实体，
+    # 避免 &quot; / &#x27; 等字面量直接显示在气泡中。
+    raw_html = md(html.escape(text), extensions=['fenced_code', 'tables', 'nl2br', 'codehilite'])
+    return html.unescape(raw_html)
 
 
 class InputTextEdit(QTextEdit):
@@ -465,11 +467,13 @@ class ChatView(QWidget):
         self._skip_verify_btn.setVisible(False)
         # 在对话区显示任务清单等待确认
         if task_list:
-            lines = ["### 任务清单（请确认）"]
+            lines = ["### ✅ 任务清单已生成，请确认是否执行"]
             for idx, task in enumerate(task_list, 1):
                 desc = task.description if hasattr(task, "description") else str(task)
                 lines.append(f"{idx}. {desc}")
-            lines.append("\n点击下方「确认执行」开始执行，或「重新分析」调整需求。")
+            lines.append("\n💡 **操作方式**：")
+            lines.append("- 点击下方「确认执行」或按 Enter 继续")
+            lines.append("- 点击下方「重新分析」或输入「重新分析」调整需求")
             self.append_system("\n".join(lines))
 
     def hide_confirmation(self):
