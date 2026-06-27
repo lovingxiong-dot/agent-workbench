@@ -298,6 +298,14 @@ class ChatView(QWidget):
         if active:
             self._streaming_buffer = ""
 
+    def set_send_enabled(self, enabled: bool):
+        """双槽位队列控制：队列满时灰化发送键"""
+        self.send_btn.setEnabled(enabled)
+        if not enabled:
+            self.send_btn.setToolTip("队列已满，请等待当前任务完成")
+        else:
+            self.send_btn.setToolTip("")
+
     def append_chunk(self, chunk: str):
         if not chunk:
             return

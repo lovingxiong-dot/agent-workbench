@@ -12,7 +12,10 @@ from PySide6.QtWidgets import (
     QStyleFactory,
 )
 from PySide6.QtCore import Qt, Slot, QTimer
-from PySide6.QtGui import QPalette, QColor
+from PySide6.QtGui import QPalette, QColor, QFont
+
+from services.pending_queue import PendingQueue, PendingTask
+from services.self_context import SelfContext
 
 from agent_engine import ModeManager, LLMRegistry, MemoryManager
 from agent_engine.phase_manager import PhaseManager, TaskItem
@@ -161,6 +164,18 @@ class MainWindow(QMainWindow):
             max_workers=self.config_service.get("task", {}).get("capacity", {}).get("max_concurrent_tasks", 3)
         )
         self.task_service.set_pool(self.worker_pool)
+
+        # ── 双槽位等待队列 + 自识别上下文 (v3.10) ──────
+        self._pending_queue = PendingQueue(self)
+        self._pending_queue.queue_changed.connect(self._on_queue_changed)
+        self._pending_queue.task_started.connect(self._on_queue_task_started)
+
+        self._self_context = SelfContext(
+            context_service=self.context_service,
+            task_service=self.task_service,
+            config=self.config_service.get("self_context", {}),
+        )
+        self.context_service._self_context = self._self_context  # 注入到 ContextService
 
         # UI 配置
         ui_cfg = self.config_service.get("ui", {}).get("log_panel", {})
@@ -341,6 +356,12 @@ class MainWindow(QMainWindow):
         self.status_bar.addWidget(self.status_indicator, 1)
         self.capacity_label = QLabel("🟢 任务:0/3 | ⏳ 排队:0/5 | 🔧 工具:0/12")
         self.status_bar.addPermanentWidget(self.capacity_label)
+        # 双槽位队列状态条
+        self._queue_bar = QLabel("")
+        self._queue_bar.setFont(QFont("Microsoft YaHei", 9))
+        self._queue_bar.setStyleSheet("color: #888; padding: 2px 8px;")
+        self._queue_bar.setVisible(False)
+        self.status_bar.addPermanentWidget(self._queue_bar)
         self.setStatusBar(self.status_bar)
 
         # 默认选中对话
@@ -596,22 +617,24 @@ class MainWindow(QMainWindow):
         self._on_session_switch(self._current_session, session_id)
 
     def _on_session_switch(self, old_session_id, new_session_id):
-        """Session-as-Room (v3.9: AB 切换不停任务)
+        """Session-as-Room (v3.10: 双槽位队列 + 自识别接替)
 
-        完整协议：detach(旧) → save phase → switch → clear → load(新) → render → reattach(新)
-        不再 stop Worker，Worker 后台继续运行，由 current_only 守卫隔离 UI 信号。
+        完整协议：detach(旧) → save phase → clear queue → switch → clear → load(新) → render → reattach(新)
         """
         if old_session_id == new_session_id:
             return
 
-        # 1. 解绑旧会话的 UI 信号（Worker 后台继续运行）
+        # 1. 解绑旧会话的 UI 信号
         if old_session_id:
             self._detach_ui_signals(old_session_id)
 
-        # 2. 保存当前 Phase 状态到 SessionTask
+        # 2. 保存当前 Phase 状态
         self._save_phase_state(old_session_id)
 
-        # 3. 切换当前房间
+        # 3. 清空双槽位队列（旧会话的排队消息不带到新会话）
+        self._pending_queue.clear()
+
+        # 4. 切换当前房间
         self._current_session = new_session_id
 
         # 4. clear UI
@@ -621,6 +644,11 @@ class MainWindow(QMainWindow):
         session = self._sessions.get(new_session_id, {"title": "未命名会话", "messages": []})
         msgs = self.session_service.get_messages(new_session_id)
         self._sessions[new_session_id] = {"title": session.get("title", "未命名会话"), "messages": msgs}
+
+        # 5.5 构建接替上下文并追加到 chat_view（v3.10: SelfContext 跨对话接替）
+        handoff_context = self._self_context.build_handoff(new_session_id)
+        if handoff_context:
+            self.chat_view.append_system(handoff_context, add_to_history=True)
 
         # 6. render
         self.chat_view.set_header(self._current_mode, self._current_model_name, session["title"])
@@ -730,17 +758,21 @@ class MainWindow(QMainWindow):
     # 消息发送
     # ═══════════════════════════════════════════════════
     def _send_message(self, user_text):
-        # 0. Phase 状态拦截：CONFIRM 阶段用户输入视为对任务清单的反馈
+        # 0. 槽满检查：队列已满时拒绝新消息
+        if self._pending_queue.is_full:
+            self._on_log_message("⚠ 队列已满，请等待当前任务完成", is_global=True)
+            return
+
+        # 0.1 Phase 状态拦截：CONFIRM 阶段用户输入视为对任务清单的反馈
         if self._current_phase == "confirm":
             lowered = user_text.lower()
             if "重新分析" in user_text or "取消" in user_text or "cancel" in lowered or "no" in lowered:
                 self._on_phase_reanalyze()
             else:
-                # 默认视为「确认执行」（包括输入 "?"、"ok"、"执行" 或直接回车）
                 self._on_phase_confirmed()
             return
 
-        # 0. 写入本轮日志标题
+        # 0.2 写入本轮日志标题
         display_text = user_text[:80] + ("..." if len(user_text) > 80 else "")
         self._on_log_message(f"▶ 用户: {display_text}", is_header=True)
 
@@ -761,15 +793,33 @@ class MainWindow(QMainWindow):
                 project_path=project_path
             )
 
-        # 2. 启动 Phase-driven 工作流
+        # 2. 构建上下文并提交到 v3.9 TaskService
         context_text = self.context_service.build_prompt_context()
-        self._phase_manager.start(user_text, self._current_mode, context_text)
-
-        # 3. v3.9: 提交到 TaskService 跟踪任务状态
         try:
             self.task_service.submit_task(self._current_session, self._current_mode, user_text)
         except ResourceError as e:
             self._on_log_message(f"[TaskService] {e}", is_global=True)
+
+        # 3. 入队双槽位队列
+        import uuid
+        task = PendingTask(
+            task_id=uuid.uuid4().hex[:8],
+            user_text=user_text,
+            mode=self._current_mode,
+            context=context_text,
+        )
+        if not self._pending_queue.enqueue(task):
+            self._on_log_message("⚠ 入队失败", is_global=True)
+            return
+
+        # 4. 如果槽位 0 空闲（刚入队到 slot 0），立即启动 Phase 工作流
+        if self._pending_queue.get_streaming_task() is task:
+            self._start_streaming(task)
+
+    def _start_streaming(self, task: PendingTask):
+        """启动队列任务的 Phase 工作流"""
+        self._on_log_message(f"🚀 开始处理: {task.user_text[:30]}...", is_header=False)
+        self._phase_manager.start(task.user_text, task.mode, task.context)
 
     # ═══════════════════════════════════════════════════
     # Phase Manager 回调
@@ -828,6 +878,10 @@ class MainWindow(QMainWindow):
         if self._is_archive_request(user_text):
             self._archive_project()
         self._phase_manager.on_archive_complete(True, "工作流完成")
+        # 当前任务完成 → 自动出队下一个
+        streaming = self._pending_queue.get_streaming_task()
+        if streaming:
+            self._pending_queue.mark_streaming_done(streaming.task_id)
 
     @Slot(bool, str)
     def _on_phase_flow_finished(self, success, message):
@@ -844,6 +898,10 @@ class MainWindow(QMainWindow):
             self._worker.wait(3000)
         print("[DIAG] _on_phase_flow_finished: worker cleared", flush=True)
         self._worker = None
+        # 当前任务完成 → 自动出队下一个
+        streaming = self._pending_queue.get_streaming_task()
+        if streaming:
+            self._pending_queue.mark_streaming_done(streaming.task_id)
 
     @Slot(str, str)
     def _on_phase_error(self, code, detail):
@@ -851,6 +909,10 @@ class MainWindow(QMainWindow):
         self.chat_view.clear_phase_ui()
         self.chat_view.append_system(f"❌ Phase 错误 [{code}]: {detail}")
         self._on_log_message(f"[ERR] Phase {code}: {detail}", is_global=True)
+        # Phase 错误视为当前任务失败 → 出队下一个
+        streaming = self._pending_queue.get_streaming_task()
+        if streaming:
+            self._pending_queue.mark_streaming_done(streaming.task_id)
 
     # ═══════════════════════════════════════════════════
     # v3.9 TaskService 回调
@@ -1122,11 +1184,69 @@ class MainWindow(QMainWindow):
         self.chat_view.append_system("📦 已触发项目存档流程")
 
     def _on_stop_generation(self):
-        """用户点击停止"""
-        if self._worker and self._worker.isRunning():
-            self._worker.stop()
+        """用户点击停止：取消当前 streaming 任务，自动出队下一个"""
+        streaming = self._pending_queue.get_streaming_task()
+        if streaming:
+            # 取消当前
+            self._pending_queue.cancel(0)
+            if self._worker and self._worker.isRunning():
+                self._worker.stop()
             self.chat_view.finalize_stream()
             self._on_log_message("⏹ 用户停止了生成", is_global=True)
+            # 重置 Phase 状态
+            if self._current_phase != "idle":
+                self._phase_manager.reset()
+                self._current_phase = "idle"
+                self.chat_view.clear_phase_ui()
+
+    # ═══════════════════════════════════════════════════
+    # 双槽位队列管理 (v3.10)
+    # ═══════════════════════════════════════════════════
+    def _on_queue_changed(self):
+        """队列状态变化 → 更新 UI"""
+        self._update_queue_bar()
+        self._update_send_button_state()
+
+    @Slot(str)
+    def _on_queue_task_started(self, task_id):
+        """队列中 slot[0] 开始新任务 → 启动 Phase 工作流"""
+        streaming = self._pending_queue.get_streaming_task()
+        if streaming and streaming.task_id == task_id:
+            self._start_streaming(streaming)
+
+    def _update_queue_bar(self):
+        """更新队列状态条"""
+        pending = self._pending_queue.get_pending_tasks()
+        if not pending:
+            self._queue_bar.setVisible(False)
+            return
+
+        lines = []
+        for task in pending:
+            preview = task.user_text[:40] + "..." if len(task.user_text) > 40 else task.user_text
+            lines.append(f"📋 排队中: {preview}")
+        if self._pending_queue.is_full:
+            lines.append("[队列已满，请等待]")
+
+        self._queue_bar.setText("  |  ".join(lines))
+        self._queue_bar.setVisible(True)
+
+    def _update_send_button_state(self):
+        """队列满时灰化发送键"""
+        if hasattr(self.chat_view, 'set_send_enabled'):
+            self.chat_view.set_send_enabled(not self._pending_queue.is_full)
+
+    def _cancel_pending(self):
+        """取消所有排队任务（保留当前 streaming）"""
+        streaming = self._pending_queue.get_streaming_task()
+        pending = self._pending_queue.get_pending_tasks()
+        for task in pending:
+            self._pending_queue.cancel(1)  # slot 1 = pending
+            self._on_log_message(f"⏹ 取消排队: {task.user_text[:30]}...", is_global=True)
+
+    def _cancel_current(self):
+        """取消当前 streaming 任务（保留排队）"""
+        self._on_stop_generation()
 
     @Slot(str)
     def _on_chunk(self, chunk):
@@ -1143,6 +1263,10 @@ class MainWindow(QMainWindow):
                 self._phase_manager.reset()
                 self._current_phase = "idle"
                 self.chat_view.clear_phase_ui()
+            # 空结果视为当前任务异常完成 → 出队下一个
+            streaming = self._pending_queue.get_streaming_task()
+            if streaming:
+                self._pending_queue.mark_streaming_done(streaming.task_id)
             return
         self._append_ai_message(session_id, text)
         if session_id == self._current_session:

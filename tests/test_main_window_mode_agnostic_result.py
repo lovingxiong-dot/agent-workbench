@@ -40,6 +40,7 @@ class TestMainWindowModeAgnosticResult(unittest.TestCase):
         main._pending_metrics = None
         main._current_phase = "idle"
         main._phase_manager = MagicMock()
+        main._pending_queue = MagicMock()  # v3.10: 双槽位队列
         return main
 
     def test_on_result_persists_to_current_session(self):

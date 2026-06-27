@@ -167,7 +167,7 @@ feature_flags:
   shared_orchestrator: true
   shared_output_panel: true
 app:
-  version: v3.9.0
+  version: v3.10.0
   last_mode: ask
   last_model: deepseek
 task:
@@ -178,3 +178,10 @@ task:
     max_total_tools: 12
     cpu_cores_reserved: 1
     memory_threshold_mb: 512
+# v3.10: SelfContext 自识别上下文配置
+self_context:
+  enabled: true
+  memory_max_len: 3000
+  log_days: 3
+  log_lines: 3
+  handoff_enabled: true

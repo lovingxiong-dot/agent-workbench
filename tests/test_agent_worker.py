@@ -1,16 +1,15 @@
 """
-单元测试：AgentWorker 工具调用与停止逻辑
+单元测试：AgentWorker 工具调用与停止逻辑（适配 v3.6+ Phase-Driven 架构）
 运行：venv/Scripts/python -m pytest tests/test_agent_worker.py -v
-或直接：venv/Scripts/python tests/test_agent_worker.py
 """
 import asyncio
-import sys
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock
 
-sys.path.insert(0, r"F:\Agent\agent_workbench")
-
-from workers.agent_worker import AgentWorker, TOOL_DEFINITIONS
-from langchain_core.messages import AIMessage, ToolMessage, HumanMessage
+from workers.agent_worker import AgentWorker
+from agent_engine.agent_session import AgentSession
+from agent_engine.orchestrator import OrchestratorCancelledError
+from langchain_core.messages import AIMessage, HumanMessage
 
 
 class FakeLLM:
@@ -30,7 +29,6 @@ class FakeLLM:
 
     async def ainvoke(self, messages):
         if self._call_idx >= len(self._responses):
-            # 默认：没有更多 tool_calls，返回空总结
             self.final_invokes += 1
             return AIMessage(content="fallback summary")
 
@@ -49,19 +47,21 @@ def _make_tool_map():
     return {"web_fetch": m}
 
 
-from workers.base_worker import WorkerCancelledError
+# ── AgentSession 集成测试（工具调用循环）──────────────────────────────
 
-
-def _run_worker(worker):
-    chunks = []
-    replies = []
-    worker.chunk_ready.connect(lambda c: chunks.append(c))
-    worker.result_ready.connect(lambda r: replies.append(r))
-    try:
-        asyncio.run(worker._process())
-    except WorkerCancelledError:
-        pass
-    return chunks, replies
+def _make_session(llm, tool_map, max_tool_rounds=8):
+    """创建 AgentSession 并注入 mock orchestrator"""
+    session = AgentSession(
+        llm=llm,
+        tool_map=tool_map,
+        tool_definitions=[{"type": "function", "function": {"name": "web_fetch"}}],
+        mode="ask",
+        project_root="",
+        system_prompt="test",
+        max_tool_rounds=max_tool_rounds,
+        cpu_executor=ThreadPoolExecutor(max_workers=1),
+    )
+    return session
 
 
 def test_multi_tool_single_final_response():
@@ -73,22 +73,13 @@ def test_multi_tool_single_final_response():
         ], ""),
         (None, "天气晴朗，黄金价格 500 元/克"),
     ])
-    worker = AgentWorker(
-        user_text="查询天气和黄金价格",
-        mode_name="ask",
-        current_llm=llm,
-        current_tools=["web_fetch"],
-        session_id="test-session",
-        tool_map=_make_tool_map(),
-        tool_definitions=TOOL_DEFINITIONS,
-        chat_history=[],
+    session = _make_session(llm, _make_tool_map())
+    tasks, full_text = asyncio.run(
+        session.run_analyze("查询天气和黄金价格", "context")
     )
-    chunks, replies = _run_worker(worker)
 
     assert llm.final_invokes == 1, f"最终总结应只调用 1 次，实际 {llm.final_invokes} 次"
-    assert len(replies) == 1, f"应只收到 1 个 result_ready，实际 {len(replies)} 个"
-    assert "天气晴朗" in replies[0] and "500 元/克" in replies[0]
-    assert len(chunks) > 0, "流式输出应产生 chunk"
+    assert "天气晴朗" in full_text and "500 元/克" in full_text
 
 
 def test_multi_round_tool_calls():
@@ -98,21 +89,13 @@ def test_multi_round_tool_calls():
         ([{"name": "web_fetch", "args": {"url": "b"}, "id": "tc2"}], ""),
         (None, "第三轮总结"),
     ])
-    worker = AgentWorker(
-        user_text="多轮工具测试",
-        mode_name="ask",
-        current_llm=llm,
-        current_tools=["web_fetch"],
-        session_id="test-session",
-        tool_map=_make_tool_map(),
-        tool_definitions=TOOL_DEFINITIONS,
-        chat_history=[],
+    session = _make_session(llm, _make_tool_map())
+    tasks, full_text = asyncio.run(
+        session.run_analyze("多轮工具测试", "context")
     )
-    chunks, replies = _run_worker(worker)
 
     assert llm.final_invokes == 1
-    assert len(replies) == 1
-    assert replies[0] == "第三轮总结"
+    assert full_text == "第三轮总结"
 
 
 def test_max_rounds_limit():
@@ -122,29 +105,52 @@ def test_max_rounds_limit():
         ([{"name": "web_fetch", "args": {"url": "b"}, "id": "tc2"}], ""),
         ([{"name": "web_fetch", "args": {"url": "c"}, "id": "tc3"}], ""),
     ])
-    worker = AgentWorker(
-        user_text="达到上限测试",
-        mode_name="ask",
-        current_llm=llm,
-        current_tools=["web_fetch"],
-        session_id="test-session",
-        tool_map=_make_tool_map(),
-        tool_definitions=TOOL_DEFINITIONS,
-        chat_history=[],
-        max_tool_rounds=2,
+    session = _make_session(llm, _make_tool_map(), max_tool_rounds=2)
+    tasks, full_text = asyncio.run(
+        session.run_analyze("达到上限测试", "context")
     )
-    chunks, replies = _run_worker(worker)
 
     assert llm.final_invokes == 0, "达到上限后不应再调用最终总结"
-    assert len(replies) == 1
-    assert "Result for a" in replies[0]
-    assert "Result for b" in replies[0]
+    assert "Result for a" in full_text
+    assert "Result for b" in full_text
 
+
+def test_stop_flag_interrupts_tool_chain():
+    """stop_flag 设置后，应中断后续工具执行与最终总结"""
+    import threading
+    llm = FakeLLM([
+        ([{"name": "web_fetch", "args": {"url": "a"}, "id": "tc1"}], ""),
+        (None, "不应该返回"),
+    ])
+    tool_map = _make_tool_map()
+    original_run = tool_map["web_fetch"].run
+
+    cancel_event = threading.Event()
+
+    def stopping_run(args):
+        result = original_run(args)
+        cancel_event.set()  # 模拟 stop 信号
+        return result
+
+    tool_map["web_fetch"].run = MagicMock(side_effect=stopping_run)
+
+    session = _make_session(llm, tool_map)
+    try:
+        tasks, full_text = asyncio.run(
+            session.run_analyze("stop test", "context", cancel_event=cancel_event)
+        )
+    except OrchestratorCancelledError:
+        full_text = "[已取消]"
+
+    assert tool_map["web_fetch"].run.call_count == 1, "停止后不应执行第二个工具"
+    assert llm.final_invokes == 0, "停止后不应调用最终总结"
+
+
+# ── AgentWorker 构造参数测试 ──────────────────────────────────────────
 
 def test_max_tool_rounds_default():
     """未传入 max_tool_rounds 时应使用默认值 8"""
     worker = AgentWorker(
-        user_text="test",
         mode_name="ask",
         current_llm=MagicMock(),
         current_tools=[],
@@ -156,7 +162,6 @@ def test_max_tool_rounds_default():
 def test_max_tool_rounds_configurable():
     """传入的 max_tool_rounds 应被正确保存"""
     worker = AgentWorker(
-        user_text="test",
         mode_name="craft",
         current_llm=MagicMock(),
         current_tools=[],
@@ -169,7 +174,6 @@ def test_max_tool_rounds_configurable():
 def test_invalid_max_tool_rounds_fallback():
     """传入非法值时应回退到默认值 8"""
     worker = AgentWorker(
-        user_text="test",
         mode_name="ask",
         current_llm=MagicMock(),
         current_tools=[],
@@ -177,59 +181,6 @@ def test_invalid_max_tool_rounds_fallback():
         max_tool_rounds=0,
     )
     assert worker.max_tool_rounds == 8
-
-
-def test_stop_flag_interrupts_tool_chain():
-    """stop_flag 设置后，应中断后续工具执行与最终总结"""
-    llm = FakeLLM([
-        ([{"name": "web_fetch", "args": {"url": "a"}, "id": "tc1"}], ""),
-        (None, "不应该返回"),
-    ])
-    tool_map = _make_tool_map()
-    original_run = tool_map["web_fetch"].run
-
-    def stopping_run(args):
-        result = original_run(args)
-        worker.stop()
-        return result
-
-    tool_map["web_fetch"].run = MagicMock(side_effect=stopping_run)
-
-    worker = AgentWorker(
-        user_text="test",
-        mode_name="ask",
-        current_llm=llm,
-        current_tools=["web_fetch"],
-        session_id="test-session",
-        tool_map=tool_map,
-        tool_definitions=TOOL_DEFINITIONS,
-        chat_history=[],
-    )
-    chunks, replies = _run_worker(worker)
-
-    assert tool_map["web_fetch"].run.call_count == 1, "停止后不应执行第二个工具"
-    assert llm.final_invokes == 0, "停止后不应调用最终总结"
-    assert len(replies) <= 1, "停止后最多收到一个取消标记"
-    if replies:
-        assert "取消" in replies[0] or "取消" in replies[0], replies[0]
-
-
-def test_user_message_not_duplicated_in_messages():
-    """AgentWorker 不应在内部再次追加 HumanMessage"""
-    llm = FakeLLM([(None, "hello")])
-    history = [HumanMessage(content="用户问题")]
-    worker = AgentWorker(
-        user_text="用户问题",
-        mode_name="ask",
-        current_llm=llm,
-        current_tools=[],
-        session_id="test-session",
-        tool_map={},
-        tool_definitions=[],
-        chat_history=history,
-    )
-    _run_worker(worker)
-    assert len(worker.chat_history) == 1
 
 
 if __name__ == "__main__":
@@ -240,5 +191,4 @@ if __name__ == "__main__":
     test_max_tool_rounds_configurable()
     test_invalid_max_tool_rounds_fallback()
     test_stop_flag_interrupts_tool_chain()
-    test_user_message_not_duplicated_in_messages()
-    print("✅ 所有测试通过")
+    print("所有测试通过")

@@ -36,9 +36,10 @@ class ContextService(QObject):
     # 摘要长度上限
     PREVIEW_MAX_LEN = 500
 
-    def __init__(self, project_service: ProjectService, parent=None):
+    def __init__(self, project_service: ProjectService, parent=None, self_context=None):
         super().__init__(parent)
         self._project_service = project_service
+        self._self_context = self_context
         self._project_root = ""
         self._active_document: Optional[DocumentContext] = None
         self._open_documents: List[DocumentContext] = []
@@ -225,10 +226,17 @@ class ContextService(QObject):
         phase = (phase or "default").lower()
 
         if phase == "execute":
-            return self._build_execute_context()
-        if phase == "verify":
-            return self._build_verify_context()
-        return self._build_default_context()
+            base = self._build_execute_context()
+        elif phase == "verify":
+            base = self._build_verify_context()
+        else:
+            base = self._build_default_context()
+
+        if self._self_context:
+            self_ctxt = self._self_context.build()
+            if self_ctxt:
+                return f"{base}\n\n{self_ctxt}"
+        return base
 
     def _build_default_context(self) -> str:
         """默认/Analyze 阶段：完整环境摘要"""
