@@ -12,7 +12,7 @@ import asyncio
 from typing import Any, Dict, List, Optional
 
 from PySide6.QtCore import QObject, Signal
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 
 from agent_engine.orchestrator import AgentOrchestrator
 from agent_engine.phase_manager import PhaseManager, TaskItem
@@ -60,6 +60,9 @@ class AgentSession(QObject):
         super().__init__()
         self.mode = mode
         self.project_root = project_root
+        self.current_session_id: str = ""
+        # 当前房间的完整对话历史（Session-as-Room）
+        self.chat_history: List[BaseMessage] = []
         self.phase_messages: List[BaseMessage] = []
         self._confirm_event: Optional[asyncio.Event] = None
         self._confirm_result = False
@@ -81,22 +84,63 @@ class AgentSession(QObject):
             confirm_callback=self._confirm_callback,
         )
 
-    # ═══════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════
+    # Session-as-Room 生命周期
+    # ═══════════════════════════════════════════════════
+    def enter(self, session_id: str, messages: List[dict]):
+        """进入房间：加载历史，重建当前 Session 的完整上下文。
+
+        Args:
+            session_id: 房间标识。
+            messages: 从 SessionService 加载的原始消息列表，按时间序排列。
+        """
+        self.leave()
+        self.current_session_id = session_id
+        for msg in messages:
+            role = msg.get("role")
+            content = msg.get("content", "")
+            if role == "user":
+                self.chat_history.append(HumanMessage(content=content))
+            elif role == "ai":
+                self.chat_history.append(AIMessage(content=content))
+            elif role == "system":
+                self.chat_history.append(SystemMessage(content=content))
+
+    def leave(self):
+        """离开房间：清空当前 Session 的上下文，不保留任何跨房间状态。"""
+        self.current_session_id = ""
+        self.chat_history.clear()
+        self.phase_messages.clear()
+
+    def add_user_message(self, content: str):
+        """追加用户消息到当前房间历史。"""
+        self.chat_history.append(HumanMessage(content=content))
+
+    def add_assistant_message(self, content: str):
+        """追加 AI 消息到当前房间历史。"""
+        self.chat_history.append(AIMessage(content=content))
+
+    def get_chat_history(self) -> List[BaseMessage]:
+        """返回当前房间的完整对话历史副本。"""
+        return list(self.chat_history)
+
+    # ═══════════════════════════════════════════════════
     # Phase 执行入口
-    # ═══════════════════════════════════════════════════════
-    async def run_analyze(self, user_text: str, context: str, cancel_event=None) -> List[TaskItem]:
-        """Analyze 阶段：复用 Orchestrator，返回解析后的任务清单"""
+    # ═══════════════════════════════════════════════════
+    async def run_analyze(self, user_text: str, context: str, cancel_event=None) -> tuple:
+        """Analyze 阶段：复用 Orchestrator，返回 (task_list, full_text)。"""
         self.orchestrator.set_phase("analyze", self.mode, context)
-        text = await self.orchestrator.arun(
+        full_text = await self.orchestrator.arun(
             user_text, list(self.phase_messages), callbacks=self._callbacks(), cancel_event=cancel_event
         )
 
         # 记录摘要，不把完整工具调用历史带入下一阶段
         self.phase_messages.append(HumanMessage(content=user_text))
-        self.phase_messages.append(AIMessage(content=text[:1500]))
+        self.phase_messages.append(AIMessage(content=full_text[:1500]))
         self._trim_phase_messages()
 
-        return PhaseManager.parse_task_list(text)
+        task_list = PhaseManager.parse_task_list(full_text)
+        return (task_list, full_text)
 
     async def run_execute(self, task_list: List[TaskItem], original_text: str, context: str, cancel_event=None) -> str:
         """Execute 阶段：独立消息列表，避免 Analyze 工具结果污染"""

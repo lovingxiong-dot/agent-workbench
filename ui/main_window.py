@@ -8,7 +8,7 @@ from datetime import datetime
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QStatusBar, QStackedWidget, QMessageBox,
+    QStatusBar, QStackedWidget, QMessageBox, QLabel,
     QStyleFactory,
 )
 from PySide6.QtCore import Qt, Slot, QTimer
@@ -28,7 +28,11 @@ from services.metrics_collector import MetricsCollector, TurnMetrics
 from services.persistence_service import PersistenceService
 from services.mcp_service import MCPRegistry
 from agent_engine.tool_gateway import ToolGateway
+from services.task_service import TaskService, ResourceError
 from workers.agent_worker import AgentWorker, TOOL_DEFINITIONS
+from workers.task_capacity import TaskCapacity
+from workers.worker_pool import WorkerPool
+from workers.session_task import SessionTask, TaskStatus
 from tools import ARUN_MAP
 from ui.widgets import (
     SidebarButton, FileTreeWidget, ConversationListWidget,
@@ -125,6 +129,8 @@ class MainWindow(QMainWindow):
         self._current_tools = []
         self._current_model_name = "tool-agent"
         self._worker = None  # Active AgentWorker
+        self._workers = {}   # session_id → AgentWorker (all active)
+        self._tools_in_use = 0
         self._chunks_received = False
         self._pending_metrics = None  # 等待 AI 回复完成后显示的 metrics
         self._phase_manager = PhaseManager(self)
@@ -148,6 +154,13 @@ class MainWindow(QMainWindow):
         self.tool_gateway.register_local_tools(TOOL_MAP, ARUN_MAP, TOOL_DEFINITIONS)
         self.mcp_registry = MCPRegistry()
         self.tool_gateway.register_mcp_registry(self.mcp_registry)
+
+        # ── 多任务管理系统 (v3.9) ────────────────────
+        self.task_service = TaskService(capacity=TaskCapacity.from_config(self.config_service))
+        self.worker_pool = WorkerPool(
+            max_workers=self.config_service.get("task", {}).get("capacity", {}).get("max_concurrent_tasks", 3)
+        )
+        self.task_service.set_pool(self.worker_pool)
 
         # UI 配置
         ui_cfg = self.config_service.get("ui", {}).get("log_panel", {})
@@ -181,6 +194,23 @@ class MainWindow(QMainWindow):
         self._phase_manager.archive_required.connect(self._on_archive_required)
         self._phase_manager.flow_finished.connect(self._on_phase_flow_finished)
         self._phase_manager.error_occurred.connect(self._on_phase_error)
+
+        # v3.9 多任务管理系统 — TaskService 信号连接
+        self.task_service.task_status_changed.connect(
+            self._on_task_status_changed
+        )
+        self.task_service.capacity_changed.connect(
+            self._on_capacity_changed
+        )
+        self.task_service.task_progress.connect(
+            self._on_task_progress_signal
+        )
+        self.task_service.tool_usage_changed.connect(
+            self._on_tool_usage_changed
+        )
+        self.task_service.task_completed.connect(
+            self._on_task_service_completed
+        )
 
         # ── 初始化 ──────────────────────────────
         # 从配置恢复上次选择的模式和模型；若无效则回退到 ask/tool-agent
@@ -309,6 +339,8 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.status_indicator = StatusIndicator()
         self.status_bar.addWidget(self.status_indicator, 1)
+        self.capacity_label = QLabel("🟢 任务:0/3 | ⏳ 排队:0/5 | 🔧 工具:0/12")
+        self.status_bar.addPermanentWidget(self.capacity_label)
         self.setStatusBar(self.status_bar)
 
         # 默认选中对话
@@ -560,21 +592,100 @@ class MainWindow(QMainWindow):
         self._on_log_message(f"📝 新会话 @ {label}", is_header=True)
 
     def _switch_conversation(self, session_id):
-        self._current_session = session_id
-        session = self._sessions[session_id]
+        """会话列表点击入口：走完整 Session-as-Room 切换协议。"""
+        self._on_session_switch(self._current_session, session_id)
+
+    def _on_session_switch(self, old_session_id, new_session_id):
+        """Session-as-Room (v3.9: AB 切换不停任务)
+
+        完整协议：detach(旧) → save phase → switch → clear → load(新) → render → reattach(新)
+        不再 stop Worker，Worker 后台继续运行，由 current_only 守卫隔离 UI 信号。
+        """
+        if old_session_id == new_session_id:
+            return
+
+        # 1. 解绑旧会话的 UI 信号（Worker 后台继续运行）
+        if old_session_id:
+            self._detach_ui_signals(old_session_id)
+
+        # 2. 保存当前 Phase 状态到 SessionTask
+        self._save_phase_state(old_session_id)
+
+        # 3. 切换当前房间
+        self._current_session = new_session_id
+
+        # 4. clear UI
         self.chat_view.clear()
+
+        # 5. load(新)
+        session = self._sessions.get(new_session_id, {"title": "未命名会话", "messages": []})
+        msgs = self.session_service.get_messages(new_session_id)
+        self._sessions[new_session_id] = {"title": session.get("title", "未命名会话"), "messages": msgs}
+
+        # 6. render
         self.chat_view.set_header(self._current_mode, self._current_model_name, session["title"])
-        # ★ 注入 LangChain 上下文
-        history = self.memory_manager.get_session_history(session_id)
-        history.clear()
         from langchain_core.messages import HumanMessage, AIMessage
-        for msg in session["messages"]:
+        history = self.memory_manager.get_session_history(new_session_id)
+        history.clear()
+        for msg in msgs:
             self._render_stored_message(msg)
             if msg["role"] == "user":
                 history.add_message(HumanMessage(content=msg["content"]))
             elif msg["role"] == "ai":
                 history.add_message(AIMessage(content=msg["content"]))
         self._on_log_message(f"📂 切换会话: {session['title']}")
+
+        # 7. 如果新会话有活跃任务，恢复信号连接和 UI 状态
+        task = self.task_service.get_task_status(new_session_id)
+        if task:
+            if task.status == TaskStatus.AWAITING_CONFIRM:
+                self._restore_confirm_ui(task)
+            elif task.is_active:
+                self._attach_ui_signals(new_session_id)
+                self.chat_view.show_phase_indicator(task.phase, len(task.task_list))
+
+    def _detach_ui_signals(self, session_id: str):
+        """解绑指定会话 Worker 的 UI 信号。不 stop Worker，只断开信号连接。"""
+        worker = self._workers.get(session_id) if hasattr(self, '_workers') else None
+        if worker is None:
+            return
+        self.chat_view.finalize_stream()
+
+    def _attach_ui_signals(self, session_id: str):
+        """重新绑定指定会话 Worker 的 UI 信号。"""
+        worker = self._workers.get(session_id) if hasattr(self, '_workers') else None
+        if worker is None:
+            return
+        worker_session_id = session_id
+        current_only = self._make_current_only_guard(worker, self, worker_session_id)
+        try:
+            worker.chunk_ready.disconnect()
+        except Exception:
+            pass
+        worker.chunk_ready.connect(current_only(self._on_chunk))
+        try:
+            worker.log_message.disconnect()
+        except Exception:
+            pass
+        worker.log_message.connect(current_only(self._on_log_message))
+
+    def _save_phase_state(self, session_id: str):
+        """保存当前 Phase 状态到 SessionTask（用于切回时恢复 confirm UI）"""
+        if not session_id or not self.task_service:
+            return
+        task = self.task_service.get_task_status(session_id)
+        if task is None:
+            return
+        if self._current_phase == "confirm":
+            task.phase = "confirm"
+            task.task_list = list(self._phase_task_list)
+            task.status = TaskStatus.AWAITING_CONFIRM
+
+    def _restore_confirm_ui(self, task):
+        """恢复 confirm 阶段的 UI 状态"""
+        self._phase_task_list = list(task.task_list)
+        self.chat_view.set_phase_indicator("confirm", len(self._phase_task_list))
+        self.chat_view.show_confirmation(self._phase_task_list)
 
     def _render_stored_message(self, msg):
         content = msg["content"]
@@ -653,6 +764,12 @@ class MainWindow(QMainWindow):
         # 2. 启动 Phase-driven 工作流
         context_text = self.context_service.build_prompt_context()
         self._phase_manager.start(user_text, self._current_mode, context_text)
+
+        # 3. v3.9: 提交到 TaskService 跟踪任务状态
+        try:
+            self.task_service.submit_task(self._current_session, self._current_mode, user_text)
+        except ResourceError as e:
+            self._on_log_message(f"[TaskService] {e}", is_global=True)
 
     # ═══════════════════════════════════════════════════
     # Phase Manager 回调
@@ -735,6 +852,49 @@ class MainWindow(QMainWindow):
         self.chat_view.append_system(f"❌ Phase 错误 [{code}]: {detail}")
         self._on_log_message(f"[ERR] Phase {code}: {detail}", is_global=True)
 
+    # ═══════════════════════════════════════════════════
+    # v3.9 TaskService 回调
+    # ═══════════════════════════════════════════════════
+    @Slot(str, str)
+    def _on_task_status_changed(self, session_id: str, status: str):
+        """TaskService 任务状态变化 → 更新会话列表"""
+        self.conversation_list.update_task_status(session_id, status)
+
+    @Slot(int, int, int)
+    def _on_capacity_changed(self, active: int, queued: int, max_total: int):
+        """更新底栏永久容量标签"""
+        self.capacity_label.setText(
+            f"🟢 任务:{active}/{self.task_service.capacity.max_concurrent_tasks}"
+            f" | ⏳ 排队:{queued}/{self.task_service.capacity.max_queued_tasks}"
+            f" | 🔧 工具:{self._tools_in_use}/{self.task_service.capacity.max_total_tools}"
+        )
+
+    @Slot(str, str, str)
+    def _on_task_progress_signal(self, session_id: str, phase: str, detail: str):
+        """TaskService Phase 变化 → 更新 UI"""
+        if session_id == self._current_session:
+            self.chat_view.show_phase_indicator(phase, len(self._phase_task_list))
+        self.conversation_list.update_task_status(session_id, phase)
+
+    @Slot(int, int)
+    def _on_tool_usage_changed(self, tools_in_use: int, max_tools: int):
+        """工具使用统计"""
+        self._tools_in_use = tools_in_use
+        self.capacity_label.setText(
+            f"🟢 任务:{self.task_service.active_count}/{self.task_service.capacity.max_concurrent_tasks}"
+            f" | ⏳ 排队:{self.task_service.queue_size}/{self.task_service.capacity.max_queued_tasks}"
+            f" | 🔧 工具:{tools_in_use}/{max_tools}"
+        )
+
+    @Slot(str, bool)
+    def _on_task_service_completed(self, session_id: str, success: bool):
+        """TaskService 任务完成"""
+        if session_id == self._current_session:
+            if success:
+                self.chat_view.append_system("✅ 任务完成")
+            else:
+                self.chat_view.append_system("❌ 任务执行失败")
+
     def _on_phase_confirmed(self):
         """用户点击确认执行"""
         self.chat_view.hide_confirmation()
@@ -770,7 +930,7 @@ class MainWindow(QMainWindow):
         self.chat_view.finalize_stream()
         if text and text.strip():
             self.chat_view.append_ai(text)
-            self._append_ai_message(text)
+            self._append_ai_message(self._current_session, text)
             self._phase_results.append({"task": "execute", "result": text})
         self._append_metrics_footer_if_any()
         self._chunks_received = False
@@ -799,6 +959,18 @@ class MainWindow(QMainWindow):
         self.chat_view.append_system(f"❌ Worker 错误 [{code}]: {detail}")
         self._on_log_message(f"[ERR] Worker {code}: {detail}", is_global=True)
 
+    @staticmethod
+    def _make_current_only_guard(worker, main_window, worker_session_id):
+        def guard(slot):
+            def wrapper(*args):
+                if worker is not main_window._worker:
+                    return
+                if main_window._current_session != worker_session_id:
+                    return
+                slot(*args)
+            return wrapper
+        return guard
+
     def _ensure_phase_worker(self):
         """确保存在一个已启动并就绪的 AgentWorker（跨 Phase 复用 AgentSession）"""
         if self._worker is not None and self._worker.isRunning():
@@ -812,11 +984,12 @@ class MainWindow(QMainWindow):
         llm_timeout = self.config_service.get_llm_timeout(self._current_mode)
         tool_timeout = self.config_service.get_tool_timeout(self._current_mode)
 
+        worker_session_id = self._current_session
         worker = AgentWorker(
             mode_name=self._current_mode,
             current_llm=self._current_llm,
             current_tools=self._current_tools,
-            session_id=self._current_session,
+            session_id=worker_session_id,
             system_prompt=default_prompt,
             tool_map=TOOL_MAP,
             tool_definitions=TOOL_DEFINITIONS,
@@ -831,14 +1004,10 @@ class MainWindow(QMainWindow):
             app_version=self.config_service.get("app.version", "v3.x"),
         )
         self._worker = worker
+        self._workers[worker_session_id] = worker  # v3.9: 多 Worker 池
         self._chunks_received = False
 
-        def current_only(slot):
-            def wrapper(*args):
-                if worker is not self._worker:
-                    return
-                slot(*args)
-            return wrapper
+        current_only = self._make_current_only_guard(worker, self, worker_session_id)
 
         worker.chunk_ready.connect(current_only(self._on_chunk))
         worker.log_message.connect(current_only(self._on_log_message))
@@ -852,6 +1021,9 @@ class MainWindow(QMainWindow):
         worker.execute_result_ready.connect(current_only(self._on_execute_result))
         worker.verify_result_ready.connect(current_only(self._on_verify_result))
         worker.error_occurred.connect(current_only(self._on_worker_error))
+        # v3.9: result_ready 不包 current_only，后台 Worker 完成时也要落盘
+        # _on_result 内部按 session_id 判断是否渲染到 UI
+        worker.result_ready.connect(self._on_result)
         worker.start()
 
         # 等待 Worker 线程的事件循环完全就绪，避免启动时序竞态
@@ -867,15 +1039,17 @@ class MainWindow(QMainWindow):
             self.chat_view.append_ai_metrics_footer(self._pending_metrics.format_brief())
             self._pending_metrics = None
 
-    def _append_ai_message(self, text, persist_to_memory=True):
+    def _append_ai_message(self, session_id, text, persist_to_memory=True):
         """把 AI 回复持久化到 session 和数据库；可选是否写入 LangChain memory"""
         if not text or not text.strip():
             return
-        self._sessions[self._current_session]["messages"].append({"role": "ai", "content": text})
-        self.session_service.add_message(self._current_session, "ai", text)
+        if session_id not in self._sessions:
+            return
+        self._sessions[session_id]["messages"].append({"role": "ai", "content": text})
+        self.session_service.add_message(session_id, "ai", text)
         if persist_to_memory:
             from langchain_core.messages import AIMessage
-            self.memory_manager.get_session_history(self._current_session).add_message(AIMessage(content=text))
+            self.memory_manager.get_session_history(session_id).add_message(AIMessage(content=text))
 
     def _run_local_verification(self) -> str:
         """运行本地语法检查和单元测试，优先使用项目 venv Python"""
@@ -959,6 +1133,25 @@ class MainWindow(QMainWindow):
         """流式输出每个 token"""
         self._chunks_received = True
         self.chat_view.append_chunk(chunk)
+
+    def _on_result(self, session_id, text):
+        if not text or not text.strip():
+            self.chat_view.finalize_stream()
+            self._chunks_received = False
+            self.status_indicator.set_tokens("")
+            if self._current_phase != "idle":
+                self._phase_manager.reset()
+                self._current_phase = "idle"
+                self.chat_view.clear_phase_ui()
+            return
+        self._append_ai_message(session_id, text)
+        if session_id == self._current_session:
+            self.chat_view.finalize_stream()
+            if not self._chunks_received:
+                self.chat_view.append_ai(text)
+            self._append_metrics_footer_if_any()
+            self._chunks_received = False
+            self.status_indicator.set_tokens("")
 
     @Slot(str)
     def _on_log_message(self, text, is_header=False, is_global=False):

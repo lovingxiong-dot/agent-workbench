@@ -58,7 +58,8 @@ TOOL_DEFINITIONS = [
 class AgentWorker(QThread):
     # 文本/结果
     chunk_ready = Signal(str)
-    result_ready = Signal(str)
+    # Mode-agnostic AI 回复统一出口：(session_id, full_text)
+    result_ready = Signal(str, str)
     error_occurred = Signal(str, str)
     log_message = Signal(str)
 
@@ -109,6 +110,7 @@ class AgentWorker(QThread):
         self._cancel_event = threading.Event()
         self._error_code = None
         self._error_detail = None
+        self._streaming_buffer = ""  # 取消时保存已流式输出的文本，避免切会话丢 AI 回复
         self._cpu_executor: Optional[ThreadPoolExecutor] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._session: Optional[AgentSession] = None
@@ -194,8 +196,9 @@ class AgentWorker(QThread):
         self.log_message.emit("[STOP] 用户请求停止当前阶段")
 
     def reset_cancel(self):
-        """新一轮 Phase 开始前重置取消标志"""
+        """新一轮 Phase 开始前重置取消标志和流式缓冲"""
         self._cancel_event.clear()
+        self._streaming_buffer = ""
 
     def is_cancelled(self) -> bool:
         return self._cancel_event.is_set()
@@ -272,20 +275,25 @@ class AgentWorker(QThread):
         try:
             self.metrics.start_turn()
             print(f"[DIAG-WORKER {self.worker_id}] calling session.run_analyze...", flush=True)
-            task_list = await asyncio.wait_for(
+            task_list, full_text = await asyncio.wait_for(
                 self._session.run_analyze(user_text, context, cancel_event=self._cancel_event),
                 timeout=self.task_timeout,
             )
             print(f"[DIAG-WORKER {self.worker_id}] session.run_analyze returned {len(task_list)} tasks", flush=True)
+            # Analyze 阶段的完整 AI 文本也汇入统一 result 出口，确保 Ask/Plan/Craft 都能落盘
+            self.result_ready.emit(self.session_id, full_text)
             self.analyze_result_ready.emit(task_list)
         except asyncio.TimeoutError:
             self._report_error("TASK_TIMEOUT", f"Analyze 阶段超过 {self.task_timeout} 秒")
         except OrchestratorCancelledError:
-            self.result_ready.emit("[已取消]")
+            # 取消时落盘已流式输出的文本，防止切会话后 AI 回复丢失
+            self.result_ready.emit(self.session_id, self._streaming_buffer.strip() or "[已取消]")
         except Exception as ex:
             print(f"[DIAG-WORKER {self.worker_id}] _run_analyze exception: {ex}", flush=True)
             traceback.print_exc()
             self._report_error("ANALYZE_ERROR", str(ex))
+            # 异常时 emit 空内容，通知 MainWindow 释放 Phase 状态机
+            self.result_ready.emit(self.session_id, "")
         print(f"[DIAG-WORKER {self.worker_id}] _run_analyze ended", flush=True)
 
     async def _run_execute(self, task_list: List[TaskItem], original_text: str, context: str):
@@ -296,13 +304,15 @@ class AgentWorker(QThread):
                 self._session.run_execute(task_list, original_text, context, cancel_event=self._cancel_event),
                 timeout=self.task_timeout,
             )
+            self.result_ready.emit(self.session_id, text)
             self.execute_result_ready.emit(text)
         except asyncio.TimeoutError:
             self._report_error("TASK_TIMEOUT", f"Execute 阶段超过 {self.task_timeout} 秒")
         except OrchestratorCancelledError:
-            self.result_ready.emit("[已取消]")
+            self.result_ready.emit(self.session_id, self._streaming_buffer.strip() or "[已取消]")
         except Exception as ex:
             self._report_error("EXECUTE_ERROR", str(ex))
+            self.result_ready.emit(self.session_id, "")
 
     async def _run_verify(self, execution_results: List[dict], local_details: str, context: str):
         self.reset_cancel()
@@ -312,13 +322,15 @@ class AgentWorker(QThread):
                 self._session.run_verify(execution_results, local_details, context, cancel_event=self._cancel_event),
                 timeout=self.task_timeout,
             )
+            self.result_ready.emit(self.session_id, text)
             self.verify_result_ready.emit(text)
         except asyncio.TimeoutError:
             self._report_error("TASK_TIMEOUT", f"Verify 阶段超过 {self.task_timeout} 秒")
         except OrchestratorCancelledError:
-            self.result_ready.emit("[已取消]")
+            self.result_ready.emit(self.session_id, self._streaming_buffer.strip() or "[已取消]")
         except Exception as ex:
             self._report_error("VERIFY_ERROR", str(ex))
+            self.result_ready.emit(self.session_id, "")
 
     # ═══════════════════════════════════════════════════════
     # 信号连接与转发
@@ -353,8 +365,11 @@ class AgentWorker(QThread):
 
     def _connect_session_signals(self):
         session = self._session
-        session.chunk_ready.connect(self.chunk_ready.emit)
-        session.result_ready.connect(self.result_ready.emit)
+        # 不直接转发 session.chunk_ready → self.chunk_ready，而是先缓冲，
+        # 确保 Worker 被取消时，已流式输出的文本可以被落盘
+        session.chunk_ready.connect(self._on_session_chunk)
+        # result_ready 由 AgentWorker 自己按 Mode 统一 emit(session_id, text)，
+        # 不转发 AgentSession.result_ready，避免 Signal(str) 与 Signal(str, str) 不匹配。
         session.tool_executed.connect(self.tool_executed.emit)
         session.token_used.connect(self._on_token_usage)
         session.turn_metrics_ready.connect(self.turn_metrics_ready.emit)
@@ -364,6 +379,11 @@ class AgentWorker(QThread):
         session.task_created.connect(self.task_created.emit)
         session.task_finished.connect(self.task_finished.emit)
         session.round_advanced.connect(self.round_advanced.emit)
+
+    def _on_session_chunk(self, chunk: str):
+        """缓冲 AI 流式输出，同时转发给 MainWindow。取消时用缓冲内容落盘。"""
+        self._streaming_buffer += chunk
+        self.chunk_ready.emit(chunk)
 
     def _on_token_usage(self, provider: str, model: str, input_tokens: int, output_tokens: int):
         try:

@@ -131,6 +131,27 @@ class ConversationListWidget(QWidget):
     def _style_active_item(self, item):
         item.setForeground(QColor("#58A6FF"))
 
+    def update_task_status(self, session_id: str, status: str):
+        """v3.9: 更新会话任务状态指示器"""
+        status_icons = {
+            "analyzing": "🟢 ",
+            "executing": "🟢 ",
+            "verifying": "🟢 ",
+            "confirm": "🟡 ",
+            "queued": "⏳ ",
+            "failed": "🔴 ",
+        }
+        icon = status_icons.get(status, "")
+        for lst in (self.project_list, self.global_list):
+            for i in range(lst.count()):
+                item = lst.item(i)
+                if item.data(Qt.UserRole) == session_id:
+                    base_title = item.toolTip() or item.text()
+                    clean_title = base_title.lstrip("🟢🟡⏳🔴⚪♻️⚙️🔍✅❌⏸️").lstrip()
+                    new_title = f"{icon}{clean_title}"
+                    item.setText(new_title)
+                    return
+
     def _on_project_item_clicked(self, item):
         self.global_list.clearSelection()
         self.conversation_selected.emit(item.data(Qt.UserRole))

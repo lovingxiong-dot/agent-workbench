@@ -563,3 +563,8 @@ class ChatView(QWidget):
     def clear(self):
         self.chat_area.clear()
         self.clear_phase_ui()
+        self._streaming_buffer = ""
+        self._streaming_active = False
+        self._has_received_chunks = False
+        if hasattr(self, '_streaming_start_pos'):
+            del self._streaming_start_pos

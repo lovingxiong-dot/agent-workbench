@@ -129,6 +129,14 @@ class SessionService:
 
     def add_message(self, conversation_id, role, content, tool_calls=None):
         conn = sqlite3.connect(self.db_path)
+        # 去重：同会话 + 同角色 + 同内容 已存在则跳过，防止防御性 flush 制造重复
+        existing = conn.execute(
+            "SELECT 1 FROM messages WHERE conversation_id=? AND role=? AND content=? LIMIT 1",
+            (conversation_id, role, content),
+        ).fetchone()
+        if existing:
+            conn.close()
+            return
         conn.execute(
             "INSERT INTO messages (conversation_id, role, content, tool_calls, created_at) VALUES (?,?,?,?,?)",
             (

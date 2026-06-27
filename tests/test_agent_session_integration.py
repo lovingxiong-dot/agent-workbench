@@ -49,7 +49,7 @@ class TestAgentSessionPhaseFlow(unittest.TestCase):
         session.orchestrator.arun = fake_arun
 
         # ── Analyze ─────────────────────────────────────────────
-        tasks = asyncio.run(session.run_analyze("帮我列目录", "workspace ctx"))
+        tasks, full_text = asyncio.run(session.run_analyze("帮我列目录", "workspace ctx"))
 
         self.assertEqual(session.orchestrator._current_phase, "analyze")
         self.assertEqual(len(tasks), 1)

@@ -1,3 +1,43 @@
+## v3.9.0 (2026-06-27) — 多任务管理系统 + Trae 暗黑主题
+
+### feat
+- **多任务管理系统（TaskService + WorkerPool）**：
+  - `services/task_service.py`：任务生命周期管理，`submit_task()` / `on_phase_change()` / `on_tool_start()` / `on_tool_end()` / `mark_completed()`
+  - `workers/task_capacity.py`：资源容量控制，最大并发任务/排队任务/工具数
+  - `workers/task_queue.py`：FIFO 排队与超时驱逐
+  - `workers/worker_pool.py`：Worker 实例池管理
+  - `workers/session_task.py`：会话级任务状态跟踪（analyzing → executing → verifying → confirm → completed/failed）
+  - `workers/task_worker_adapter.py`：TaskService 与 AgentWorker 之间的适配桥接
+  - 相关信号：`task_status_changed` / `capacity_changed` / `task_progress` / `tool_usage_changed` / `task_completed`
+
+- **Session-as-Room (v3.9.0 会话隔离)**：
+  - `_on_session_switch()` 实现完整 AB 切换协议：detach(旧) → save phase → switch → clear → load(新) → render → reattach(新)
+  - `_make_current_only_guard()` 信号路由守卫：同时校验 Worker 实例和当前会话 ID，防止跨会话消息泄漏
+  - `_detach_ui_signals()` / `_attach_ui_signals()` 信号解绑/重绑，Worker 后台继续运行
+  - `_save_phase_state()` / `_restore_confirm_ui()` 跨会话保存/恢复 confirm 阶段状态
+  - `_append_ai_message()` 按 session_id 独立落盘，后台 Worker 完成时无条件写入 SQLite
+
+- **Trae 暗黑主题**：
+  - `resources/themes/trae_dark.qss`：637 行 QSS，覆盖 QMainWindow / QListWidget / QTreeWidget / QTextEdit / QLineEdit / QPushButton / QLabel / QStatusBar / QScrollBar
+  - 色值基于 Trae IDE 暗黑风格（深紫灰 #1e1e2e、选中指示器 #89b4fa、绿色 #a6e3a1、黄色 #f9e2af、红色 #f38ba8）
+  - `ThemeService` 支持 frozen exe 路径解析（`sys._MEIPASS`），`trae_dark` 设为默认主题
+
+- **底栏容量状态条**：
+  - `QLabel` 永久控件显示：🟢 任务:0/3 | ⏳ 排队:0/5 | 🔧 工具:0/12
+  - 实时响应 `capacity_changed` / `tool_usage_changed` 信号刷新
+
+- **会话列表状态图标**：
+  - `ConversationItem.set_task_status()` 方法，emoji 图标：🟢(运 行) / 🟡(确认) / ⏳(排队) / 🔴(失败)
+
+### fix
+- **信号调试管道**：添加 `_log_signal` 装饰器在 emit 端记录信号轨迹，`[RECV]` 日志在 recv 端确认到达
+- **ThemeService 路径修复**：exe 环境下 `get_qss()` 使用 `_MEIPASS` 解析相对路径
+- **AgentWorkbench.spec**：补充 `trae_dark.qss` 到 PyInstaller datas
+
+### test
+- `tests/test_agent_session_integration.py`：Analyze → Execute → Verify 全链路状态隔离 + phase_messages 滑动窗口
+- `tests/test_main_window_session_isolation.py`：会话切换信号守卫 / 同 session ID 放行 / 切回非当前会话丢弃
+
 ## v3.8.1 (2026-06-27) — 填充架构占位 + 对话气泡与活动面板交互优化
 
 ### feat

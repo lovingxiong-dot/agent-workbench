@@ -40,6 +40,7 @@ manual_modes:
       a final answer based on existing results.
 
       '
+    current_model: deepseek
   plan:
     tools:
     - web_fetch
@@ -143,7 +144,7 @@ memory:
     language: zh-CN
     response_style: detailed
     preferred_quant_source: akshare
-    default_python_env: ""
+    default_python_env: ''
     risk_tolerance: medium
     frequent_tickers: []
     custom_terms: {}
@@ -157,14 +158,23 @@ ui:
     visible: true
     max_lines: 500
   explorer:
-    project_root: F:\Agent\agent_workbench
-    recent_projects: []
+    project_root: D:\ThinkPad\Desktop\prompt
+    recent_projects:
+    - D:\ThinkPad\Desktop\prompt
 feature_flags:
   use_new_explorer: true
   use_async_tools: true
   shared_orchestrator: true
   shared_output_panel: true
 app:
-  version: v3.8.1
-  last_mode: craft
+  version: v3.9.0
+  last_mode: ask
   last_model: deepseek
+task:
+  capacity:
+    max_concurrent_tasks: 3
+    max_queued_tasks: 5
+    max_tools_per_task: 8
+    max_total_tools: 12
+    cpu_cores_reserved: 1
+    memory_threshold_mb: 512

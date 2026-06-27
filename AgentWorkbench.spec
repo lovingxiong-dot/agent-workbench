@@ -8,6 +8,7 @@ a = Analysis(
     datas=[
         ('config.yaml', '.'),
         ('resources/themes/dark_github.qss', 'resources/themes'),
+        ('resources/themes/trae_dark.qss', 'resources/themes'),
         (r'venv\Lib\site-packages\certifi\cacert.pem', 'certifi'),
     ],
     hiddenimports=[

@@ -270,10 +270,24 @@ async def arun_web_fetch(args: dict) -> str:
 
     try:
         import aiohttp
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
-            async with session.get(url, headers={"User-Agent": "AI-Agent-Workbench/3.8"}) as resp:
-                raw = await resp.read()
-                content_type = resp.headers.get("Content-Type", "")
+        import ssl as _ssl
+        _ssl_error = None
+        for _verify_ssl in (True, False):
+            try:
+                connector = aiohttp.TCPConnector(ssl=False if not _verify_ssl else True)
+                async with aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=10),
+                    connector=connector,
+                ) as session:
+                    async with session.get(url, headers={"User-Agent": "AI-Agent-Workbench/3.8"}) as resp:
+                        raw = await resp.read()
+                        content_type = resp.headers.get("Content-Type", "")
+                        break
+            except aiohttp.ClientConnectorCertificateError as e:
+                _ssl_error = e
+                continue  # 降级为不验证证书重试
+        else:
+            raise _ssl_error
     except ImportError:
         # 兜底同步 urllib
         import urllib.request
