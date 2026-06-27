@@ -1,3 +1,10 @@
+# Changelog
+
+## HANDOFF (2026-06-27) — v3.9.0 模型交接
+- 移交模型: Kimi-K2.7-Code
+- 交接内容: TaskService + WorkerPool 多任务管理、Session-as-Room 会话隔离、Trae 暗黑主题、底栏状态条、会话状态图标
+- 状态: 全部单元测试通过，已推送 origin/main + tag v3.9.0
+
 ## v3.9.0 (2026-06-27) — 多任务管理系统 + Trae 暗黑主题
 
 ### feat
