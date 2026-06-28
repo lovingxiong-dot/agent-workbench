@@ -738,7 +738,10 @@ class MainWindow(QMainWindow):
         if self._current_phase == "confirm":
             task.phase = "confirm"
             task.task_list = list(self._phase_task_list)
-            task.status = TaskStatus.AWAITING_CONFIRM
+            # 状态变更统一由 TaskService 发起
+            self.task_service._on_phase_change(
+                session_id, "confirm", "等待用户确认"
+            )
 
     def _restore_confirm_ui(self, task):
         """恢复 confirm 阶段的 UI 状态"""

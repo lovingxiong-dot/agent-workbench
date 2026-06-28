@@ -75,7 +75,7 @@ def test_switch_session_does_not_overwrite_completed(app, mock_app_context, bus,
 
     # 模拟 s1 任务已完成
     task = SessionTask(session_id="s1", mode="ask", user_input="hello")
-    task.status = TaskStatus.COMPLETED
+    task._set_status(TaskStatus.COMPLETED)
     task_service._tasks["s1"] = task
 
     orch.switch_session("s2")

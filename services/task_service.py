@@ -84,10 +84,10 @@ class TaskService(QObject):
             session_id=session_id,
             mode=mode,
             user_input=user_input,
-            status=status,
             created_at=datetime.now().isoformat(),
             updated_at=datetime.now().isoformat(),
         )
+        task._set_status(status)
 
         # 如果已有同会话的旧任务且未终止，则取消
         old_task = self._tasks.get(session_id)
@@ -111,7 +111,7 @@ class TaskService(QObject):
         return task
 
     def _drain_queue(self):
-        """从队列中取出任务提交到 WorkerPool"""
+        """从队列中取出任务提交到 WorkerPool。终端状态任务不会被重新激活。"""
         while self._queue.size > 0:
             ok, reason = self.can_submit()
             if not ok or reason == "queued":
@@ -125,23 +125,27 @@ class TaskService(QObject):
                     session_id=queued.session_id,
                     mode=queued.mode,
                     user_input=queued.user_input,
-                    status=TaskStatus.ANALYZING,
                     created_at=datetime.now().isoformat(),
                     updated_at=datetime.now().isoformat(),
                 )
                 self._tasks[queued.session_id] = task
-            task.status = TaskStatus.ANALYZING
+            # 该会话任务已到达终态，跳过 stale 队列项，避免覆盖 completed/failed
+            if task.is_terminal:
+                continue
+            task._set_status(TaskStatus.ANALYZING)
             if self._pool:
                 self._pool.submit(task, self._on_phase_change, self._on_task_done)
             self.task_status_changed.emit(task.session_id, task.status.value)
 
     def cancel_task(self, session_id: str):
-        """取消指定会话的任务"""
+        """取消指定会话的任务。terminal 状态不会被覆盖。"""
         task = self._tasks.get(session_id)
+        if task and task.is_terminal:
+            return
         if task and task.is_waiting:
             self._queue.remove(session_id)
         if task:
-            task.status = TaskStatus.FAILED
+            task._set_status(TaskStatus.FAILED)
             task.last_error = "用户取消"
             task.updated_at = datetime.now().isoformat()
             self.task_status_changed.emit(session_id, TaskStatus.FAILED.value)
@@ -149,6 +153,24 @@ class TaskService(QObject):
         if self._pool:
             self._pool.cancel(session_id)
         self._emit_capacity()
+        # 取消后释放容量，尝试启动队列中的下一个任务
+        self._drain_queue()
+
+    def fail_task(self, session_id: str, error: str = ""):
+        """将指定会话任务标记为失败。terminal 状态不会被覆盖。"""
+        task = self._tasks.get(session_id)
+        if task and task.is_terminal:
+            return
+        if task:
+            task._set_status(TaskStatus.FAILED)
+            if error:
+                task.last_error = error
+            task.updated_at = datetime.now().isoformat()
+            self.task_status_changed.emit(session_id, TaskStatus.FAILED.value)
+            self.task_completed.emit(session_id, False)
+        self._emit_capacity()
+        # 失败后释放容量，尝试启动队列中的下一个任务
+        self._drain_queue()
 
     def get_task_status(self, session_id: str) -> Optional[SessionTask]:
         return self._tasks.get(session_id)
@@ -165,8 +187,8 @@ class TaskService(QObject):
     # ═══════════════════════════════════════════════════════
     def _on_phase_change(self, session_id: str, phase: str, detail: str = ""):
         task = self._tasks.get(session_id)
-        if task:
-            task.status = TaskStatus(phase) if phase in {s.value for s in TaskStatus} else TaskStatus.ANALYZING
+        if task and not task.is_terminal:
+            task._set_status(TaskStatus(phase) if phase in {s.value for s in TaskStatus} else TaskStatus.ANALYZING)
             task.updated_at = datetime.now().isoformat()
             self.task_progress.emit(session_id, phase, detail)
             self.task_status_changed.emit(session_id, phase)
@@ -186,10 +208,12 @@ class TaskService(QObject):
     # 任务完成
     # ═══════════════════════════════════════════════════════
     def complete_task(self, session_id: str, success: bool, error: str = ""):
-        """由 MainWindow 显式调用，标记一次用户请求的工作流完成/失败"""
+        """由 MainWindow 显式调用，标记一次用户请求的工作流完成/失败。terminal 状态不会被覆盖。"""
         task = self._tasks.get(session_id)
+        if task and task.is_terminal:
+            return
         if task:
-            task.status = TaskStatus.COMPLETED if success else TaskStatus.FAILED
+            task._set_status(TaskStatus.COMPLETED if success else TaskStatus.FAILED)
             if error:
                 task.last_error = error
             task.updated_at = datetime.now().isoformat()

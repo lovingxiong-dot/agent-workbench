@@ -81,7 +81,7 @@ def test_runtime_task_binding(app):
     assert rt.task is task
     assert rt.is_active
 
-    task.status = TaskStatus.COMPLETED
+    task._set_status(TaskStatus.COMPLETED)
     assert not rt.is_active
 
     rt.clear_task()
