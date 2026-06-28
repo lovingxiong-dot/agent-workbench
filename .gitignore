@@ -1,0 +1,14 @@
+venv/
+build/
+dist/
+__pycache__/
+*.pyc
+*.pyo
+*.db
+storage/*.db
+storage/*.json
+storage/vector_store/
+.env
+*.spec.bak
+.trae/
+deepseek_api/

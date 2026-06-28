@@ -1,0 +1,187 @@
+manual_modes:
+  ask:
+    tools:
+    - web_fetch
+    - fetch_financial_news
+    - fetch_macro_data
+    - fetch_stock_data
+    - read_file
+    - list_dir
+    - run_command
+    - clipboard_read
+    - clipboard_write
+    - send_notification
+    - list_processes
+    system_prompt: 'You are an AI assistant in Ask mode. Call tools when user requests
+      information.
+
+
+      TOOL PRIORITY (MUST FOLLOW):
+
+      1. For prices/news/weather/facts: use web_fetch FIRST
+
+      2. For stocks: fetch_stock_data. For economic data: fetch_macro_data
+
+      3. For files: read_file or list_dir
+
+      4. NEVER call mt5_get_price for gold/silver/oil prices - use web_fetch instead.
+      mt5 tools are NOT available in Ask mode.
+
+      5. Do NOT use destructive tools (run_as_admin, write_file, kill_process). Suggest
+      Craft mode if needed.
+
+      6. After tool result arrives, summarize immediately. Never say "let me check"
+      without calling a tool.
+
+      7. Do NOT make more than 2 web_fetch calls for the same question. If the first
+      result is insufficient, answer with what you have.
+
+      8. When max tool rounds is almost reached, you MUST stop calling tools and provide
+      a final answer based on existing results.
+
+      '
+    current_model: deepseek
+  plan:
+    tools:
+    - web_fetch
+    - fetch_financial_news
+    - fetch_macro_data
+    - fetch_stock_data
+    - read_file
+    - list_dir
+    - run_command
+    - clipboard_read
+    - clipboard_write
+    - send_notification
+    - list_processes
+    - run_backtest
+    - write_file
+    system_prompt: 'You are a planning expert in Plan mode. Gather facts with tools
+      first, then output structured plan.
+
+
+      TOOL RULES: web_fetch/read_file for research. fetch_stock_data for stocks. fetch_macro_data
+      for economics. run_backtest for strategy validation. Output: Current State ->
+      Goals -> Step-by-step (resources/time/risks) -> Alternatives. No destructive
+      execution.
+
+      '
+  craft:
+    tools:
+    - web_fetch
+    - fetch_financial_news
+    - fetch_macro_data
+    - fetch_stock_data
+    - run_backtest
+    - mt5_get_price
+    - mt5_place_order
+    - read_file
+    - write_file
+    - list_dir
+    - run_command
+    - run_as_admin
+    - clipboard_read
+    - clipboard_write
+    - send_notification
+    - list_processes
+    - kill_process
+    system_prompt: 'You are an execution engine in Craft mode. Execute user commands
+      directly with tools.
+
+
+      TOOL RULES: Call tools immediately, report results concisely. Confirm for sensitive
+      ops: run_as_admin, mt5_place_order, write_file, kill_process. Never just say
+      "OK" - always call the tool.
+
+      '
+agent:
+  defaults:
+    max_tool_rounds: 8
+    task_timeout: 120.0
+    llm_timeout: 90.0
+    tool_timeout: 30.0
+  ask:
+    max_tool_rounds: 5
+    task_timeout: 120.0
+    llm_timeout: 90.0
+    tool_timeout: 30.0
+  plan:
+    max_tool_rounds: 8
+    task_timeout: 120.0
+    llm_timeout: 90.0
+    tool_timeout: 30.0
+  craft:
+    max_tool_rounds: 12
+    task_timeout: 180.0
+    llm_timeout: 120.0
+    tool_timeout: 60.0
+llm_providers:
+  fast-chat:
+    base_url: http://localhost:11434/v1
+    api_key: not-needed
+    model: gemma2:2b
+  tool-agent:
+    base_url: http://localhost:11434/v1
+    api_key: not-needed
+    model: qwen3:4b
+  deepseek:
+    base_url: https://api.deepseek.com/v1
+    api_key: ${DEEPSEEK_API_KEY}
+    model: deepseek-v4-flash
+  deepseek-pro:
+    base_url: https://api.deepseek.com/v1
+    api_key: ${DEEPSEEK_PRO_API_KEY}
+    model: deepseek-v4-pro
+user_rules:
+- Always respond in Chinese
+- Summarize key findings and data sources at end
+memory:
+  short_term_db: short_term.db
+  user_profile: user_profile.json
+  vector_store: vector_store
+  user_profile_defaults:
+    schema_version: 1
+    language: zh-CN
+    response_style: detailed
+    preferred_quant_source: akshare
+    default_python_env: ''
+    risk_tolerance: medium
+    frequent_tickers: []
+    custom_terms: {}
+terminal:
+  preferred_interpreter:
+    type: python
+    name: Python (venv)
+    path: F:\Agent\agent_workbench\venv\Scripts\python.exe
+ui:
+  log_panel:
+    visible: true
+    max_lines: 500
+  explorer:
+    project_root: D:\ThinkPad\Desktop\prompt
+    recent_projects:
+    - D:\ThinkPad\Desktop\prompt
+feature_flags:
+  use_new_explorer: true
+  use_async_tools: true
+  shared_orchestrator: true
+  shared_output_panel: true
+app:
+  version: v3.10.0
+  last_mode: ask
+  last_model: deepseek
+task:
+  capacity:
+    max_concurrent_tasks: 3
+    max_queued_tasks: 5
+    max_tools_per_task: 8
+    max_total_tools: 12
+    cpu_cores_reserved: 1
+    memory_threshold_mb: 512
+# v3.10: SelfContext 自识别上下文配置
+self_context:
+  enabled: true
+  memory_max_len: 3000
+  log_days: 3
+  log_lines: 3
+  handoff_enabled: true
