@@ -32,6 +32,8 @@ class InputTextEdit(QTextEdit):
         self.setFont(QFont("Segoe UI", 12))
 
     def keyPressEvent(self, event):
+        if event.isAutoRepeat():
+            return
         if event.key() in (Qt.Key_Return, Qt.Key_Enter):
             if event.modifiers() & Qt.ShiftModifier:
                 self.insertPlainText("\n")
@@ -275,9 +277,15 @@ class ChatView(QWidget):
 
     def _send(self):
         text = self.input_field.toPlainText().strip()
+        print(f"[DIAG-CHAT] _send text='{text[:20]}'", flush=True)
         if text:
-            self.input_field.clear()
             self.send_clicked.emit(text)
+
+    def clear_input(self):
+        """清空输入框（由 MainWindow 在入队成功后调用）"""
+        print(f"[DIAG-CHAT] clear_input before: '{self.input_field.toPlainText()[:20]}'", flush=True)
+        self.input_field.setPlainText("")
+        print(f"[DIAG-CHAT] clear_input after: '{self.input_field.toPlainText()[:20]}'", flush=True)
 
     def _on_log_btn_clicked(self, checked):
         self.log_panel_toggled.emit(checked)

@@ -11,3 +11,4 @@ storage/vector_store/
 .env
 *.spec.bak
 .trae/
+deepseek_api/

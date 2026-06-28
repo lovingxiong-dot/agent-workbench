@@ -165,6 +165,7 @@ class PhaseManager(QObject):
     # ═══════════════════════════════════════════════════
     def on_analyze_complete(self, task_list: List[TaskItem]):
         """分析阶段完成，传入解析出的任务清单"""
+        print(f"[DIAG-PHASE] on_analyze_complete, current_phase={self._current_phase.value}, task_count={len(task_list)}", flush=True)
         if self._current_phase != Phase.ANALYZE:
             self._emit_error("PHASE_MISMATCH", f"期望 ANALYZE，当前是 {self._current_phase.value}")
             return
@@ -205,8 +206,8 @@ class PhaseManager(QObject):
         if self._current_phase != Phase.ARCHIVE:
             self._emit_error("PHASE_MISMATCH", f"期望 ARCHIVE，当前是 {self._current_phase.value}")
             return
-        self.flow_finished.emit(success, message or "工作流完成")
         self.reset()
+        self.flow_finished.emit(success, message or "工作流完成")
 
     # ═══════════════════════════════════════════════════
     # 解析工具：把 LLM 返回的文本解析为 TaskItem 列表
@@ -261,16 +262,19 @@ class PhaseManager(QObject):
 
     def _advance(self):
         """进入下一个阶段"""
+        print(f"[DIAG-PHASE] _advance: flow_index={self._flow_index}, flow_len={len(self._flow)}, current_phase={self._current_phase.value}", flush=True)
         # 软检查点：记录但不阻塞
         self._run_soft_checkpoints()
 
         self._flow_index += 1
         if self._flow_index >= len(self._flow):
-            self.flow_finished.emit(True, "工作流完成")
+            print(f"[DIAG-PHASE] _advance: flow finished, emitting flow_finished", flush=True)
             self.reset()
+            self.flow_finished.emit(True, "工作流完成")
             return
 
         next_phase = self._flow[self._flow_index]
+        print(f"[DIAG-PHASE] _advance: next_phase={next_phase.value}", flush=True)
 
         # 硬检查点
         if not self._check_hard_checkpoint(next_phase):
@@ -312,6 +316,7 @@ class PhaseManager(QObject):
             pass
 
     def _emit_error(self, code: str, detail: str):
+        print(f"[DIAG-PHASE] _emit_error: code={code}, detail={detail}", flush=True)
         self.error_occurred.emit(code, detail)
         # 出错后安全回到 IDLE，避免卡住
         self.reset()

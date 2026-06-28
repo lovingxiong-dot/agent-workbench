@@ -31,25 +31,20 @@ def _diagnostic_hook(exc_type, exc_value, exc_tb):
 sys.excepthook = _diagnostic_hook
 
 from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QTimer
 from ui.main_window import MainWindow
 
 
 if __name__ == "__main__":
-    print("[DIAG] main.py start", flush=True)
     app = QApplication(sys.argv)
     app.setApplicationName("AI Agent Workbench")
-    print("[DIAG] QApplication created", flush=True)
 
     try:
         window = MainWindow()
-        print("[DIAG] MainWindow created", flush=True)
         window.show()
-        print("[DIAG] MainWindow shown", flush=True)
         exit_code = app.exec()
-        print(f"[DIAG] app.exec() returned {exit_code}", flush=True)
         sys.exit(exit_code)
     except Exception as e:
-        print(f"[DIAG] Exception during startup: {e}", flush=True)
         traceback.print_exc()
         sys.stderr.flush()
         raise

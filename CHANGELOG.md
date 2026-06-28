@@ -1,5 +1,22 @@
 # Changelog
 
+## v3.9.1 (2026-06-29) — 修复 Phase 状态机重入与任务状态回收
+
+### fix
+- **Phase 状态机重入**：`agent_engine/phase_manager.py` 中 `flow_finished.emit()` 在 `reset()` 之前执行，导致新任务启动时 PhaseManager 仍处于 ARCHIVE 状态而被 PHASE_BUSY 拦截。已调整为先 `reset()` 再 `emit()`。
+- **任务状态未回收**：`MainWindow` 各完成/错误路径改为统一调用 `TaskService.complete_task()`，确保 `task_status_changed` / `task_completed` / `capacity_changed` 信号发射，UI 状态正确刷新。
+- **会话切换覆盖已完成状态**：`_abort_current_session_task()` 原本无条件 `cancel_task()`，会把 completed 任务改回 failed。改为仅对 active 状态任务取消，保留已完成状态。
+- **会话列表 completed 图标缺失**：`ui/widgets/conversation.py` 的 `update_task_status()` 增加 `"completed": "✅ "`，已完成的任务显示绿色。
+- **SessionManager 标题更新失效**：`ui/managers/session_manager.py` 中 `item.data(1)` 改为 `item.data(Qt.UserRole)`，会话重命名后 UI 正确更新。
+
+### refactor
+- **Worker/任务资源回收闭路**：`_on_phase_flow_finished`、`_on_phase_error`、`_on_worker_error`、`_on_result`（空结果）路径统一清理 `_workers` 字典和 `WorkerPool` 资源。
+- **Managers 模块化准备**：完善 `ui/managers/session_registry.py`、`worker_manager.py`、`phase_coordinator.py`、`queue_manager.py`，为后续 MainWindow 绞杀者模式接入做准备。
+
+### test
+- `tests/test_pending_queue.py`：更新 `mark_task_completed` 相关测试用例。
+- `tests/test_self_context.py`：补充任务状态上下文测试。
+
 ## HANDOFF (2026-06-27) — v3.9.0 模型交接
 - 移交模型: Kimi-K2.7-Code
 - 交接内容: TaskService + WorkerPool 多任务管理、Session-as-Room 会话隔离、Trae 暗黑主题、底栏状态条、会话状态图标

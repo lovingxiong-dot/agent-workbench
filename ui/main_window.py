@@ -44,6 +44,7 @@ from ui.widgets import (
 )
 from ui.dialogs import SettingsDialog, ProviderFormDialog
 from ui.chat_view import ChatView
+from ui.managers.session_manager import SessionManager
 from tools.system import run_command, run_as_admin
 from tools.system import read_file, write_file, list_dir, web_fetch
 from tools.system import clipboard_read, clipboard_write, send_notification
@@ -125,8 +126,6 @@ class MainWindow(QMainWindow):
         self.context_service.set_interpreter_service(self.interpreter_service)
 
         # 全局状态
-        self._current_session = ""
-        self._sessions = {}
         self._current_mode = "ask"
         self._current_llm = None
         self._current_tools = []
@@ -167,8 +166,8 @@ class MainWindow(QMainWindow):
 
         # ── 双槽位等待队列 + 自识别上下文 (v3.10) ──────
         self._pending_queue = PendingQueue(self)
-        self._pending_queue.queue_changed.connect(self._on_queue_changed)
-        self._pending_queue.task_started.connect(self._on_queue_task_started)
+        self._pending_queue.queue_changed.connect(self._on_queue_changed, Qt.QueuedConnection)
+        self._pending_queue.task_started.connect(self._on_queue_task_started, Qt.QueuedConnection)
 
         self._self_context = SelfContext(
             context_service=self.context_service,
@@ -185,6 +184,16 @@ class MainWindow(QMainWindow):
         # ── UI 构建 ─────────────────────────────
         self._apply_theme()
         self._setup_ui()
+
+        # ── SessionManager（v3.11: 绞杀者模式，依赖 _setup_ui 创建的 conversation_list）──
+        self._session_mgr = SessionManager(
+            session_service=self.session_service,
+            project_service=self.project_service,
+            context_service=self.context_service,
+            memory_manager=self.memory_manager,
+            conversation_list_widget=self.conversation_list,
+            parent=self,
+        )
 
         # ── 连接信号 ────────────────────────────
         self.chat_view.model_changed.connect(self._on_model_changed)
@@ -248,6 +257,31 @@ class MainWindow(QMainWindow):
 
         # ── 全局启动事件 ─────────────────────────
         self._on_log_message(f"🚀 程序启动: {self.windowTitle()}", is_header=True, is_global=True)
+
+    # ── SessionManager 代理属性（绞杀者模式：兼容旧代码）──
+    @property
+    def _current_session(self) -> str:
+        return self._session_mgr.current_session
+
+    @_current_session.setter
+    def _current_session(self, value: str):
+        self._session_mgr.current_session = value
+
+    @property
+    def _sessions(self) -> dict:
+        return self._session_mgr.sessions
+
+    @_sessions.setter
+    def _sessions(self, value: dict):
+        self._session_mgr._sessions = value
+
+    @property
+    def _switching(self) -> bool:
+        return self._session_mgr.switching
+
+    @_switching.setter
+    def _switching(self, value: bool):
+        self._session_mgr.switching = value
 
     # ═══════════════════════════════════════════════════
     # 主题
@@ -512,62 +546,45 @@ class MainWindow(QMainWindow):
     def _on_new_conversation_requested(self, project_flag: str):
         """对话列表新建按钮：'<project>' 表示当前项目，'' 表示全局纯对话"""
         if project_flag == "<project>":
+            # 兜底：_project_root 可能为空（未切换过项目），尝试从文件树获取
+            if not self._project_root:
+                self._project_root = self.file_tree.get_root_path() or ""
+                if not self._project_root:
+                    self._on_log_message("⚠️ 当前未检测到项目路径，已降级为全局对话", is_header=True)
+                    self._new_conversation(project_path="")
+                    return
             self._new_conversation(project_path=self._project_root)
         else:
             self._new_conversation(project_path="")
 
     def _switch_project(self, project_path: str, is_init=False):
         """切换项目目录上下文：加载该目录下会话与全局纯对话"""
+        print(f"[DIAG] _switch_project: path={project_path}, is_init={is_init}", flush=True)
         project_path = self.project_service.normalize_path(project_path)
         self._project_root = project_path
         self.context_service.set_project_root(project_path)
         self.file_tree.set_root_path(project_path)
-        self._sessions = {}
-        self.conversation_list.clear_conversations()
+        self._session_mgr.clear()
         self.conversation_list.set_project_label(project_path)
         self.memory_manager.store.clear()
         self.chat_view.clear()
 
-        has_any = False
+        # 加载会话
+        project_sessions, global_sessions = self._session_mgr.load_project_sessions(project_path)
 
-        # 1) 加载全局纯对话
-        global_sessions = self.project_service.list_sessions("")
-        for conv in global_sessions:
-            self._sessions[conv["id"]] = {"title": conv["title"], "messages": []}
-            msgs = self.session_service.get_messages(conv["id"])
-            self._sessions[conv["id"]]["messages"] = msgs
-            self.conversation_list.add_conversation(conv["id"], conv["title"], project_path="")
-            has_any = True
-
-        # 2) 加载当前项目目录下会话
-        project_sessions = self.project_service.list_sessions(project_path)
-        for conv in project_sessions:
-            self._sessions[conv["id"]] = {"title": conv["title"], "messages": []}
-            msgs = self.session_service.get_messages(conv["id"])
-            self._sessions[conv["id"]]["messages"] = msgs
-            self.conversation_list.add_conversation(conv["id"], conv["title"], project_path=project_path)
-            has_any = True
-
-        if has_any:
-            # 优先激活项目会话；无则激活全局会话
+        if project_sessions or global_sessions:
             first = project_sessions[0] if project_sessions else global_sessions[0]
-            self._switch_conversation(first["id"])
+            QTimer.singleShot(0, lambda sid=first["id"]: self._switch_conversation(sid))
             if not is_init:
                 self._on_log_message(
                     f"📂 已加载项目: {project_path} ({len(project_sessions)} 个项目会话, {len(global_sessions)} 个全局会话)",
                     is_header=True,
                 )
         else:
-            # 无任何会话时，自动在当前项目创建一个默认会话
-            session_id = self.project_service.create_session(
-                project_path=project_path,
-                mode=self._current_mode,
-                model=self._current_model_name,
-                title="新对话",
+            session_id = self._session_mgr.create_session(
+                project_path=project_path, mode=self._current_mode,
+                model=self._current_model_name, title="新对话",
             )
-            self._sessions[session_id] = {"title": "新对话", "messages": []}
-            self.conversation_list.add_conversation(session_id, "新对话", project_path=project_path, active=True)
-            self._current_session = session_id
             self.chat_view.set_header(self._current_mode, self._current_model_name, "新对话")
             if not is_init:
                 self.chat_view.append_system(
@@ -597,80 +614,94 @@ class MainWindow(QMainWindow):
 
     def _new_conversation(self, project_path=""):
         """创建新对话；project_path='' 表示全局纯对话，否则关联项目目录"""
-        session_id = self.project_service.create_session(
-            project_path=project_path,
-            mode=self._current_mode,
-            model=self._current_model_name,
-            title="新对话",
-        )
-        self._sessions[session_id] = {"title": "新对话", "messages": []}
-        self.memory_manager.get_session_history(session_id)
-        self.conversation_list.add_conversation(session_id, "新对话", project_path=project_path, active=True)
-        self._current_session = session_id
-        self.chat_view.clear()
-        self.chat_view.set_header(self._current_mode, self._current_model_name, "新对话")
-        label = "全局" if project_path == "" else project_path
-        self._on_log_message(f"📝 新会话 @ {label}", is_header=True)
+        print(f"[DIAG] _new_conversation: project_path={project_path}", flush=True)
+        # 中止当前会话的活跃任务，释放队列槽位
+        self._abort_current_session_task()
+        # 守卫：防止信号槽重入导致重复创建（v3.10.1）
+        if getattr(self, '_switching', False):
+            return
+
+        # 守卫：当前上下文中已有空对话（标题=新对话 且 消息数=0）→ 直接切换
+        empty_sid = self._session_mgr.find_empty_session(project_path)
+        if empty_sid:
+            self._switch_conversation(empty_sid)
+            return
+
+        self._switching = True
+        try:
+            session_id = self._session_mgr.create_session(
+                project_path=project_path, mode=self._current_mode,
+                model=self._current_model_name, title="新对话",
+            )
+            self.chat_view.clear()
+            self.chat_view.set_header(self._current_mode, self._current_model_name, "新对话")
+            # 全局对话清除项目上下文，项目对话设置项目上下文
+            self.context_service.set_project_root(project_path)
+            label = "全局" if project_path == "" else project_path
+            self._on_log_message(f"📝 新会话 @ {label}", is_header=True)
+        finally:
+            self._switching = False
 
     def _switch_conversation(self, session_id):
         """会话列表点击入口：走完整 Session-as-Room 切换协议。"""
         self._on_session_switch(self._current_session, session_id)
 
     def _on_session_switch(self, old_session_id, new_session_id):
-        """Session-as-Room (v3.10: 双槽位队列 + 自识别接替)
-
-        完整协议：detach(旧) → save phase → clear queue → switch → clear → load(新) → render → reattach(新)
-        """
+        """Session-as-Room (v3.11: SessionManager 管理数据 + MainWindow 管理 UI)"""
         if old_session_id == new_session_id:
             return
 
-        # 1. 解绑旧会话的 UI 信号
-        if old_session_id:
-            self._detach_ui_signals(old_session_id)
+        if getattr(self, '_switching', False):
+            return
+        # 中止旧会话的活跃任务，释放队列槽位
+        self._abort_current_session_task()
+        self._switching = True
+        try:
+            # 1. 解绑旧会话的 UI 信号
+            if old_session_id:
+                self._detach_ui_signals(old_session_id)
 
-        # 2. 保存当前 Phase 状态
-        self._save_phase_state(old_session_id)
+            # 2. 保存当前 Phase 状态
+            self._save_phase_state(old_session_id)
 
-        # 3. 清空双槽位队列（旧会话的排队消息不带到新会话）
-        self._pending_queue.clear()
+            # 3. 不再清空双槽位队列 — 每个会话独立队列，切换时保留后台任务
 
-        # 4. 切换当前房间
-        self._current_session = new_session_id
+            # 4. SessionManager 处理数据侧切换（加载消息、设置 project_root）
+            self._session_mgr.switch_session(new_session_id)
 
-        # 4. clear UI
-        self.chat_view.clear()
+            # 5. 渲染 UI
+            self.chat_view.clear()
+            session = self._session_mgr.get_session_data(new_session_id)
+            msgs = session["messages"]
 
-        # 5. load(新)
-        session = self._sessions.get(new_session_id, {"title": "未命名会话", "messages": []})
-        msgs = self.session_service.get_messages(new_session_id)
-        self._sessions[new_session_id] = {"title": session.get("title", "未命名会话"), "messages": msgs}
+            # 5.1 接替上下文
+            handoff_context = self._self_context.build_handoff(new_session_id)
+            if handoff_context:
+                self.chat_view.append_system(handoff_context)
 
-        # 5.5 构建接替上下文并追加到 chat_view（v3.10: SelfContext 跨对话接替）
-        handoff_context = self._self_context.build_handoff(new_session_id)
-        if handoff_context:
-            self.chat_view.append_system(handoff_context, add_to_history=True)
+            # 5.2 render
+            self.chat_view.set_header(self._current_mode, self._current_model_name, session["title"])
+            from langchain_core.messages import HumanMessage, AIMessage
+            history = self.memory_manager.get_session_history(new_session_id)
+            history.clear()
+            for msg in msgs:
+                self._render_stored_message(msg)
+                if msg["role"] == "user":
+                    history.add_message(HumanMessage(content=msg["content"]))
+                elif msg["role"] == "ai":
+                    history.add_message(AIMessage(content=msg["content"]))
+            self._on_log_message(f"📂 切换会话: {session['title']}")
 
-        # 6. render
-        self.chat_view.set_header(self._current_mode, self._current_model_name, session["title"])
-        from langchain_core.messages import HumanMessage, AIMessage
-        history = self.memory_manager.get_session_history(new_session_id)
-        history.clear()
-        for msg in msgs:
-            self._render_stored_message(msg)
-            if msg["role"] == "user":
-                history.add_message(HumanMessage(content=msg["content"]))
-            elif msg["role"] == "ai":
-                history.add_message(AIMessage(content=msg["content"]))
-        self._on_log_message(f"📂 切换会话: {session['title']}")
-
-        # 7. 如果新会话有活跃任务，恢复信号连接和 UI 状态
-        task = self.task_service.get_task_status(new_session_id)
-        if task:
-            if task.status == TaskStatus.AWAITING_CONFIRM:
-                self._restore_confirm_ui(task)
-            elif task.is_active:
-                self._attach_ui_signals(new_session_id)
-                self.chat_view.show_phase_indicator(task.phase, len(task.task_list))
+            # 6. 恢复任务状态
+            task = self.task_service.get_task_status(new_session_id)
+            if task:
+                if task.status == TaskStatus.AWAITING_CONFIRM:
+                    self._restore_confirm_ui(task)
+                elif task.is_active:
+                    self._attach_ui_signals(new_session_id)
+                    self.chat_view.set_phase_indicator(task.phase, len(task.task_list))
+        finally:
+            self._switching = False
 
     def _detach_ui_signals(self, session_id: str):
         """解绑指定会话 Worker 的 UI 信号。不 stop Worker，只断开信号连接。"""
@@ -735,31 +766,51 @@ class MainWindow(QMainWindow):
         if len(self._sessions) <= 1:
             QMessageBox.information(self, "提示", "不能删除唯一的会话")
             return
-        self.conversation_list.remove_conversation(session_id)
-        self._sessions.pop(session_id, None)
-        self.memory_manager.store.pop(session_id, None)
-        # 持久化
-        self.session_service.delete_conversation(session_id)
+        self._session_mgr.delete_session(session_id)
         if self._current_session == session_id:
             first = next(iter(self._sessions.keys()), "")
             if first:
                 self._switch_conversation(first)
 
     def _update_conversation_title(self, session_id, title):
-        for lst in (self.conversation_list.project_list, self.conversation_list.global_list):
-            for i in range(lst.count()):
-                item = lst.item(i)
-                if item.data(Qt.UserRole) == session_id:
-                    item.setText(title)
-                    item.setToolTip(title)
-                    return
+        self._session_mgr.update_title(session_id, title)
+
+    def _abort_current_session_task(self):
+        """中止当前会话的活跃任务：停止 Worker、清空队列、重置 PhaseManager"""
+        current_sid = self._current_session
+        if not current_sid:
+            return
+        # 1. 停止当前 Worker
+        worker = self._workers.get(current_sid) if hasattr(self, '_workers') else None
+        if worker is not None and worker.isRunning():
+            worker.stop()
+            worker.wait(3000)
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.stop()
+            self._worker.wait(3000)
+        self._worker = None
+        # 2. 清空双槽位队列
+        self._pending_queue.clear()
+        # 3. 重置 PhaseManager
+        self._phase_manager.reset()
+        self._current_phase = "idle"
+        self._phase_task_list = []
+        self._phase_results = []
+        # 4. 更新 TaskService 状态（通过 cancel_task 统一处理）
+        self.task_service.cancel_task(current_sid)
+        # 5. 更新 UI
+        self.chat_view.finalize_stream()
+        self.chat_view.clear_phase_ui()
+        self.chat_view.set_streaming(False)
 
     # ═══════════════════════════════════════════════════
     # 消息发送
     # ═══════════════════════════════════════════════════
     def _send_message(self, user_text):
+        print(f"[DIAG] _send_message ENTER: text='{user_text[:30]}' full={self._pending_queue.is_full} len={self._pending_queue.length}", flush=True)
         # 0. 槽满检查：队列已满时拒绝新消息
         if self._pending_queue.is_full:
+            print(f"[DIAG] _send_message QUEUE FULL, len={self._pending_queue.length}", flush=True)
             self._on_log_message("⚠ 队列已满，请等待当前任务完成", is_global=True)
             return
 
@@ -777,11 +828,11 @@ class MainWindow(QMainWindow):
         self._on_log_message(f"▶ 用户: {display_text}", is_header=True)
 
         # 1. UI 和 session 持久化
-        self._sessions[self._current_session]["messages"].append({"role": "user", "content": user_text})
+        self._session_mgr.add_message(self._current_session, "user", user_text)
         self.chat_view.append_user(user_text)
         self.session_service.add_message(self._current_session, "user", user_text)
 
-        session = self._sessions[self._current_session]
+        session = self._session_mgr.get_session_data(self._current_session)
         if len(session["messages"]) == 1:
             title = user_text[:20] + "..." if len(user_text) > 20 else user_text
             session["title"] = title
@@ -795,6 +846,8 @@ class MainWindow(QMainWindow):
 
         # 2. 构建上下文并提交到 v3.9 TaskService
         context_text = self.context_service.build_prompt_context()
+        old_task = self.task_service.get_task_status(self._current_session)
+        print(f"[DIAG-SEND] submit_task: session={self._current_session}, old_task={old_task.status.value if old_task else 'None'}, is_terminal={old_task.is_terminal if old_task else 'N/A'}", flush=True)
         try:
             self.task_service.submit_task(self._current_session, self._current_mode, user_text)
         except ResourceError as e:
@@ -812,9 +865,10 @@ class MainWindow(QMainWindow):
             self._on_log_message("⚠ 入队失败", is_global=True)
             return
 
-        # 4. 如果槽位 0 空闲（刚入队到 slot 0），立即启动 Phase 工作流
-        if self._pending_queue.get_streaming_task() is task:
-            self._start_streaming(task)
+        self.chat_view.clear_input()
+
+        # 由 _on_queue_task_started（QueuedConnection）统一启动 Phase 工作流
+        # 不再在此处直接调用 _start_streaming，避免双重启动和信号槽重入
 
     def _start_streaming(self, task: PendingTask):
         """启动队列任务的 Phase 工作流"""
@@ -872,20 +926,18 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _on_archive_required(self, mode):
         """Archive 阶段：普通对话直接收尾；若用户触发存档则执行"""
+        print("[DIAG] _on_archive_required called", flush=True)
         self.chat_view.append_phase_message("archive", "任务收尾")
         self.chat_view.hide_skip_verify()
         user_text = self._phase_manager.current_context().user_text
         if self._is_archive_request(user_text):
             self._archive_project()
         self._phase_manager.on_archive_complete(True, "工作流完成")
-        # 当前任务完成 → 自动出队下一个
-        streaming = self._pending_queue.get_streaming_task()
-        if streaming:
-            self._pending_queue.mark_streaming_done(streaming.task_id)
+        # mark_task_completed 由 _on_phase_flow_finished 统一处理，此处不重复调用
 
     @Slot(bool, str)
     def _on_phase_flow_finished(self, success, message):
-        print("[DIAG] _on_phase_flow_finished: stopping worker...", flush=True)
+        print(f"[DIAG] _on_phase_flow_finished success={success}, queue_len={self._pending_queue.length}", flush=True)
         self._current_phase = "idle"
         self._phase_task_list = []
         self._phase_results = []
@@ -893,26 +945,49 @@ class MainWindow(QMainWindow):
         if not success:
             self.chat_view.append_system(f"⚠️ {message}")
 
+        # 更新 TaskService 中的任务状态，并通过信号刷新 UI
+        current_sid = self._current_session
+        error_msg = "" if success else message
+        print(f"[DIAG-FLOW] _on_phase_flow_finished: session={current_sid}, success={success}", flush=True)
+        self.task_service.complete_task(current_sid, success, error_msg)
+
         if self._worker is not None and self._worker.isRunning():
             self._worker.stop()
             self._worker.wait(3000)
-        print("[DIAG] _on_phase_flow_finished: worker cleared", flush=True)
         self._worker = None
+        # 清理 _workers 字典和 WorkerPool
+        if current_sid:
+            self._workers.pop(current_sid, None)
+            self.worker_pool.on_task_complete(current_sid)
         # 当前任务完成 → 自动出队下一个
         streaming = self._pending_queue.get_streaming_task()
         if streaming:
-            self._pending_queue.mark_streaming_done(streaming.task_id)
+            self._pending_queue.mark_task_completed(streaming.task_id)
 
     @Slot(str, str)
     def _on_phase_error(self, code, detail):
+        print(f"[DIAG] _on_phase_error code={code}, detail={detail}", flush=True)
         self._current_phase = "idle"
         self.chat_view.clear_phase_ui()
         self.chat_view.append_system(f"❌ Phase 错误 [{code}]: {detail}")
         self._on_log_message(f"[ERR] Phase {code}: {detail}", is_global=True)
+        # 更新 TaskService 任务状态为 FAILED，并通过信号刷新 UI
+        current_sid = self._current_session
+        self.task_service.complete_task(current_sid, False, f"Phase 错误 [{code}]: {detail}")
+        # 停止 Worker 并清理
+        if self._worker is not None:
+            if self._worker.isRunning():
+                self._worker.stop()
+                self._worker.wait(3000)
+            self._worker = None
+        # 清理 _workers 字典和 WorkerPool
+        if current_sid:
+            self._workers.pop(current_sid, None)
+            self.worker_pool.on_task_complete(current_sid)
         # Phase 错误视为当前任务失败 → 出队下一个
         streaming = self._pending_queue.get_streaming_task()
         if streaming:
-            self._pending_queue.mark_streaming_done(streaming.task_id)
+            self._pending_queue.mark_task_completed(streaming.task_id)
 
     # ═══════════════════════════════════════════════════
     # v3.9 TaskService 回调
@@ -935,7 +1010,7 @@ class MainWindow(QMainWindow):
     def _on_task_progress_signal(self, session_id: str, phase: str, detail: str):
         """TaskService Phase 变化 → 更新 UI"""
         if session_id == self._current_session:
-            self.chat_view.show_phase_indicator(phase, len(self._phase_task_list))
+            self.chat_view.set_phase_indicator(phase, len(self._phase_task_list))
         self.conversation_list.update_task_status(session_id, phase)
 
     @Slot(int, int)
@@ -977,6 +1052,7 @@ class MainWindow(QMainWindow):
 
     def _on_analyze_result(self, task_list):
         """Analyze 阶段结果：已解析为 task list"""
+        print(f"[DIAG] _on_analyze_result called, task_list_len={len(task_list) if task_list else 0}, phase={self._current_phase}", flush=True)
         if not task_list and self._current_mode in ("plan", "craft"):
             # LLM 没有输出标准清单时，把原始需求作为单一任务兜底
             original = self._phase_manager.current_context().user_text
@@ -1020,14 +1096,29 @@ class MainWindow(QMainWindow):
         self.status_indicator.set_tokens("")
         self.chat_view.append_system(f"❌ Worker 错误 [{code}]: {detail}")
         self._on_log_message(f"[ERR] Worker {code}: {detail}", is_global=True)
+        # 更新 TaskService 任务状态为 FAILED，并通过信号刷新 UI
+        current_sid = self._current_session
+        self.task_service.complete_task(current_sid, False, f"Worker 错误 [{code}]: {detail}")
+        # 停止 Worker 并清理
+        if self._worker is not None:
+            if self._worker.isRunning():
+                self._worker.stop()
+                self._worker.wait(3000)
+            self._worker = None
+        # 清理 _workers 字典和 WorkerPool
+        if current_sid:
+            self._workers.pop(current_sid, None)
+            self.worker_pool.on_task_complete(current_sid)
 
     @staticmethod
     def _make_current_only_guard(worker, main_window, worker_session_id):
         def guard(slot):
             def wrapper(*args):
                 if worker is not main_window._worker:
+                    print(f"[DIAG-GUARD] BLOCKED: worker mismatch (worker={worker.worker_id}, _worker={main_window._worker.worker_id if main_window._worker else 'None'})", flush=True)
                     return
                 if main_window._current_session != worker_session_id:
+                    print(f"[DIAG-GUARD] BLOCKED: session mismatch (worker_session={worker_session_id}, current={main_window._current_session})", flush=True)
                     return
                 slot(*args)
             return wrapper
@@ -1090,7 +1181,6 @@ class MainWindow(QMainWindow):
 
         # 等待 Worker 线程的事件循环完全就绪，避免启动时序竞态
         ready = worker._loop_ready.wait(timeout=5.0)
-        print(f"[DIAG] _ensure_phase_worker: loop_ready={ready}", flush=True)
 
         self.chat_view.set_streaming(True)
         self.status_indicator.set_tokens("生成中...")
@@ -1107,7 +1197,7 @@ class MainWindow(QMainWindow):
             return
         if session_id not in self._sessions:
             return
-        self._sessions[session_id]["messages"].append({"role": "ai", "content": text})
+        self._session_mgr.add_message(session_id, "ai", text)
         self.session_service.add_message(session_id, "ai", text)
         if persist_to_memory:
             from langchain_core.messages import AIMessage
@@ -1210,18 +1300,27 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _on_queue_task_started(self, task_id):
         """队列中 slot[0] 开始新任务 → 启动 Phase 工作流"""
+        print(f"[DIAG] _on_queue_task_started task_id={task_id}, switching={getattr(self, '_switching', False)}", flush=True)
+        if getattr(self, '_switching', False):
+            print("[DIAG] _on_queue_task_started BLOCKED by switching guard", flush=True)
+            return  # 会话切换中，跳过任务启动
         streaming = self._pending_queue.get_streaming_task()
         if streaming and streaming.task_id == task_id:
             self._start_streaming(streaming)
 
     def _update_queue_bar(self):
-        """更新队列状态条"""
+        """更新队列状态条：显示 streaming（slot 0）和 pending（slot 1）"""
+        streaming = self._pending_queue.get_streaming_task()
         pending = self._pending_queue.get_pending_tasks()
-        if not pending:
+
+        if not streaming and not pending:
             self._queue_bar.setVisible(False)
             return
 
         lines = []
+        if streaming:
+            preview = streaming.user_text[:40] + "..." if len(streaming.user_text) > 40 else streaming.user_text
+            lines.append(f"🔄 处理中: {preview}")
         for task in pending:
             preview = task.user_text[:40] + "..." if len(task.user_text) > 40 else task.user_text
             lines.append(f"📋 排队中: {preview}")
@@ -1263,10 +1362,21 @@ class MainWindow(QMainWindow):
                 self._phase_manager.reset()
                 self._current_phase = "idle"
                 self.chat_view.clear_phase_ui()
+            # 停止当前 Worker 并清理
+            if self._worker is not None:
+                if self._worker.isRunning():
+                    self._worker.stop()
+                    self._worker.wait(3000)
+                self._worker = None
+            # 清理 _workers 字典和 WorkerPool
+            self._workers.pop(session_id, None)
+            self.worker_pool.on_task_complete(session_id)
+            # 更新 TaskService 任务状态为 FAILED，并通过信号刷新 UI
+            self.task_service.complete_task(session_id, False, "LLM 返回空结果")
             # 空结果视为当前任务异常完成 → 出队下一个
             streaming = self._pending_queue.get_streaming_task()
             if streaming:
-                self._pending_queue.mark_streaming_done(streaming.task_id)
+                self._pending_queue.mark_task_completed(streaming.task_id)
             return
         self._append_ai_message(session_id, text)
         if session_id == self._current_session:
@@ -1411,9 +1521,28 @@ class MainWindow(QMainWindow):
         self.workspace.open_document(path)
 
     def closeEvent(self, event):
-        if self._worker and self._worker.isRunning():
-            print("[DIAG] closeEvent: stopping worker...", flush=True)
-            self._worker.stop()
-            self._worker.wait(3000)
-            print("[DIAG] closeEvent: worker stopped", flush=True)
+        # 停止所有 Worker 线程（v3.11: 多会话 Registry）
+        all_workers = list(self._workers.values())
+        if self._worker and self._worker not in all_workers:
+            all_workers.append(self._worker)
+        for worker in all_workers:
+            if worker and worker.isRunning():
+                try:
+                    worker.stop()
+                except Exception:
+                    pass
+        for worker in all_workers:
+            if worker and worker.isRunning():
+                worker.quit()
+                if not worker.wait(5000):
+                    worker.terminate()
+                    worker.wait(1000)
+        # 关闭线程池
+        cpu_executor = getattr(self, '_cpu_executor', None)
+        if cpu_executor:
+            try:
+                cpu_executor.shutdown(wait=True)
+            except Exception:
+                pass
         event.accept()
+

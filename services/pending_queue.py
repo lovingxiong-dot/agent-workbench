@@ -23,7 +23,7 @@ class PendingTask:
     mode: str
     context: str
     cancel_event: threading.Event = field(default_factory=threading.Event)
-    status: str = "pending"  # pending | streaming | cancelled
+    status: str = "pending"  # pending | streaming | cancelled | completed
     timestamp: float = field(default_factory=time.time)
 
 
@@ -51,9 +51,13 @@ class PendingQueue(QObject):
                     self._slots[i] = task
                     if i == 0:
                         task.status = "streaming"
+                        print(f"[DIAG-QUEUE] enqueue slot[0] task_id={task.task_id}, text='{task.user_text[:20]}'", flush=True)
                         self.task_started.emit(task.task_id)
+                    else:
+                        print(f"[DIAG-QUEUE] enqueue slot[{i}] task_id={task.task_id}, text='{task.user_text[:20]}'", flush=True)
                     self.queue_changed.emit()
                     return True
+            print(f"[DIAG-QUEUE] enqueue FAILED: queue full, slots={[s.task_id if s else None for s in self._slots]}", flush=True)
             return False  # 槽满
     
     def cancel(self, slot_index: int):
@@ -61,30 +65,35 @@ class PendingQueue(QObject):
         with self._lock:
             if 0 <= slot_index < self.MAX_SLOTS:
                 task = self._slots[slot_index]
-                if task and task.status != "cancelled":
+                if task and task.status not in ("cancelled", "completed"):
                     task.cancel_event.set()
                     task.status = "cancelled"
                     self.task_cancelled.emit(task.task_id)
                     self._slots[slot_index] = None
                     self._compact()
                     self.queue_changed.emit()
+            else:
+                import logging
+                logging.warning(f"PendingQueue.cancel: slot_index={slot_index} out of range [0, {self.MAX_SLOTS})")
     
     def cancel_all(self):
         """取消所有任务"""
         for i in range(self.MAX_SLOTS - 1, -1, -1):
             self.cancel(i)
     
-    def mark_streaming_done(self, task_id: str):
-        """标记当前 streaming 任务完成，自动 dequeue 下一个"""
+    def mark_task_completed(self, task_id: str):
+        """
+        标记当前 streaming 任务完成，自动 dequeue 下一个。
+        
+        _compact() 内部已将 slot[1] 移到 slot[0] 并设置 status="streaming" 和 emit task_started，
+        此处只负责移除当前任务和发射 task_completed，不重复处理下一个任务的启动。
+        """
         with self._lock:
             if self._slots[0] and self._slots[0].task_id == task_id:
+                self._slots[0].status = "completed"
                 self._slots[0] = None
                 self.task_completed.emit(task_id)
-                self._compact()  # slot[1] 移到 slot[0]
-                # 如果 slot[0] 有新任务，开始 streaming
-                if self._slots[0]:
-                    self._slots[0].status = "streaming"
-                    self.task_started.emit(self._slots[0].task_id)
+                self._compact()
                 self.queue_changed.emit()
     
     def dequeue(self) -> Optional[PendingTask]:
@@ -132,10 +141,12 @@ class PendingQueue(QObject):
                     self._slots[i].cancel_event.set()
                     self._slots[i].status = "cancelled"
                     self._slots[i] = None
-            self.queue_changed.emit()
+        self.queue_changed.emit()
     
     def _compact(self):
         """压缩槽位：将 slot[1] 移到 slot[0]（如果 slot[0] 为空）"""
         if self._slots[0] is None and self._slots[1] is not None:
             self._slots[0] = self._slots[1]
+            self._slots[0].status = "streaming"
             self._slots[1] = None
+            self.task_started.emit(self._slots[0].task_id)

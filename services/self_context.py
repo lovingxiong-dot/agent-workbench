@@ -76,13 +76,17 @@ class SelfContext:
         if not task:
             return ""
 
+        # 无活跃任务且非终态 → 不显示接替上下文
+        if not task.is_active and not (hasattr(task, 'is_terminal') and task.is_terminal):
+            return ""
+
         parts = ["[会话接替上下文]"]
         if task.is_active:
             parts.append("🔄 此会话中有未完成的任务")
             parts.append(f"   当前阶段: {task.phase}")
             if hasattr(task, 'status') and hasattr(task.status, 'value'):
                 if 'AWAITING_CONFIRM' in str(task.status):
-                    parts.append(f"   等待确认的任务清单")
+                    parts.append("   等待确认的任务清单")
                     if task.task_list:
                         parts.append(f"   任务清单: {json.dumps(task.task_list, ensure_ascii=False)}")
         elif hasattr(task, 'is_terminal') and task.is_terminal:
@@ -112,7 +116,10 @@ class SelfContext:
         parts = ["[当前位置]"]
         if self._context_service:
             root = self._context_service.get_project_root()
-            parts.append(f"项目目录: {root or '未设置'}")
+            if root:
+                parts.append(f"项目目录: {root}")
+            else:
+                parts.append("当前在您的电脑上，未绑定特定项目目录（全局对话模式）")
         return "\n".join(parts)
 
     def _build_task_state_context(self) -> str:
@@ -176,6 +183,8 @@ class SelfContext:
             )
             for lf in log_files[:log_days]:
                 basename = os.path.basename(lf).replace(".md", "")
+                if basename == "MEMORY":  # 跳过主记忆文件，避免重复
+                    continue
                 try:
                     with open(lf, "r", encoding="utf-8") as f:
                         first_n = "".join(f.readlines()[:log_lines])

@@ -186,6 +186,7 @@ class AgentWorker(QThread):
                 self._loop.call_soon_threadsafe(self._loop.stop)
             except Exception as e:
                 print(f"[DIAG-WORKER {self.worker_id}] stop error: {e}", flush=True)
+        self.quit()  # 退出 QThread 事件循环
 
     def cancel_phase(self):
         """仅取消当前 Phase，不结束 Worker 事件循环（用户点击停止按钮时调用）"""

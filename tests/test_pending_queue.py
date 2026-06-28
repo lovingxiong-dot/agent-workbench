@@ -84,21 +84,32 @@ class TestBasicOperations:
         assert queue.length == 0
         assert queue.has_streaming is False
 
-    def test_mark_streaming_done_auto_dequeue(self, queue, make_task):
+    def test_cancel_out_of_range_noop(self, queue, make_task):
+        """cancel(2) 越界应静默处理，不抛异常"""
+        t1 = make_task("t1")
+        queue.enqueue(t1)
+        # 不应抛异常，队列状态不变
+        queue.cancel(2)
+        assert queue.length == 1
+        assert queue.has_streaming is True
+        queue.cancel(-1)
+        assert queue.length == 1
+
+    def test_mark_task_completed_auto_dequeue(self, queue, make_task):
         t1 = make_task("t1")
         t2 = make_task("t2")
         queue.enqueue(t1)
         queue.enqueue(t2)
-        queue.mark_streaming_done("t1")
+        queue.mark_task_completed("t1")
         assert queue.length == 1
         assert queue.has_streaming is True
         assert queue.get_streaming_task() is t2
         assert t2.status == "streaming"
 
-    def test_mark_streaming_done_empty_queue(self, queue, make_task):
+    def test_mark_task_completed_empty_queue(self, queue, make_task):
         t1 = make_task("t1")
         queue.enqueue(t1)
-        queue.mark_streaming_done("t1")
+        queue.mark_task_completed("t1")
         assert queue.length == 0
         assert queue.has_streaming is False
 

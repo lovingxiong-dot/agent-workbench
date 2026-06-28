@@ -158,3 +158,65 @@ class TestSelfContext:
         sc = SelfContext(task_service=mock_ts)
         result = sc.build_handoff("session-1")
         assert result == ""
+
+
+class TestMemoryBoundary:
+    """_build_memory_context 边界测试"""
+
+    def test_memory_truncation_long_content(self):
+        """记忆内容超过 memory_max_len 时应被截断"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mem_dir = os.path.join(tmpdir, ".workbuddy", "memory")
+            os.makedirs(mem_dir, exist_ok=True)
+            mem_file = os.path.join(mem_dir, "MEMORY.md")
+            long_text = "A" * 5000  # 超过默认 3000
+            with open(mem_file, "w", encoding="utf-8") as f:
+                f.write(long_text)
+
+            mock_cs = MagicMock()
+            mock_cs.get_project_root.return_value = tmpdir
+            sc = SelfContext(context_service=mock_cs)
+            result = sc._build_memory_context()
+            # 截断验证：5000 字符的完整内容不应出现在结果中
+            assert "A" * 5000 not in result
+            assert "[项目记忆 - 跨对话持久化]" in result
+            # 结果应包含前缀 + 截断内容（不会超过 3200）
+            assert len(result) <= 3200, f"预期 ≤ 3200，实际 {len(result)}"
+
+    def test_log_days_zero_no_logs(self):
+        """log_days=0 时不读取任何日志文件"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mem_dir = os.path.join(tmpdir, ".workbuddy", "memory")
+            os.makedirs(mem_dir, exist_ok=True)
+            log_file = os.path.join(mem_dir, "2026-06-28.md")
+            with open(log_file, "w", encoding="utf-8") as f:
+                f.write("line1\nline2\nline3")
+
+            mock_cs = MagicMock()
+            mock_cs.get_project_root.return_value = tmpdir
+            sc = SelfContext(
+                context_service=mock_cs,
+                config={"log_days": 0, "log_lines": 3},
+            )
+            result = sc._build_memory_context()
+            assert "line1" not in result  # 日志不应被读取
+
+    def test_log_lines_zero_no_content(self):
+        """log_lines=0 时日志文件读取 0 行"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mem_dir = os.path.join(tmpdir, ".workbuddy", "memory")
+            os.makedirs(mem_dir, exist_ok=True)
+            with open(os.path.join(mem_dir, "MEMORY.md"), "w", encoding="utf-8") as f:
+                f.write("mem")
+            log_file = os.path.join(mem_dir, "2026-06-28.md")
+            with open(log_file, "w", encoding="utf-8") as f:
+                f.write("line1\nline2\nline3")
+
+            mock_cs = MagicMock()
+            mock_cs.get_project_root.return_value = tmpdir
+            sc = SelfContext(
+                context_service=mock_cs,
+                config={"log_days": 3, "log_lines": 0},
+            )
+            result = sc._build_memory_context()
+            assert "line1" not in result  # 0 行日志不应出现

@@ -96,32 +96,34 @@ class ConversationListWidget(QWidget):
         self.project_header.setText(f"当前项目: {display}")
         self.project_header.setToolTip(path)
 
-    def add_conversation(self, session_id, title, project_path=None, active=False):
-        """添加对话；根据 project_path 决定放到哪一栏"""
+    def add_conversation(self, session_id, title, project_path=None):
+        """添加对话项到列表，不激活。调用方需用 set_active_conversation 激活"""
         item = QListWidgetItem(title)
         item.setData(Qt.UserRole, session_id)
         item.setToolTip(title)
         if project_path:
             self.project_list.addItem(item)
-            if active:
-                self.project_list.setCurrentItem(item)
         else:
             self.global_list.addItem(item)
-            if active:
-                self.global_list.setCurrentItem(item)
-        if active:
-            self._style_active_item(item)
 
-    def set_active(self, session_id):
-        """高亮指定会话，并清除其他项的高亮样式"""
-        for lst in (self.project_list, self.global_list):
-            for i in range(lst.count()):
-                item = lst.item(i)
-                if item.data(Qt.UserRole) == session_id:
-                    lst.setCurrentItem(item)
-                    self._style_active_item(item)
-                else:
-                    item.setForeground(QColor("#E6EDF3"))
+    def set_active_conversation(self, session_id):
+        """高亮指定会话，清除其他高亮。使用 blockSignals 防止信号级联"""
+        self.blockSignals(True)  # 防御：阻止 ConversationListWidget 自身信号
+        try:
+            for lst in (self.project_list, self.global_list):
+                lst.blockSignals(True)  # 防御：阻止 itemClicked 等子控件信号
+                try:
+                    for i in range(lst.count()):
+                        item = lst.item(i)
+                        if item.data(Qt.UserRole) == session_id:
+                            lst.setCurrentItem(item)
+                            self._style_active_item(item)
+                        else:
+                            item.setForeground(QColor("#E6EDF3"))
+                finally:
+                    lst.blockSignals(False)
+        finally:
+            self.blockSignals(False)
 
     def clear_conversations(self):
         """清空两栏"""
@@ -140,6 +142,7 @@ class ConversationListWidget(QWidget):
             "confirm": "🟡 ",
             "queued": "⏳ ",
             "failed": "🔴 ",
+            "completed": "✅ ",
         }
         icon = status_icons.get(status, "")
         for lst in (self.project_list, self.global_list):

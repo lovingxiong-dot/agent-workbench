@@ -89,8 +89,10 @@ class TaskService(QObject):
             updated_at=datetime.now().isoformat(),
         )
 
-        # 如果已有同会话的旧任务，移除
-        if session_id in self._tasks:
+        # 如果已有同会话的旧任务且未终止，则取消
+        old_task = self._tasks.get(session_id)
+        if old_task is not None and not old_task.is_terminal:
+            print(f"[DIAG-TASK] submit_task canceling old task: session={session_id}, old_status={old_task.status.value}", flush=True)
             self.cancel_task(session_id)
 
         self._tasks[session_id] = task
@@ -183,19 +185,26 @@ class TaskService(QObject):
     # ═══════════════════════════════════════════════════════
     # 任务完成
     # ═══════════════════════════════════════════════════════
-    def _on_task_done(self, session_id: str, success: bool):
+    def complete_task(self, session_id: str, success: bool, error: str = ""):
+        """由 MainWindow 显式调用，标记一次用户请求的工作流完成/失败"""
         task = self._tasks.get(session_id)
         if task:
             task.status = TaskStatus.COMPLETED if success else TaskStatus.FAILED
+            if error:
+                task.last_error = error
             task.updated_at = datetime.now().isoformat()
-        if self._pool:
-            self._pool.on_task_complete(session_id)
         self.task_completed.emit(session_id, success)
         status_str = (task.status.value if task else TaskStatus.COMPLETED.value)
         self.task_status_changed.emit(session_id, status_str)
         self._emit_capacity()
         # 尝试从队列中取出下一个任务
         self._drain_queue()
+
+    def _on_task_done(self, session_id: str, success: bool):
+        """WorkerPool 回调用入口，统一委托到 complete_task"""
+        if self._pool:
+            self._pool.on_task_complete(session_id)
+        self.complete_task(session_id, success)
 
     # ═══════════════════════════════════════════════════════
     # 容量查询
@@ -205,7 +214,6 @@ class TaskService(QObject):
                      if t.status in (TaskStatus.ANALYZING, TaskStatus.EXECUTING,
                                      TaskStatus.VERIFYING, TaskStatus.AWAITING_CONFIRM))
         queued = self._queue.size
-        _log_signal("capacity_changed", active, queued, self.capacity.total_capacity)
         self.capacity_changed.emit(active, queued, self.capacity.total_capacity)
 
     def get_capacity_info(self) -> dict:
