@@ -32,11 +32,13 @@ from core.events import (
     PhaseArchiveRequiredEvent,
     PhaseFlowCompletedEvent,
     PhaseErrorEvent,
+    WorkerCreatedEvent,
     WorkerResultEvent,
     WorkerChunkEvent,
     WorkerErrorEvent,
     WorkerToolExecutedEvent,
     UIAppendUserEvent,
+    UIAppendSystemEvent,
     UIClearPhaseUIEvent,
     UISetStreamingEvent,
     UIUpdateSessionStatusEvent,
@@ -50,7 +52,7 @@ from services.app_context import AppContext
 from services.session_runtime import SessionRuntime
 from services.task_service import TaskService
 from workers.session_task import SessionTask, TaskStatus
-from agent_engine.phase_manager import PhaseManager, TaskItem
+from agent_engine.phase_manager import PhaseManager
 
 
 class SessionOrchestrator(QObject):
@@ -96,31 +98,31 @@ class SessionOrchestrator(QObject):
     # 事件订阅
     # ═══════════════════════════════════════════════════
     def _subscribe_events(self):
-        self._bus.subscribe(self._on_user_send, namespace="user")
-        self._bus.subscribe(self._on_user_stop, namespace="user")
-        self._bus.subscribe(self._on_user_confirm, namespace="user")
-        self._bus.subscribe(self._on_user_reanalyze, namespace="user")
-        self._bus.subscribe(self._on_user_skip_verify, namespace="user")
+        self._bus.subscribe_name("user", "send", self._on_user_send)
+        self._bus.subscribe_name("user", "stop", self._on_user_stop)
+        self._bus.subscribe_name("user", "confirm", self._on_user_confirm)
+        self._bus.subscribe_name("user", "reanalyze", self._on_user_reanalyze)
+        self._bus.subscribe_name("user", "skip_verify", self._on_user_skip_verify)
 
-        self._bus.subscribe(self._on_session_create, namespace="session")
-        self._bus.subscribe(self._on_session_switch, namespace="session")
-        self._bus.subscribe(self._on_session_delete, namespace="session")
+        self._bus.subscribe_name("session", "create", self._on_session_create)
+        self._bus.subscribe_name("session", "switch", self._on_session_switch)
+        self._bus.subscribe_name("session", "delete", self._on_session_delete)
 
-        self._bus.subscribe(self._on_queue_task_ready, namespace="queue")
-        self._bus.subscribe(self._on_queue_task_stopped, namespace="queue")
+        self._bus.subscribe_name("queue", "task_ready", self._on_queue_task_ready)
+        self._bus.subscribe_name("queue", "task_stopped", self._on_queue_task_stopped)
 
-        self._bus.subscribe(self._on_phase_analyze, namespace="phase")
-        self._bus.subscribe(self._on_phase_confirm, namespace="phase")
-        self._bus.subscribe(self._on_phase_execute, namespace="phase")
-        self._bus.subscribe(self._on_phase_verify, namespace="phase")
-        self._bus.subscribe(self._on_phase_archive, namespace="phase")
-        self._bus.subscribe(self._on_phase_flow_completed, namespace="phase")
-        self._bus.subscribe(self._on_phase_error, namespace="phase")
+        self._bus.subscribe_name("phase", "analyze_required", self._on_phase_analyze)
+        self._bus.subscribe_name("phase", "confirm_required", self._on_phase_confirm)
+        self._bus.subscribe_name("phase", "execute_required", self._on_phase_execute)
+        self._bus.subscribe_name("phase", "verify_required", self._on_phase_verify)
+        self._bus.subscribe_name("phase", "archive_required", self._on_phase_archive)
+        self._bus.subscribe_name("phase", "flow_completed", self._on_phase_flow_completed)
+        self._bus.subscribe_name("phase", "error", self._on_phase_error)
 
-        self._bus.subscribe(self._on_worker_result, namespace="worker")
-        self._bus.subscribe(self._on_worker_chunk, namespace="worker")
-        self._bus.subscribe(self._on_worker_error, namespace="worker")
-        self._bus.subscribe(self._on_worker_tool, namespace="worker")
+        self._bus.subscribe_name("worker", "result", self._on_worker_result)
+        self._bus.subscribe_name("worker", "chunk", self._on_worker_chunk)
+        self._bus.subscribe_name("worker", "error", self._on_worker_error)
+        self._bus.subscribe_name("worker", "tool_executed", self._on_worker_tool)
 
     # ═══════════════════════════════════════════════════
     # 用户动作处理
@@ -212,8 +214,8 @@ class SessionOrchestrator(QObject):
             title=title,
             mode=mode,
             model=model,
-            parent=self,
         )
+        rt.setParent(self)
         self._runtimes[session_id] = rt
         if self._current_session_id is None:
             self._current_session_id = session_id
@@ -347,7 +349,7 @@ class SessionOrchestrator(QObject):
         rt.clear_phase_state()
 
         # 3. 通知队列出队
-        rt.queue_manager.mark_current_done(event.session_id)
+        rt.queue_manager.mark_current_done()
 
         # 4. UI 归零
         self._bus.emit(UISetStreamingEvent(session_id=event.session_id, active=False))

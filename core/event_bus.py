@@ -51,6 +51,10 @@ class MessageBus(QObject):
         """按 namespace 订阅。"""
         self.subscribe(handler, namespace=namespace)
 
+    def subscribe_name(self, namespace: str, name: str, handler: Callable[[Event], None]):
+        """按 namespace + event name 精确订阅。"""
+        self.subscribe(handler, namespace=namespace, event_filter=lambda e: e.name == name)
+
     def process(self, event: Event):
         """
         同步处理单个事件（主要用于测试）。

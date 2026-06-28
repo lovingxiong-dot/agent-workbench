@@ -93,6 +93,7 @@ def test_user_send_emits_ui_append_user(app, mock_app_context, bus, task_service
 
     orch.create_runtime("s1", "/tmp", "test", "ask", "deepseek")
     bus.process(UserSendEvent(session_id="s1", user_text="hello", mode="ask"))
+    app.processEvents()
 
     append_events = [e for e in spy.events if isinstance(e, UIAppendUserEvent)]
     assert len(append_events) == 1
@@ -111,6 +112,7 @@ def test_phase_flow_completed_clears_state(app, mock_app_context, bus, task_serv
     orch.get_runtime("s1").bind_task(task)
 
     bus.process(PhaseFlowCompletedEvent(session_id="s1", success=True))
+    app.processEvents()
 
     assert task.status == TaskStatus.COMPLETED
     clear_events = [e for e in spy.events if isinstance(e, UIClearPhaseUIEvent)]

@@ -41,7 +41,7 @@ class PendingQueue(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._slots: list[Optional[PendingTask]] = [None, None]
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
     
     def enqueue(self, task: PendingTask) -> bool:
         """入队：找到第一个空槽位，返回是否成功"""
