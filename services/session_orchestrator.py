@@ -219,6 +219,21 @@ class SessionOrchestrator(QObject):
         self._runtimes[session_id] = rt
         if self._current_session_id is None:
             self._current_session_id = session_id
+
+        # 桥接 QueueManager Qt 信号 → MessageBus 事件
+        rt.queue_manager.task_ready_to_start.connect(
+            lambda task: self._bus.emit(QueueTaskReadyEvent(
+                session_id=task.session_id,
+                task_id=task.task_id,
+            ))
+        )
+        rt.queue_manager.task_stopped.connect(
+            lambda sid: self._bus.emit(QueueTaskStoppedEvent(
+                session_id=sid,
+                task_id="",
+            ))
+        )
+
         return rt
 
     def switch_session(self, new_session_id: str):

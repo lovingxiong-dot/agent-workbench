@@ -45,6 +45,21 @@ from ui.widgets import (
 from ui.dialogs import SettingsDialog, ProviderFormDialog
 from ui.chat_view import ChatView
 from ui.managers.session_manager import SessionManager
+from core.event_bus import MessageBus
+from core.events import (
+    SessionCreateEvent,
+    SessionSwitchEvent,
+    SessionDeleteEvent,
+    UIAppendUserEvent,
+    UIAppendAIEvent,
+    UIAppendSystemEvent,
+    UIStreamChunkEvent,
+    UIFinalizeStreamEvent,
+    UISetStreamingEvent,
+    UIClearPhaseUIEvent,
+    UIHideConfirmationEvent,
+    UIHideSkipVerifyEvent,
+)
 from tools.system import run_command, run_as_admin
 from tools.system import read_file, write_file, list_dir, web_fetch
 from tools.system import clipboard_read, clipboard_write, send_notification
@@ -86,44 +101,85 @@ def resource_path(relative_path):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, app_context=None, session_orchestrator=None):
         super().__init__()
         self.resize(1600, 950)
 
+        # ── v3 注入点 ───────────────────────────
+        self._app_ctx = app_context
+        self._orchestrator = session_orchestrator
+
         # ── 基础路径与配置 ──────────────────────
-        config_path = resource_path("config.yaml")
-        config_write = (
-            os.path.join(os.path.dirname(sys.executable), "config.yaml")
-            if getattr(sys, 'frozen', False)
-            else config_path
-        )
-        self.config_service = ConfigService(config_path, writable_path=config_write)
-        self.persistence_service = PersistenceService(self.config_service)
+        if self._app_ctx is not None:
+            config_path = app_context.config_path
+            config_write = app_context.writable_config_path
+            self.config_service = app_context.config_service
+            self.persistence_service = PersistenceService(self.config_service)
+            self._app_storage_dir = app_context.storage_dir
+            app_root = app_context.app_root
+        else:
+            config_path = resource_path("config.yaml")
+            config_write = (
+                os.path.join(os.path.dirname(sys.executable), "config.yaml")
+                if getattr(sys, 'frozen', False)
+                else config_path
+            )
+            self.config_service = ConfigService(config_path, writable_path=config_write)
+            self.persistence_service = PersistenceService(self.config_service)
+            app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            self._app_storage_dir = (
+                os.path.join(os.path.dirname(sys.executable), "storage")
+                if getattr(sys, 'frozen', False)
+                else os.path.join(app_root, "storage")
+            )
+            os.makedirs(self._app_storage_dir, exist_ok=True)
 
         # 窗口标题动态读取版本号（必须在 config_service 初始化之后）
         app_version = self.config_service.get("app.version", "v3.x")
         self.setWindowTitle(f"AI Agent 工作台 {app_version} · 手动模式")
 
-        # 统一持久化根目录：开发时用项目根目录/storage，打包时用 exe 同级/storage
-        app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self._app_storage_dir = (
-            os.path.join(os.path.dirname(sys.executable), "storage")
-            if getattr(sys, 'frozen', False)
-            else os.path.join(app_root, "storage")
-        )
-        os.makedirs(self._app_storage_dir, exist_ok=True)
-
         # ── 服务初始化 ──────────────────────────
-        self.session_service = SessionService(os.path.join(self._app_storage_dir, "conversations.db"))
-        self.project_service = ProjectService(self.session_service, self.config_service)
+        if self._app_ctx is not None:
+            self.session_service = app_context.session_service
+            self.project_service = app_context.project_service
+            self._project_root = app_context.project_root()
+            self.context_service = app_context.context_service
+            self.interpreter_service = app_context.interpreter_service
+            self.activity_service = app_context.activity_service
+            self.theme_service = app_context.theme_service
+            self.mode_manager = app_context.mode_manager
+            self.llm_registry = app_context.llm_registry
+            self.memory_manager = app_context.memory_manager
+            self.metrics_collector = app_context.metrics_collector
+            self.tool_gateway = app_context.tool_gateway
+            self.mcp_registry = app_context.mcp_registry
+        else:
+            self.session_service = SessionService(os.path.join(self._app_storage_dir, "conversations.db"))
+            self.project_service = ProjectService(self.session_service, self.config_service)
 
-        # 先确定项目根目录，后续服务依赖它
-        self._project_root = self.project_service.detect_current_project(app_root)
+            # 先确定项目根目录，后续服务依赖它
+            self._project_root = self.project_service.detect_current_project(app_root)
 
-        self.context_service = ContextService(self.project_service, self)
-        self.interpreter_service = InterpreterService(self._project_root, self.config_service)
-        self.interpreter_service.discover()
-        self.context_service.set_interpreter_service(self.interpreter_service)
+            self.context_service = ContextService(self.project_service, self)
+            self.interpreter_service = InterpreterService(self._project_root, self.config_service)
+            self.interpreter_service.discover()
+            self.context_service.set_interpreter_service(self.interpreter_service)
+
+            self.activity_service = ActivityService(os.path.join(self._app_storage_dir, "activities.json"))
+            self.theme_service = ThemeService()
+            self.mode_manager = ModeManager(config_path)
+            self.llm_registry = LLMRegistry(config_path, config_write)
+            self.memory_manager = MemoryManager(
+                self.config_service.get("memory", {}),
+                storage_dir=self._app_storage_dir,
+            )
+            self.metrics_collector = MetricsCollector()
+
+            # ── 工具网关与外部能力接入点 ─────────────────────────────
+            self.tool_gateway = ToolGateway()
+            self.tool_gateway.register_local_tools(TOOL_MAP, ARUN_MAP, TOOL_DEFINITIONS)
+            self.mcp_registry = MCPRegistry()
+            self.tool_gateway.register_mcp_registry(self.mcp_registry)
 
         # 全局状态
         self._current_mode = "ask"
@@ -140,29 +196,16 @@ class MainWindow(QMainWindow):
         self._phase_task_list = []
         self._phase_results = []
 
-        # 其余服务
-        # 活动记录持久化到统一 storage 目录
-        self.activity_service = ActivityService(os.path.join(self._app_storage_dir, "activities.json"))
-        self.theme_service = ThemeService()
-        self.mode_manager = ModeManager(config_path)
-        self.llm_registry = LLMRegistry(config_path, config_write)
-        self.memory_manager = MemoryManager(
-            self.config_service.get("memory", {}),
-            storage_dir=self._app_storage_dir,
-        )
-
-        # ── 工具网关与外部能力接入点 ─────────────────────────────
-        self.tool_gateway = ToolGateway()
-        self.tool_gateway.register_local_tools(TOOL_MAP, ARUN_MAP, TOOL_DEFINITIONS)
-        self.mcp_registry = MCPRegistry()
-        self.tool_gateway.register_mcp_registry(self.mcp_registry)
-
         # ── 多任务管理系统 (v3.9) ────────────────────
-        self.task_service = TaskService(capacity=TaskCapacity.from_config(self.config_service))
-        self.worker_pool = WorkerPool(
-            max_workers=self.config_service.get("task", {}).get("capacity", {}).get("max_concurrent_tasks", 3)
-        )
-        self.task_service.set_pool(self.worker_pool)
+        if self._app_ctx is not None:
+            self.task_service = app_context.task_service
+            self.worker_pool = None
+        else:
+            self.task_service = TaskService(capacity=TaskCapacity.from_config(self.config_service))
+            self.worker_pool = WorkerPool(
+                max_workers=self.config_service.get("task", {}).get("capacity", {}).get("max_concurrent_tasks", 3)
+            )
+            self.task_service.set_pool(self.worker_pool)
 
         # ── 双槽位等待队列 + 自识别上下文 (v3.10) ──────
         self._pending_queue = PendingQueue(self)
@@ -194,6 +237,10 @@ class MainWindow(QMainWindow):
             conversation_list_widget=self.conversation_list,
             parent=self,
         )
+
+        # ── v3 Orchestrator 生命周期镜像 ──────────
+        if self._orchestrator is not None:
+            self._connect_orchestrator()
 
         # ── 连接信号 ────────────────────────────
         self.chat_view.model_changed.connect(self._on_model_changed)
@@ -282,6 +329,38 @@ class MainWindow(QMainWindow):
     @_switching.setter
     def _switching(self, value: bool):
         self._session_mgr.switching = value
+
+    def _connect_orchestrator(self):
+        """将 SessionManager 生命周期信号桥接到 SessionOrchestrator"""
+        orch = self._orchestrator
+
+        def _on_session_created(session_id: str, project_path: str):
+            orch.create_runtime(
+                session_id=session_id,
+                project_path=project_path or "",
+                title="新对话",
+                mode=self._current_mode,
+                model=self._current_model_name,
+            )
+
+        def _on_session_switched(old_id: str, new_id: str):
+            orch.switch_session(new_id)
+
+        def _on_session_deleted(session_id: str):
+            orch.delete_runtime(session_id)
+
+        self._session_mgr.session_created.connect(_on_session_created)
+        self._session_mgr.session_switched.connect(_on_session_switched)
+        self._session_mgr.session_deleted.connect(_on_session_deleted)
+
+        # 订阅 v3 ui.* 事件（Phase 5 前为占位，仅记录日志避免事件丢失）
+        bus = self._app_ctx.message_bus
+        bus.subscribe_namespace("ui", self._on_ui_event)
+
+    def _on_ui_event(self, event):
+        """v3 UI 事件占位处理器（Phase 5 由 UIRenderer 接管）"""
+        # 当前阶段仍由旧信号路径直接更新 UI；此处仅做调试追踪
+        pass
 
     # ═══════════════════════════════════════════════════
     # 主题

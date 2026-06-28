@@ -32,7 +32,30 @@ sys.excepthook = _diagnostic_hook
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QTimer
+from services.app_context import AppContext
+from services.session_orchestrator import SessionOrchestrator
 from ui.main_window import MainWindow
+
+
+def _create_app_context():
+    """创建全局服务容器"""
+    app_root = os.path.dirname(os.path.abspath(__file__))
+    storage_dir = AppContext.resolve_storage_dir(app_root)
+    config_path = os.path.join(
+        getattr(sys, "_MEIPASS", app_root) if getattr(sys, "frozen", False) else app_root,
+        "config.yaml",
+    )
+    writable_config_path = (
+        os.path.join(os.path.dirname(sys.executable), "config.yaml")
+        if getattr(sys, "frozen", False)
+        else config_path
+    )
+    return AppContext(
+        config_path=config_path,
+        writable_config_path=writable_config_path,
+        storage_dir=storage_dir,
+        app_root=app_root,
+    )
 
 
 if __name__ == "__main__":
@@ -40,7 +63,13 @@ if __name__ == "__main__":
     app.setApplicationName("AI Agent Workbench")
 
     try:
-        window = MainWindow()
+        app_ctx = _create_app_context()
+        orchestrator = SessionOrchestrator(
+            app_context=app_ctx,
+            message_bus=app_ctx.message_bus,
+            task_service=app_ctx.task_service,
+        )
+        window = MainWindow(app_context=app_ctx, session_orchestrator=orchestrator)
         window.show()
         exit_code = app.exec()
         sys.exit(exit_code)
