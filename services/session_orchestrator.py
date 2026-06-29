@@ -431,9 +431,10 @@ class SessionOrchestrator(QObject):
             else:
                 self._task_service.complete_task(event.session_id, False, event.message)
 
-        # 2. 清除运行时 Task 引用
+        # 2. 清除运行时 Task 引用与 Phase 状态（错误路径可能未 reset）
         rt.clear_task()
         rt.clear_phase_state()
+        rt.phase_manager.reset()
 
         # 3. 通知队列出队
         rt.queue_manager.mark_current_done()

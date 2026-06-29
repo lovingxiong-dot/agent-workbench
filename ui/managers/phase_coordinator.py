@@ -194,6 +194,7 @@ class PhaseCoordinator(QObject):
             session_id=self._session_id,
             text=f"❌ Phase 错误 [{code}]: {detail}",
         ))
+        self._phase_manager.reset()
         self._finish_flow(False, detail)
 
     def _finish_flow(self, success: bool, message: str):

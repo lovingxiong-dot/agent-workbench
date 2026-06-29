@@ -1,5 +1,20 @@
 # Changelog
 
+## v3.11.3 (2026-06-29) — 修复真实运行时 v3 Worker 无响应与状态卡死
+
+### fix
+- **WorkerManager 无法解析真实 LLM 导致任务永远卡住**：`ui/managers/worker_manager.py` 的 `_resolve_llm` 之前调用 LLMRegistry 不存在的 `has_provider` / `get`，真实运行时永远返回 `None`，Worker 创建失败、analyze 不执行、队列槽位不释放。现兼容测试 stub（`has_provider` / `get`）与真实注册表（`list_providers` / `get_llm`），并支持首个 provider 回退。
+- **Phase 错误后状态机未 reset 导致后续消息 PHASE_BUSY**：`ui/managers/phase_coordinator.py` 错误路径补充 `self._phase_manager.reset()`；`services/session_orchestrator.py` 在 `PhaseFlowCompletedEvent` 处理后统一 reset，确保同一会话可继续发送新消息。
+- **空对话守卫导致项目会话永远只有一个"新对话"标签**：`ui/main_window.py` 的 `_new_conversation_requested` 将守卫条件改为"已有空会话且不是当前选中"才复用，否则新建，使每次点击"+ 新对话"都能看到新标签。
+- **新建会话后 Orchestrator 当前会话不同步**：`ui/main_window.py` 在创建新会话后调用 `self._orchestrator.switch_session(session_id)`，保证 `SessionOrchestrator._current_session_id` 与 `SessionManager` 一致，避免 UI 过滤与暂停/恢复逻辑错乱。
+- **SessionManager 标题更新失效**：`ui/managers/session_manager.py` 的 `update_title` 改为使用 `Qt.UserRole` 获取 session_id，修复会话重命名/首条消息生成标题后 UI 不更新。
+
+### chore
+- 新增 `pytest.ini`，将 `testpaths` 限定为 `tests/`，排除 `scripts/test_llm_direct.py` 被 pytest 误识别导致的 fixture 错误。
+
+### test
+- 全量 210 个单元/集成测试通过。
+
 ## v3.11.2 (2026-06-29) — 修复 v3 Worker 重复创建与文档规范化
 
 ### fix

@@ -238,16 +238,25 @@ class WorkerManager(QObject):
         return self._workers.get(session_id)
 
     def _resolve_llm(self, model: str):
-        """通过 LLMRegistry 解析模型实例"""
+        """通过 LLMRegistry 解析模型实例。
+
+        兼容两种接口：
+        - 测试 stub：has_provider / get
+        - 真实 LLMRegistry：list_providers / get_llm
+        """
         try:
             if self._llm_registry.has_provider(model):
                 return self._llm_registry.get(model)
-            # 尝试第一个可用 provider
+        except AttributeError:
+            pass  # 真实 LLMRegistry 没有 has_provider/get
+        try:
             providers = self._llm_registry.list_providers()
+            if model in providers:
+                return self._llm_registry.get_llm(model)
             if providers:
                 first = next(iter(providers))
                 logger.warning("Model %s not found, fallback to %s", model, first)
-                return self._llm_registry.get(first)
+                return self._llm_registry.get_llm(first)
         except Exception as e:
             logger.warning("Failed to resolve LLM for %s: %s", model, e)
         return None
