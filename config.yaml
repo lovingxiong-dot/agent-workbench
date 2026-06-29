@@ -205,7 +205,7 @@ feature_flags:
   shared_orchestrator: true
   shared_output_panel: true
 app:
-  version: v3.11.4
+  version: v3.12.0
   last_mode: plan
   last_model: deepseek-pro
 task:
