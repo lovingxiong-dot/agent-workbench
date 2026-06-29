@@ -1,38 +1,91 @@
-# HANDOFF — 2026-06-29 20:56
+---
+generated: 2026-06-30T03:00:00+08:00
+agent: Kimi-K2.7-Code
+schema_version: 3.1
 
-## Git Status
-- **Branch**: master
-- **Last Commit**: d241b44 `test(ui): 新增 MainWindow UI 自动化测试 [test:214/214]`
-- **Remote**: git@gitee.com:xyzturbo/xyz.git
-- **Dirty Files**: ` M services/self_context.py` (v3.10.0 开发遗留)
+## Mission
+完成 AI Agent Workbench v3.12.0 的 UI 修复、MainWindow 架构收敛、AI Engine 八引擎升级评审、版本号统一与分支整理，将代码库推进到干净、可继续开发的归档状态。
 
-## Branch Content (deepseek_api/)
-完整 DeepSeek Web 集成代码位于 `deepseek_api/` 目录（.gitignore 已排除，git 不可见）：
-- `services/api_discovery.py` — API 端点配置
-- `services/stream_adapter.py` — SSE→OpenAI 流式转换
-- `services/rule_injector.py` — Prompt 注入
-- `services/tool_injector.py` — 工具定义+门控
-- `services/deepseek_adapter.py` — 核心适配器+LangChain Wrapper
-- `services/pow_solver.py` — DeepSeekHashV1 WASM 求解器
-- `resources/cookie.txt` — user_token (保密)
-- `resources/sha3_wasm_bg.7b9ca65ddd.wasm` — POW WASM 模块
+## Progress
+1. ✅ 修复新会话按钮只能添加一个标签的问题（移除空会话守卫）。
+2. ✅ 修复会话标签名均为"新对话"的问题（首条消息后更新标题）。
+3. ✅ 修复 Enter 键首次失效问题（新增 `_focus_input_field()` 强制焦点）。
+4. ✅ 修复切换新会话显示无意义接替上下文的问题（`task.phase == "idle"` 守卫）。
+5. ✅ 完成 MainWindow 架构收敛重构，移除旧全局状态（`_pending_queue`、`_worker`、`_workers`、`_phase_manager`），统一走 v3 MessageBus 路径。
+6. ✅ 新增 `tests/test_main_window_ui_automation.py` UI 自动化测试（4 个用例）。
+7. ✅ 评审并确认 v3.12.0 AI Engine 八引擎模块化升级的正确性与合理性（绞杀者模式、接口抽象、依赖注入）。
+8. ✅ 统一版本号：`config.yaml` / `PROJECT_BLUEPRINT.md` / 提交标签一致为 `v3.12.0`。
+9. ✅ 整理分支布局：将 `master` 合并到 `main`，删除本地与远程 `master`，`main` 成为唯一主线。
+10. ✅ 全量测试 `214 passed`，工作区 clean，最新提交已 push 到 `origin/main`。
 
-## 当前困境/阻塞
-- DeepSeek 账号 temporarily muted (biz_code=5, mute_until ~1782807928)，需等待解封后重试
-- 非代码问题：Token 认证/Session 创建/POW 求解均验证通过
+## Blocker
+无。所有已识别问题已修复并验证，代码库处于可继续开发状态。
 
-## 问题反思
-1. **POW 阻塞**: DeepSeek Web 强制要求 DeepSeekHashV1 WASM 求解，无绕过可能。wasmtime 库已安装到 venv，WASM 文件已下载（26612 bytes）
-2. **分支隔离**: 当前 deepseek_api/ 在 .gitignore 中，切换工作区后该目录可能被遗忘。建议新工作区开始前确认是否需要迁移
-3. **Prompt 格式**: DeepSeek 使用 `｜User｜/｜Assistant｜/｜end of sentence｜` 标签拼接（非 standard messages），System Prompt 以 `｜User｜` 包裹伪装为第一条用户消息
+## Decision Log
+1. 决策：采用 `_focus_input_field()` 统一处理输入框焦点（`activateWindow` + `raise_` + `QTimer.singleShot`）。
+   原因：同步 `setFocus()` 在窗口未激活或被其他控件抢占时失效。
+   排除：仅增加 `setFocusPolicy(Qt.StrongFocus)` 或仅在更多事件里调用 `setFocus()`。
+   状态：已执行并验证。
 
-## Next Steps
-1. 等待 mute 过期 → 重新运行 E2E 测试
-2. 将 `DeepSeekWebChatModel` 接入主线 `AgentOrchestrator` 作为 `deepseek-web` provider
-3. 实现确认门控回调对接 `PhaseManager`
-4. 解决 Git 仓库分支问题（当前用 master 而非 main）
+2. 决策：对 AI Engine 升级使用绞杀者模式，保留旧逻辑作为回退。
+   原因：`arun()` 主循环是热路径，直接全量替换风险过高。
+   排除：一次性全量迁移到八引擎主循环。
+   状态：已确认合理，后续需分阶段推进主循环迁移。
+
+3. 决策：将 `master` 合并到 `main` 后删除 `master`，以 `main` 作为唯一主线。
+   原因：用户要求唯一主线布局，`origin/HEAD` 已指向 `main`。
+   排除：保留 `master` 作为并行开发分支。
+   状态：已执行，`master` 本地与远程均已删除。
+
+4. 决策：版本号修正提交不打新标签，复用已存在的 `v3.12.0`。
+   原因：`v3.12.0` 已推送远程，指向 AI Engine 升级提交；元数据修正作为补丁提交跟随其后。
+   排除：强制移动 `v3.12.0` 标签（违反 --force 规则）。
+   状态：已执行，`v3.12.0` 标签保留。
+
+## Key Files
+- `ui/main_window.py` — MainWindow 架构收敛、输入框焦点修复、会话切换逻辑。
+- `services/self_context.py` — 接替上下文构建，`task.phase == "idle"` 守卫。
+- `ui/widgets/sidebar.py` — 补充 `FileTreeWidget.get_root_path()`。
+- `ui/managers/session_manager.py` — `update_title` 补充 `Qt` 导入。
+- `agent_engine/engines/` — v3.12.0 八引擎模块化实现（Context/Prompt/Inference/Tool/Phase/Memory/Metrics/Policy）。
+- `agent_engine/orchestrator.py` — 绞杀者模式集成，新旧逻辑并存。
+- `config.yaml` — 版本号、LLM 参数、engines 配置、system prompt。
+- `PROJECT_BLUEPRINT.md` / `CHANGELOG.md` — 项目文档与变更日志。
+- `tests/test_main_window_ui_automation.py` — UI 自动化测试。
+
+## Error Log
+No error. 最近一个完整测试运行：`214 passed in 44.45s`。
+
+## Environment Snapshot
+branch: main
+python: Python 3.14.6
+venv: none
+last_commit: 9621c5e Merge branch 'master'
+
+## Working State
+### Dirty Files
+working tree clean
+
+### Uncommitted Changes Summary
+no uncommitted changes
+
+### Recent Conversation
+- 用户要求分析 v3.12.0 AI Engine 八引擎升级的正确性与合理性。
+- AI 确认升级架构正确：职责单一、接口抽象、依赖注入、绞杀者模式合理；指出主循环尚未迁移、引擎间初始化顺序、降级路径测试等后续关注点。
+- 用户要求执行「存档+移交」，同步版本号，整理分支为唯一主线。
+- AI 完成版本号统一、master 合并到 main、删除 master、push 到远程。
+
+## Next Steps (AI-Inferred)
+1. **验证 v3.12.0 运行时行为**：启动 `python main.py`，确认八引擎升级后没有破坏会话管理、焦点、队列状态等已有修复。
+2. **推进八引擎主循环迁移**：制定从 `arun()` 旧路径逐步迁移到 `InferenceEngine` + `ToolEngine` + `PhaseEngine` 的计划。
+3. **补充引擎降级/重试路径测试**：为 `InferenceEngine.invoke()` 的 fallback model、重试耗尽、流式取消等边界场景补充测试。
+4. **清理 MainWindow 旧路径残留**：在确认 v3 MessageBus 路径稳定后，彻底移除 `_worker`、`_workers`、`_phase_manager` 等兼容属性及相关旧方法。
 
 ## Test Status
-- 单元测试: 全部通过（stream_adapter SSE 解析, rule_injector prompt 构建, tool_injector 工具注入, pow_solver WASM 加载）
-- 集成测试: Token ✅ / Session ✅ / POW ✅ / Chat ⚠️ (muted)
-- Test runner: F:\Agent\agent_workbench\venv\Scripts\python.exe
+latest: [test:214/214]
+command: python -m pytest tests -q --tb=short
+
+## Notes
+- `v3.12.0` 标签指向 `54b61fe`（AI Engine 升级提交），版本号修正提交 `b478515` 在其后并通过 merge 进入 `main`。
+- 当前远程分支仅剩 `main` 与 `feature/v3-rewrite`；`origin/HEAD -> origin/main`。
+- 建议后续在 Gitee 后台将默认分支明确设为 `main`（虽然 HEAD 已指向 main）。
