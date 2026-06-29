@@ -365,6 +365,16 @@ class MainWindow(QMainWindow):
             )
 
         def _on_session_switched(old_id: str, new_id: str):
+            # 历史会话加载后可能没有 runtime，确保存在
+            if not orch.has_runtime(new_id):
+                session = self._session_mgr.get_session_data(new_id)
+                orch.create_runtime(
+                    session_id=new_id,
+                    project_path=session.get("project_path", ""),
+                    title=session.get("title", "新对话"),
+                    mode=self._current_mode,
+                    model=self._current_model_name,
+                )
             orch.switch_session(new_id)
 
         def _on_session_deleted(session_id: str):
@@ -879,11 +889,28 @@ class MainWindow(QMainWindow):
         self._session_mgr.update_title(session_id, title)
 
     def _abort_current_session_task(self):
-        """中止当前会话的活跃任务：停止 Worker、清空队列、重置 PhaseManager"""
+        """中止当前会话的活跃任务：停止 Worker、清空队列、重置 PhaseManager
+
+        v3 路径下：只停止旧路径的 Worker，不 cancel TaskService 任务，
+        因为 SessionOrchestrator 负责会话级任务生命周期，切换会话时应后台保留。
+        """
         current_sid = self._current_session
         if not current_sid:
             return
-        # 1. 停止当前 Worker
+
+        # v3 路径：旧 Worker 清理即可，队列/任务/Phase 由 SessionRuntime 管理
+        if self._v3_enabled:
+            worker = self._workers.get(current_sid) if hasattr(self, '_workers') else None
+            if worker is not None and worker.isRunning():
+                worker.stop()
+                worker.wait(3000)
+            if self._worker is not None and self._worker.isRunning():
+                self._worker.stop()
+                self._worker.wait(3000)
+            self._worker = None
+            return
+
+        # 旧路径：完整清理
         worker = self._workers.get(current_sid) if hasattr(self, '_workers') else None
         if worker is not None and worker.isRunning():
             worker.stop()
@@ -892,16 +919,12 @@ class MainWindow(QMainWindow):
             self._worker.stop()
             self._worker.wait(3000)
         self._worker = None
-        # 2. 清空双槽位队列
         self._pending_queue.clear()
-        # 3. 重置 PhaseManager
         self._phase_manager.reset()
         self._current_phase = "idle"
         self._phase_task_list = []
         self._phase_results = []
-        # 4. 更新 TaskService 状态（通过 cancel_task 统一处理）
         self.task_service.cancel_task(current_sid)
-        # 5. 更新 UI
         self.chat_view.finalize_stream()
         self.chat_view.clear_phase_ui()
         self.chat_view.set_streaming(False)

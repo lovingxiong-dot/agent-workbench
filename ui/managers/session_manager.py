@@ -61,10 +61,8 @@ class SessionManager(QObject):
 
     @current_session.setter
     def current_session(self, value: str):
-        import traceback
         if value != self._current_session:
             print(f"[DIAG-SESSION] current_session changed: {self._current_session} → {value}", flush=True)
-            traceback.print_stack(limit=6)
         self._current_session = value
 
     @property

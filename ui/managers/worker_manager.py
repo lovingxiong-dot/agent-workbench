@@ -13,6 +13,7 @@ from typing import Optional
 from PySide6.QtCore import QObject, Signal
 
 from core.event_bus import MessageBus
+from core.events import WorkerCreatedEvent
 from workers.agent_worker import AgentWorker, TOOL_DEFINITIONS
 from ui.managers.signal_adapter import SignalAdapter
 
@@ -58,13 +59,7 @@ class WorkerManager(QObject):
 
             self._bus.subscribe_name(
                 "worker", "created",
-                lambda event: self.create_worker(
-                    session_id=event.session_id,
-                    mode=event.mode,
-                    model=event.model,
-                    tools=event.tools,
-                    context=event.context,
-                )
+                lambda event: self._on_worker_created_event(event)
                 if isinstance(event, WorkerCreatedEvent) else None,
             )
             self._bus.subscribe_name(
@@ -94,6 +89,18 @@ class WorkerManager(QObject):
             )
         except Exception as e:
             logger.warning("WorkerManager event subscription error: %s", e)
+
+    def _on_worker_created_event(self, event: WorkerCreatedEvent):
+        """WorkerCreatedEvent 处理：创建 Worker 并立即触发 analyze（如果是 analyze 阶段）"""
+        worker = self.create_worker(
+            session_id=event.session_id,
+            mode=event.mode,
+            model=event.model,
+            tools=event.tools,
+            context=event.context,
+        )
+        if worker is not None and event.user_text:
+            worker.request_analyze(event.user_text, event.context)
 
     def create_worker(
         self,

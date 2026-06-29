@@ -230,6 +230,7 @@ class WorkerCreatedEvent(Event):
     model: str = ""
     context: str = ""
     tools: List[str] = field(default_factory=list)
+    user_text: str = ""  # analyze 阶段需要，创建 Worker 后立即请求分析
 
 
 @dataclass

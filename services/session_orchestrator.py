@@ -284,11 +284,8 @@ class SessionOrchestrator(QObject):
         # 暂停旧会话（只断 UI 信号，不停止 Worker）
         if old_session_id and old_session_id in self._runtimes:
             old_rt = self._runtimes[old_session_id]
-            # 旧会话任务仍活跃时，只取消 active 任务（不应覆盖 completed）
-            task = self._task_service.get_task_status(old_session_id)
-            if task and task.is_active:
-                # 后台继续运行，不切掉 Worker
-                pass
+            # v3 架构：旧会话任务仍活跃时，后台继续运行，不切掉 Worker
+            pass
 
         self._current_session_id = new_session_id
 
@@ -296,6 +293,10 @@ class SessionOrchestrator(QObject):
         new_rt = self._runtimes.get(new_session_id)
         if new_rt and new_rt.phase_state:
             self._restore_phase_ui(new_rt)
+
+        # 同步新会话的 UI 状态（输入框、队列条）
+        if new_rt:
+            self._emit_queue_ui_state(new_rt)
 
     def delete_runtime(self, session_id: str):
         rt = self._runtimes.pop(session_id, None)
@@ -311,6 +312,21 @@ class SessionOrchestrator(QObject):
         if phase == "confirm":
             task_list = state.get("task_list", [])
             self._bus.emit(UIShowConfirmationEvent(session_id=rt.session_id, task_list=task_list))
+
+    def _emit_queue_ui_state(self, rt: SessionRuntime):
+        """将会话队列状态同步到 UI"""
+        sid = rt.session_id
+        qm = rt.queue_manager
+        self._bus.emit(UISetSendEnabledEvent(
+            session_id=sid,
+            enabled=not qm.is_full,
+        ))
+        bar_text = qm._build_queue_bar_text()
+        self._bus.emit(UIUpdateQueueBarEvent(
+            session_id=sid,
+            bar_text=bar_text,
+            is_visible=bool(bar_text),
+        ))
 
     # ═══════════════════════════════════════════════════
     # 队列事件处理
@@ -350,8 +366,7 @@ class SessionOrchestrator(QObject):
         rt = self._require_runtime(event.session_id)
         if rt is None:
             return
-        # 创建/复用 Worker，由 WorkerManager 处理
-        # 这里发射 worker.create 事件
+        # 创建/复用 Worker，由 WorkerManager 处理；携带 user_text 以便创建后立即 analyze
         self._bus.emit(WorkerCreatedEvent(
             session_id=event.session_id,
             worker_id=event.session_id,
@@ -359,6 +374,7 @@ class SessionOrchestrator(QObject):
             model=rt.model,
             context=event.context,
             tools=[],  # Phase 5 后从 TaskService/配置解析
+            user_text=event.user_text,
         ))
 
     def _on_phase_confirm(self, event: PhaseConfirmRequiredEvent):

@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v3.11.0 | 存档次数 | 21 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v3.11.1 | 存档次数 | 22 |
 
 ## 项目概要
 AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、MT5 交易、网页抓取、剪贴板管理等能力。v3.1 完成右侧工作区重构；v3.2 引入项目目录上下文；v3.3 对文件预览、对话分栏、活动面板、文档编辑进行精细化打磨；v3.4 让 Agent 具备工作空间感知能力，能自动识别当前项目目录、右侧打开文件，并基于项目根目录解析工具相对路径。v3.5 引入请求级指标（token/耗时）并在 AI 气泡下方显示。v3.6 引入 Phase-Driven Workflow Engine：将每次请求按 Mode 切分为 Analyze → Confirm → Execute → Verify → Archive 阶段，Mode 与 Phase 正交，硬门控/软提示分离，任务清单驱动执行。v3.7 引入 InterpreterService，支持终端解释器自动发现、手动切换与 AI 上下文感知。v3.7.1 修复启动时解释器检测弹窗、历史会话 AI 回复丢失、终端输入框无法编辑等问题，并增强活动面板交互与窗口标题版本可持续迭代。v3.7.2 修复 v3.7.1 中窗口标题初始化顺序导致的打包启动崩溃。v3.8.1 填充 4 个架构占位文件（screen/overlay/settings/tools_panel），优化对话气泡排版与活动面板多选交互。v3.11.0 进行 v3 架构重构：引入事件总线（MessageBus）作为唯一跨组件通信层，每个会话拥有独立的运行时聚合根（SessionRuntime），由 SessionOrchestrator 统一协调；PhaseCoordinator、WorkerManager、UIRenderer 全部基于事件驱动，TaskService 增加终态保护，彻底解决会话切换状态覆盖、队列槽位不归零、任务状态不回收等历史问题。
@@ -138,6 +138,17 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ├── rebuild.ps1             # 一键打包脚本
 ├── start.bat               # 启动脚本
 ├── app.ico                 # 应用图标
+├── README.md               # 项目总入口（定位、启动、文件地图）
+├── ARCHITECTURE.md         # 架构概览（Mermaid 图、核心概念、设计决策）
+├── blueprints/             # 工程蓝图（从 .trae/documents/ 提炼）
+│   ├── index.md            # 蓝图索引（按时间线/模块）
+│   ├── session/
+│   │   ├── v3-event-bus-architecture.md  # v3 事件总线架构
+│   │   └── v2-multi-session-design.md    # v2 多会话管理
+│   └── integration/
+│       └── workspace-context.md          # 工作空间上下文感知
+├── docs/                   # 开发者文档
+│   └── getting-started.md  # 5 分钟上手指南
 ├── CHANGELOG.md            # AI 维护的变更日志
 └── PROJECT_BLUEPRINT.md    # 本文件
 ```
@@ -145,6 +156,8 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v3.11.1 | 2026-06-29 | 修复 v3 事件流：Worker 创建后立即 analyze、会话切换同步队列 UI、历史会话自动创建 runtime、切换不误杀后台任务 | fix/refactor | core/events.py, ui/managers/worker_manager.py, services/session_orchestrator.py, ui/main_window.py, ui/managers/session_manager.py, README.md |
+| v3.11.0 | 2026-06-29 | 工程标准化：新增 README、ARCHITECTURE、blueprints/、docs/getting-started | docs | README.md, ARCHITECTURE.md, blueprints/*.md, docs/*.md |
 | v3.9.1 | 2026-06-29 | 修复 Phase 状态机重入与任务状态回收：调整 flow_finished/reset 顺序、统一 TaskService.complete_task 调用、修复会话切换覆盖 completed 状态、补充 completed 绿色图标、修复 SessionManager 标题更新 data role | fix/refactor | agent_engine/phase_manager.py, services/task_service.py, services/pending_queue.py, services/self_context.py, ui/main_window.py, ui/widgets/conversation.py, ui/chat_view.py, workers/agent_worker.py, tests/test_pending_queue.py, tests/test_self_context.py, ui/managers/*.py |
 | v3.9.0 | 2026-06-27 | 多任务管理系统（TaskService+WorkerPool）、Session-as-Room 会话隔离、Trae 暗黑主题、底栏容量状态条、会话状态图标、信号调试管道 | feat/fix | services/task_service.py, workers/task_capacity.py, workers/task_queue.py, workers/worker_pool.py, workers/session_task.py, workers/task_worker_adapter.py, resources/themes/trae_dark.qss, services/theme_service.py, ui/main_window.py, ui/widgets/conversation.py, ui/chat_view.py, agent_engine/agent_session.py, workers/agent_worker.py, config.yaml, AgentWorkbench.spec, tests/test_agent_session_integration.py, tests/test_main_window_session_isolation.py |
 | v3.8.1 | 2026-06-27 | 填充架构占位文件、对话气泡排版优化、活动面板多选增强、屏幕工具注册 | feat/fix | tools/screen.py, tools/__init__.py, ui/overlay.py, ui/settings.py, ui/tools_panel.py, ui/chat_view.py, ui/widgets/activity_panel.py, workers/agent_worker.py, config.yaml |
