@@ -1,5 +1,22 @@
 # Changelog
 
+## v3.11.1 (2026-06-29) — v3 事件流与会话切换修复
+
+### fix
+- **Worker 创建后未触发 analyze**：`core/events.py` 的 `WorkerCreatedEvent` 新增 `user_text` 字段；`ui/managers/worker_manager.py` 在 Worker 创建后立即调用 `request_analyze(event.user_text, event.context)`，解决消息发送后无响应。
+- **会话切换后输入框/队列条状态未同步**：`services/session_orchestrator.py` 新增 `_emit_queue_ui_state`，在 `switch_session` 时向当前会话发射 `UISetSendEnabledEvent` 与 `UIUpdateQueueBarEvent`。
+- **历史会话缺少 runtime**：`services/session_orchestrator.py` 与 `ui/main_window.py` 在切换历史会话时自动创建缺失的 `SessionRuntime`。
+- **v3 切换会话误杀后台任务**：`ui/main_window.py` 的 `_abort_current_session_task` 在 v3 路径下仅停止旧路径 Worker，不再调用 `cancel_task`，避免 completed 任务被错误改回 failed。
+
+### refactor
+- 移除 `ui/managers/session_manager.py` 中 `current_session` setter 的 `traceback.print_stack` 调试输出。
+
+### docs
+- 恢复并完善 `README.md`，补充 v3 文件地图、快速启动、运行测试与 AI 认知加载路径。
+
+### test
+- 全量 209 个单元/集成测试通过。
+
 ## v3.11.0 (2026-06-29) — v3 架构重构：事件总线、会话运行时与统一协调器
 
 ### feat
