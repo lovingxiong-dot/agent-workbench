@@ -45,7 +45,7 @@ venv\Scripts\Activate.ps1
 python -m pytest tests/ -v
 ```
 
-全部 **209 个单元 / 集成测试** 通过。
+全部 **210 个单元 / 集成测试** 通过。
 
 ---
 
@@ -69,20 +69,20 @@ python -m pytest tests/ -v
 | `services/session_orchestrator.py` | v3 统一协调器（唯一调度权威） | ★★★★★ |
 | `services/session_runtime.py` | 会话运行时聚合根（每会话独立） | ★★★★★ |
 | `services/task_service.py` | 任务调度中心（终态保护） | ★★★★ |
-| `agent_engine/` | 编排器 / Phase 管理 / 意图分类 / 记忆管理 | ★★★★ |
+| `agent_engine/` | 编排器 / Phase 管理 / 意图分类 / 记忆管理 / 八引擎（engines/） | ★★★★ |
 | `workers/` | 后台线程：Agent 推理 / 终端捕获 / 验证 | ★★★★ |
 | `ui/main_window.py` | 主窗口（绞杀者模式，新旧路径并存） | ★★★★ |
 | `ui/managers/` | v3 事件驱动管理器（UIRenderer / PhaseCoordinator / WorkerManager / QueueManager） | ★★★★ |
 | `ui/widgets/` | 视图组件（侧栏 / 对话 / 终端 / 工作区 / 编辑器 / 活动面板） | ★★★ |
 | `tools/` | 工具层：系统命令 / 量化分析 / Web / MT5 / 屏幕 | ★★★ |
-| `tests/` | 209 个单元 / 集成测试 | ★★★ |
+| `tests/` | 210 个单元 / 集成测试 | ★★★ |
 | `resources/themes/` | QSS 主题（GitHub Dark / Trae Dark） | ★★ |
 | `start.bat` | 一键启动脚本 | ★★ |
 | `rebuild.ps1` | 打包 + 桌面快捷方式刷新 | ★★ |
 | `ARCHITECTURE.md` | 架构全景（Mermaid 图 + 核心概念 + 设计决策） | ★★★ |
 | `blueprints/index.md` | 蓝图索引入口 | ★★ |
 | `docs/getting-started.md` | 开发上手（模式 / Phase / 核心概念） | ★★ |
-| `CHANGELOG.md` | 版本变更日志（v0.1 → v3.11.1） | ★★ |
+| `CHANGELOG.md` | 版本变更日志（v0.1 → v3.12.0） | ★★ |
 | `PROJECT_BLUEPRINT.md` | 项目蓝图（完整目录树 + 技术栈 + 存档记录） | ★★★ |
 
 ---
@@ -91,9 +91,9 @@ python -m pytest tests/ -v
 
 | 指标 | 详情 |
 |---|---|
-| 版本 | v3.11.1 |
-| 测试 | 209/209 通过 |
-| 架构 | 事件总线 + SessionRuntime + SessionOrchestrator（v3） |
+| 版本 | v3.12.0 |
+| 测试 | 210/210 通过 |
+| 架构 | 事件总线 + SessionRuntime + SessionOrchestrator + 八引擎（v3） |
 | 打包 | PyInstaller 单文件 ≈ 17.6 MB |
 | 分支 | master |
 
