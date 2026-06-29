@@ -12,3 +12,4 @@ storage/vector_store/
 *.spec.bak
 .trae/
 deepseek_api/
+.memory/

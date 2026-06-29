@@ -1,5 +1,33 @@
 # Changelog
 
+## v3.12.0 (2026-06-30) — AI Engine 架构升级：八引擎模块化 + Prompt 增强 + 记忆系统重构
+
+### feat
+- **八引擎模块化架构**：`agent_engine/engines/` 下新增 ContextEngine / PromptEngine / InferenceEngine / ToolEngine / PhaseEngine / MemoryEngine / MetricsEngine / PolicyEngine，每个引擎单一职责，通过 `interfaces.py` 抽象接口交互。
+  - **ContextEngine**: 上下文组装、4 种压缩策略（滑动窗口/语义/实体保留/混合）、token 估算。
+  - **PromptEngine**: System prompt 分层构建（基础+Phase+画像），支持 Analyze/Verify 追加而非覆盖。
+  - **InferenceEngine**: LLM 调用、指数退避重试、模型降级（fallback_map）、指标反馈闭环。
+  - **ToolEngine**: Phase 级工具白名单、敏感操作确认回调、超时与结果截断。
+  - **PhaseEngine**: Mode-Phase 矩阵、插件扩展、硬 checkpoint 校验。
+  - **MemoryEngine**: 三层记忆（会话/画像/项目），读取 app_root/.memory/ 注入 prompt。
+  - **MetricsEngine**: 指标采集与聚合（avg/sum/max/min）、阈值告警。
+  - **PolicyEngine**: dot-path 配置查询、模型选择决策、压缩触发判断。
+- **绞杀者模式集成**：`AgentOrchestrator` 新增 `engines` 可选参数，有引擎则委托，无引擎回退旧逻辑。旧代码全部保留，零破坏。
+
+### refactor
+- **System prompt 增强**：三模式 prompt 加入角色定位、回复深度、推理链、语气风格要求，从 2-5 行扩展为结构化中文提示。
+- **LLM 参数可配置化**：`llm_registry.py` 从 config 读取 temperature/top_p/max_tokens/request_timeout，替代硬编码。
+- **User rules 增强**：从 2 条扩展为 6 条，含专业风格 + 项目规范约束。
+
+### fix
+- **记忆路径修正**：`SelfContext._build_memory_context()` 改用 `app_root/.memory/` 替代 `project_root/.workbuddy/memory/`。
+- **Analyze 阶段不再覆盖基础 prompt**：`set_phase()` 中 analyze/verify 阶段在 base_system_prompt 后追加，不再替换。
+
+### docs
+- 新建 `.memory/` 目录（项目级记忆系统），含 MEMORY.md + 每日日志，已加入 `.gitignore`。
+- `config.yaml` 新增 `ai_engine` 配置节（context/prompt/inference/tool/phase/memory/metrics）。
+- 同步更新 `tests/test_self_context.py` 适配新路径。
+
 ## v3.11.4 (2026-06-29) — MainWindow 架构收敛与 UI 修复
 
 ### fix

@@ -221,6 +221,7 @@ class MainWindow(QMainWindow):
             context_service=self.context_service,
             task_service=self.task_service,
             config=self.config_service.get("self_context", {}),
+            app_root=self._app_ctx.app_root if self._app_ctx is not None else None,
         )
         self.context_service._self_context = self._self_context  # 注入到 ContextService
 

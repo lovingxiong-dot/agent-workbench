@@ -93,42 +93,36 @@ class TestSelfContext:
         assert "已完成" in result
 
     def test_build_memory_no_root(self):
-        sc = SelfContext()
+        sc = SelfContext(app_root="")
         result = sc._build_memory_context()
         assert result == ""
 
     def test_build_memory_no_dir(self):
-        mock_cs = MagicMock()
-        mock_cs.get_project_root.return_value = "/nonexistent"
-        sc = SelfContext(context_service=mock_cs)
+        sc = SelfContext(app_root="/nonexistent")
         result = sc._build_memory_context()
         assert result == ""
 
     def test_build_memory_with_mem_file(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            mem_dir = os.path.join(tmpdir, ".workbuddy", "memory")
+            mem_dir = os.path.join(tmpdir, ".memory")
             os.makedirs(mem_dir, exist_ok=True)
             mem_file = os.path.join(mem_dir, "MEMORY.md")
             with open(mem_file, "w", encoding="utf-8") as f:
                 f.write("This is test memory.")
 
-            mock_cs = MagicMock()
-            mock_cs.get_project_root.return_value = tmpdir
-            sc = SelfContext(context_service=mock_cs)
+            sc = SelfContext(app_root=tmpdir)
             result = sc._build_memory_context()
             assert "This is test memory" in result
 
     def test_cache_invalidation(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            mem_dir = os.path.join(tmpdir, ".workbuddy", "memory")
+            mem_dir = os.path.join(tmpdir, ".memory")
             os.makedirs(mem_dir, exist_ok=True)
             mem_file = os.path.join(mem_dir, "MEMORY.md")
             with open(mem_file, "w", encoding="utf-8") as f:
                 f.write("v1")
 
-            mock_cs = MagicMock()
-            mock_cs.get_project_root.return_value = tmpdir
-            sc = SelfContext(context_service=mock_cs)
+            sc = SelfContext(app_root=tmpdir)
             result1 = sc._build_memory_context()
             assert "v1" in result1
 

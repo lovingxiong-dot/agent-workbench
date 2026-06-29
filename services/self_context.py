@@ -5,7 +5,7 @@ SelfContext — 代码层自识别上下文注入
 - 时间戳（datetime.now() 硬事实）
 - 位置感知（项目根、会话ID、标题）
 - 跨对话接替（Phase状态、任务清单、上次活动）
-- 独立记忆（.workbuddy/memory/MEMORY.md + 最近日志）
+- 独立记忆（app_root/.memory/MEMORY.md + 最近日志）
 """
 
 import os
@@ -16,7 +16,13 @@ from typing import Optional, Dict, Any, List
 
 
 class SelfContext:
-    """构建代码层自识别上下文，注入 prompt"""
+    """构建代码层自识别上下文，注入 prompt
+
+    记忆定位规则：
+    - 读取 app_root/.memory/ 下的 MEMORY.md 和每日日志
+    - app_root 为项目根目录（agent_workbench/），由外部注入
+    - 不再依赖 WorkBuddy 的 .workbuddy/memory/ 路径
+    """
 
     _WEEKDAY_NAMES = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
 
@@ -30,10 +36,15 @@ class SelfContext:
         context_service=None,
         task_service=None,
         config: Optional[Dict[str, Any]] = None,
+        app_root: Optional[str] = None,
     ):
         self._context_service = context_service
         self._task_service = task_service
         self._config = config or {}
+        if app_root is None:
+            self._app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        else:
+            self._app_root = app_root
         self._memory_cache: Optional[str] = None
         self._memory_cache_mtime: float = 0.0
 
@@ -146,12 +157,12 @@ class SelfContext:
         return "\n".join(parts)
 
     def _build_memory_context(self) -> str:
-        """独立记忆注入：读取 .workbuddy/memory/ 下的项目记忆"""
-        project_root = self._context_service.get_project_root() if self._context_service else ""
-        if not project_root:
+        """独立记忆注入：读取 app_root/.memory/ 下的项目记忆与每日日志"""
+        app_root = self._app_root
+        if not app_root:
             return ""
 
-        memory_dir = os.path.join(project_root, ".workbuddy", "memory")
+        memory_dir = os.path.join(app_root, ".memory")
         if not os.path.isdir(memory_dir):
             return ""
 
