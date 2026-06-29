@@ -29,10 +29,11 @@ class SessionTask:
 
     不持有 AgentWorker / AgentSession 实例，只记录状态和引用。
     Worker 实例由 WorkerPool 管理。
+
+    状态写操作必须由 TaskService 发起，禁止外部直接修改 status。
     """
     session_id: str
     mode: str = "ask"
-    status: TaskStatus = TaskStatus.QUEUED
     user_input: str = ""
     created_at: str = ""
     updated_at: str = ""
@@ -49,6 +50,17 @@ class SessionTask:
     tool_calls_count: int = 0
     error_count: int = 0
     last_error: str = ""
+
+    # 内部状态：外部应通过 TaskService 修改
+    _status: TaskStatus = field(default=TaskStatus.QUEUED, repr=False)
+
+    @property
+    def status(self) -> TaskStatus:
+        return self._status
+
+    def _set_status(self, value: TaskStatus):
+        """内部方法：仅允许 TaskService 调用。"""
+        self._status = value
 
     @property
     def is_active(self) -> bool:
@@ -104,7 +116,7 @@ class SessionTask:
         return cls(
             session_id=data.get("session_id", ""),
             mode=data.get("mode", "ask"),
-            status=TaskStatus(data.get("status", "queued")),
+            _status=TaskStatus(data.get("status", "queued")),
             user_input=data.get("user_input", ""),
             phase=data.get("phase", "idle"),
             task_list_json=data.get("task_list_json", ""),

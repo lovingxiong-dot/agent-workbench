@@ -45,6 +45,27 @@ from ui.widgets import (
 from ui.dialogs import SettingsDialog, ProviderFormDialog
 from ui.chat_view import ChatView
 from ui.managers.session_manager import SessionManager
+from ui.managers.ui_renderer import UIRenderer
+from core.event_bus import MessageBus
+from core.events import (
+    UserSendEvent,
+    UserStopEvent,
+    UserConfirmEvent,
+    UserReanalyzeEvent,
+    UserSkipVerifyEvent,
+    SessionCreateEvent,
+    SessionSwitchEvent,
+    SessionDeleteEvent,
+    UIAppendUserEvent,
+    UIAppendAIEvent,
+    UIAppendSystemEvent,
+    UIStreamChunkEvent,
+    UIFinalizeStreamEvent,
+    UISetStreamingEvent,
+    UIClearPhaseUIEvent,
+    UIHideConfirmationEvent,
+    UIHideSkipVerifyEvent,
+)
 from tools.system import run_command, run_as_admin
 from tools.system import read_file, write_file, list_dir, web_fetch
 from tools.system import clipboard_read, clipboard_write, send_notification
@@ -86,44 +107,85 @@ def resource_path(relative_path):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, app_context=None, session_orchestrator=None):
         super().__init__()
         self.resize(1600, 950)
 
+        # ── v3 注入点 ───────────────────────────
+        self._app_ctx = app_context
+        self._orchestrator = session_orchestrator
+
         # ── 基础路径与配置 ──────────────────────
-        config_path = resource_path("config.yaml")
-        config_write = (
-            os.path.join(os.path.dirname(sys.executable), "config.yaml")
-            if getattr(sys, 'frozen', False)
-            else config_path
-        )
-        self.config_service = ConfigService(config_path, writable_path=config_write)
-        self.persistence_service = PersistenceService(self.config_service)
+        if self._app_ctx is not None:
+            config_path = app_context.config_path
+            config_write = app_context.writable_config_path
+            self.config_service = app_context.config_service
+            self.persistence_service = PersistenceService(self.config_service)
+            self._app_storage_dir = app_context.storage_dir
+            app_root = app_context.app_root
+        else:
+            config_path = resource_path("config.yaml")
+            config_write = (
+                os.path.join(os.path.dirname(sys.executable), "config.yaml")
+                if getattr(sys, 'frozen', False)
+                else config_path
+            )
+            self.config_service = ConfigService(config_path, writable_path=config_write)
+            self.persistence_service = PersistenceService(self.config_service)
+            app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            self._app_storage_dir = (
+                os.path.join(os.path.dirname(sys.executable), "storage")
+                if getattr(sys, 'frozen', False)
+                else os.path.join(app_root, "storage")
+            )
+            os.makedirs(self._app_storage_dir, exist_ok=True)
 
         # 窗口标题动态读取版本号（必须在 config_service 初始化之后）
         app_version = self.config_service.get("app.version", "v3.x")
         self.setWindowTitle(f"AI Agent 工作台 {app_version} · 手动模式")
 
-        # 统一持久化根目录：开发时用项目根目录/storage，打包时用 exe 同级/storage
-        app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self._app_storage_dir = (
-            os.path.join(os.path.dirname(sys.executable), "storage")
-            if getattr(sys, 'frozen', False)
-            else os.path.join(app_root, "storage")
-        )
-        os.makedirs(self._app_storage_dir, exist_ok=True)
-
         # ── 服务初始化 ──────────────────────────
-        self.session_service = SessionService(os.path.join(self._app_storage_dir, "conversations.db"))
-        self.project_service = ProjectService(self.session_service, self.config_service)
+        if self._app_ctx is not None:
+            self.session_service = app_context.session_service
+            self.project_service = app_context.project_service
+            self._project_root = app_context.project_root()
+            self.context_service = app_context.context_service
+            self.interpreter_service = app_context.interpreter_service
+            self.activity_service = app_context.activity_service
+            self.theme_service = app_context.theme_service
+            self.mode_manager = app_context.mode_manager
+            self.llm_registry = app_context.llm_registry
+            self.memory_manager = app_context.memory_manager
+            self.metrics_collector = app_context.metrics_collector
+            self.tool_gateway = app_context.tool_gateway
+            self.mcp_registry = app_context.mcp_registry
+        else:
+            self.session_service = SessionService(os.path.join(self._app_storage_dir, "conversations.db"))
+            self.project_service = ProjectService(self.session_service, self.config_service)
 
-        # 先确定项目根目录，后续服务依赖它
-        self._project_root = self.project_service.detect_current_project(app_root)
+            # 先确定项目根目录，后续服务依赖它
+            self._project_root = self.project_service.detect_current_project(app_root)
 
-        self.context_service = ContextService(self.project_service, self)
-        self.interpreter_service = InterpreterService(self._project_root, self.config_service)
-        self.interpreter_service.discover()
-        self.context_service.set_interpreter_service(self.interpreter_service)
+            self.context_service = ContextService(self.project_service, self)
+            self.interpreter_service = InterpreterService(self._project_root, self.config_service)
+            self.interpreter_service.discover()
+            self.context_service.set_interpreter_service(self.interpreter_service)
+
+            self.activity_service = ActivityService(os.path.join(self._app_storage_dir, "activities.json"))
+            self.theme_service = ThemeService()
+            self.mode_manager = ModeManager(config_path)
+            self.llm_registry = LLMRegistry(config_path, config_write)
+            self.memory_manager = MemoryManager(
+                self.config_service.get("memory", {}),
+                storage_dir=self._app_storage_dir,
+            )
+            self.metrics_collector = MetricsCollector()
+
+            # ── 工具网关与外部能力接入点 ─────────────────────────────
+            self.tool_gateway = ToolGateway()
+            self.tool_gateway.register_local_tools(TOOL_MAP, ARUN_MAP, TOOL_DEFINITIONS)
+            self.mcp_registry = MCPRegistry()
+            self.tool_gateway.register_mcp_registry(self.mcp_registry)
 
         # 全局状态
         self._current_mode = "ask"
@@ -140,29 +202,18 @@ class MainWindow(QMainWindow):
         self._phase_task_list = []
         self._phase_results = []
 
-        # 其余服务
-        # 活动记录持久化到统一 storage 目录
-        self.activity_service = ActivityService(os.path.join(self._app_storage_dir, "activities.json"))
-        self.theme_service = ThemeService()
-        self.mode_manager = ModeManager(config_path)
-        self.llm_registry = LLMRegistry(config_path, config_write)
-        self.memory_manager = MemoryManager(
-            self.config_service.get("memory", {}),
-            storage_dir=self._app_storage_dir,
-        )
-
-        # ── 工具网关与外部能力接入点 ─────────────────────────────
-        self.tool_gateway = ToolGateway()
-        self.tool_gateway.register_local_tools(TOOL_MAP, ARUN_MAP, TOOL_DEFINITIONS)
-        self.mcp_registry = MCPRegistry()
-        self.tool_gateway.register_mcp_registry(self.mcp_registry)
-
         # ── 多任务管理系统 (v3.9) ────────────────────
-        self.task_service = TaskService(capacity=TaskCapacity.from_config(self.config_service))
-        self.worker_pool = WorkerPool(
-            max_workers=self.config_service.get("task", {}).get("capacity", {}).get("max_concurrent_tasks", 3)
-        )
-        self.task_service.set_pool(self.worker_pool)
+        if self._app_ctx is not None:
+            self.task_service = app_context.task_service
+            self.worker_pool = None
+            # 向 v3 WorkerManager 注入工具注册表
+            app_context.worker_manager.set_tool_map(TOOL_MAP)
+        else:
+            self.task_service = TaskService(capacity=TaskCapacity.from_config(self.config_service))
+            self.worker_pool = WorkerPool(
+                max_workers=self.config_service.get("task", {}).get("capacity", {}).get("max_concurrent_tasks", 3)
+            )
+            self.task_service.set_pool(self.worker_pool)
 
         # ── 双槽位等待队列 + 自识别上下文 (v3.10) ──────
         self._pending_queue = PendingQueue(self)
@@ -195,6 +246,22 @@ class MainWindow(QMainWindow):
             parent=self,
         )
 
+        # ── v3 Orchestrator 生命周期镜像 ──────────
+        self._v3_enabled = self._orchestrator is not None
+        self._ui_renderer = None
+        if self._v3_enabled:
+            self._ui_renderer = UIRenderer(
+                message_bus=self._app_ctx.message_bus,
+                chat_view=self.chat_view,
+                status_indicator=self.status_indicator,
+                conversation_list=self.conversation_list,
+                capacity_label=self.capacity_label,
+                queue_bar=self._queue_bar,
+                current_session_provider=lambda: self._current_session,
+                parent=self,
+            )
+            self._connect_orchestrator()
+
         # ── 连接信号 ────────────────────────────
         self.chat_view.model_changed.connect(self._on_model_changed)
         self.chat_view.settings_clicked.connect(self._open_settings)
@@ -209,15 +276,16 @@ class MainWindow(QMainWindow):
         self.workspace.document_opened.connect(self._on_document_opened)
         self.workspace.document_closed.connect(self._on_document_closed)
 
-        # PhaseManager 信号
-        self._phase_manager.phase_changed.connect(self._on_phase_changed)
-        self._phase_manager.analyze_required.connect(self._on_analyze_required)
-        self._phase_manager.confirm_required.connect(self._on_confirm_required)
-        self._phase_manager.execute_required.connect(self._on_execute_required)
-        self._phase_manager.verify_required.connect(self._on_verify_required)
-        self._phase_manager.archive_required.connect(self._on_archive_required)
-        self._phase_manager.flow_finished.connect(self._on_phase_flow_finished)
-        self._phase_manager.error_occurred.connect(self._on_phase_error)
+        # PhaseManager 信号（v3 路径下由 SessionRuntime 内的 PhaseCoordinator 接管）
+        if not self._v3_enabled:
+            self._phase_manager.phase_changed.connect(self._on_phase_changed)
+            self._phase_manager.analyze_required.connect(self._on_analyze_required)
+            self._phase_manager.confirm_required.connect(self._on_confirm_required)
+            self._phase_manager.execute_required.connect(self._on_execute_required)
+            self._phase_manager.verify_required.connect(self._on_verify_required)
+            self._phase_manager.archive_required.connect(self._on_archive_required)
+            self._phase_manager.flow_finished.connect(self._on_phase_flow_finished)
+            self._phase_manager.error_occurred.connect(self._on_phase_error)
 
         # v3.9 多任务管理系统 — TaskService 信号连接
         self.task_service.task_status_changed.connect(
@@ -282,6 +350,38 @@ class MainWindow(QMainWindow):
     @_switching.setter
     def _switching(self, value: bool):
         self._session_mgr.switching = value
+
+    def _connect_orchestrator(self):
+        """将 SessionManager 生命周期信号桥接到 SessionOrchestrator"""
+        orch = self._orchestrator
+
+        def _on_session_created(session_id: str, project_path: str):
+            orch.create_runtime(
+                session_id=session_id,
+                project_path=project_path or "",
+                title="新对话",
+                mode=self._current_mode,
+                model=self._current_model_name,
+            )
+
+        def _on_session_switched(old_id: str, new_id: str):
+            orch.switch_session(new_id)
+
+        def _on_session_deleted(session_id: str):
+            orch.delete_runtime(session_id)
+
+        self._session_mgr.session_created.connect(_on_session_created)
+        self._session_mgr.session_switched.connect(_on_session_switched)
+        self._session_mgr.session_deleted.connect(_on_session_deleted)
+
+        # 订阅 v3 ui.* 事件（Phase 5 前为占位，仅记录日志避免事件丢失）
+        bus = self._app_ctx.message_bus
+        bus.subscribe_namespace("ui", self._on_ui_event)
+
+    def _on_ui_event(self, event):
+        """v3 UI 事件占位处理器（Phase 5 由 UIRenderer 接管）"""
+        # 当前阶段仍由旧信号路径直接更新 UI；此处仅做调试追踪
+        pass
 
     # ═══════════════════════════════════════════════════
     # 主题
@@ -738,7 +838,10 @@ class MainWindow(QMainWindow):
         if self._current_phase == "confirm":
             task.phase = "confirm"
             task.task_list = list(self._phase_task_list)
-            task.status = TaskStatus.AWAITING_CONFIRM
+            # 状态变更统一由 TaskService 发起
+            self.task_service._on_phase_change(
+                session_id, "confirm", "等待用户确认"
+            )
 
     def _restore_confirm_ui(self, task):
         """恢复 confirm 阶段的 UI 状态"""
@@ -807,20 +910,27 @@ class MainWindow(QMainWindow):
     # 消息发送
     # ═══════════════════════════════════════════════════
     def _send_message(self, user_text):
-        print(f"[DIAG] _send_message ENTER: text='{user_text[:30]}' full={self._pending_queue.is_full} len={self._pending_queue.length}", flush=True)
-        # 0. 槽满检查：队列已满时拒绝新消息
-        if self._pending_queue.is_full:
-            print(f"[DIAG] _send_message QUEUE FULL, len={self._pending_queue.length}", flush=True)
-            self._on_log_message("⚠ 队列已满，请等待当前任务完成", is_global=True)
-            return
+        print(f"[DIAG] _send_message ENTER: text='{user_text[:30]}' v3={self._v3_enabled}", flush=True)
 
         # 0.1 Phase 状态拦截：CONFIRM 阶段用户输入视为对任务清单的反馈
-        if self._current_phase == "confirm":
+        if self._current_phase == "confirm" and not self._v3_enabled:
             lowered = user_text.lower()
             if "重新分析" in user_text or "取消" in user_text or "cancel" in lowered or "no" in lowered:
                 self._on_phase_reanalyze()
             else:
                 self._on_phase_confirmed()
+            return
+
+        # v3 路径：委托给 SessionOrchestrator
+        if self._v3_enabled:
+            self._send_message_v3(user_text)
+            return
+
+        print(f"[DIAG] _send_message ENTER: text='{user_text[:30]}' full={self._pending_queue.is_full} len={self._pending_queue.length}", flush=True)
+        # 0. 槽满检查：队列已满时拒绝新消息
+        if self._pending_queue.is_full:
+            print(f"[DIAG] _send_message QUEUE FULL, len={self._pending_queue.length}", flush=True)
+            self._on_log_message("⚠ 队列已满，请等待当前任务完成", is_global=True)
             return
 
         # 0.2 写入本轮日志标题
@@ -869,6 +979,44 @@ class MainWindow(QMainWindow):
 
         # 由 _on_queue_task_started（QueuedConnection）统一启动 Phase 工作流
         # 不再在此处直接调用 _start_streaming，避免双重启动和信号槽重入
+
+    def _send_message_v3(self, user_text: str):
+        """v3 路径：通过 MessageBus 委托给 SessionOrchestrator"""
+        rt = self._orchestrator.get_runtime(self._current_session)
+        if rt is None:
+            self._on_log_message("⚠ 当前会话未初始化", is_global=True)
+            return
+
+        if rt.queue_manager.is_full:
+            self._on_log_message("⚠ 队列已满，请等待当前任务完成", is_global=True)
+            return
+
+        # 写入本轮日志标题
+        display_text = user_text[:80] + ("..." if len(user_text) > 80 else "")
+        self._on_log_message(f"▶ 用户: {display_text}", is_header=True)
+
+        # UI 和 session 持久化
+        self._session_mgr.add_message(self._current_session, "user", user_text)
+        self.session_service.add_message(self._current_session, "user", user_text)
+
+        session = self._session_mgr.get_session_data(self._current_session)
+        if len(session["messages"])  == 1:
+            title = user_text[:20] + "..." if len(user_text) > 20 else user_text
+            session["title"] = title
+            self._update_conversation_title(self._current_session, title)
+            self.chat_view.set_header(self._current_mode, self._current_model_name, title)
+            project_path = self.project_service.get_session_project(self._current_session)
+            self.session_service.create_conversation(
+                self._current_session, title, self._current_mode, self._current_model_name,
+                project_path=project_path
+            )
+
+        self._app_ctx.message_bus.emit(UserSendEvent(
+            session_id=self._current_session,
+            user_text=user_text,
+            mode=self._current_mode,
+        ))
+        self.chat_view.clear_input()
 
     def _start_streaming(self, task: PendingTask):
         """启动队列任务的 Phase 工作流"""
@@ -1034,11 +1182,22 @@ class MainWindow(QMainWindow):
 
     def _on_phase_confirmed(self):
         """用户点击确认执行"""
+        if self._v3_enabled:
+            self._app_ctx.message_bus.emit(UserConfirmEvent(
+                session_id=self._current_session,
+                confirmed=True,
+            ))
+            return
         self.chat_view.hide_confirmation()
         self._phase_manager.on_user_confirm(True)
 
     def _on_phase_reanalyze(self):
         """用户点击重新分析：重启 analyze"""
+        if self._v3_enabled:
+            self._app_ctx.message_bus.emit(UserReanalyzeEvent(
+                session_id=self._current_session,
+            ))
+            return
         self.chat_view.hide_confirmation()
         ctx = self._phase_manager.current_context()
         self._phase_manager.reset()
@@ -1047,6 +1206,11 @@ class MainWindow(QMainWindow):
 
     def _on_phase_skip_verify(self):
         """用户点击跳过验证"""
+        if self._v3_enabled:
+            self._app_ctx.message_bus.emit(UserSkipVerifyEvent(
+                session_id=self._current_session,
+            ))
+            return
         self.chat_view.hide_skip_verify()
         self._phase_manager.on_verify_complete(True, "用户跳过验证")
 
@@ -1275,6 +1439,12 @@ class MainWindow(QMainWindow):
 
     def _on_stop_generation(self):
         """用户点击停止：取消当前 streaming 任务，自动出队下一个"""
+        if self._v3_enabled:
+            self._app_ctx.message_bus.emit(UserStopEvent(
+                session_id=self._current_session,
+            ))
+            return
+
         streaming = self._pending_queue.get_streaming_task()
         if streaming:
             # 取消当前

@@ -27,11 +27,20 @@ class TestMainWindowModeAgnosticResult(unittest.TestCase):
         """构造一个最小化的 MainWindow 实例用于单元测试。"""
         with patch.object(MainWindow, "__init__", lambda self: None):
             main = MainWindow.__new__(MainWindow)
-        main._current_session = "session-A"
-        main._sessions = {
+        # v3.11+ SessionManager 代理属性需要 _session_mgr 存在
+        main._session_mgr = MagicMock()
+        sessions = {
             "session-A": {"title": "会话A", "messages": []},
             "session-B": {"title": "会话B", "messages": []},
         }
+
+        def _add_message(sid, role, text):
+            sessions[sid]["messages"].append({"role": role, "content": text})
+
+        main._session_mgr.add_message = _add_message
+        main._session_mgr.current_session = "session-A"
+        main._session_mgr.sessions = sessions
+        main._current_session = "session-A"
         main.session_service = MagicMock()
         main.memory_manager = MagicMock()
         main.chat_view = MagicMock()
@@ -41,6 +50,10 @@ class TestMainWindowModeAgnosticResult(unittest.TestCase):
         main._current_phase = "idle"
         main._phase_manager = MagicMock()
         main._pending_queue = MagicMock()  # v3.10: 双槽位队列
+        main._worker = None
+        main._workers = {}
+        main.worker_pool = MagicMock()
+        main.task_service = MagicMock()
         return main
 
     def test_on_result_persists_to_current_session(self):
