@@ -132,10 +132,6 @@ class SessionOrchestrator(QObject):
         self._bus.subscribe_name("phase", "flow_completed", self._on_phase_flow_completed)
         self._bus.subscribe_name("phase", "error", self._on_phase_error)
 
-        self._bus.subscribe_name("worker", "created", self._on_worker_created)
-        self._bus.subscribe_name("worker", "stopped", self._on_worker_stopped)
-        self._bus.subscribe_name("worker", "execute_required", self._on_worker_execute_required)
-        self._bus.subscribe_name("worker", "verify_required", self._on_worker_verify_required)
         self._bus.subscribe_name("worker", "result", self._on_worker_result)
         self._bus.subscribe_name("worker", "chunk", self._on_worker_chunk)
         self._bus.subscribe_name("worker", "error", self._on_worker_error)
@@ -273,6 +269,9 @@ class SessionOrchestrator(QObject):
                 is_visible=bool(text),
             ))
         )
+
+        # 新 runtime 创建后立即同步一次 UI 状态（发送键、队列条）
+        self._emit_queue_ui_state(rt)
 
         return rt
 

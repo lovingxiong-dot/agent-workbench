@@ -1,5 +1,14 @@
 # Changelog
 
+## v3.11.2 (2026-06-29) — README 质量修正与文档环境规范化
+
+### docs
+- **README 补全开发环境指引**：明确工作目录 `F:\Agent\agent_workbench`、venv 激活方式、`start.bat` 一键启动、`rebuild.ps1` 打包 + 桌面快捷方式。
+- **定位语修正**：MT5 从头版标题移除，聚焦事件总线 + Phase-Driven Workflow + 多会话运行时隔离。
+- **新增「AI 进入本工作区须知」**：声明不得盲目运行系统 Python/pip install，文档由存档流程统一维护。
+- **同步修正 `docs/getting-started.md`**：对齐 Python 版本（3.14）、补全 cd + venv + activate 步骤、移除不存在的依赖（pandas/numpy）。
+- **`PROJECT_BLUEPRINT.md` 存档流程规则对齐**：`git add` 扩展为全文档目录（git add -u + 显式新文档），标签推送改为单标签（禁 --tags）。
+
 ## v3.11.1 (2026-06-29) — v3 事件流与会话切换修复
 
 ### fix

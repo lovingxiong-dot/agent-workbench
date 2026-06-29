@@ -128,3 +128,45 @@ def test_user_send_v3_full_chain(app, bus, orchestrator):
     assert any(isinstance(e, QueueStateChangedEvent) for e in spy.events)
     assert any(isinstance(e, PhaseAnalyzeRequiredEvent) for e in spy.events)
     assert any(isinstance(e, WorkerCreatedEvent) for e in spy.events)
+
+
+def test_worker_created_only_once(app, bus, orchestrator):
+    """回归：WorkerCreatedEvent 只能触发一次 Worker 创建与 analyze 请求"""
+    from unittest.mock import patch, MagicMock
+    from ui.managers.worker_manager import WorkerManager
+
+    config = MagicMock()
+    config.get_mode_config.return_value = {"system_prompt": "test"}
+    config.get_max_tool_rounds.return_value = 3
+    config.get_task_timeout.return_value = 30
+    config.get_llm_timeout.return_value = 10
+    config.get_tool_timeout.return_value = 10
+    config.get.return_value = []
+
+    llm_registry = MagicMock()
+    llm_registry.has_provider.return_value = True
+    llm_registry.get.return_value = MagicMock()
+
+    orch = orchestrator
+    orch.create_runtime("s1", "/tmp", "test", "ask", "deepseek")
+
+    with patch("ui.managers.worker_manager.AgentWorker") as MockWorker:
+        worker_instance = MagicMock()
+        worker_instance.isRunning.return_value = True
+        MockWorker.return_value = worker_instance
+
+        WorkerManager(
+            config_service=config,
+            context_service=orch._app_ctx.context_service,
+            message_bus=bus,
+            llm_registry=llm_registry,
+            tool_map={},
+        )
+
+        bus.process(UserSendEvent(session_id="s1", user_text="hello", mode="ask"))
+        _pump_events(app, times=10)
+
+        assert MockWorker.call_count == 1, (
+            f"AgentWorker 应只创建 1 次，实际 {MockWorker.call_count} 次"
+        )
+        worker_instance.request_analyze.assert_called_once()
