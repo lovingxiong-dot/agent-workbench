@@ -1,10 +1,10 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v3.9.1 | 存档次数 | 20 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v3.11.0 | 存档次数 | 21 |
 
 ## 项目概要
-AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、MT5 交易、网页抓取、剪贴板管理等能力。v3.1 完成右侧工作区重构；v3.2 引入项目目录上下文；v3.3 对文件预览、对话分栏、活动面板、文档编辑进行精细化打磨；v3.4 让 Agent 具备工作空间感知能力，能自动识别当前项目目录、右侧打开文件，并基于项目根目录解析工具相对路径。v3.5 引入请求级指标（token/耗时）并在 AI 气泡下方显示。v3.6 引入 Phase-Driven Workflow Engine：将每次请求按 Mode 切分为 Analyze → Confirm → Execute → Verify → Archive 阶段，Mode 与 Phase 正交，硬门控/软提示分离，任务清单驱动执行。v3.7 引入 InterpreterService，支持终端解释器自动发现、手动切换与 AI 上下文感知。v3.7.1 修复启动时解释器检测弹窗、历史会话 AI 回复丢失、终端输入框无法编辑等问题，并增强活动面板交互与窗口标题版本可持续迭代。v3.7.2 修复 v3.7.1 中窗口标题初始化顺序导致的打包启动崩溃。v3.8.1 填充 4 个架构占位文件（screen/overlay/settings/tools_panel），优化对话气泡排版与活动面板多选交互。
+AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、MT5 交易、网页抓取、剪贴板管理等能力。v3.1 完成右侧工作区重构；v3.2 引入项目目录上下文；v3.3 对文件预览、对话分栏、活动面板、文档编辑进行精细化打磨；v3.4 让 Agent 具备工作空间感知能力，能自动识别当前项目目录、右侧打开文件，并基于项目根目录解析工具相对路径。v3.5 引入请求级指标（token/耗时）并在 AI 气泡下方显示。v3.6 引入 Phase-Driven Workflow Engine：将每次请求按 Mode 切分为 Analyze → Confirm → Execute → Verify → Archive 阶段，Mode 与 Phase 正交，硬门控/软提示分离，任务清单驱动执行。v3.7 引入 InterpreterService，支持终端解释器自动发现、手动切换与 AI 上下文感知。v3.7.1 修复启动时解释器检测弹窗、历史会话 AI 回复丢失、终端输入框无法编辑等问题，并增强活动面板交互与窗口标题版本可持续迭代。v3.7.2 修复 v3.7.1 中窗口标题初始化顺序导致的打包启动崩溃。v3.8.1 填充 4 个架构占位文件（screen/overlay/settings/tools_panel），优化对话气泡排版与活动面板多选交互。v3.11.0 进行 v3 架构重构：引入事件总线（MessageBus）作为唯一跨组件通信层，每个会话拥有独立的运行时聚合根（SessionRuntime），由 SessionOrchestrator 统一协调；PhaseCoordinator、WorkerManager、UIRenderer 全部基于事件驱动，TaskService 增加终态保护，彻底解决会话切换状态覆盖、队列槽位不归零、任务状态不回收等历史问题。
 
 ## 技术栈
 | 类别 | 技术 | 版本 | 用途 |
@@ -39,25 +39,36 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │   ├── mt5.py              # MT5 报价 + 下单
 │   ├── external_apis.py    # 财经新闻 / 宏观数据
 │   └── screen.py           # 屏幕相关工具
+├── core/                   # 核心基础设施
+│   ├── __init__.py
+│   ├── event_bus.py        # 基于 Qt Signal 的事件总线
+│   └── events.py           # 强类型跨组件事件定义
 ├── services/               # 服务层
 │   ├── __init__.py
 │   ├── config_service.py   # 配置读取与持久化
 │   ├── session_service.py  # SQLite 对话 + Token 用量持久化
 │   ├── theme_service.py    # QSS 主题加载
 │   ├── project_service.py  # 项目目录与会话关联管理
-│   ├── app_context.py       # 服务容器与生命周期管理
-│   ├── activity_service.py  # 结构化活动记录与持久化
-│   ├── context_service.py   # 当前工作空间上下文维护
-│   ├── path_resolver.py     # 基于项目根目录的路径解析
-│   ├── python_resolver.py   # 项目 Python 解释器解析
+│   ├── app_context.py      # 服务容器与生命周期管理
+│   ├── activity_service.py # 结构化活动记录与持久化
+│   ├── context_service.py  # 当前工作空间上下文维护
+│   ├── path_resolver.py    # 基于项目根目录的路径解析
+│   ├── python_resolver.py  # 项目 Python 解释器解析
 │   ├── metrics_collector.py # 请求级指标收集（token/耗时）
-│   └── interpreter_service.py # 终端解释器发现/选择/持久化
+│   ├── interpreter_service.py # 终端解释器发现/选择/持久化
+│   ├── pending_queue.py    # 双槽位等待队列
+│   ├── session_runtime.py  # 会话运行时聚合根
+│   ├── session_orchestrator.py # v3 统一协调器
+│   └── task_service.py     # 任务调度中心
 ├── workers/                # 后台线程
 │   ├── __init__.py
 │   ├── agent_worker.py     # 流式 Agent 推理 + 工具调用
 │   ├── base_worker.py      # Worker 基类
 │   ├── terminal_worker.py  # 终端命令输出捕获
-│   └── verification_worker.py # 本地验证（语法检查/单元测试）
+│   ├── verification_worker.py # 本地验证（语法检查/单元测试）
+│   ├── session_task.py     # 会话级任务状态
+│   ├── task_capacity.py    # 资源容量控制
+│   └── task_queue.py       # FIFO 任务排队
 ├── ui/                     # 界面层
 │   ├── __init__.py
 │   ├── main_window.py      # 主窗口全局状态与信号协调
@@ -79,22 +90,42 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │   │   
 │   ├── models/             # 数据模型
 │   │   └── explorer_model.py   # 资源管理器数据模型
-│   └── dialogs/            # 对话框
-│       ├── __init__.py
-│       └── settings.py     # 模型设置 / 规则设置
+│   ├── managers/           # v3 事件驱动管理器
+│   │   ├── __init__.py
+│   │   ├── phase_coordinator.py # PhaseManager → MessageBus 桥接
+│   │   ├── queue_manager.py     # 双槽位队列状态机
+│   │   ├── signal_adapter.py    # Worker 信号 → MessageBus 事件
+│   │   ├── ui_renderer.py       # UI 事件统一渲染器
+│   │   └── worker_manager.py    # Worker 生命周期管理
+│   ├── dialogs/            # 对话框
+│   │   ├── __init__.py
+│   │   └── settings.py     # 模型设置 / 规则设置
 ├── resources/              # 静态资源
 │   └── themes/
 │       └── dark_github.qss # GitHub Dark 主题
-├── tests/                  # 单元测试
+├── tests/                  # 单元测试 / 集成测试
 │   ├── __init__.py
+│   ├── integration/
+│   │   └── test_v3_flow.py       # v3 事件流集成测试
 │   ├── test_agent_worker.py
 │   ├── test_agent_session_integration.py
 │   ├── test_async_tools.py
 │   ├── test_context_service.py
+│   ├── test_event_bus.py
 │   ├── test_explorer_model.py
+│   ├── test_main_window_mode_agnostic_result.py
+│   ├── test_main_window_session_isolation.py
 │   ├── test_metrics_collector.py
 │   ├── test_orchestrator_phase.py
+│   ├── test_phase_coordinator.py
 │   ├── test_phase_manager.py
+│   ├── test_pending_queue.py
+│   ├── test_self_context.py
+│   ├── test_session_orchestrator.py
+│   ├── test_session_runtime.py
+│   ├── test_task_service_terminal.py
+│   ├── test_tool_gateway.py
+│   ├── test_ui_renderer.py
 │   └── test_interpreter_service.py
 ├── main.py                 # 程序入口
 ├── config.yaml             # 全局配置

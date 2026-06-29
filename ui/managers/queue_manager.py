@@ -1,4 +1,4 @@
-﻿"""
+"""
 QueueManager — 双槽位队列状态管理器（会话级）
 
 职责：
@@ -64,6 +64,7 @@ class QueueManager(QObject):
             user_text=user_text,
             mode=mode,
             context=context,
+            session_id=self._session_id,
         )
         if not self._pq.enqueue(task):
             return False

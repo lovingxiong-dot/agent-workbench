@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for AI Agent Workbench v3.8"""
+"""PyInstaller spec for AI Agent Workbench v3.11"""
 
 a = Analysis(
     ['main.py'],
@@ -12,7 +12,26 @@ a = Analysis(
         (r'venv\Lib\site-packages\certifi\cacert.pem', 'certifi'),
     ],
     hiddenimports=[
+        # Core infrastructure
         'yaml',
+        'core.event_bus',
+        'core.events',
+        # v3 managers
+        'ui.managers.phase_coordinator',
+        'ui.managers.queue_manager',
+        'ui.managers.signal_adapter',
+        'ui.managers.ui_renderer',
+        'ui.managers.worker_manager',
+        # v3 services
+        'services.app_context',
+        'services.pending_queue',
+        'services.session_orchestrator',
+        'services.session_runtime',
+        'services.task_service',
+        # v3 workers
+        'workers.session_task',
+        'workers.task_capacity',
+        'workers.task_queue',
         'markdown',
         'markdown.extensions.fenced_code',
         'bs4',

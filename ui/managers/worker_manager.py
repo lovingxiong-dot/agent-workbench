@@ -49,7 +49,44 @@ class WorkerManager(QObject):
 
     def _subscribe_events(self):
         try:
-            from core.events import TaskCompletedEvent
+            from core.events import (
+                TaskCompletedEvent,
+                WorkerCreatedEvent,
+                WorkerExecuteRequiredEvent,
+                WorkerVerifyRequiredEvent,
+            )
+
+            self._bus.subscribe_name(
+                "worker", "created",
+                lambda event: self.create_worker(
+                    session_id=event.session_id,
+                    mode=event.mode,
+                    model=event.model,
+                    tools=event.tools,
+                    context=event.context,
+                )
+                if isinstance(event, WorkerCreatedEvent) else None,
+            )
+            self._bus.subscribe_name(
+                "worker", "execute_required",
+                lambda event: self.execute_task(
+                    session_id=event.session_id,
+                    task_list=event.task_list,
+                    original_text=event.original_text,
+                    context=event.context,
+                )
+                if isinstance(event, WorkerExecuteRequiredEvent) else None,
+            )
+            self._bus.subscribe_name(
+                "worker", "verify_required",
+                lambda event: self.verify_task(
+                    session_id=event.session_id,
+                    execution_results=event.execution_results,
+                    local_details=event.local_details,
+                    context=event.context,
+                )
+                if isinstance(event, WorkerVerifyRequiredEvent) else None,
+            )
             self._bus.subscribe_name(
                 "task", "completed",
                 lambda event: self.stop_worker(event.session_id)

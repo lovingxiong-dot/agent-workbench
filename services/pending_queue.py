@@ -22,6 +22,7 @@ class PendingTask:
     user_text: str
     mode: str
     context: str
+    session_id: str = ""
     cancel_event: threading.Event = field(default_factory=threading.Event)
     status: str = "pending"  # pending | streaming | cancelled | completed
     timestamp: float = field(default_factory=time.time)

@@ -13,6 +13,7 @@ from PySide6.QtCore import QObject
 from agent_engine.phase_manager import PhaseManager
 from services.pending_queue import PendingQueue
 from ui.managers.queue_manager import QueueManager
+from ui.managers.phase_coordinator import PhaseCoordinator
 from workers.session_task import SessionTask, TaskStatus
 
 
@@ -33,14 +34,21 @@ class SessionRuntime(QObject):
     mode: str
     model: str
 
+    # v3 事件总线（可选，测试中可省略）
+    message_bus: Optional[object] = None
+
     # 业务对象（__post_init__ 中创建）
     pending_queue: PendingQueue = field(init=False)
     queue_manager: QueueManager = field(init=False)
     phase_manager: PhaseManager = field(init=False)
+    phase_coordinator: PhaseCoordinator = field(init=False)
 
     # 运行时引用
     worker: Optional[object] = None
     task: Optional[SessionTask] = None
+
+    # 流式状态
+    chunks_received: bool = False
 
     # 状态快照
     phase_state: dict = field(default_factory=dict)
@@ -58,6 +66,12 @@ class SessionRuntime(QObject):
             parent=self,
         )
         self.phase_manager = PhaseManager(parent=self)
+        self.phase_coordinator = PhaseCoordinator(
+            session_id=self.session_id,
+            phase_manager=self.phase_manager,
+            message_bus=self.message_bus,
+            parent=self,
+        )
 
     @property
     def is_active(self) -> bool:

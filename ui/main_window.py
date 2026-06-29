@@ -45,8 +45,14 @@ from ui.widgets import (
 from ui.dialogs import SettingsDialog, ProviderFormDialog
 from ui.chat_view import ChatView
 from ui.managers.session_manager import SessionManager
+from ui.managers.ui_renderer import UIRenderer
 from core.event_bus import MessageBus
 from core.events import (
+    UserSendEvent,
+    UserStopEvent,
+    UserConfirmEvent,
+    UserReanalyzeEvent,
+    UserSkipVerifyEvent,
     SessionCreateEvent,
     SessionSwitchEvent,
     SessionDeleteEvent,
@@ -241,7 +247,19 @@ class MainWindow(QMainWindow):
         )
 
         # ── v3 Orchestrator 生命周期镜像 ──────────
-        if self._orchestrator is not None:
+        self._v3_enabled = self._orchestrator is not None
+        self._ui_renderer = None
+        if self._v3_enabled:
+            self._ui_renderer = UIRenderer(
+                message_bus=self._app_ctx.message_bus,
+                chat_view=self.chat_view,
+                status_indicator=self.status_indicator,
+                conversation_list=self.conversation_list,
+                capacity_label=self.capacity_label,
+                queue_bar=self._queue_bar,
+                current_session_provider=lambda: self._current_session,
+                parent=self,
+            )
             self._connect_orchestrator()
 
         # ── 连接信号 ────────────────────────────
@@ -258,15 +276,16 @@ class MainWindow(QMainWindow):
         self.workspace.document_opened.connect(self._on_document_opened)
         self.workspace.document_closed.connect(self._on_document_closed)
 
-        # PhaseManager 信号
-        self._phase_manager.phase_changed.connect(self._on_phase_changed)
-        self._phase_manager.analyze_required.connect(self._on_analyze_required)
-        self._phase_manager.confirm_required.connect(self._on_confirm_required)
-        self._phase_manager.execute_required.connect(self._on_execute_required)
-        self._phase_manager.verify_required.connect(self._on_verify_required)
-        self._phase_manager.archive_required.connect(self._on_archive_required)
-        self._phase_manager.flow_finished.connect(self._on_phase_flow_finished)
-        self._phase_manager.error_occurred.connect(self._on_phase_error)
+        # PhaseManager 信号（v3 路径下由 SessionRuntime 内的 PhaseCoordinator 接管）
+        if not self._v3_enabled:
+            self._phase_manager.phase_changed.connect(self._on_phase_changed)
+            self._phase_manager.analyze_required.connect(self._on_analyze_required)
+            self._phase_manager.confirm_required.connect(self._on_confirm_required)
+            self._phase_manager.execute_required.connect(self._on_execute_required)
+            self._phase_manager.verify_required.connect(self._on_verify_required)
+            self._phase_manager.archive_required.connect(self._on_archive_required)
+            self._phase_manager.flow_finished.connect(self._on_phase_flow_finished)
+            self._phase_manager.error_occurred.connect(self._on_phase_error)
 
         # v3.9 多任务管理系统 — TaskService 信号连接
         self.task_service.task_status_changed.connect(
@@ -891,20 +910,27 @@ class MainWindow(QMainWindow):
     # 消息发送
     # ═══════════════════════════════════════════════════
     def _send_message(self, user_text):
-        print(f"[DIAG] _send_message ENTER: text='{user_text[:30]}' full={self._pending_queue.is_full} len={self._pending_queue.length}", flush=True)
-        # 0. 槽满检查：队列已满时拒绝新消息
-        if self._pending_queue.is_full:
-            print(f"[DIAG] _send_message QUEUE FULL, len={self._pending_queue.length}", flush=True)
-            self._on_log_message("⚠ 队列已满，请等待当前任务完成", is_global=True)
-            return
+        print(f"[DIAG] _send_message ENTER: text='{user_text[:30]}' v3={self._v3_enabled}", flush=True)
 
         # 0.1 Phase 状态拦截：CONFIRM 阶段用户输入视为对任务清单的反馈
-        if self._current_phase == "confirm":
+        if self._current_phase == "confirm" and not self._v3_enabled:
             lowered = user_text.lower()
             if "重新分析" in user_text or "取消" in user_text or "cancel" in lowered or "no" in lowered:
                 self._on_phase_reanalyze()
             else:
                 self._on_phase_confirmed()
+            return
+
+        # v3 路径：委托给 SessionOrchestrator
+        if self._v3_enabled:
+            self._send_message_v3(user_text)
+            return
+
+        print(f"[DIAG] _send_message ENTER: text='{user_text[:30]}' full={self._pending_queue.is_full} len={self._pending_queue.length}", flush=True)
+        # 0. 槽满检查：队列已满时拒绝新消息
+        if self._pending_queue.is_full:
+            print(f"[DIAG] _send_message QUEUE FULL, len={self._pending_queue.length}", flush=True)
+            self._on_log_message("⚠ 队列已满，请等待当前任务完成", is_global=True)
             return
 
         # 0.2 写入本轮日志标题
@@ -953,6 +979,44 @@ class MainWindow(QMainWindow):
 
         # 由 _on_queue_task_started（QueuedConnection）统一启动 Phase 工作流
         # 不再在此处直接调用 _start_streaming，避免双重启动和信号槽重入
+
+    def _send_message_v3(self, user_text: str):
+        """v3 路径：通过 MessageBus 委托给 SessionOrchestrator"""
+        rt = self._orchestrator.get_runtime(self._current_session)
+        if rt is None:
+            self._on_log_message("⚠ 当前会话未初始化", is_global=True)
+            return
+
+        if rt.queue_manager.is_full:
+            self._on_log_message("⚠ 队列已满，请等待当前任务完成", is_global=True)
+            return
+
+        # 写入本轮日志标题
+        display_text = user_text[:80] + ("..." if len(user_text) > 80 else "")
+        self._on_log_message(f"▶ 用户: {display_text}", is_header=True)
+
+        # UI 和 session 持久化
+        self._session_mgr.add_message(self._current_session, "user", user_text)
+        self.session_service.add_message(self._current_session, "user", user_text)
+
+        session = self._session_mgr.get_session_data(self._current_session)
+        if len(session["messages"])  == 1:
+            title = user_text[:20] + "..." if len(user_text) > 20 else user_text
+            session["title"] = title
+            self._update_conversation_title(self._current_session, title)
+            self.chat_view.set_header(self._current_mode, self._current_model_name, title)
+            project_path = self.project_service.get_session_project(self._current_session)
+            self.session_service.create_conversation(
+                self._current_session, title, self._current_mode, self._current_model_name,
+                project_path=project_path
+            )
+
+        self._app_ctx.message_bus.emit(UserSendEvent(
+            session_id=self._current_session,
+            user_text=user_text,
+            mode=self._current_mode,
+        ))
+        self.chat_view.clear_input()
 
     def _start_streaming(self, task: PendingTask):
         """启动队列任务的 Phase 工作流"""
@@ -1118,11 +1182,22 @@ class MainWindow(QMainWindow):
 
     def _on_phase_confirmed(self):
         """用户点击确认执行"""
+        if self._v3_enabled:
+            self._app_ctx.message_bus.emit(UserConfirmEvent(
+                session_id=self._current_session,
+                confirmed=True,
+            ))
+            return
         self.chat_view.hide_confirmation()
         self._phase_manager.on_user_confirm(True)
 
     def _on_phase_reanalyze(self):
         """用户点击重新分析：重启 analyze"""
+        if self._v3_enabled:
+            self._app_ctx.message_bus.emit(UserReanalyzeEvent(
+                session_id=self._current_session,
+            ))
+            return
         self.chat_view.hide_confirmation()
         ctx = self._phase_manager.current_context()
         self._phase_manager.reset()
@@ -1131,6 +1206,11 @@ class MainWindow(QMainWindow):
 
     def _on_phase_skip_verify(self):
         """用户点击跳过验证"""
+        if self._v3_enabled:
+            self._app_ctx.message_bus.emit(UserSkipVerifyEvent(
+                session_id=self._current_session,
+            ))
+            return
         self.chat_view.hide_skip_verify()
         self._phase_manager.on_verify_complete(True, "用户跳过验证")
 
@@ -1359,6 +1439,12 @@ class MainWindow(QMainWindow):
 
     def _on_stop_generation(self):
         """用户点击停止：取消当前 streaming 任务，自动出队下一个"""
+        if self._v3_enabled:
+            self._app_ctx.message_bus.emit(UserStopEvent(
+                session_id=self._current_session,
+            ))
+            return
+
         streaming = self._pending_queue.get_streaming_task()
         if streaming:
             # 取消当前

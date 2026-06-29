@@ -25,6 +25,7 @@ from core.events import (
     QueueEnqueueEvent,
     QueueTaskReadyEvent,
     QueueTaskStoppedEvent,
+    QueueStateChangedEvent,
     PhaseAnalyzeRequiredEvent,
     PhaseConfirmRequiredEvent,
     PhaseExecuteRequiredEvent,
@@ -44,7 +45,10 @@ from core.events import (
     WorkerExecuteResultEvent,
     WorkerVerifyResultEvent,
     UIAppendUserEvent,
+    UIAppendAIEvent,
     UIAppendSystemEvent,
+    UIStreamChunkEvent,
+    UIFinalizeStreamEvent,
     UIClearPhaseUIEvent,
     UISetStreamingEvent,
     UIUpdateSessionStatusEvent,
@@ -53,6 +57,8 @@ from core.events import (
     UIShowSkipVerifyEvent,
     UIHideSkipVerifyEvent,
     UIUpdateStatusBarEvent,
+    UIUpdateQueueBarEvent,
+    UISetSendEnabledEvent,
 )
 from services.app_context import AppContext
 from services.session_runtime import SessionRuntime
@@ -134,9 +140,6 @@ class SessionOrchestrator(QObject):
         self._bus.subscribe_name("worker", "chunk", self._on_worker_chunk)
         self._bus.subscribe_name("worker", "error", self._on_worker_error)
         self._bus.subscribe_name("worker", "tool_executed", self._on_worker_tool)
-        self._bus.subscribe_name("worker", "analyze_result", self._on_worker_analyze_result)
-        self._bus.subscribe_name("worker", "execute_result", self._on_worker_execute_result)
-        self._bus.subscribe_name("worker", "verify_result", self._on_worker_verify_result)
 
     # ═══════════════════════════════════════════════════
     # 用户动作处理
@@ -179,7 +182,7 @@ class SessionOrchestrator(QObject):
     def _on_user_confirm(self, event: UserConfirmEvent):
         rt = self._require_runtime(event.session_id)
         if rt:
-            rt.phase_manager.on_user_confirm(event.confirmed)
+            rt.phase_coordinator.on_user_confirm(event.confirmed)
             if event.confirmed:
                 rt.save_phase_state({"phase": "confirm", "confirmed": True})
             else:
@@ -188,13 +191,12 @@ class SessionOrchestrator(QObject):
     def _on_user_reanalyze(self, event: UserReanalyzeEvent):
         rt = self._require_runtime(event.session_id)
         if rt:
-            # PhaseCoordinator 层处理 reanalyze 逻辑
-            pass
+            rt.phase_coordinator.on_user_reanalyze()
 
     def _on_user_skip_verify(self, event: UserSkipVerifyEvent):
         rt = self._require_runtime(event.session_id)
         if rt:
-            rt.phase_manager.on_verify_complete(True, "用户跳过验证")
+            rt.phase_coordinator.on_user_skip_verify()
 
     # ═══════════════════════════════════════════════════
     # 会话生命周期处理
@@ -228,6 +230,7 @@ class SessionOrchestrator(QObject):
             title=title,
             mode=mode,
             model=model,
+            message_bus=self._bus,
         )
         rt.setParent(self)
         self._runtimes[session_id] = rt
@@ -235,16 +238,39 @@ class SessionOrchestrator(QObject):
             self._current_session_id = session_id
 
         # 桥接 QueueManager Qt 信号 → MessageBus 事件
-        rt.queue_manager.task_ready_to_start.connect(
+        qm = rt.queue_manager
+        qm.task_ready_to_start.connect(
             lambda task: self._bus.emit(QueueTaskReadyEvent(
                 session_id=task.session_id,
                 task_id=task.task_id,
             ))
         )
-        rt.queue_manager.task_stopped.connect(
+        qm.task_stopped.connect(
             lambda sid: self._bus.emit(QueueTaskStoppedEvent(
                 session_id=sid,
                 task_id="",
+            ))
+        )
+        qm.state_changed.connect(
+            lambda state_name: self._bus.emit(QueueStateChangedEvent(
+                session_id=session_id,
+                state_name=state_name,
+                is_full=qm.is_full,
+                send_enabled=not qm.is_full,
+                bar_text=qm._build_queue_bar_text(),
+            ))
+        )
+        qm.send_enabled_changed.connect(
+            lambda enabled: self._bus.emit(UISetSendEnabledEvent(
+                session_id=session_id,
+                enabled=enabled,
+            ))
+        )
+        qm.queue_bar_text_changed.connect(
+            lambda text: self._bus.emit(UIUpdateQueueBarEvent(
+                session_id=session_id,
+                bar_text=text,
+                is_visible=bool(text),
             ))
         )
 
@@ -302,8 +328,8 @@ class SessionOrchestrator(QObject):
         self._task_service.submit_task(task.session_id, task.mode, task.user_text)
         rt.bind_task(self._task_service.get_task_status(task.session_id))
 
-        # 启动 Phase 工作流
-        rt.phase_manager.start(task.user_text, task.mode, task.context)
+        # 启动 Phase 工作流（通过 PhaseCoordinator）
+        rt.phase_coordinator.start_flow(task.user_text, task.mode, task.context)
 
     def _on_queue_task_stopped(self, event: QueueTaskStoppedEvent):
         rt = self._require_runtime(event.session_id)
@@ -372,10 +398,9 @@ class SessionOrchestrator(QObject):
         ))
 
     def _on_phase_archive(self, event: PhaseArchiveRequiredEvent):
-        rt = self._require_runtime(event.session_id)
-        if rt is None:
-            return
-        rt.phase_manager.on_archive_complete(True, "工作流完成")
+        """Archive 阶段已由 PhaseCoordinator 自动推进，Orchestrator 无需重复调用。"""
+        # PhaseCoordinator._on_archive_required 已调用 phase_manager.on_archive_complete
+        pass
 
     def _on_phase_flow_completed(self, event: PhaseFlowCompletedEvent):
         """唯一任务完成路径"""
@@ -455,21 +480,36 @@ class SessionOrchestrator(QObject):
         rt = self._require_runtime(event.session_id)
         if rt is None:
             return
-        # 兼容旧版 result_ready：按当前 phase 决定用途
+
+        text = event.full_text or ""
+
+        # 1. UI 落盘：先 finalize stream；若全程无 chunk，再追加完整文本
+        self._bus.emit(UIFinalizeStreamEvent(session_id=event.session_id))
+        if not rt.chunks_received and text.strip():
+            self._bus.emit(UIAppendAIEvent(session_id=event.session_id, text=text))
+        rt.chunks_received = False
+
+        # 2. 持久化 AI 消息（静默失败，避免阻塞工作流）
+        try:
+            self._app_ctx.session_service.add_message(event.session_id, "ai", text)
+        except Exception as e:
+            logger.warning("Failed to persist AI message for %s: %s", event.session_id, e)
+
+        # 3. 按当前 phase 决定用途
         phase = rt.current_phase
         if phase == "analyze":
-            task_list = PhaseManager.parse_task_list(event.full_text)
+            task_list = PhaseManager.parse_task_list(text)
             rt.phase_manager.on_analyze_complete(task_list)
         elif phase == "execute":
-            rt.phase_manager.on_execute_complete(event.full_text)
+            rt.phase_manager.on_execute_complete(text)
         elif phase == "verify":
-            rt.phase_manager.on_verify_complete(True, event.full_text)
+            rt.phase_manager.on_verify_complete(True, text)
 
     def _on_worker_chunk(self, event: WorkerChunkEvent):
-        # 仅当前会话更新 UI
-        if event.session_id == self._current_session_id:
-            from core.events import UIStreamChunkEvent
-            self._bus.emit(UIStreamChunkEvent(session_id=event.session_id, chunk=event.chunk))
+        rt = self._require_runtime(event.session_id)
+        if rt is not None:
+            rt.chunks_received = True
+        self._bus.emit(UIStreamChunkEvent(session_id=event.session_id, chunk=event.chunk))
 
     def _on_worker_error(self, event: WorkerErrorEvent):
         self._bus.emit(PhaseFlowCompletedEvent(

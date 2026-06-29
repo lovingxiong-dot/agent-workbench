@@ -515,6 +515,15 @@ class UISetSendEnabledEvent(Event):
 
 
 @dataclass
+class UIUpdateQueueBarEvent(Event):
+    namespace = "ui"
+    name = "update_queue_bar"
+    session_id: str
+    bar_text: str = ""
+    is_visible: bool = True
+
+
+@dataclass
 class UIUpdateSessionStatusEvent(Event):
     namespace = "ui"
     name = "update_session_status"
