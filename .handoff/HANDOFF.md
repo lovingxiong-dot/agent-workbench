@@ -1,91 +1,88 @@
 ---
-generated: 2026-06-30T03:00:00+08:00
+generated: 2026-06-30T05:05:00+08:00
 agent: Kimi-K2.7-Code
 schema_version: 3.1
+---
 
 ## Mission
-完成 AI Agent Workbench v3.12.0 的 UI 修复、MainWindow 架构收敛、AI Engine 八引擎升级评审、版本号统一与分支整理，将代码库推进到干净、可继续开发的归档状态。
+修复 Agent Workbench 多会话与状态机问题，并启动轻量化重构：第一步将左侧“新会话”按钮从“创建新标签”改为“重置当前对话框”。
 
 ## Progress
-1. ✅ 修复新会话按钮只能添加一个标签的问题（移除空会话守卫）。
-2. ✅ 修复会话标签名均为"新对话"的问题（首条消息后更新标题）。
-3. ✅ 修复 Enter 键首次失效问题（新增 `_focus_input_field()` 强制焦点）。
-4. ✅ 修复切换新会话显示无意义接替上下文的问题（`task.phase == "idle"` 守卫）。
-5. ✅ 完成 MainWindow 架构收敛重构，移除旧全局状态（`_pending_queue`、`_worker`、`_workers`、`_phase_manager`），统一走 v3 MessageBus 路径。
-6. ✅ 新增 `tests/test_main_window_ui_automation.py` UI 自动化测试（4 个用例）。
-7. ✅ 评审并确认 v3.12.0 AI Engine 八引擎模块化升级的正确性与合理性（绞杀者模式、接口抽象、依赖注入）。
-8. ✅ 统一版本号：`config.yaml` / `PROJECT_BLUEPRINT.md` / 提交标签一致为 `v3.12.0`。
-9. ✅ 整理分支布局：将 `master` 合并到 `main`，删除本地与远程 `master`，`main` 成为唯一主线。
-10. ✅ 全量测试 `214 passed`，工作区 clean，最新提交已 push 到 `origin/main`。
+- [x] PhaseManager 修复：Esc 否定票视为完成（不标记失败）；PLAN/CRAFT analyze 无任务时自动跳过 CONFIRM/EXECUTE/VERIFY
+- [x] config.yaml 恢复 YAML 格式并设置 `app.last_mode: ask`
+- [x] MainWindow 新会话按钮改为重置当前对话框：不新建 session、不新增标签、不终止后台任务
+- [x] 修复会话列表刷新：重置时标题同步更新，项目/全局切换时列表项移动到正确分组
+- [x] UI 自动化测试同步更新，全部 214 项测试通过
+- [x] 停止运行中的 GUI 进程，清理测试用 storage 数据
 
 ## Blocker
-无。所有已识别问题已修复并验证，代码库处于可继续开发状态。
+symptom: 无明确报错。轻量化第一步刚完成，需下一位开发者或用户验证实际 GUI 交互体验。
+failed_attempts:
+  1. 多标签新会话方案 — 导致 UI 线程与后台状态不同步、标签名不刷新、问题难以排查，已放弃并改为单会话重置模式。
 
 ## Decision Log
-1. 决策：采用 `_focus_input_field()` 统一处理输入框焦点（`activateWindow` + `raise_` + `QTimer.singleShot`）。
-   原因：同步 `setFocus()` 在窗口未激活或被其他控件抢占时失效。
-   排除：仅增加 `setFocusPolicy(Qt.StrongFocus)` 或仅在更多事件里调用 `setFocus()`。
-   状态：已执行并验证。
+1. 决策：新会话按钮从“创建新标签”改为“重置当前对话框”
+   排除：继续维护多标签创建/切换逻辑（复杂度高、状态容易覆盖）
+   原因：降低 UI 与后台状态耦合，先让“新会话”回归最简单的窗口初始化
+   状态：已执行
 
-2. 决策：对 AI Engine 升级使用绞杀者模式，保留旧逻辑作为回退。
-   原因：`arun()` 主循环是热路径，直接全量替换风险过高。
-   排除：一次性全量迁移到八引擎主循环。
-   状态：已确认合理，后续需分阶段推进主循环迁移。
+2. 决策：重置时不中止当前后台任务/队列
+   排除：重置前调用 `_abort_current_session_task()`
+   原因：用户明确要求“没有终止对话，全部都调到后台去了，初始化 UI 对话窗口，和队列任务不冲突”
+   状态：已执行
 
-3. 决策：将 `master` 合并到 `main` 后删除 `master`，以 `main` 作为唯一主线。
-   原因：用户要求唯一主线布局，`origin/HEAD` 已指向 `main`。
-   排除：保留 `master` 作为并行开发分支。
-   状态：已执行，`master` 本地与远程均已删除。
-
-4. 决策：版本号修正提交不打新标签，复用已存在的 `v3.12.0`。
-   原因：`v3.12.0` 已推送远程，指向 AI Engine 升级提交；元数据修正作为补丁提交跟随其后。
-   排除：强制移动 `v3.12.0` 标签（违反 --force 规则）。
-   状态：已执行，`v3.12.0` 标签保留。
+3. 决策：修复 `_new_conversation` 中的会话列表同步（标题刷新 + 项目/全局列表移动）
+   排除：仅清空 UI 不更新列表状态
+   原因：用户测试发现“会话列表不刷新”，需要列表与内存状态保持一致
+   状态：已执行
 
 ## Key Files
-- `ui/main_window.py` — MainWindow 架构收敛、输入框焦点修复、会话切换逻辑。
-- `services/self_context.py` — 接替上下文构建，`task.phase == "idle"` 守卫。
-- `ui/widgets/sidebar.py` — 补充 `FileTreeWidget.get_root_path()`。
-- `ui/managers/session_manager.py` — `update_title` 补充 `Qt` 导入。
-- `agent_engine/engines/` — v3.12.0 八引擎模块化实现（Context/Prompt/Inference/Tool/Phase/Memory/Metrics/Policy）。
-- `agent_engine/orchestrator.py` — 绞杀者模式集成，新旧逻辑并存。
-- `config.yaml` — 版本号、LLM 参数、engines 配置、system prompt。
-- `PROJECT_BLUEPRINT.md` / `CHANGELOG.md` — 项目文档与变更日志。
-- `tests/test_main_window_ui_automation.py` — UI 自动化测试。
+- `agent_engine/phase_manager.py` — Esc/阶段跳过状态机修复
+- `ui/main_window.py` — `_new_conversation` 重置逻辑 + `_move_conversation_item` 列表同步
+- `tests/test_main_window_ui_automation.py` — 新会话测试改为验证重置行为
+- `tests/test_phase_manager.py` — Esc/阶段跳过对应单元测试
+- `config.yaml` — 恢复格式，`last_mode: ask`
 
 ## Error Log
-No error. 最近一个完整测试运行：`214 passed in 44.45s`。
+No error. Logic verified by full test suite.
 
 ## Environment Snapshot
 branch: main
 python: Python 3.14.6
 venv: none
-last_commit: 9621c5e Merge branch 'master'
+last_commit: 5f66159 chore(handoff): v3.12.0 归档交接 — UI修复/架构收敛/AI Engine评审/分支整理 [hint:v3.12.0-archive] (by AI-Kimi-K2.7-Code)
 
 ## Working State
 ### Dirty Files
-working tree clean
+ M agent_engine/phase_manager.py
+ M config.yaml
+ M tests/test_main_window_ui_automation.py
+ M tests/test_phase_manager.py
+ M ui/main_window.py
 
 ### Uncommitted Changes Summary
-no uncommitted changes
+ agent_engine/phase_manager.py           | 44 ++++++++++++++--------
+ config.yaml                             |  2 +-
+ tests/test_main_window_ui_automation.py | 32 ++++++++++-----
+ tests/test_phase_manager.py             |  9 +++--
+ ui/main_window.py                       | 71 ++++++++++++++++++---------------
+ 5 files changed, 98 insertions(+), 60 deletions(-)
 
 ### Recent Conversation
-- 用户要求分析 v3.12.0 AI Engine 八引擎升级的正确性与合理性。
-- AI 确认升级架构正确：职责单一、接口抽象、依赖注入、绞杀者模式合理；指出主循环尚未迁移、引擎间初始化顺序、降级路径测试等后续关注点。
-- 用户要求执行「存档+移交」，同步版本号，整理分支为唯一主线。
-- AI 完成版本号统一、master 合并到 main、删除 master、push 到远程。
+- 用户：“执行” → 确认按最小改动方案执行第一步。
+- 用户：“清理并启动一下 我测试” → 清理 storage 并启动 GUI。
+- 用户：“新会话按钮...这一层是正确的了。现在 会话列表不刷新 不出现在会话列表 只有一个会话窗口在左侧” → 修复列表刷新。
+- 用户：“你交接吧 我换个人来” → 触发移交流程。
 
 ## Next Steps (AI-Inferred)
-1. **验证 v3.12.0 运行时行为**：启动 `python main.py`，确认八引擎升级后没有破坏会话管理、焦点、队列状态等已有修复。
-2. **推进八引擎主循环迁移**：制定从 `arun()` 旧路径逐步迁移到 `InferenceEngine` + `ToolEngine` + `PhaseEngine` 的计划。
-3. **补充引擎降级/重试路径测试**：为 `InferenceEngine.invoke()` 的 fallback model、重试耗尽、流式取消等边界场景补充测试。
-4. **清理 MainWindow 旧路径残留**：在确认 v3 MessageBus 路径稳定后，彻底移除 `_worker`、`_workers`、`_phase_manager` 等兼容属性及相关旧方法。
+1. 启动 `python main.py` 进行 GUI 端到端验证：反复点击新会话按钮应只重置对话框；项目/全局切换应正确移动列表项；发送消息后标题应更新。
+2. 根据验证结果继续轻量化第二步（如进一步合并两个新会话按钮为单一重置按钮，或移除会话列表中的冗余分组）。
+3. 验证通过后执行存档/打包流程。
 
 ## Test Status
-latest: [test:214/214]
-command: python -m pytest tests -q --tb=short
+latest: 214/214 passed
+command: python -m pytest tests/ -x --tb=short
 
 ## Notes
-- `v3.12.0` 标签指向 `54b61fe`（AI Engine 升级提交），版本号修正提交 `b478515` 在其后并通过 merge 进入 `main`。
-- 当前远程分支仅剩 `main` 与 `feature/v3-rewrite`；`origin/HEAD -> origin/main`。
-- 建议后续在 Gitee 后台将默认分支明确设为 `main`（虽然 HEAD 已指向 main）。
+- 当前 `_new_conversation` 仅清空内存消息，未删除 DB 中的历史消息；如需真正“全新会话”，后续可考虑删除当前会话记录或引入“后台归档”机制。
+- 运行中的 GUI 进程已停止，下一位接手时需重新启动。
