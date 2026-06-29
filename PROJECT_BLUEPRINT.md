@@ -1,10 +1,10 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v3.11.3 | 存档次数 | 24 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v3.12.0 | 存档次数 | 26 |
 
 ## 项目概要
-AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、MT5 交易、网页抓取、剪贴板管理等能力。v3.1 完成右侧工作区重构；v3.2 引入项目目录上下文；v3.3 对文件预览、对话分栏、活动面板、文档编辑进行精细化打磨；v3.4 让 Agent 具备工作空间感知能力，能自动识别当前项目目录、右侧打开文件，并基于项目根目录解析工具相对路径。v3.5 引入请求级指标（token/耗时）并在 AI 气泡下方显示。v3.6 引入 Phase-Driven Workflow Engine：将每次请求按 Mode 切分为 Analyze → Confirm → Execute → Verify → Archive 阶段，Mode 与 Phase 正交，硬门控/软提示分离，任务清单驱动执行。v3.7 引入 InterpreterService，支持终端解释器自动发现、手动切换与 AI 上下文感知。v3.7.1 修复启动时解释器检测弹窗、历史会话 AI 回复丢失、终端输入框无法编辑等问题，并增强活动面板交互与窗口标题版本可持续迭代。v3.7.2 修复 v3.7.1 中窗口标题初始化顺序导致的打包启动崩溃。v3.8.1 填充 4 个架构占位文件（screen/overlay/settings/tools_panel），优化对话气泡排版与活动面板多选交互。v3.11.0 进行 v3 架构重构：引入事件总线（MessageBus）作为唯一跨组件通信层，每个会话拥有独立的运行时聚合根（SessionRuntime），由 SessionOrchestrator 统一协调；PhaseCoordinator、WorkerManager、UIRenderer 全部基于事件驱动，TaskService 增加终态保护，彻底解决会话切换状态覆盖、队列槽位不归零、任务状态不回收等历史问题。
+AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v3.12.0 完成 AI Engine 八引擎模块化架构升级：ContextEngine/PromptEngine/InferenceEngine/ToolEngine/PhaseEngine/MemoryEngine/MetricsEngine/PolicyEngine，实现单一职责 + 闭环反馈 + 绞杀者模式集成，同时增强 System Prompt、LLM 参数可配置化、自识别记忆路径修正。
 
 ## 技术栈
 | 类别 | 技术 | 版本 | 用途 |
@@ -25,13 +25,25 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 /
 ├── agent_engine/           # 引擎层
 │   ├── __init__.py
+│   ├── agent_session.py    # 跨 Phase 复用会话
 │   ├── classifier.py       # 意图分类
-    ├── llm_registry.py     # LLM 提供商注册与持久化
-    ├── memory_manager.py   # 会话记忆管理
-    ├── mode_manager.py     # 手动模式管理
-    ├── orchestrator.py     # 编排器
-    ├── phase_manager.py    # Phase-Driven Workflow Engine
-    └── proactive_engine.py # 主动引擎
+│   ├── llm_registry.py     # LLM 提供商注册与持久化
+│   ├── memory_manager.py   # 会话记忆管理
+│   ├── mode_manager.py     # 手动模式管理
+│   ├── orchestrator.py     # 编排器（绞杀者：支持八引擎委托）
+│   ├── phase_manager.py    # Phase-Driven Workflow Engine
+│   ├── proactive_engine.py # 主动引擎
+│   ├── engines/            # v3.12 八引擎模块
+│   │   ├── __init__.py
+│   │   ├── interfaces.py       # 8 引擎接口 + 共享 dataclass
+│   │   ├── context_engine.py   # 上下文组装与压缩
+│   │   ├── prompt_engine.py    # System prompt 构建
+│   │   ├── inference_engine.py # LLM 调用 + 重试/降级
+│   │   ├── tool_engine.py      # 工具执行与权限
+│   │   ├── phase_engine.py     # Phase 流转管理
+│   │   ├── memory_engine.py    # 三层记忆系统
+│   │   ├── metrics_engine.py   # 指标采集与聚合
+│   │   └── policy_engine.py    # 策略决策驱动
 ├── tools/                  # 工具层
 │   ├── __init__.py
 │   ├── system.py           # 系统命令 / 文件读写 / 网络 / 剪贴板 / 通知 / 进程
@@ -156,6 +168,8 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v3.12.0 | 2026-06-30 | AI Engine 架构升级：八引擎模块化 + System Prompt 增强 + LLM 参数可配 + 记忆路径修正 + 绞杀者集成 | feat/refactor/fix | agent_engine/engines/*.py, agent_engine/orchestrator.py, agent_engine/llm_registry.py, services/self_context.py, config.yaml, ui/main_window.py, tests/test_self_context.py |
+| v3.11.4 | 2026-06-29 | MainWindow 架构收敛重构：移除 _pending_queue/_worker/_workers/_phase_manager 等旧全局状态，统一走 v3 MessageBus 路径；修复新会话按钮只能添加一个标签、会话标签名均为"新对话"、Enter 键首次失效（新增 `_focus_input_field` 强制焦点）、切换新会话显示无意义接替上下文；补充 FileTreeWidget.get_root_path 与 SessionManager Qt 导入修复；新增 MainWindow UI 自动化测试 | fix/refactor/test | ui/main_window.py, ui/widgets/sidebar.py, ui/managers/session_manager.py, services/self_context.py, tests/test_main_window_ui_automation.py |
 | v3.11.3 | 2026-06-29 | 修复真实运行时 WorkerManager 无法解析 LLM、Phase 错误后未 reset、空对话守卫导致单标签、新建会话后 Orchestrator 当前会话不同步、SessionManager 标题 data role 错误；新增 pytest.ini 排除 scripts 测试噪音 | fix | ui/managers/worker_manager.py, ui/managers/phase_coordinator.py, services/session_orchestrator.py, ui/main_window.py, ui/managers/session_manager.py, pytest.ini |
 | v3.11.2 | 2026-06-29 | 修复 v3 Worker 重复创建导致无响应：Orchestrator 移除 worker.created/execute_required/verify_required 重复订阅；新 runtime 创建后同步 UI 队列状态；README 与文档规范化 | fix/docs | services/session_orchestrator.py, tests/integration/test_v3_flow.py, README.md, docs/getting-started.md, PROJECT_BLUEPRINT.md |
 | v3.11.1 | 2026-06-29 | 修复 v3 事件流：Worker 创建后立即 analyze、会话切换同步队列 UI、历史会话自动创建 runtime、切换不误杀后台任务 | fix/refactor | core/events.py, ui/managers/worker_manager.py, services/session_orchestrator.py, ui/main_window.py, ui/managers/session_manager.py, README.md |
@@ -186,7 +200,7 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 3. git commit -m "..." + git tag vX.Y.Z
 4. git push + git push origin vX.Y.Z（仅当前分支 + 当前标签，禁止 --tags）
 
-_更新于 2026-06-29 23:45:00 by AI-Kimi-K2.7-Code_
+_更新于 2026-06-30 04:00:00 by AI-Kimi-K2.7-Code_
 
 ## Agent交接记录
 | 时间 | 方向 | 从 | 到 | 交接点 | 备注 |

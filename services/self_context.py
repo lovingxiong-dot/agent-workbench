@@ -5,7 +5,7 @@ SelfContext — 代码层自识别上下文注入
 - 时间戳（datetime.now() 硬事实）
 - 位置感知（项目根、会话ID、标题）
 - 跨对话接替（Phase状态、任务清单、上次活动）
-- 独立记忆（.workbuddy/memory/MEMORY.md + 最近日志）
+- 独立记忆（app_root/.memory/MEMORY.md + 最近日志）
 """
 
 import os
@@ -16,7 +16,13 @@ from typing import Optional, Dict, Any, List
 
 
 class SelfContext:
-    """构建代码层自识别上下文，注入 prompt"""
+    """构建代码层自识别上下文，注入 prompt
+
+    记忆定位规则：
+    - 读取 app_root/.memory/ 下的 MEMORY.md 和每日日志
+    - app_root 为项目根目录（agent_workbench/），由外部注入
+    - 不再依赖 WorkBuddy 的 .workbuddy/memory/ 路径
+    """
 
     _WEEKDAY_NAMES = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
 
@@ -30,10 +36,15 @@ class SelfContext:
         context_service=None,
         task_service=None,
         config: Optional[Dict[str, Any]] = None,
+        app_root: Optional[str] = None,
     ):
         self._context_service = context_service
         self._task_service = task_service
         self._config = config or {}
+        if app_root is None:
+            self._app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        else:
+            self._app_root = app_root
         self._memory_cache: Optional[str] = None
         self._memory_cache_mtime: float = 0.0
 
@@ -77,25 +88,29 @@ class SelfContext:
             return ""
 
         # 无活跃任务且非终态 → 不显示接替上下文
-        if not task.is_active and not (hasattr(task, 'is_terminal') and task.is_terminal):
+        if not task.is_active and not task.is_terminal:
+            return ""
+
+        # 活跃但 phase 仍为 idle → PhaseManager 尚未推进，没有实际状态需要接替
+        if task.is_active and task.phase == "idle":
             return ""
 
         parts = ["[会话接替上下文]"]
         if task.is_active:
             parts.append("🔄 此会话中有未完成的任务")
             parts.append(f"   当前阶段: {task.phase}")
-            if hasattr(task, 'status') and hasattr(task.status, 'value'):
+            if hasattr(task.status, 'value'):
                 if 'AWAITING_CONFIRM' in str(task.status):
                     parts.append("   等待确认的任务清单")
                     if task.task_list:
                         parts.append(f"   任务清单: {json.dumps(task.task_list, ensure_ascii=False)}")
-        elif hasattr(task, 'is_terminal') and task.is_terminal:
+        elif task.is_terminal:
             parts.append(f"✅ 上次任务已完成 (状态: {task.status.value if hasattr(task.status, 'value') else task.status})")
             parts.append(f"   完成时间: {task.updated_at}")
 
-        if hasattr(task, 'created_at'):
+        if task.created_at:
             parts.append(f"   会话创建时间: {task.created_at}")
-        if hasattr(task, 'updated_at'):
+        if task.updated_at:
             parts.append(f"   上次活动: {task.updated_at}")
 
         return "\n".join(parts)
@@ -142,12 +157,12 @@ class SelfContext:
         return "\n".join(parts)
 
     def _build_memory_context(self) -> str:
-        """独立记忆注入：读取 .workbuddy/memory/ 下的项目记忆"""
-        project_root = self._context_service.get_project_root() if self._context_service else ""
-        if not project_root:
+        """独立记忆注入：读取 app_root/.memory/ 下的项目记忆与每日日志"""
+        app_root = self._app_root
+        if not app_root:
             return ""
 
-        memory_dir = os.path.join(project_root, ".workbuddy", "memory")
+        memory_dir = os.path.join(app_root, ".memory")
         if not os.path.isdir(memory_dir):
             return ""
 
@@ -162,13 +177,23 @@ class SelfContext:
         context_parts = []
         max_len = self._config.get("memory_max_len", self.DEFAULT_MEMORY_MAX_LEN)
 
-        # 读取 MEMORY.md
+        # 读取 MEMORY.md（项目记忆）
         mem_file = os.path.join(memory_dir, "MEMORY.md")
         if os.path.exists(mem_file):
             try:
                 with open(mem_file, "r", encoding="utf-8") as f:
                     content = f.read()[:max_len]
                     context_parts.append(f"[项目记忆 - 跨对话持久化]\n{content}")
+            except Exception:
+                pass
+
+        # 读取 skills.md（技能协议，全量注入）
+        skills_file = os.path.join(memory_dir, "skills.md")
+        if os.path.exists(skills_file):
+            try:
+                with open(skills_file, "r", encoding="utf-8") as f:
+                    skills_content = f.read()[:max_len]
+                    context_parts.append(f"[内置技能协议]\n{skills_content}")
             except Exception:
                 pass
 
@@ -183,7 +208,7 @@ class SelfContext:
             )
             for lf in log_files[:log_days]:
                 basename = os.path.basename(lf).replace(".md", "")
-                if basename == "MEMORY":  # 跳过主记忆文件，避免重复
+                if basename in ("MEMORY", "skills"):  # 跳过已全量注入的文件
                     continue
                 try:
                     with open(lf, "r", encoding="utf-8") as f:

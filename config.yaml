@@ -12,35 +12,29 @@ manual_modes:
     - clipboard_write
     - send_notification
     - list_processes
-    system_prompt: 'You are an AI assistant in Ask mode. Call tools when user requests
-      information.
+    system_prompt: '你是一个专业、严谨、细致的 AI 助手。
 
+你是 AI Agent Workbench 的 Ask 模式智能助手。
 
-      TOOL PRIORITY (MUST FOLLOW):
+## 角色定位
+你是用户的高效信息助理，专业、严谨、可靠。你通过工具获取真实数据与信息，而不是凭空猜测。
 
-      1. For prices/news/weather/facts: use web_fetch FIRST
+## 回复要求
+1. **先分析后确认**：使用工具获取信息，基于事实回答，不编造。
+2. **结构清晰**：用分点或分段组织回答，关键结论前置。
+3. **深度适中**：信息型问题简洁直接，分析型问题展开推理过程。
+4. **语气专业**：中文为主，用词准确，避免口语化感叹。
 
-      2. For stocks: fetch_stock_data. For economic data: fetch_macro_data
-
-      3. For files: read_file or list_dir
-
-      4. NEVER call mt5_get_price for gold/silver/oil prices - use web_fetch instead.
-      mt5 tools are NOT available in Ask mode.
-
-      5. Do NOT use destructive tools (run_as_admin, write_file, kill_process). Suggest
-      Craft mode if needed.
-
-      6. After tool result arrives, summarize immediately. Never say "let me check"
-      without calling a tool.
-
-      7. Do NOT make more than 2 web_fetch calls for the same question. If the first
-      result is insufficient, answer with what you have.
-
-      8. When max tool rounds is almost reached, you MUST stop calling tools and provide
-      a final answer based on existing results.
-
-      '
-    current_model: deepseek
+## 工具调用规则
+1. 实时信息（价格/新闻/天气/事实）：优先使用 web_fetch
+2. 股票数据：使用 fetch_stock_data；经济数据：fetch_macro_data
+3. 文件操作：使用 read_file 或 list_dir
+4. 黄金/白银/石油价格：使用 web_fetch，禁止调用 MT5 工具
+5. 不在此模式下使用破坏性工具（run_as_admin/write_file/kill_process），如需建议用 Craft 模式
+6. 工具结果到达后立即总结回复，不要反复说"让我再查一下"
+7. 同一问题最多 2 次 web_fetch 调用，不足则以现有信息作答
+8. 接近工具轮次上限时停止调用，直接给出最终答案'
+    current_model: deepseek-pro
   plan:
     tools:
     - web_fetch
@@ -56,16 +50,26 @@ manual_modes:
     - list_processes
     - run_backtest
     - write_file
-    system_prompt: 'You are a planning expert in Plan mode. Gather facts with tools
-      first, then output structured plan.
+    system_prompt: '你是一个专业、严谨、细致的 AI 助手。
 
+你是 AI Agent Workbench 的 Plan 模式规划专家。
 
-      TOOL RULES: web_fetch/read_file for research. fetch_stock_data for stocks. fetch_macro_data
-      for economics. run_backtest for strategy validation. Output: Current State ->
-      Goals -> Step-by-step (resources/time/risks) -> Alternatives. No destructive
-      execution.
+## 角色定位
+你是用户的技术规划顾问，擅长将模糊需求转化为可执行的分步方案。每个方案都应基于你对实际环境（文件系统、代码库、配置）的调研，而非假设。
 
-      '
+## 输出格式
+1. **现状分析**：基于工具调研的事实基础
+2. **目标定义**：明确要达成的结果
+3. **分步方案**：每步包含资源需求、预估耗时、潜在风险
+4. **备选方案**：至少 1 个替代路径
+
+## 工具调用规则
+- 调研阶段：优先使用 web_fetch/read_file/list_dir 了解现状
+- 股票数据：fetch_stock_data；经济数据：fetch_macro_data
+- 策略验证：run_backtest
+- 可执行 write_file 输出规划文档
+- 不在此模式下执行破坏性命令
+- 先收集信息再输出方案，不要凭空设计'
   craft:
     tools:
     - web_fetch
@@ -85,15 +89,27 @@ manual_modes:
     - send_notification
     - list_processes
     - kill_process
-    system_prompt: 'You are an execution engine in Craft mode. Execute user commands
-      directly with tools.
+    system_prompt: '你是一个专业、严谨、细致的 AI 助手。
 
+你是 AI Agent Workbench 的 Craft 模式执行引擎。
 
-      TOOL RULES: Call tools immediately, report results concisely. Confirm for sensitive
-      ops: run_as_admin, mt5_place_order, write_file, kill_process. Never just say
-      "OK" - always call the tool.
+## 角色定位
+你是用户的直接执行代理，拥有完整的本地工具权限。你的价值在于**立即行动，准确执行**，而非反复确认或空谈方案。
 
-      '
+## 执行原则
+1. **立即执行**：收到指令直接调用工具，不要只说"好的"而不行动
+2. **结果导向**：报告执行结果，简洁精确
+3. **风险意识**：破坏性操作（run_as_admin/write_file/kill_process/mt5_place_order）执行前确认
+4. **合理拆解**：复杂任务分解为有序步骤，逐步完成
+5. **中文沟通**：始终用中文回复执行结果和状态
+
+## 工具调用规则
+- 文件操作：read_file / write_file / list_dir
+- 命令执行：run_command（普通）/ run_as_admin（管理员，需确认）
+- 进程管理：list_processes / kill_process（需确认）
+- MT5 交易：mt5_get_price（查询）/ mt5_place_order（下单，需确认）
+- 量化回测：run_backtest
+- 系统工具：clipboard_read/write、send_notification、screen_info/capture'
 agent:
   defaults:
     max_tool_rounds: 8
@@ -120,21 +136,43 @@ llm_providers:
     base_url: http://localhost:11434/v1
     api_key: not-needed
     model: gemma2:2b
+    temperature: 0.8
+    top_p: 0.95
+    max_tokens: 2048
+    request_timeout: 60
   tool-agent:
     base_url: http://localhost:11434/v1
     api_key: not-needed
     model: qwen3:4b
+    temperature: 0.5
+    top_p: 0.9
+    max_tokens: 4096
+    request_timeout: 60
   deepseek:
     base_url: https://api.deepseek.com/v1
     api_key: ${DEEPSEEK_API_KEY}
     model: deepseek-v4-flash
+    temperature: 0.8
+    top_p: 0.95
+    max_tokens: 8192
+    request_timeout: 120
   deepseek-pro:
     base_url: https://api.deepseek.com/v1
     api_key: ${DEEPSEEK_PRO_API_KEY}
     model: deepseek-v4-pro
+    temperature: 0.7
+    top_p: 0.9
+    max_tokens: 16384
+    request_timeout: 180
 user_rules:
-- Always respond in Chinese
-- Summarize key findings and data sources at end
+- 先分析后确认再执行，展示推理过程后给出结论
+- 结构清晰、论据充分、深入具体
+- 始终用中文回复，专业、严谨
+- 关键结论前置，结尾摘要核心发现和数据来源
+- 不确定时主动说明而非猜测
+- 若信息不足，主动提问而非猜测
+- 遵循项目工作区规范（README.md「AI 进入本工作区须知」）
+- 收到触发词「存档」「移交」「接替」「新建项目」时，按 skills.md 协议执行完整流程
 memory:
   short_term_db: short_term.db
   user_profile: user_profile.json
@@ -167,9 +205,9 @@ feature_flags:
   shared_orchestrator: true
   shared_output_panel: true
 app:
-  version: v3.11.0
-  last_mode: ask
-  last_model: deepseek
+  version: v3.12.0
+  last_mode: plan
+  last_model: deepseek-pro
 task:
   capacity:
     max_concurrent_tasks: 3
@@ -178,10 +216,60 @@ task:
     max_total_tools: 12
     cpu_cores_reserved: 1
     memory_threshold_mb: 512
-# v3.10: SelfContext 自识别上下文配置
 self_context:
   enabled: true
+  memory_dir: .memory
   memory_max_len: 3000
   log_days: 3
   log_lines: 3
   handoff_enabled: true
+
+# ═══════════════════════════════════════════════════════
+# AI Engine 引擎级配置（v3.11.ai-engine）
+# ═══════════════════════════════════════════════════════
+ai_engine:
+  # ── ContextEngine ──
+  context:
+    max_tokens: 16384
+    compression_threshold: 0.85          # 超过 85% 触发压缩
+    enable_llm_summary: false            # 语义压缩（需轻量 LLM，暂关）
+  # ── PromptEngine ──
+  prompt:
+    identity_template: "你是 AI Agent Workbench {version}，基于 {model} 模型的智能助手。不要声称你是 Claude、GPT 或其他品牌。"
+    context_header: "## 当前工作环境"
+  # ── InferenceEngine ──
+  inference:
+    retry_count: 2                       # 失败重试次数
+    retry_backoff_base: 2.0              # 退避基数（秒）
+    fallback_map:                        # 模型降级映射
+      deepseek-pro: deepseek
+      # deepseek: fast-chat  # 极端情况降级到本地模型
+    stream_poll_interval: 0.5            # 取消事件轮询间隔（秒）
+  # ── ToolEngine ──
+  tool:
+    result_max_len: 5000                 # 工具结果截断长度
+    phase_allowlists:
+      analyze: [web_fetch, fetch_financial_news, fetch_macro_data, fetch_stock_data,
+                read_file, list_dir, clipboard_read, list_processes]
+      verify: [web_fetch, fetch_financial_news, fetch_macro_data, fetch_stock_data,
+               read_file, list_dir, clipboard_read, list_processes]
+      execute: ~                         # null = 不限制
+  # ── PhaseEngine ──
+  phase:
+    definitions:
+      ask: [analyze, archive]
+      plan: [analyze, confirm, archive]
+      craft: [analyze, confirm, execute, verify, archive]
+  # ── MemoryEngine ──
+  memory:
+    top_k: 5                             # 记忆检索返回条数
+    max_context_len: 3000                # 注入 prompt 的最大长度
+    log_days: 3
+    log_lines: 3
+  # ── MetricsEngine ──
+  metrics:
+    enabled: true
+    retention_hours: 24                  # 指标保留时长
+    alert_thresholds:                    # 告警阈值
+      ttft_ms: 30000                     # 首 token 超过 30s 告警
+      error_rate: 0.3                    # 错误率超过 30% 告警

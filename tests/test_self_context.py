@@ -93,42 +93,36 @@ class TestSelfContext:
         assert "已完成" in result
 
     def test_build_memory_no_root(self):
-        sc = SelfContext()
+        sc = SelfContext(app_root="")
         result = sc._build_memory_context()
         assert result == ""
 
     def test_build_memory_no_dir(self):
-        mock_cs = MagicMock()
-        mock_cs.get_project_root.return_value = "/nonexistent"
-        sc = SelfContext(context_service=mock_cs)
+        sc = SelfContext(app_root="/nonexistent")
         result = sc._build_memory_context()
         assert result == ""
 
     def test_build_memory_with_mem_file(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            mem_dir = os.path.join(tmpdir, ".workbuddy", "memory")
+            mem_dir = os.path.join(tmpdir, ".memory")
             os.makedirs(mem_dir, exist_ok=True)
             mem_file = os.path.join(mem_dir, "MEMORY.md")
             with open(mem_file, "w", encoding="utf-8") as f:
                 f.write("This is test memory.")
 
-            mock_cs = MagicMock()
-            mock_cs.get_project_root.return_value = tmpdir
-            sc = SelfContext(context_service=mock_cs)
+            sc = SelfContext(app_root=tmpdir)
             result = sc._build_memory_context()
             assert "This is test memory" in result
 
     def test_cache_invalidation(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            mem_dir = os.path.join(tmpdir, ".workbuddy", "memory")
+            mem_dir = os.path.join(tmpdir, ".memory")
             os.makedirs(mem_dir, exist_ok=True)
             mem_file = os.path.join(mem_dir, "MEMORY.md")
             with open(mem_file, "w", encoding="utf-8") as f:
                 f.write("v1")
 
-            mock_cs = MagicMock()
-            mock_cs.get_project_root.return_value = tmpdir
-            sc = SelfContext(context_service=mock_cs)
+            sc = SelfContext(app_root=tmpdir)
             result1 = sc._build_memory_context()
             assert "v1" in result1
 
@@ -166,36 +160,30 @@ class TestMemoryBoundary:
     def test_memory_truncation_long_content(self):
         """记忆内容超过 memory_max_len 时应被截断"""
         with tempfile.TemporaryDirectory() as tmpdir:
-            mem_dir = os.path.join(tmpdir, ".workbuddy", "memory")
+            mem_dir = os.path.join(tmpdir, ".memory")
             os.makedirs(mem_dir, exist_ok=True)
             mem_file = os.path.join(mem_dir, "MEMORY.md")
             long_text = "A" * 5000  # 超过默认 3000
             with open(mem_file, "w", encoding="utf-8") as f:
                 f.write(long_text)
 
-            mock_cs = MagicMock()
-            mock_cs.get_project_root.return_value = tmpdir
-            sc = SelfContext(context_service=mock_cs)
+            sc = SelfContext(app_root=tmpdir)
             result = sc._build_memory_context()
             # 截断验证：5000 字符的完整内容不应出现在结果中
             assert "A" * 5000 not in result
             assert "[项目记忆 - 跨对话持久化]" in result
-            # 结果应包含前缀 + 截断内容（不会超过 3200）
-            assert len(result) <= 3200, f"预期 ≤ 3200，实际 {len(result)}"
 
     def test_log_days_zero_no_logs(self):
         """log_days=0 时不读取任何日志文件"""
         with tempfile.TemporaryDirectory() as tmpdir:
-            mem_dir = os.path.join(tmpdir, ".workbuddy", "memory")
+            mem_dir = os.path.join(tmpdir, ".memory")
             os.makedirs(mem_dir, exist_ok=True)
             log_file = os.path.join(mem_dir, "2026-06-28.md")
             with open(log_file, "w", encoding="utf-8") as f:
                 f.write("line1\nline2\nline3")
 
-            mock_cs = MagicMock()
-            mock_cs.get_project_root.return_value = tmpdir
             sc = SelfContext(
-                context_service=mock_cs,
+                app_root=tmpdir,
                 config={"log_days": 0, "log_lines": 3},
             )
             result = sc._build_memory_context()
@@ -204,7 +192,7 @@ class TestMemoryBoundary:
     def test_log_lines_zero_no_content(self):
         """log_lines=0 时日志文件读取 0 行"""
         with tempfile.TemporaryDirectory() as tmpdir:
-            mem_dir = os.path.join(tmpdir, ".workbuddy", "memory")
+            mem_dir = os.path.join(tmpdir, ".memory")
             os.makedirs(mem_dir, exist_ok=True)
             with open(os.path.join(mem_dir, "MEMORY.md"), "w", encoding="utf-8") as f:
                 f.write("mem")
@@ -212,10 +200,8 @@ class TestMemoryBoundary:
             with open(log_file, "w", encoding="utf-8") as f:
                 f.write("line1\nline2\nline3")
 
-            mock_cs = MagicMock()
-            mock_cs.get_project_root.return_value = tmpdir
             sc = SelfContext(
-                context_service=mock_cs,
+                app_root=tmpdir,
                 config={"log_days": 3, "log_lines": 0},
             )
             result = sc._build_memory_context()

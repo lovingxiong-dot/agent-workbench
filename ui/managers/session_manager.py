@@ -12,7 +12,7 @@ from datetime import datetime
 from enum import Enum, auto
 from typing import Optional
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, Qt
 
 logger = logging.getLogger(__name__)
 

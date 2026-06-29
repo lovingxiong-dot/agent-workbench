@@ -134,6 +134,10 @@ class FileTreeWidget(QWidget):
         self.tree.setRootIndex(self.model.index(path) if path and os.path.exists(path) else QModelIndex())
         self.folder_changed.emit(path)
 
+    def get_root_path(self) -> str:
+        """返回当前文件树根目录"""
+        return self.root_path or ""
+
     def set_recent_projects(self, projects: list):
         """设置最近项目下拉列表
 

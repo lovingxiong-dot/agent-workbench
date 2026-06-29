@@ -58,8 +58,10 @@ class LLMRegistry:
             model=cfg["model"],
             base_url=cfg["base_url"],
             api_key=cfg["api_key"],
-            temperature=0.7,
-            timeout=120,
+            temperature=cfg.get("temperature", 0.7),
+            top_p=cfg.get("top_p", 0.9),
+            max_tokens=cfg.get("max_tokens", 4096),
+            timeout=cfg.get("request_timeout", 120),
         )
         self._instances[provider_name] = llm
         return llm

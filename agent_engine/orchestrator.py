@@ -62,6 +62,7 @@ class AgentOrchestrator:
         arun_map: Optional[Dict[str, Callable]] = None,
         confirm_callback: Optional[Callable[[str, Any], Any]] = None,
         phase_tool_allowlists: Optional[Dict[str, Optional[Any]]] = None,
+        engines: Optional[Dict[str, Any]] = None,
     ):
         self.llm = llm
         self.tool_map = tool_map or {}
@@ -80,10 +81,13 @@ class AgentOrchestrator:
         self.arun_map = arun_map or {}
         self.confirm_callback = confirm_callback
         self._current_phase = "execute"
+        self._current_mode = "craft"
         # 合并自定义 Phase 工具白名单；None 表示该 Phase 不限制
         self.phase_tool_allowlists: Dict[str, Optional[Any]] = dict(self.DEFAULT_PHASE_TOOLS)
         if phase_tool_allowlists:
             self.phase_tool_allowlists.update(phase_tool_allowlists)
+        # v3.11.ai-engine: 绞杀者模式 — 新引擎注入
+        self._engines = engines or {}
 
     # ═══════════════════════════════════════════════════════
     # Phase 切换（P0-2 新增）
@@ -95,25 +99,40 @@ class AgentOrchestrator:
             phase: 目标阶段 (analyze/execute/verify)
             mode: 当前模式 (ask/plan/craft)，用于生成对应阶段的 prompt
             context: 工作区上下文
+
+        规则：
+        - analyze/verify 阶段在 base_system_prompt 后**追加**阶段特定指令，不覆盖
+        - execute 阶段使用 base_system_prompt
         """
         phase = (phase or "execute").lower()
         mode = (mode or "craft").lower()
         self._current_phase = phase
-        if phase == "analyze":
-            self.system_prompt = self._build_analyze_prompt(mode)
-        elif phase == "verify":
-            self.system_prompt = self._build_verify_prompt(mode)
-        elif phase == "execute":
-            self.system_prompt = self.base_system_prompt
+        self._current_mode = mode
+
+        # v3.11.ai-engine: PromptEngine 委托
+        prompt_engine = self._engines.get("prompt")
+        if prompt_engine and hasattr(prompt_engine, "build_system_prompt"):
+            self.system_prompt = prompt_engine.build_system_prompt(mode, phase)
+        else:
+            # 回退旧逻辑
+            if phase == "analyze":
+                self.system_prompt = self.base_system_prompt + "\n\n" + self._build_analyze_prompt(mode)
+            elif phase == "verify":
+                self.system_prompt = self.base_system_prompt + "\n\n" + self._build_verify_prompt(mode)
+            elif phase == "execute":
+                self.system_prompt = self.base_system_prompt
+
         if context:
             self.workspace_context = context
 
     def bind_tools_for_phase(self, phase: str):
-        """根据 phase 决定绑定哪些工具；返回绑定后的 LLM
+        """根据 phase 决定绑定哪些工具；返回绑定后的 LLM"""
+        # v3.11.ai-engine: ToolEngine 委托
+        tool_engine = self._engines.get("tool")
+        if tool_engine and hasattr(tool_engine, "bind_for_phase"):
+            return tool_engine.bind_for_phase(phase, self.llm)
 
-        Analyze / Verify 默认只绑定读/查类工具，避免在分析/验证阶段执行写入、命令等副作用操作。
-        Execute 阶段开放全部工具。可通过 phase_tool_allowlists 自定义。
-        """
+        # 回退旧逻辑
         phase = (phase or "execute").lower()
         allowed_names = self.phase_tool_allowlists.get(phase)
 
@@ -362,7 +381,15 @@ class AgentOrchestrator:
             return f"Error: {str(ex)}"
 
     async def _call_tool(self, name: str, args: Any) -> str:
-        """调用工具：优先使用 ARUN_MAP 中的协程，否则显式进入 cpu_executor 执行同步 run"""
+        """调用工具：优先使用 ToolEngine（如有），否则走旧逻辑"""
+
+        # v3.11.ai-engine: ToolEngine 委托
+        tool_engine = self._engines.get("tool")
+        if tool_engine and hasattr(tool_engine, "call"):
+            result = await tool_engine.call(name, args, self._current_phase)
+            return result.result
+
+        # 回退旧逻辑
         tool_func = self.tool_map.get(name)
         if not tool_func:
             return f"Tool {name} not found"
