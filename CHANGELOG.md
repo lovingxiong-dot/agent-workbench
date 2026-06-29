@@ -1,5 +1,45 @@
 # Changelog
 
+## v3.11.0 (2026-06-29) — v3 架构重构：事件总线、会话运行时与统一协调器
+
+### feat
+- **事件总线（MessageBus）**：
+  - `core/event_bus.py` 实现基于 Qt Signal 的强类型事件总线，支持 namespace/name 订阅与全量订阅。
+  - `core/events.py` 定义全量跨组件事件（user.*、session.*、queue.*、phase.*、worker.*、ui.*）。
+- **会话运行时聚合根（SessionRuntime）**：
+  - `services/session_runtime.py` 每个会话拥有独立的 `PendingQueue`、`QueueManager`、`PhaseManager`、`PhaseCoordinator`。
+  - 支持 Worker / Task 引用绑定、phase_state 快照、流式 chunk 标记。
+- **统一协调器（SessionOrchestrator）**：
+  - `services/session_orchestrator.py` 作为 v3 单一协调权威，持有所有 `SessionRuntime`。
+  - 订阅 MessageBus 事件并路由到正确的运行时，保证任务完成路径唯一、会话切换状态不被覆盖。
+- **PhaseCoordinator 解耦**：
+  - `ui/managers/phase_coordinator.py` 将 `PhaseManager` 的 Qt 信号转换为带 `session_id` 的 Bus 事件。
+  - 错误路径只发送一次系统消息，避免重复；`flow_finished.emit()` 在 `reset()` 之后执行，防止状态机重入。
+- **WorkerManager 事件驱动化**：
+  - `ui/managers/worker_manager.py` 订阅 `worker.*` 事件，统一创建/停止/复用 Worker，支持 pause/resume。
+- **UI 渲染器（UIRenderer）**：
+  - `ui/managers/ui_renderer.py` 统一订阅 `ui.*` 事件，按当前会话 ID 过滤并更新 `ChatView`、状态栏、会话列表、队列条等。
+- **双槽位队列会话级化**：
+  - `services/pending_queue.py` `PendingTask` 新增 `session_id` 字段。
+  - `ui/managers/queue_manager.py` 封装会话级队列状态机，支持 `mark_current_done()` 唯一完成路径。
+- **TaskService 终态保护**：
+  - `services/task_service.py` 的 `complete_task`、`fail_task`、`cancel_task` 均跳过已到达终态的任务，避免覆盖 completed/failed。
+  - `_drain_queue` 跳过 stale 队列项，不重新激活终端任务。
+
+### refactor
+- **MainWindow 绞杀者瘦身**：
+  - `ui/main_window.py` 引入 `UIRenderer`，将用户操作转换为事件发射。
+  - 新增 `_send_message_v3()` 路径，通过 `MessageBus` 委托给 `SessionOrchestrator`。
+- **AppContext 延迟导入**：
+  - `services/app_context.py` 延迟导入 `WorkerManager`，消除 `AppContext -> WorkerManager -> MainWindow -> AppContext` 循环依赖。
+
+### test
+- 新增 `tests/integration/test_v3_flow.py`：验证 `UserSendEvent` → `QueueStateChangedEvent` → `PhaseAnalyzeRequiredEvent` → `WorkerCreatedEvent` 完整事件链路。
+- 新增 `tests/test_phase_coordinator.py`：`start_flow`、阶段变化、确认、完成、错误路径全覆盖。
+- 新增 `tests/test_ui_renderer.py`：当前会话事件透传、非当前会话事件过滤、流式 finalize、Phase UI 事件处理。
+- 新增 `tests/test_session_orchestrator.py` 与 `tests/test_session_runtime.py`：运行时生命周期、会话切换不覆盖终态、Phase 完成后状态清理。
+- 全部 209 个单元/集成测试通过。
+
 ## v3.9.1 (2026-06-29) — 修复 Phase 状态机重入与任务状态回收
 
 ### fix

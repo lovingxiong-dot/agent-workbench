@@ -16,6 +16,9 @@ from services.interpreter_service import InterpreterService
 from services.activity_service import ActivityService
 from services.theme_service import ThemeService
 from services.metrics_collector import MetricsCollector
+from services.task_service import TaskService
+from core.event_bus import MessageBus
+from workers.task_capacity import TaskCapacity
 from agent_engine import ModeManager, LLMRegistry, MemoryManager
 from agent_engine.tool_gateway import ToolGateway
 from services.mcp_service import MCPRegistry
@@ -94,6 +97,23 @@ class AppContext:
         # ── 工具网关与外部能力接入点 ─────────────────────────────
         self.tool_gateway = ToolGateway()
         self.mcp_registry = MCPRegistry()
+
+        # ── v3 事件总线与任务服务 ────────────────────────────────
+        self.message_bus = MessageBus(parent=None)
+        self.message_bus.connect_dispatch()
+        self.task_service = TaskService(
+            capacity=TaskCapacity.from_config(self.config_service),
+            message_bus=self.message_bus,
+        )
+        # 延迟导入 WorkerManager，避免 ui/__init__.py → MainWindow → AppContext 循环
+        from ui.managers.worker_manager import WorkerManager
+        self.worker_manager = WorkerManager(
+            config_service=self.config_service,
+            context_service=self.context_service,
+            message_bus=self.message_bus,
+            llm_registry=self.llm_registry,
+            parent=None,
+        )
 
     # ═══════════════════════════════════════════════════════
     # 公共访问接口
