@@ -231,7 +231,7 @@ class SessionManager(QObject):
                      self._conversation_list.global_list):
             for i in range(lst.count()):
                 item = lst.item(i)
-                if item.data(1) == session_id:  # Qt.UserRole
+                if item.data(Qt.UserRole) == session_id:
                     item.setText(title)
                     item.setToolTip(title)
                     return

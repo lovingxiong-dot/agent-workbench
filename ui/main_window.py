@@ -731,9 +731,9 @@ class MainWindow(QMainWindow):
         if getattr(self, '_switching', False):
             return
 
-        # 守卫：当前上下文中已有空对话（标题=新对话 且 消息数=0）→ 直接切换
+        # 守卫：当前上下文中已有空对话（标题=新对话 且 消息数=0）且不是当前选中 → 直接切换
         empty_sid = self._session_mgr.find_empty_session(project_path)
-        if empty_sid:
+        if empty_sid and empty_sid != self._current_session:
             self._switch_conversation(empty_sid)
             return
 
@@ -747,6 +747,9 @@ class MainWindow(QMainWindow):
             self.chat_view.set_header(self._current_mode, self._current_model_name, "新对话")
             # 全局对话清除项目上下文，项目对话设置项目上下文
             self.context_service.set_project_root(project_path)
+            # v3 路径：让 Orchestrator 的当前会话与 SessionManager 保持一致
+            if self._v3_enabled:
+                self._orchestrator.switch_session(session_id)
             label = "全局" if project_path == "" else project_path
             self._on_log_message(f"📝 新会话 @ {label}", is_header=True)
         finally:
