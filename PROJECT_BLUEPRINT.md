@@ -156,7 +156,7 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
-| v3.11.2 | 2026-06-29 | README 质量修正：补全开发环境指引（cd/venv/start.bat/rebuild.ps1）、去除 MT5 头版定位、同步更新 docs/getting-started、存档流程规则对齐（git add 扩展文档目录、禁 --tags） | docs/fix | README.md, docs/getting-started.md, PROJECT_BLUEPRINT.md |
+| v3.11.2 | 2026-06-29 | 修复 v3 Worker 重复创建导致无响应：Orchestrator 移除 worker.created/execute_required/verify_required 重复订阅；新 runtime 创建后同步 UI 队列状态；README 与文档规范化 | fix/docs | services/session_orchestrator.py, tests/integration/test_v3_flow.py, README.md, docs/getting-started.md, PROJECT_BLUEPRINT.md |
 | v3.11.1 | 2026-06-29 | 修复 v3 事件流：Worker 创建后立即 analyze、会话切换同步队列 UI、历史会话自动创建 runtime、切换不误杀后台任务 | fix/refactor | core/events.py, ui/managers/worker_manager.py, services/session_orchestrator.py, ui/main_window.py, ui/managers/session_manager.py, README.md |
 | v3.11.0 | 2026-06-29 | 工程标准化：新增 README、ARCHITECTURE、blueprints/、docs/getting-started | docs | README.md, ARCHITECTURE.md, blueprints/*.md, docs/*.md |
 | v3.9.1 | 2026-06-29 | 修复 Phase 状态机重入与任务状态回收：调整 flow_finished/reset 顺序、统一 TaskService.complete_task 调用、修复会话切换覆盖 completed 状态、补充 completed 绿色图标、修复 SessionManager 标题更新 data role | fix/refactor | agent_engine/phase_manager.py, services/task_service.py, services/pending_queue.py, services/self_context.py, ui/main_window.py, ui/widgets/conversation.py, ui/chat_view.py, workers/agent_worker.py, tests/test_pending_queue.py, tests/test_self_context.py, ui/managers/*.py |
@@ -185,7 +185,7 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 3. git commit -m "..." + git tag vX.Y.Z
 4. git push + git push origin vX.Y.Z（仅当前分支 + 当前标签，禁止 --tags）
 
-_更新于 2026-06-29 16:00:00 by AI-Claude-4.5-Opus_
+_更新于 2026-06-29 23:10:00 by AI-Kimi-K2.7-Code_
 
 ## Agent交接记录
 | 时间 | 方向 | 从 | 到 | 交接点 | 备注 |

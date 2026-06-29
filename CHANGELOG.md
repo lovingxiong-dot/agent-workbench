@@ -1,6 +1,10 @@
 # Changelog
 
-## v3.11.2 (2026-06-29) — README 质量修正与文档环境规范化
+## v3.11.2 (2026-06-29) — 修复 v3 Worker 重复创建与文档规范化
+
+### fix
+- **Worker 被重复创建导致 analyze 无法触发**：`services/session_orchestrator.py` 移除对 `worker.created` / `worker.execute_required` / `worker.verify_required` 的重复订阅，仅由 `WorkerManager` 统一处理 Worker 输入侧事件，避免 Worker 被覆盖后 `request_analyze` 丢失、消息发送无响应。
+- **新 runtime 创建后 UI 状态未同步**：`SessionOrchestrator.create_runtime` 结束处调用 `_emit_queue_ui_state`，确保新会话发送按钮与队列条立即处于正确状态。
 
 ### docs
 - **README 补全开发环境指引**：明确工作目录 `F:\Agent\agent_workbench`、venv 激活方式、`start.bat` 一键启动、`rebuild.ps1` 打包 + 桌面快捷方式。
@@ -8,6 +12,10 @@
 - **新增「AI 进入本工作区须知」**：声明不得盲目运行系统 Python/pip install，文档由存档流程统一维护。
 - **同步修正 `docs/getting-started.md`**：对齐 Python 版本（3.14）、补全 cd + venv + activate 步骤、移除不存在的依赖（pandas/numpy）。
 - **`PROJECT_BLUEPRINT.md` 存档流程规则对齐**：`git add` 扩展为全文档目录（git add -u + 显式新文档），标签推送改为单标签（禁 --tags）。
+
+### test
+- 新增 `tests/integration/test_v3_flow.py::test_worker_created_only_once`：验证 `UserSendEvent` → `WorkerCreatedEvent` 链路中 `AgentWorker` 只实例化一次且 `request_analyze` 只调用一次。
+- 全量 210 个单元/集成测试通过。
 
 ## v3.11.1 (2026-06-29) — v3 事件流与会话切换修复
 
