@@ -77,25 +77,29 @@ class SelfContext:
             return ""
 
         # 无活跃任务且非终态 → 不显示接替上下文
-        if not task.is_active and not (hasattr(task, 'is_terminal') and task.is_terminal):
+        if not task.is_active and not task.is_terminal:
+            return ""
+
+        # 活跃但 phase 仍为 idle → PhaseManager 尚未推进，没有实际状态需要接替
+        if task.is_active and task.phase == "idle":
             return ""
 
         parts = ["[会话接替上下文]"]
         if task.is_active:
             parts.append("🔄 此会话中有未完成的任务")
             parts.append(f"   当前阶段: {task.phase}")
-            if hasattr(task, 'status') and hasattr(task.status, 'value'):
+            if hasattr(task.status, 'value'):
                 if 'AWAITING_CONFIRM' in str(task.status):
                     parts.append("   等待确认的任务清单")
                     if task.task_list:
                         parts.append(f"   任务清单: {json.dumps(task.task_list, ensure_ascii=False)}")
-        elif hasattr(task, 'is_terminal') and task.is_terminal:
+        elif task.is_terminal:
             parts.append(f"✅ 上次任务已完成 (状态: {task.status.value if hasattr(task.status, 'value') else task.status})")
             parts.append(f"   完成时间: {task.updated_at}")
 
-        if hasattr(task, 'created_at'):
+        if task.created_at:
             parts.append(f"   会话创建时间: {task.created_at}")
-        if hasattr(task, 'updated_at'):
+        if task.updated_at:
             parts.append(f"   上次活动: {task.updated_at}")
 
         return "\n".join(parts)
