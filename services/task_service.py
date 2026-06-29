@@ -17,6 +17,14 @@ from workers.session_task import SessionTask, TaskStatus
 from workers.task_capacity import TaskCapacity
 from workers.task_queue import TaskQueue
 
+# v3: 可选 MessageBus 引用，用于发射 TaskCompletedEvent
+MessageBus = None
+try:
+    from core.event_bus import MessageBus as _MessageBus
+    MessageBus = _MessageBus
+except Exception:
+    pass
+
 
 class ResourceError(RuntimeError):
     """资源不足，无法提交新任务"""
@@ -31,18 +39,19 @@ class TaskService(QObject):
     tool_usage_changed = Signal(int, int)         # tools_in_use, max_tools
     task_completed = Signal(str, bool)            # session_id, success
 
-    def __init__(self, capacity: TaskCapacity = None):
+    def __init__(self, capacity: TaskCapacity = None, message_bus=None):
         super().__init__()
         self.capacity = capacity or TaskCapacity()
         self._queue = TaskQueue(self.capacity.max_queued_tasks)
         self._tasks: Dict[str, SessionTask] = {}
         self._active_tools: int = 0
+        self._bus = message_bus
 
-        # WorkerPool 延迟创建（需要传入 worker 创建工厂函数）
+        # WorkerPool 延迟创建（v3 后逐步退役）
         self._pool = None  # type: Optional[WorkerPool]
 
     def set_pool(self, pool):
-        """注入 WorkerPool 实例（由 MainWindow 在初始化完成后调用）"""
+        """注入 WorkerPool 实例（兼容旧版，v3 后逐步退役）"""
         self._pool = pool
 
     # ═══════════════════════════════════════════════════════
@@ -221,6 +230,8 @@ class TaskService(QObject):
         status_str = (task.status.value if task else TaskStatus.COMPLETED.value)
         self.task_status_changed.emit(session_id, status_str)
         self._emit_capacity()
+        # v3: 发射 Bus 事件，供 WorkerManager 等订阅者消费
+        self._emit_task_completed_event(session_id, success, error)
         # 尝试从队列中取出下一个任务
         self._drain_queue()
 
@@ -229,6 +240,20 @@ class TaskService(QObject):
         if self._pool:
             self._pool.on_task_complete(session_id)
         self.complete_task(session_id, success)
+
+    def _emit_task_completed_event(self, session_id: str, success: bool, error: str = ""):
+        """v3: 向 MessageBus 发射 TaskCompletedEvent（如已配置）"""
+        if self._bus is None:
+            return
+        try:
+            from core.events import TaskCompletedEvent
+            self._bus.emit(TaskCompletedEvent(
+                session_id=session_id,
+                success=success,
+                error=error,
+            ))
+        except Exception as e:
+            print(f"[TaskService] emit task_completed event error: {e}", flush=True)
 
     # ═══════════════════════════════════════════════════════
     # 容量查询

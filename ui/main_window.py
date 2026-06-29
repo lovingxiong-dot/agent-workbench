@@ -200,6 +200,8 @@ class MainWindow(QMainWindow):
         if self._app_ctx is not None:
             self.task_service = app_context.task_service
             self.worker_pool = None
+            # 向 v3 WorkerManager 注入工具注册表
+            app_context.worker_manager.set_tool_map(TOOL_MAP)
         else:
             self.task_service = TaskService(capacity=TaskCapacity.from_config(self.config_service))
             self.worker_pool = WorkerPool(

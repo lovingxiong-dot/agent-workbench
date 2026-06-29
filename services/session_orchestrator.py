@@ -33,10 +33,16 @@ from core.events import (
     PhaseFlowCompletedEvent,
     PhaseErrorEvent,
     WorkerCreatedEvent,
+    WorkerStoppedEvent,
+    WorkerExecuteRequiredEvent,
+    WorkerVerifyRequiredEvent,
     WorkerResultEvent,
     WorkerChunkEvent,
     WorkerErrorEvent,
     WorkerToolExecutedEvent,
+    WorkerAnalyzeResultEvent,
+    WorkerExecuteResultEvent,
+    WorkerVerifyResultEvent,
     UIAppendUserEvent,
     UIAppendSystemEvent,
     UIClearPhaseUIEvent,
@@ -76,6 +82,7 @@ class SessionOrchestrator(QObject):
         self._app_ctx = app_context
         self._bus = message_bus
         self._task_service = task_service
+        self._worker_manager = getattr(app_context, "worker_manager", None)
         self._runtimes: Dict[str, SessionRuntime] = {}
         self._current_session_id: Optional[str] = None
 
@@ -119,10 +126,17 @@ class SessionOrchestrator(QObject):
         self._bus.subscribe_name("phase", "flow_completed", self._on_phase_flow_completed)
         self._bus.subscribe_name("phase", "error", self._on_phase_error)
 
+        self._bus.subscribe_name("worker", "created", self._on_worker_created)
+        self._bus.subscribe_name("worker", "stopped", self._on_worker_stopped)
+        self._bus.subscribe_name("worker", "execute_required", self._on_worker_execute_required)
+        self._bus.subscribe_name("worker", "verify_required", self._on_worker_verify_required)
         self._bus.subscribe_name("worker", "result", self._on_worker_result)
         self._bus.subscribe_name("worker", "chunk", self._on_worker_chunk)
         self._bus.subscribe_name("worker", "error", self._on_worker_error)
         self._bus.subscribe_name("worker", "tool_executed", self._on_worker_tool)
+        self._bus.subscribe_name("worker", "analyze_result", self._on_worker_analyze_result)
+        self._bus.subscribe_name("worker", "execute_result", self._on_worker_execute_result)
+        self._bus.subscribe_name("worker", "verify_result", self._on_worker_verify_result)
 
     # ═══════════════════════════════════════════════════
     # 用户动作处理
@@ -315,6 +329,10 @@ class SessionOrchestrator(QObject):
         self._bus.emit(WorkerCreatedEvent(
             session_id=event.session_id,
             worker_id=event.session_id,
+            mode=event.mode,
+            model=rt.model,
+            context=event.context,
+            tools=[],  # Phase 5 后从 TaskService/配置解析
         ))
 
     def _on_phase_confirm(self, event: PhaseConfirmRequiredEvent):
@@ -331,6 +349,14 @@ class SessionOrchestrator(QObject):
             return
         self._task_service._on_phase_change(event.session_id, "executing", "执行中")
         # 请求 Worker 执行
+        task = rt.task
+        original_text = task.user_input if task else ""
+        self._bus.emit(WorkerExecuteRequiredEvent(
+            session_id=event.session_id,
+            task_list=event.task_list,
+            original_text=original_text,
+            context=self._build_context(event.session_id),
+        ))
 
     def _on_phase_verify(self, event: PhaseVerifyRequiredEvent):
         rt = self._require_runtime(event.session_id)
@@ -338,6 +364,12 @@ class SessionOrchestrator(QObject):
             return
         self._task_service._on_phase_change(event.session_id, "verifying", "验证中")
         self._bus.emit(UIShowSkipVerifyEvent(session_id=event.session_id))
+        self._bus.emit(WorkerVerifyRequiredEvent(
+            session_id=event.session_id,
+            execution_results=event.execution_results,
+            local_details="",
+            context=self._build_context(event.session_id),
+        ))
 
     def _on_phase_archive(self, event: PhaseArchiveRequiredEvent):
         rt = self._require_runtime(event.session_id)
@@ -383,13 +415,55 @@ class SessionOrchestrator(QObject):
     # ═══════════════════════════════════════════════════
     # Worker 事件处理
     # ═══════════════════════════════════════════════════
+    def _on_worker_created(self, event: WorkerCreatedEvent):
+        if self._worker_manager is None:
+            return
+        self._worker_manager.create_worker(
+            session_id=event.session_id,
+            mode=event.mode,
+            model=event.model,
+            tools=event.tools,
+            context=event.context,
+        )
+
+    def _on_worker_stopped(self, event: WorkerStoppedEvent):
+        if self._worker_manager is None:
+            return
+        self._worker_manager.stop_worker(event.session_id)
+
+    def _on_worker_execute_required(self, event: WorkerExecuteRequiredEvent):
+        if self._worker_manager is None:
+            return
+        self._worker_manager.execute_task(
+            session_id=event.session_id,
+            task_list=event.task_list,
+            original_text=event.original_text,
+            context=event.context,
+        )
+
+    def _on_worker_verify_required(self, event: WorkerVerifyRequiredEvent):
+        if self._worker_manager is None:
+            return
+        self._worker_manager.verify_task(
+            session_id=event.session_id,
+            execution_results=event.execution_results,
+            local_details=event.local_details,
+            context=event.context,
+        )
+
     def _on_worker_result(self, event: WorkerResultEvent):
         rt = self._require_runtime(event.session_id)
         if rt is None:
             return
-        # 解析 task list 并推进 Phase
-        task_list = PhaseManager.parse_task_list(event.full_text)
-        rt.phase_manager.on_analyze_complete(task_list)
+        # 兼容旧版 result_ready：按当前 phase 决定用途
+        phase = rt.current_phase
+        if phase == "analyze":
+            task_list = PhaseManager.parse_task_list(event.full_text)
+            rt.phase_manager.on_analyze_complete(task_list)
+        elif phase == "execute":
+            rt.phase_manager.on_execute_complete(event.full_text)
+        elif phase == "verify":
+            rt.phase_manager.on_verify_complete(True, event.full_text)
 
     def _on_worker_chunk(self, event: WorkerChunkEvent):
         # 仅当前会话更新 UI
@@ -407,6 +481,24 @@ class SessionOrchestrator(QObject):
     def _on_worker_tool(self, event: WorkerToolExecutedEvent):
         # 工具执行事件，可用于日志/活动面板
         pass
+
+    def _on_worker_analyze_result(self, event: WorkerAnalyzeResultEvent):
+        rt = self._require_runtime(event.session_id)
+        if rt is None:
+            return
+        rt.phase_manager.on_analyze_complete(event.task_list)
+
+    def _on_worker_execute_result(self, event: WorkerExecuteResultEvent):
+        rt = self._require_runtime(event.session_id)
+        if rt is None:
+            return
+        rt.phase_manager.on_execute_complete(event.result)
+
+    def _on_worker_verify_result(self, event: WorkerVerifyResultEvent):
+        rt = self._require_runtime(event.session_id)
+        if rt is None:
+            return
+        rt.phase_manager.on_verify_complete(True, event.result)
 
     # ═══════════════════════════════════════════════════
     # 工具方法

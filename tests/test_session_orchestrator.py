@@ -32,6 +32,7 @@ def mock_app_context():
     ctx = MagicMock()
     ctx.context_service = MagicMock()
     ctx.context_service.build_prompt_context.return_value = "ctx"
+    ctx.worker_manager = MagicMock()
     return ctx
 
 

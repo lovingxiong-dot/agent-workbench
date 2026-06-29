@@ -226,6 +226,10 @@ class WorkerCreatedEvent(Event):
     name = "created"
     session_id: str
     worker_id: str
+    mode: str = "ask"
+    model: str = ""
+    context: str = ""
+    tools: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -234,6 +238,104 @@ class WorkerStoppedEvent(Event):
     name = "stopped"
     session_id: str
     worker_id: str
+
+
+@dataclass
+class WorkerExecuteRequiredEvent(Event):
+    namespace = "worker"
+    name = "execute_required"
+    session_id: str
+    task_list: List[Any] = field(default_factory=list)
+    original_text: str = ""
+    context: str = ""
+
+
+@dataclass
+class WorkerVerifyRequiredEvent(Event):
+    namespace = "worker"
+    name = "verify_required"
+    session_id: str
+    execution_results: List[dict] = field(default_factory=list)
+    local_details: str = ""
+    context: str = ""
+
+
+@dataclass
+class WorkerLogMessageEvent(Event):
+    namespace = "worker"
+    name = "log_message"
+    session_id: str
+    message: str
+
+
+@dataclass
+class WorkerTaskCreatedEvent(Event):
+    namespace = "worker"
+    name = "task_created"
+    session_id: str
+    task_id: str
+    description: str
+
+
+@dataclass
+class WorkerTaskFinishedEvent(Event):
+    namespace = "worker"
+    name = "task_finished"
+    session_id: str
+    task_id: str
+    result: str
+
+
+@dataclass
+class WorkerTokenUsedEvent(Event):
+    namespace = "worker"
+    name = "token_used"
+    session_id: str
+    model: str
+    token_type: str
+    count: int
+    cost: int
+
+
+@dataclass
+class WorkerTurnMetricsEvent(Event):
+    namespace = "worker"
+    name = "turn_metrics"
+    session_id: str
+    metrics: object
+
+
+@dataclass
+class WorkerConfirmRequiredEvent(Event):
+    namespace = "worker"
+    name = "confirm_required"
+    session_id: str
+    task_id: str
+    description: str
+
+
+@dataclass
+class WorkerAnalyzeResultEvent(Event):
+    namespace = "worker"
+    name = "analyze_result"
+    session_id: str
+    task_list: List[Any] = field(default_factory=list)
+
+
+@dataclass
+class WorkerExecuteResultEvent(Event):
+    namespace = "worker"
+    name = "execute_result"
+    session_id: str
+    result: str
+
+
+@dataclass
+class WorkerVerifyResultEvent(Event):
+    namespace = "worker"
+    name = "verify_result"
+    session_id: str
+    result: str
 
 
 @dataclass
