@@ -5,7 +5,7 @@
 ### fix
 - **新会话按钮只能添加一个标签**：`ui/main_window.py` 的 `_new_conversation` 彻底移除空会话守卫，每次点击都创建新会话，支持无限添加。
 - **会话标签名均为"新对话"**：`_send_message_v3` 在首条用户消息后将会话标题与列表项文本更新为消息内容前 20 字；`ui/managers/session_manager.py` 的 `update_title` 补充 `Qt` 导入，修复 `Qt.UserRole` 未定义导致的标题不刷新。
-- **Enter 键首次失效**：`_new_conversation`、`_on_session_switch`、`_switch_project` 在切换/新建完成后主动调用 `chat_view.input_field.setFocus()`，确保输入框立即响应 Enter。
+- **Enter 键首次失效**：`_new_conversation`、`_on_session_switch`、`_switch_project` 在切换/新建完成后调用新增的 `_focus_input_field()`，通过 `activateWindow()` + `raise_()` + `QTimer.singleShot(0, setFocus(Qt.OtherFocusReason))` 强制输入框获得焦点，解决首次 Enter 被其他控件吞掉的问题。
 - **项目新对话按钮触发 AttributeError**：`ui/widgets/sidebar.py` 补充 `FileTreeWidget.get_root_path()`，修复 `_on_new_conversation_requested` 中诊断日志调用不存在方法导致的崩溃。
 - **切换新会话显示无意义接替上下文**：`services/self_context.py` 的 `build_handoff` 增加 `task.phase == "idle"` 守卫，避免任务刚创建、PhaseManager 尚未推进时切换会话显示"🔄 此会话中有未完成的任务 / 当前阶段: idle"。
 

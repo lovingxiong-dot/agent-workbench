@@ -704,7 +704,7 @@ class MainWindow(QMainWindow):
         self.workspace.set_project_path(project_path)
         self._refresh_activities()
         # 项目初始化/切换完成后把焦点移回输入框，确保 Enter 键立即生效
-        self.chat_view.input_field.setFocus()
+        self._focus_input_field()
 
     # ═══════════════════════════════════════════════════
     # 对话管理
@@ -721,6 +721,14 @@ class MainWindow(QMainWindow):
     def _restore_conversations(self):
         """启动恢复：由 _init_default_session -> _switch_project 统一处理"""
         pass
+
+    def _focus_input_field(self):
+        """强制将焦点移回输入框（兼容窗口未激活、被其他控件抢占的情况）"""
+        self.activateWindow()
+        self.raise_()
+        input_field = self.chat_view.input_field
+        input_field.setFocusPolicy(Qt.StrongFocus)
+        QTimer.singleShot(0, lambda: input_field.setFocus(Qt.OtherFocusReason))
 
     def _new_conversation(self, project_path=""):
         """创建新对话；project_path='' 表示全局纯对话，否则关联项目目录"""
@@ -753,7 +761,7 @@ class MainWindow(QMainWindow):
                 flush=True,
             )
             # 新建会话后把焦点移回输入框，确保 Enter 键立即生效
-            self.chat_view.input_field.setFocus()
+            self._focus_input_field()
         finally:
             self._switching = False
 
@@ -801,7 +809,7 @@ class MainWindow(QMainWindow):
             self._on_log_message(f"📂 切换会话: {session['title']}")
 
             # 切换会话后把焦点移回输入框，确保 Enter 键立即生效
-            self.chat_view.input_field.setFocus()
+            self._focus_input_field()
         finally:
             self._switching = False
 
