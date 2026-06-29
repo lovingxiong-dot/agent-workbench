@@ -1,5 +1,20 @@
 # Changelog
 
+## v3.11.4 (2026-06-29) — MainWindow 架构收敛与 UI 修复
+
+### fix
+- **新会话按钮只能添加一个标签**：`ui/main_window.py` 的 `_new_conversation` 彻底移除空会话守卫，每次点击都创建新会话，支持无限添加。
+- **会话标签名均为"新对话"**：`_send_message_v3` 在首条用户消息后将会话标题与列表项文本更新为消息内容前 20 字；`ui/managers/session_manager.py` 的 `update_title` 补充 `Qt` 导入，修复 `Qt.UserRole` 未定义导致的标题不刷新。
+- **Enter 键首次失效**：`_new_conversation`、`_on_session_switch`、`_switch_project` 在切换/新建完成后主动调用 `chat_view.input_field.setFocus()`，确保输入框立即响应 Enter。
+- **项目新对话按钮触发 AttributeError**：`ui/widgets/sidebar.py` 补充 `FileTreeWidget.get_root_path()`，修复 `_on_new_conversation_requested` 中诊断日志调用不存在方法导致的崩溃。
+
+### refactor
+- **MainWindow 架构收敛**：移除 `_pending_queue`、`_worker`、`_workers`、`_phase_manager` 等旧全局状态的活跃使用，统一委托给 `SessionOrchestrator` / `WorkerManager` / `SessionRuntime` 的 v3 事件路径；保留兼容属性供测试引用。
+
+### test
+- 全量 210 个单元/集成测试通过。
+- 新增 `scripts/verify_ui_fixes.py`（临时验证脚本，不提交）覆盖三个 UI 修复点。
+
 ## v3.11.3 (2026-06-29) — 修复真实运行时 v3 Worker 无响应与状态卡死
 
 ### fix

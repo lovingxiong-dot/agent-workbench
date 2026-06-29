@@ -14,11 +14,10 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Slot, QTimer
 from PySide6.QtGui import QPalette, QColor, QFont
 
-from services.pending_queue import PendingQueue, PendingTask
 from services.self_context import SelfContext
 
 from agent_engine import ModeManager, LLMRegistry, MemoryManager
-from agent_engine.phase_manager import PhaseManager, TaskItem
+from agent_engine.phase_manager import PhaseManager
 from services.app_context import AppContext
 from services.config_service import ConfigService
 from services.session_service import SessionService
@@ -32,7 +31,6 @@ from services.persistence_service import PersistenceService
 from services.mcp_service import MCPRegistry
 from agent_engine.tool_gateway import ToolGateway
 from services.task_service import TaskService, ResourceError
-from workers.agent_worker import AgentWorker, TOOL_DEFINITIONS
 from workers.task_capacity import TaskCapacity
 from workers.worker_pool import WorkerPool
 from workers.session_task import SessionTask, TaskStatus
@@ -192,15 +190,18 @@ class MainWindow(QMainWindow):
         self._current_llm = None
         self._current_tools = []
         self._current_model_name = "tool-agent"
-        self._worker = None  # Active AgentWorker
-        self._workers = {}   # session_id → AgentWorker (all active)
         self._tools_in_use = 0
         self._chunks_received = False
         self._pending_metrics = None  # 等待 AI 回复完成后显示的 metrics
+        # 旧路径 Worker/Phase/队列 状态已收敛到 SessionRuntime / WorkerManager / QueueManager，
+        # 此处保留兼容属性供测试与旧方法引用，但不再初始化活跃实例。
+        self._worker = None
+        self._workers = {}
         self._phase_manager = PhaseManager(self)
         self._current_phase = "idle"
         self._phase_task_list = []
         self._phase_results = []
+        self._pending_queue = None
 
         # ── 多任务管理系统 (v3.9) ────────────────────
         if self._app_ctx is not None:
@@ -215,11 +216,7 @@ class MainWindow(QMainWindow):
             )
             self.task_service.set_pool(self.worker_pool)
 
-        # ── 双槽位等待队列 + 自识别上下文 (v3.10) ──────
-        self._pending_queue = PendingQueue(self)
-        self._pending_queue.queue_changed.connect(self._on_queue_changed, Qt.QueuedConnection)
-        self._pending_queue.task_started.connect(self._on_queue_task_started, Qt.QueuedConnection)
-
+        # ── 自识别上下文 (v3.10) ──────
         self._self_context = SelfContext(
             context_service=self.context_service,
             task_service=self.task_service,
@@ -655,6 +652,7 @@ class MainWindow(QMainWindow):
 
     def _on_new_conversation_requested(self, project_flag: str):
         """对话列表新建按钮：'<project>' 表示当前项目，'' 表示全局纯对话"""
+        print(f"[DIAG-NEW] button clicked: project_flag={project_flag!r}, _project_root={self._project_root!r}, file_tree_root={self.file_tree.get_root_path()!r}", flush=True)
         if project_flag == "<project>":
             # 兜底：_project_root 可能为空（未切换过项目），尝试从文件树获取
             if not self._project_root:
@@ -705,6 +703,8 @@ class MainWindow(QMainWindow):
         # 同步活动面板的项目路径过滤
         self.workspace.set_project_path(project_path)
         self._refresh_activities()
+        # 项目初始化/切换完成后把焦点移回输入框，确保 Enter 键立即生效
+        self.chat_view.input_field.setFocus()
 
     # ═══════════════════════════════════════════════════
     # 对话管理
@@ -729,12 +729,7 @@ class MainWindow(QMainWindow):
         self._abort_current_session_task()
         # 守卫：防止信号槽重入导致重复创建（v3.10.1）
         if getattr(self, '_switching', False):
-            return
-
-        # 守卫：当前上下文中已有空对话（标题=新对话 且 消息数=0）且不是当前选中 → 直接切换
-        empty_sid = self._session_mgr.find_empty_session(project_path)
-        if empty_sid and empty_sid != self._current_session:
-            self._switch_conversation(empty_sid)
+            print("[DIAG-NEW] blocked by switching guard", flush=True)
             return
 
         self._switching = True
@@ -752,6 +747,13 @@ class MainWindow(QMainWindow):
                 self._orchestrator.switch_session(session_id)
             label = "全局" if project_path == "" else project_path
             self._on_log_message(f"📝 新会话 @ {label}", is_header=True)
+            print(
+                f"[DIAG-NEW] after create: project_items={self.conversation_list.project_list.count()} "
+                f"global_items={self.conversation_list.global_list.count()} current={self._current_session}",
+                flush=True,
+            )
+            # 新建会话后把焦点移回输入框，确保 Enter 键立即生效
+            self.chat_view.input_field.setFocus()
         finally:
             self._switching = False
 
@@ -770,29 +772,22 @@ class MainWindow(QMainWindow):
         self._abort_current_session_task()
         self._switching = True
         try:
-            # 1. 解绑旧会话的 UI 信号
-            if old_session_id:
-                self._detach_ui_signals(old_session_id)
-
-            # 2. 保存当前 Phase 状态
-            self._save_phase_state(old_session_id)
-
-            # 3. 不再清空双槽位队列 — 每个会话独立队列，切换时保留后台任务
-
-            # 4. SessionManager 处理数据侧切换（加载消息、设置 project_root）
+            # SessionManager 处理数据侧切换（加载消息、设置 project_root），
+            # 并通过 session_switched 信号触发 SessionOrchestrator.switch_session，
+            # 由 Orchestrator 统一恢复 Phase UI 与队列状态。
             self._session_mgr.switch_session(new_session_id)
 
-            # 5. 渲染 UI
+            # 渲染 UI
             self.chat_view.clear()
             session = self._session_mgr.get_session_data(new_session_id)
             msgs = session["messages"]
 
-            # 5.1 接替上下文
+            # 接替上下文
             handoff_context = self._self_context.build_handoff(new_session_id)
             if handoff_context:
                 self.chat_view.append_system(handoff_context)
 
-            # 5.2 render
+            # render
             self.chat_view.set_header(self._current_mode, self._current_model_name, session["title"])
             from langchain_core.messages import HumanMessage, AIMessage
             history = self.memory_manager.get_session_history(new_session_id)
@@ -805,62 +800,10 @@ class MainWindow(QMainWindow):
                     history.add_message(AIMessage(content=msg["content"]))
             self._on_log_message(f"📂 切换会话: {session['title']}")
 
-            # 6. 恢复任务状态
-            task = self.task_service.get_task_status(new_session_id)
-            if task:
-                if task.status == TaskStatus.AWAITING_CONFIRM:
-                    self._restore_confirm_ui(task)
-                elif task.is_active:
-                    self._attach_ui_signals(new_session_id)
-                    self.chat_view.set_phase_indicator(task.phase, len(task.task_list))
+            # 切换会话后把焦点移回输入框，确保 Enter 键立即生效
+            self.chat_view.input_field.setFocus()
         finally:
             self._switching = False
-
-    def _detach_ui_signals(self, session_id: str):
-        """解绑指定会话 Worker 的 UI 信号。不 stop Worker，只断开信号连接。"""
-        worker = self._workers.get(session_id) if hasattr(self, '_workers') else None
-        if worker is None:
-            return
-        self.chat_view.finalize_stream()
-
-    def _attach_ui_signals(self, session_id: str):
-        """重新绑定指定会话 Worker 的 UI 信号。"""
-        worker = self._workers.get(session_id) if hasattr(self, '_workers') else None
-        if worker is None:
-            return
-        worker_session_id = session_id
-        current_only = self._make_current_only_guard(worker, self, worker_session_id)
-        try:
-            worker.chunk_ready.disconnect()
-        except Exception:
-            pass
-        worker.chunk_ready.connect(current_only(self._on_chunk))
-        try:
-            worker.log_message.disconnect()
-        except Exception:
-            pass
-        worker.log_message.connect(current_only(self._on_log_message))
-
-    def _save_phase_state(self, session_id: str):
-        """保存当前 Phase 状态到 SessionTask（用于切回时恢复 confirm UI）"""
-        if not session_id or not self.task_service:
-            return
-        task = self.task_service.get_task_status(session_id)
-        if task is None:
-            return
-        if self._current_phase == "confirm":
-            task.phase = "confirm"
-            task.task_list = list(self._phase_task_list)
-            # 状态变更统一由 TaskService 发起
-            self.task_service._on_phase_change(
-                session_id, "confirm", "等待用户确认"
-            )
-
-    def _restore_confirm_ui(self, task):
-        """恢复 confirm 阶段的 UI 状态"""
-        self._phase_task_list = list(task.task_list)
-        self.chat_view.set_phase_indicator("confirm", len(self._phase_task_list))
-        self.chat_view.show_confirmation(self._phase_task_list)
 
     def _render_stored_message(self, msg):
         content = msg["content"]
@@ -892,115 +835,42 @@ class MainWindow(QMainWindow):
         self._session_mgr.update_title(session_id, title)
 
     def _abort_current_session_task(self):
-        """中止当前会话的活跃任务：停止 Worker、清空队列、重置 PhaseManager
+        """中止当前会话的活跃任务。
 
-        v3 路径下：只停止旧路径的 Worker，不 cancel TaskService 任务，
-        因为 SessionOrchestrator 负责会话级任务生命周期，切换会话时应后台保留。
+        v3 路径下：只停止旧路径残留的 Worker，不 cancel TaskService 任务，
+        队列/任务/Phase 由 SessionRuntime / SessionOrchestrator 管理。
         """
         current_sid = self._current_session
         if not current_sid:
             return
 
-        # v3 路径：旧 Worker 清理即可，队列/任务/Phase 由 SessionRuntime 管理
-        if self._v3_enabled:
-            worker = self._workers.get(current_sid) if hasattr(self, '_workers') else None
-            if worker is not None and worker.isRunning():
-                worker.stop()
-                worker.wait(3000)
-            if self._worker is not None and self._worker.isRunning():
-                self._worker.stop()
-                self._worker.wait(3000)
-            self._worker = None
-            return
-
-        # 旧路径：完整清理
-        worker = self._workers.get(current_sid) if hasattr(self, '_workers') else None
-        if worker is not None and worker.isRunning():
-            worker.stop()
-            worker.wait(3000)
-        if self._worker is not None and self._worker.isRunning():
+        # 清理旧路径可能残留的 Worker 引用（v3 WorkerManager 持有真实 Worker）
+        if self._worker is not None and getattr(self._worker, "isRunning", lambda: False)():
             self._worker.stop()
             self._worker.wait(3000)
         self._worker = None
-        self._pending_queue.clear()
-        self._phase_manager.reset()
-        self._current_phase = "idle"
-        self._phase_task_list = []
-        self._phase_results = []
-        self.task_service.cancel_task(current_sid)
-        self.chat_view.finalize_stream()
-        self.chat_view.clear_phase_ui()
-        self.chat_view.set_streaming(False)
+        if self._workers:
+            worker = self._workers.pop(current_sid, None)
+            if worker is not None and getattr(worker, "isRunning", lambda: False)():
+                worker.stop()
+                worker.wait(3000)
 
     # ═══════════════════════════════════════════════════
     # 消息发送
     # ═══════════════════════════════════════════════════
     def _send_message(self, user_text):
+        """消息发送统一入口：v3 路径下委托给 SessionOrchestrator。"""
         print(f"[DIAG] _send_message ENTER: text='{user_text[:30]}' v3={self._v3_enabled}", flush=True)
 
-        # 0.1 Phase 状态拦截：CONFIRM 阶段用户输入视为对任务清单的反馈
-        if self._current_phase == "confirm" and not self._v3_enabled:
-            lowered = user_text.lower()
-            if "重新分析" in user_text or "取消" in user_text or "cancel" in lowered or "no" in lowered:
-                self._on_phase_reanalyze()
-            else:
-                self._on_phase_confirmed()
-            return
-
-        # v3 路径：委托给 SessionOrchestrator
         if self._v3_enabled:
             self._send_message_v3(user_text)
             return
 
-        print(f"[DIAG] _send_message ENTER: text='{user_text[:30]}' full={self._pending_queue.is_full} len={self._pending_queue.length}", flush=True)
-        # 0. 槽满检查：队列已满时拒绝新消息
-        if self._pending_queue.is_full:
-            print(f"[DIAG] _send_message QUEUE FULL, len={self._pending_queue.length}", flush=True)
-            self._on_log_message("⚠ 队列已满，请等待当前任务完成", is_global=True)
-            return
-
-        # 0.2 写入本轮日志标题
-        display_text = user_text[:80] + ("..." if len(user_text) > 80 else "")
-        self._on_log_message(f"▶ 用户: {display_text}", is_header=True)
-
-        # 1. UI 和 session 持久化
+        # 非 v3 环境（单元测试/旧路径兜底）：直接追加用户消息并清空输入
+        print("[DIAG] _send_message: non-v3 path is no-op", flush=True)
         self._session_mgr.add_message(self._current_session, "user", user_text)
         self.chat_view.append_user(user_text)
         self.session_service.add_message(self._current_session, "user", user_text)
-
-        session = self._session_mgr.get_session_data(self._current_session)
-        if len(session["messages"]) == 1:
-            title = user_text[:20] + "..." if len(user_text) > 20 else user_text
-            session["title"] = title
-            self._update_conversation_title(self._current_session, title)
-            self.chat_view.set_header(self._current_mode, self._current_model_name, title)
-            project_path = self.project_service.get_session_project(self._current_session)
-            self.session_service.create_conversation(
-                self._current_session, title, self._current_mode, self._current_model_name,
-                project_path=project_path
-            )
-
-        # 2. 构建上下文并提交到 v3.9 TaskService
-        context_text = self.context_service.build_prompt_context()
-        old_task = self.task_service.get_task_status(self._current_session)
-        print(f"[DIAG-SEND] submit_task: session={self._current_session}, old_task={old_task.status.value if old_task else 'None'}, is_terminal={old_task.is_terminal if old_task else 'N/A'}", flush=True)
-        try:
-            self.task_service.submit_task(self._current_session, self._current_mode, user_text)
-        except ResourceError as e:
-            self._on_log_message(f"[TaskService] {e}", is_global=True)
-
-        # 3. 入队双槽位队列
-        import uuid
-        task = PendingTask(
-            task_id=uuid.uuid4().hex[:8],
-            user_text=user_text,
-            mode=self._current_mode,
-            context=context_text,
-        )
-        if not self._pending_queue.enqueue(task):
-            self._on_log_message("⚠ 入队失败", is_global=True)
-            return
-
         self.chat_view.clear_input()
 
         # 由 _on_queue_task_started（QueuedConnection）统一启动 Phase 工作流
@@ -1044,125 +914,6 @@ class MainWindow(QMainWindow):
         ))
         self.chat_view.clear_input()
 
-    def _start_streaming(self, task: PendingTask):
-        """启动队列任务的 Phase 工作流"""
-        self._on_log_message(f"🚀 开始处理: {task.user_text[:30]}...", is_header=False)
-        self._phase_manager.start(task.user_text, task.mode, task.context)
-
-    # ═══════════════════════════════════════════════════
-    # Phase Manager 回调
-    # ═══════════════════════════════════════════════════
-    @Slot(str, str)
-    def _on_phase_changed(self, phase, mode):
-        self._current_phase = phase
-        self.chat_view.set_phase_indicator(phase, len(self._phase_task_list))
-        self._on_log_message(f"[Phase] {phase.upper()} @ {mode}", is_header=False)
-
-    @Slot(str, str, str)
-    def _on_analyze_required(self, user_text, mode, context):
-        """Analyze 阶段：请求 AgentWorker 生成 task list"""
-        self.chat_view.append_phase_message("analyze", "正在分析需求...")
-        self._ensure_phase_worker()
-        self._worker.reset_cancel()
-        self._worker.request_analyze(user_text, context)
-
-    @Slot(list)
-    def _on_confirm_required(self, task_list):
-        """Confirm 阶段：显示任务清单等待用户确认"""
-        self._phase_task_list = list(task_list)
-        self.chat_view.set_phase_indicator("confirm", len(self._phase_task_list))
-        self.chat_view.append_phase_message("confirm", "请确认以下任务清单")
-        self.chat_view.show_confirmation(self._phase_task_list)
-
-    @Slot(list)
-    def _on_execute_required(self, task_list):
-        """Execute 阶段：请求 AgentWorker 绑定工具执行用户请求"""
-        self._phase_task_list = list(task_list)
-        self.chat_view.hide_confirmation()
-        self.chat_view.append_phase_message("execute", "开始执行任务")
-        context_text = self.context_service.get_phase_context("execute")
-        original_text = self._phase_manager.current_context().user_text
-        self._ensure_phase_worker()
-        self._worker.reset_cancel()
-        self._worker.request_execute(self._phase_task_list, original_text, context_text)
-
-    @Slot(list, str)
-    def _on_verify_required(self, execution_results, mode):
-        """Verify 阶段：请求 AgentWorker 运行 LLM 验证"""
-        self.chat_view.append_phase_message("verify", "正在验证执行结果...")
-        self.chat_view.show_skip_verify()
-        self._verification_details = self._run_local_verification()
-        context_text = self.context_service.get_phase_context("verify")
-        self._ensure_phase_worker()
-        self._worker.reset_cancel()
-        self._worker.request_verify(execution_results, self._verification_details, context_text)
-
-    @Slot(str)
-    def _on_archive_required(self, mode):
-        """Archive 阶段：普通对话直接收尾；若用户触发存档则执行"""
-        print("[DIAG] _on_archive_required called", flush=True)
-        self.chat_view.append_phase_message("archive", "任务收尾")
-        self.chat_view.hide_skip_verify()
-        user_text = self._phase_manager.current_context().user_text
-        if self._is_archive_request(user_text):
-            self._archive_project()
-        self._phase_manager.on_archive_complete(True, "工作流完成")
-        # mark_task_completed 由 _on_phase_flow_finished 统一处理，此处不重复调用
-
-    @Slot(bool, str)
-    def _on_phase_flow_finished(self, success, message):
-        print(f"[DIAG] _on_phase_flow_finished success={success}, queue_len={self._pending_queue.length}", flush=True)
-        self._current_phase = "idle"
-        self._phase_task_list = []
-        self._phase_results = []
-        self.chat_view.clear_phase_ui()
-        if not success:
-            self.chat_view.append_system(f"⚠️ {message}")
-
-        # 更新 TaskService 中的任务状态，并通过信号刷新 UI
-        current_sid = self._current_session
-        error_msg = "" if success else message
-        print(f"[DIAG-FLOW] _on_phase_flow_finished: session={current_sid}, success={success}", flush=True)
-        self.task_service.complete_task(current_sid, success, error_msg)
-
-        if self._worker is not None and self._worker.isRunning():
-            self._worker.stop()
-            self._worker.wait(3000)
-        self._worker = None
-        # 清理 _workers 字典和 WorkerPool
-        if current_sid:
-            self._workers.pop(current_sid, None)
-            self.worker_pool.on_task_complete(current_sid)
-        # 当前任务完成 → 自动出队下一个
-        streaming = self._pending_queue.get_streaming_task()
-        if streaming:
-            self._pending_queue.mark_task_completed(streaming.task_id)
-
-    @Slot(str, str)
-    def _on_phase_error(self, code, detail):
-        print(f"[DIAG] _on_phase_error code={code}, detail={detail}", flush=True)
-        self._current_phase = "idle"
-        self.chat_view.clear_phase_ui()
-        self.chat_view.append_system(f"❌ Phase 错误 [{code}]: {detail}")
-        self._on_log_message(f"[ERR] Phase {code}: {detail}", is_global=True)
-        # 更新 TaskService 任务状态为 FAILED，并通过信号刷新 UI
-        current_sid = self._current_session
-        self.task_service.complete_task(current_sid, False, f"Phase 错误 [{code}]: {detail}")
-        # 停止 Worker 并清理
-        if self._worker is not None:
-            if self._worker.isRunning():
-                self._worker.stop()
-                self._worker.wait(3000)
-            self._worker = None
-        # 清理 _workers 字典和 WorkerPool
-        if current_sid:
-            self._workers.pop(current_sid, None)
-            self.worker_pool.on_task_complete(current_sid)
-        # Phase 错误视为当前任务失败 → 出队下一个
-        streaming = self._pending_queue.get_streaming_task()
-        if streaming:
-            self._pending_queue.mark_task_completed(streaming.task_id)
-
     # ═══════════════════════════════════════════════════
     # v3.9 TaskService 回调
     # ═══════════════════════════════════════════════════
@@ -1183,8 +934,10 @@ class MainWindow(QMainWindow):
     @Slot(str, str, str)
     def _on_task_progress_signal(self, session_id: str, phase: str, detail: str):
         """TaskService Phase 变化 → 更新 UI"""
+        task = self.task_service.get_task_status(session_id)
+        task_count = len(task.task_list) if task else 0
         if session_id == self._current_session:
-            self.chat_view.set_phase_indicator(phase, len(self._phase_task_list))
+            self.chat_view.set_phase_indicator(phase, task_count)
         self.conversation_list.update_task_status(session_id, phase)
 
     @Slot(int, int)
@@ -1207,173 +960,48 @@ class MainWindow(QMainWindow):
                 self.chat_view.append_system("❌ 任务执行失败")
 
     def _on_phase_confirmed(self):
-        """用户点击确认执行"""
+        """用户点击确认执行：通过 MessageBus 通知 PhaseCoordinator。"""
         if self._v3_enabled:
             self._app_ctx.message_bus.emit(UserConfirmEvent(
                 session_id=self._current_session,
                 confirmed=True,
             ))
             return
+        # 非 v3 环境兜底
         self.chat_view.hide_confirmation()
-        self._phase_manager.on_user_confirm(True)
 
     def _on_phase_reanalyze(self):
-        """用户点击重新分析：重启 analyze"""
+        """用户点击重新分析：通过 MessageBus 通知 PhaseCoordinator。"""
         if self._v3_enabled:
             self._app_ctx.message_bus.emit(UserReanalyzeEvent(
                 session_id=self._current_session,
             ))
             return
+        # 非 v3 环境兜底
         self.chat_view.hide_confirmation()
-        ctx = self._phase_manager.current_context()
-        self._phase_manager.reset()
-        context_text = self.context_service.get_phase_context("analyze")
-        self._phase_manager.start(ctx.user_text, ctx.mode, context_text)
 
     def _on_phase_skip_verify(self):
-        """用户点击跳过验证"""
+        """用户点击跳过验证：通过 MessageBus 通知 PhaseCoordinator。"""
         if self._v3_enabled:
             self._app_ctx.message_bus.emit(UserSkipVerifyEvent(
                 session_id=self._current_session,
             ))
             return
+        # 非 v3 环境兜底
         self.chat_view.hide_skip_verify()
-        self._phase_manager.on_verify_complete(True, "用户跳过验证")
-
-    def _on_analyze_result(self, task_list):
-        """Analyze 阶段结果：已解析为 task list"""
-        print(f"[DIAG] _on_analyze_result called, task_list_len={len(task_list) if task_list else 0}, phase={self._current_phase}", flush=True)
-        if not task_list and self._current_mode in ("plan", "craft"):
-            # LLM 没有输出标准清单时，把原始需求作为单一任务兜底
-            original = self._phase_manager.current_context().user_text
-            fallback_desc = original.strip()[:300] if original.strip() else "执行用户请求"
-            from agent_engine.agent_session import TaskItem
-            task_list = [TaskItem(id="task-1", description=fallback_desc)]
-        self._phase_task_list = task_list
-        self.chat_view.set_task_progress(0, len(task_list))
-        self._phase_manager.on_analyze_complete(task_list)
-
-    def _on_execute_result(self, text):
-        """Execute 阶段结果：显示并保存到 session"""
-        self.chat_view.finalize_stream()
-        if text and text.strip():
-            self.chat_view.append_ai(text)
-            self._append_ai_message(self._current_session, text)
-            self._phase_results.append({"task": "execute", "result": text})
-        self._append_metrics_footer_if_any()
-        self._chunks_received = False
-        self.status_indicator.set_tokens("")
-        self._phase_manager.on_execute_complete(self._phase_results)
-
-    def _on_verify_result(self, text):
-        """Verify 阶段结果：显示验证结论"""
-        self.chat_view.finalize_stream()
-        self.chat_view.hide_skip_verify()
-        if text and text.strip():
-            self.chat_view.append_ai(f"**验证结果**\n\n{text}")
-        self._append_metrics_footer_if_any()
-        self._chunks_received = False
-        self.status_indicator.set_tokens("")
-        local_details = getattr(self, "_verification_details", "")
-        passed = "通过" in text or "passed" in text.lower() or "未通过" not in text
-        self._phase_manager.on_verify_complete(passed, f"{local_details}\n\n{text}")
-
-    def _on_worker_error(self, code, detail):
-        """AgentWorker 报告错误"""
-        self.chat_view.finalize_stream()
-        self._append_metrics_footer_if_any()
-        self._chunks_received = False
-        self.status_indicator.set_tokens("")
-        self.chat_view.append_system(f"❌ Worker 错误 [{code}]: {detail}")
-        self._on_log_message(f"[ERR] Worker {code}: {detail}", is_global=True)
-        # 更新 TaskService 任务状态为 FAILED，并通过信号刷新 UI
-        current_sid = self._current_session
-        self.task_service.complete_task(current_sid, False, f"Worker 错误 [{code}]: {detail}")
-        # 停止 Worker 并清理
-        if self._worker is not None:
-            if self._worker.isRunning():
-                self._worker.stop()
-                self._worker.wait(3000)
-            self._worker = None
-        # 清理 _workers 字典和 WorkerPool
-        if current_sid:
-            self._workers.pop(current_sid, None)
-            self.worker_pool.on_task_complete(current_sid)
 
     @staticmethod
     def _make_current_only_guard(worker, main_window, worker_session_id):
+        """旧路径 Worker 信号守卫（保留供单元测试使用）。"""
         def guard(slot):
             def wrapper(*args):
                 if worker is not main_window._worker:
-                    print(f"[DIAG-GUARD] BLOCKED: worker mismatch (worker={worker.worker_id}, _worker={main_window._worker.worker_id if main_window._worker else 'None'})", flush=True)
                     return
                 if main_window._current_session != worker_session_id:
-                    print(f"[DIAG-GUARD] BLOCKED: session mismatch (worker_session={worker_session_id}, current={main_window._current_session})", flush=True)
                     return
                 slot(*args)
             return wrapper
         return guard
-
-    def _ensure_phase_worker(self):
-        """确保存在一个已启动并就绪的 AgentWorker（跨 Phase 复用 AgentSession）"""
-        if self._worker is not None and self._worker.isRunning():
-            return
-
-        mode_config = self.config_service.get_mode_config(self._current_mode)
-        default_prompt = mode_config.get("system_prompt", "你是全能 AI 助手。")
-        user_rules = self.config_service.get("user_rules", [])
-        max_tool_rounds = self.config_service.get_max_tool_rounds(self._current_mode)
-        task_timeout = self.config_service.get_task_timeout(self._current_mode)
-        llm_timeout = self.config_service.get_llm_timeout(self._current_mode)
-        tool_timeout = self.config_service.get_tool_timeout(self._current_mode)
-
-        worker_session_id = self._current_session
-        worker = AgentWorker(
-            mode_name=self._current_mode,
-            current_llm=self._current_llm,
-            current_tools=self._current_tools,
-            session_id=worker_session_id,
-            system_prompt=default_prompt,
-            tool_map=TOOL_MAP,
-            tool_definitions=TOOL_DEFINITIONS,
-            enable_streaming=True,
-            user_rules=user_rules,
-            max_tool_rounds=max_tool_rounds,
-            task_timeout=task_timeout,
-            llm_timeout=llm_timeout,
-            tool_timeout=tool_timeout,
-            project_root=self.context_service.get_project_root(),
-            workspace_context=self.context_service.build_prompt_context(),
-            app_version=self.config_service.get("app.version", "v3.x"),
-        )
-        self._worker = worker
-        self._workers[worker_session_id] = worker  # v3.9: 多 Worker 池
-        self._chunks_received = False
-
-        current_only = self._make_current_only_guard(worker, self, worker_session_id)
-
-        worker.chunk_ready.connect(current_only(self._on_chunk))
-        worker.log_message.connect(current_only(self._on_log_message))
-        worker.task_created.connect(current_only(self._add_task))
-        worker.task_finished.connect(current_only(self._finish_task))
-        worker.confirm_required.connect(current_only(self._on_tool_confirm_required))
-        worker.token_used.connect(current_only(self._on_token_used))
-        worker.turn_metrics_ready.connect(current_only(self._on_turn_metrics_ready))
-        worker.tool_executed.connect(current_only(self._on_tool_executed))
-        worker.analyze_result_ready.connect(current_only(self._on_analyze_result))
-        worker.execute_result_ready.connect(current_only(self._on_execute_result))
-        worker.verify_result_ready.connect(current_only(self._on_verify_result))
-        worker.error_occurred.connect(current_only(self._on_worker_error))
-        # v3.9: result_ready 不包 current_only，后台 Worker 完成时也要落盘
-        # _on_result 内部按 session_id 判断是否渲染到 UI
-        worker.result_ready.connect(self._on_result)
-        worker.start()
-
-        # 等待 Worker 线程的事件循环完全就绪，避免启动时序竞态
-        ready = worker._loop_ready.wait(timeout=5.0)
-
-        self.chat_view.set_streaming(True)
-        self.status_indicator.set_tokens("生成中...")
 
     def _append_metrics_footer_if_any(self):
         """如果有待显示的 metrics，追加到 AI 内容下方"""
@@ -1464,92 +1092,24 @@ class MainWindow(QMainWindow):
         self.chat_view.append_system("📦 已触发项目存档流程")
 
     def _on_stop_generation(self):
-        """用户点击停止：取消当前 streaming 任务，自动出队下一个"""
+        """用户点击停止：通过 MessageBus 通知 SessionOrchestrator 取消当前任务。"""
         if self._v3_enabled:
             self._app_ctx.message_bus.emit(UserStopEvent(
                 session_id=self._current_session,
             ))
             return
 
-        streaming = self._pending_queue.get_streaming_task()
-        if streaming:
-            # 取消当前
-            self._pending_queue.cancel(0)
-            if self._worker and self._worker.isRunning():
-                self._worker.stop()
-            self.chat_view.finalize_stream()
-            self._on_log_message("⏹ 用户停止了生成", is_global=True)
-            # 重置 Phase 状态
-            if self._current_phase != "idle":
-                self._phase_manager.reset()
-                self._current_phase = "idle"
-                self.chat_view.clear_phase_ui()
-
-    # ═══════════════════════════════════════════════════
-    # 双槽位队列管理 (v3.10)
-    # ═══════════════════════════════════════════════════
-    def _on_queue_changed(self):
-        """队列状态变化 → 更新 UI"""
-        self._update_queue_bar()
-        self._update_send_button_state()
-
-    @Slot(str)
-    def _on_queue_task_started(self, task_id):
-        """队列中 slot[0] 开始新任务 → 启动 Phase 工作流"""
-        print(f"[DIAG] _on_queue_task_started task_id={task_id}, switching={getattr(self, '_switching', False)}", flush=True)
-        if getattr(self, '_switching', False):
-            print("[DIAG] _on_queue_task_started BLOCKED by switching guard", flush=True)
-            return  # 会话切换中，跳过任务启动
-        streaming = self._pending_queue.get_streaming_task()
-        if streaming and streaming.task_id == task_id:
-            self._start_streaming(streaming)
-
-    def _update_queue_bar(self):
-        """更新队列状态条：显示 streaming（slot 0）和 pending（slot 1）"""
-        streaming = self._pending_queue.get_streaming_task()
-        pending = self._pending_queue.get_pending_tasks()
-
-        if not streaming and not pending:
-            self._queue_bar.setVisible(False)
-            return
-
-        lines = []
-        if streaming:
-            preview = streaming.user_text[:40] + "..." if len(streaming.user_text) > 40 else streaming.user_text
-            lines.append(f"🔄 处理中: {preview}")
-        for task in pending:
-            preview = task.user_text[:40] + "..." if len(task.user_text) > 40 else task.user_text
-            lines.append(f"📋 排队中: {preview}")
-        if self._pending_queue.is_full:
-            lines.append("[队列已满，请等待]")
-
-        self._queue_bar.setText("  |  ".join(lines))
-        self._queue_bar.setVisible(True)
-
-    def _update_send_button_state(self):
-        """队列满时灰化发送键"""
-        if hasattr(self.chat_view, 'set_send_enabled'):
-            self.chat_view.set_send_enabled(not self._pending_queue.is_full)
-
-    def _cancel_pending(self):
-        """取消所有排队任务（保留当前 streaming）"""
-        streaming = self._pending_queue.get_streaming_task()
-        pending = self._pending_queue.get_pending_tasks()
-        for task in pending:
-            self._pending_queue.cancel(1)  # slot 1 = pending
-            self._on_log_message(f"⏹ 取消排队: {task.user_text[:30]}...", is_global=True)
-
-    def _cancel_current(self):
-        """取消当前 streaming 任务（保留排队）"""
-        self._on_stop_generation()
+        # 非 v3 环境兜底
+        self._on_log_message("⏹ 停止请求（非 v3 路径无操作）", is_global=True)
 
     @Slot(str)
     def _on_chunk(self, chunk):
-        """流式输出每个 token"""
+        """流式输出每个 token（旧路径兼容，v3 由 UIRenderer 处理 WorkerChunkEvent）。"""
         self._chunks_received = True
         self.chat_view.append_chunk(chunk)
 
     def _on_result(self, session_id, text):
+        """旧路径 result_ready 兼容入口（v3 由 SessionOrchestrator 处理 Worker 结果）。"""
         if not text or not text.strip():
             self.chat_view.finalize_stream()
             self._chunks_received = False
@@ -1557,7 +1117,7 @@ class MainWindow(QMainWindow):
             if self._current_phase != "idle":
                 self._phase_manager.reset()
                 self._current_phase = "idle"
-                self.chat_view.clear_phase_ui()
+            self.chat_view.clear_phase_ui()
             # 停止当前 Worker 并清理
             if self._worker is not None:
                 if self._worker.isRunning():
@@ -1566,13 +1126,16 @@ class MainWindow(QMainWindow):
                 self._worker = None
             # 清理 _workers 字典和 WorkerPool
             self._workers.pop(session_id, None)
-            self.worker_pool.on_task_complete(session_id)
+            if getattr(self, "worker_pool", None) is not None:
+                self.worker_pool.on_task_complete(session_id)
             # 更新 TaskService 任务状态为 FAILED，并通过信号刷新 UI
             self.task_service.complete_task(session_id, False, "LLM 返回空结果")
             # 空结果视为当前任务异常完成 → 出队下一个
-            streaming = self._pending_queue.get_streaming_task()
-            if streaming:
-                self._pending_queue.mark_task_completed(streaming.task_id)
+            pending = getattr(self, "_pending_queue", None)
+            if pending is not None:
+                streaming = pending.get_streaming_task()
+                if streaming:
+                    pending.mark_task_completed(streaming.task_id)
             return
         self._append_ai_message(session_id, text)
         if session_id == self._current_session:
@@ -1717,22 +1280,29 @@ class MainWindow(QMainWindow):
         self.workspace.open_document(path)
 
     def closeEvent(self, event):
-        # 停止所有 Worker 线程（v3.11: 多会话 Registry）
-        all_workers = list(self._workers.values())
-        if self._worker and self._worker not in all_workers:
-            all_workers.append(self._worker)
-        for worker in all_workers:
-            if worker and worker.isRunning():
-                try:
-                    worker.stop()
-                except Exception:
-                    pass
-        for worker in all_workers:
-            if worker and worker.isRunning():
-                worker.quit()
-                if not worker.wait(5000):
-                    worker.terminate()
-                    worker.wait(1000)
+        # v3 路径：由 WorkerManager 统一停止所有 Worker
+        if self._v3_enabled and self._app_ctx is not None:
+            try:
+                self._app_ctx.worker_manager.stop_all_workers()
+            except Exception:
+                pass
+        else:
+            # 旧路径兜底
+            all_workers = list(self._workers.values())
+            if self._worker and self._worker not in all_workers:
+                all_workers.append(self._worker)
+            for worker in all_workers:
+                if worker and worker.isRunning():
+                    try:
+                        worker.stop()
+                    except Exception:
+                        pass
+            for worker in all_workers:
+                if worker and worker.isRunning():
+                    worker.quit()
+                    if not worker.wait(5000):
+                        worker.terminate()
+                        worker.wait(1000)
         # 关闭线程池
         cpu_executor = getattr(self, '_cpu_executor', None)
         if cpu_executor:
