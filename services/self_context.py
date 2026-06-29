@@ -177,13 +177,23 @@ class SelfContext:
         context_parts = []
         max_len = self._config.get("memory_max_len", self.DEFAULT_MEMORY_MAX_LEN)
 
-        # 读取 MEMORY.md
+        # 读取 MEMORY.md（项目记忆）
         mem_file = os.path.join(memory_dir, "MEMORY.md")
         if os.path.exists(mem_file):
             try:
                 with open(mem_file, "r", encoding="utf-8") as f:
                     content = f.read()[:max_len]
                     context_parts.append(f"[项目记忆 - 跨对话持久化]\n{content}")
+            except Exception:
+                pass
+
+        # 读取 skills.md（技能协议，全量注入）
+        skills_file = os.path.join(memory_dir, "skills.md")
+        if os.path.exists(skills_file):
+            try:
+                with open(skills_file, "r", encoding="utf-8") as f:
+                    skills_content = f.read()[:max_len]
+                    context_parts.append(f"[内置技能协议]\n{skills_content}")
             except Exception:
                 pass
 
@@ -198,7 +208,7 @@ class SelfContext:
             )
             for lf in log_files[:log_days]:
                 basename = os.path.basename(lf).replace(".md", "")
-                if basename == "MEMORY":  # 跳过主记忆文件，避免重复
+                if basename in ("MEMORY", "skills"):  # 跳过已全量注入的文件
                     continue
                 try:
                     with open(lf, "r", encoding="utf-8") as f:
