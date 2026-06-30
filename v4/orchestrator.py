@@ -90,29 +90,36 @@ class SessionOrchestrator(QObject):
     # user.* 处理
     # ═══════════════════════════════════════════════════
     def _on_user_send(self, event: UserSendEvent):
-        """用户发送消息：先写 DB，再发 UI；随后入队。"""
-        rt = self._require_runtime(event.session_id)
+        """用户发送消息：若当前无会话（草稿窗口），先创建会话；再写 DB，再发 UI；随后入队。"""
+        # 草稿窗口首条消息：创建会话并切换
+        if not self._current_session_id:
+            self._create_session_from_draft(
+                session_type=event.session_type,
+                project_path=event.project_path,
+                mode=event.mode,
+                model="tool-agent",
+            )
+
+        rt = self._require_runtime(self._current_session_id)
         if not rt:
             return
 
         # 1. 持久化用户消息（唯一权威来源）
-        msg = Message.new(event.session_id, "user", event.user_text)
+        msg = Message.new(self._current_session_id, "user", event.user_text)
         self._repo.add_message(msg)
 
         # 2. 通知 UI（仅当前会话）
-        if event.session_id == self._current_session_id:
-            self._bus.emit(UIAppendUserEvent(session_id=event.session_id, text=event.user_text))
+        self._bus.emit(UIAppendUserEvent(session_id=self._current_session_id, text=event.user_text))
 
         # 3. 入队
-        context = self._build_context(event.session_id)
+        context = self._build_context(self._current_session_id)
         task = rt.queue.enqueue(event.user_text, event.mode, context)
 
         if not task:
-            if event.session_id == self._current_session_id:
-                self._bus.emit(UIAppendSystemEvent(
-                    session_id=event.session_id,
-                    text="⚠️ 队列已满",
-                ))
+            self._bus.emit(UIAppendSystemEvent(
+                session_id=self._current_session_id,
+                text="⚠️ 队列已满",
+            ))
             return
 
         # 4. 刷新会话列表（消息时间已更新）
@@ -178,6 +185,8 @@ class SessionOrchestrator(QObject):
                 self._switch_session(sid)
             else:
                 self._current_session_id = None
+                self._bus.emit(UIClearChatEvent(session_id=""))
+                self._bus.emit(UIFocusInputEvent(session_id=""))
 
         self._refresh_session_list()
 
@@ -368,6 +377,34 @@ class SessionOrchestrator(QObject):
     # ═══════════════════════════════════════════════════
     # 内部工具方法
     # ═══════════════════════════════════════════════════
+    def _create_session_from_draft(self, session_type: str, project_path: str, mode: str, model: str):
+        """从草稿窗口创建会话：写入 DB、创建 runtime、切换当前会话、刷新列表并设置选中项。"""
+        metadata = SessionMetadata.new(
+            title="新对话",
+            session_type=session_type,
+            mode=mode,
+            model=model,
+            project_path=project_path,
+        )
+        self._repo.create_session(metadata)
+
+        rt = SessionRuntime(metadata, parent=self)
+        self._runtimes[metadata.session_id] = rt
+        self._connect_queue_signals(rt)
+
+        self._current_session_id = metadata.session_id
+        self._refresh_session_list()
+        self._bus.emit(UISetActiveSessionEvent(
+            session_id=metadata.session_id,
+            active_session_id=metadata.session_id,
+        ))
+
+    def clear_current(self):
+        """清空当前会话指针，进入草稿窗口状态。"""
+        self._current_session_id = None
+        self._bus.emit(UIClearChatEvent(session_id=""))
+        self._bus.emit(UIFocusInputEvent(session_id=""))
+
     def _require_runtime(self, session_id: str) -> Optional[SessionRuntime]:
         """获取运行时；若不存在则从 DB 恢复。"""
         rt = self._runtimes.get(session_id)

@@ -27,26 +27,27 @@ class TestV4GUISmoke:
         self.app.processEvents()
         assert window is not None
         assert window._orchestrator is not None
-        assert window._orchestrator.current_session_id is not None
+        # 启动时进入草稿窗口，不自动创建会话
+        assert window._orchestrator.current_session_id is None
         window.close()
         window.deleteLater()
         self.app.processEvents()
 
-    def test_new_conversation_buttons_create_sessions(self):
+    def test_new_conversation_buttons_do_not_create_empty_sessions(self):
         window = MainWindow()
         initial_count = len(window._repo.list_sessions())
 
-        # Click chat new conversation
+        # 反复点击新对话按钮，不应创建空会话
+        window.conversation_list._btn_chat.click()
+        self.app.processEvents()
+        window.conversation_list._btn_work.click()
+        self.app.processEvents()
         window.conversation_list._btn_chat.click()
         self.app.processEvents()
 
-        # Click work new conversation
-        window.conversation_list._btn_work.click()
-        self.app.processEvents()
-
         final_count = len(window._repo.list_sessions())
-        assert final_count == initial_count + 2, (
-            f"Expected {initial_count + 2} sessions, got {final_count}"
+        assert final_count == initial_count, (
+            f"空点击不应创建会话，期望 {initial_count}，实际 {final_count}"
         )
 
         window.close()

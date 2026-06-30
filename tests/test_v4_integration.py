@@ -130,13 +130,21 @@ class TestV4Integration:
     def _create_window(self, auto_complete=True):
         """创建 MainWindow 并挂载 StubWorkerManager。
 
-        创建后先处理一次事件队列，让 _init_default_session() 中异步发射的
-        SessionCreateEvent 完成处理，确保默认会话已初始化。
+        v4 启动时进入草稿窗口，不自动创建会话；需要发送首条消息才会创建会话。
         """
         window = MainWindow()
         window._stub_wm = StubWorkerManager(window._bus, auto_complete=auto_complete)
         self._process_events()
         return window
+
+    def _send_first_message(self, window, text="测试消息"):
+        """在草稿窗口发送首条消息，返回创建后的 session_id。"""
+        window.chat_view.input_field.setPlainText(text)
+        window.chat_view.send_btn.click()
+        self._process_events()
+        sid = window._orchestrator.current_session_id
+        assert sid is not None, "发送首条消息后应创建会话"
+        return sid
 
     def _current_list_item(self, window):
         return window.conversation_list._list.currentItem()
@@ -156,25 +164,24 @@ class TestV4Integration:
     def test_create_chat_session_and_send_message(self):
         window = self._create_window()
         initial_count = window.conversation_list._list.count()
+        assert initial_count == 0, "启动时列表应为空"
 
+        # 点击新对话按钮不创建会话
         window.conversation_list._btn_chat.click()
         self._process_events()
+        assert window.conversation_list._list.count() == 0, "空点击不应新增列表项"
 
+        # 发送首条消息后才创建会话并出现在列表
+        sid = self._send_first_message(window, "你好，v4")
         final_count = window.conversation_list._list.count()
-        assert final_count == initial_count + 1, (
-            f"创建 Chat 会话后列表项应为 {initial_count + 1}，实际 {final_count}"
+        assert final_count == 1, (
+            f"发送首条消息后列表项应为 1，实际 {final_count}"
         )
 
         item = self._current_list_item(window)
         assert "💬" in item.text(), "Chat 会话应显示对话图标"
         assert "新对话" in item.text(), "Chat 会话默认标题应为'新对话'"
 
-        # 发送消息
-        window.chat_view.input_field.setPlainText("你好，v4")
-        window.chat_view.send_btn.click()
-        self._process_events()
-
-        sid = window._orchestrator.current_session_id
         messages = window._repo.get_messages(sid)
         assert len(messages) == 1, "DB 中应存在 1 条用户消息"
         assert messages[0].role == "user"
@@ -199,7 +206,11 @@ class TestV4Integration:
         window.conversation_list._btn_work.click()
         self._process_events()
 
-        sid = window._orchestrator.current_session_id
+        # 点击 work 按钮后仍处于草稿状态，未创建会话
+        assert window._orchestrator.current_session_id is None
+
+        # 发送首条消息后创建 work 会话
+        sid = self._send_first_message(window, "分析项目")
         session = window._repo.get_session(sid)
         assert session is not None
         assert session.session_type.value == "work", "应创建 work 类型会话"
@@ -213,11 +224,7 @@ class TestV4Integration:
         env = window._repo.get_environment(sid)
         assert env.project_root == test_path, "environments 表应保存项目根目录"
 
-        # 环境感知：发送消息时 Worker 创建请求应绑定项目目录
-        window.chat_view.input_field.setPlainText("分析项目")
-        window.chat_view.send_btn.click()
-        self._process_events()
-
+        # 环境感知：Worker 创建请求应绑定项目目录
         assert window._stub_wm.created_events, "应产生 Worker 创建请求"
         last_event = window._stub_wm.created_events[-1]
         assert last_event.project_root == test_path, "Worker 创建请求应绑定项目目录"
@@ -231,12 +238,13 @@ class TestV4Integration:
     # ------------------------------------------------------------------
     def test_send_message_persists_and_renders(self):
         window = self._create_window()
-        sid = window._orchestrator.current_session_id
 
         window.chat_view.input_field.setPlainText("测试消息")
         window.chat_view.send_btn.click()
         self._process_events()
 
+        sid = window._orchestrator.current_session_id
+        assert sid is not None, "发送首条消息后应创建会话"
         messages = window._repo.get_messages(sid)
         user_messages = [m for m in messages if m.role == "user"]
         assert len(user_messages) == 1
@@ -257,20 +265,12 @@ class TestV4Integration:
         window = self._create_window()
 
         # 创建会话 A 并发送消息
-        window.conversation_list._btn_chat.click()
-        self._process_events()
-        sid_a = window._orchestrator.current_session_id
-        window.chat_view.input_field.setPlainText("消息 A")
-        window.chat_view.send_btn.click()
-        self._process_events()
+        sid_a = self._send_first_message(window, "消息 A")
 
-        # 创建会话 B 并发送消息
+        # 点击新对话进入草稿状态，再发送消息创建会话 B
         window.conversation_list._btn_chat.click()
         self._process_events()
-        sid_b = window._orchestrator.current_session_id
-        window.chat_view.input_field.setPlainText("消息 B")
-        window.chat_view.send_btn.click()
-        self._process_events()
+        sid_b = self._send_first_message(window, "消息 B")
 
         assert sid_a != sid_b
 
@@ -296,13 +296,14 @@ class TestV4Integration:
     # ------------------------------------------------------------------
     def test_queue_full_rejects_third_message(self):
         window = self._create_window(auto_complete=False)
-        sid = window._orchestrator.current_session_id
 
-        # 前两条通过 UI 发送，占满两个槽位
-        for text in ("任务 1", "任务 2"):
-            window.chat_view.input_field.setPlainText(text)
-            window.chat_view.send_btn.click()
-            self._process_events()
+        # 发送首条消息创建会话
+        sid = self._send_first_message(window, "任务 1")
+
+        # 再发送一条，占满两个槽位
+        window.chat_view.input_field.setPlainText("任务 2")
+        window.chat_view.send_btn.click()
+        self._process_events()
 
         rt = window._orchestrator.get_runtime(sid)
         assert rt.queue.is_full, "两个槽位应被占满"
@@ -333,11 +334,9 @@ class TestV4Integration:
     # ------------------------------------------------------------------
     def test_queue_auto_dequeues_next_task(self):
         window = self._create_window(auto_complete=True)
-        sid = window._orchestrator.current_session_id
 
-        window.chat_view.input_field.setPlainText("任务 A")
-        window.chat_view.send_btn.click()
-        self._process_events(100)
+        # 发送首条消息创建会话
+        sid = self._send_first_message(window, "任务 A")
 
         window.chat_view.input_field.setPlainText("任务 B")
         window.chat_view.send_btn.click()
@@ -361,11 +360,9 @@ class TestV4Integration:
     # ------------------------------------------------------------------
     def test_stop_task_cancels_and_restores(self):
         window = self._create_window(auto_complete=False)
-        sid = window._orchestrator.current_session_id
 
-        window.chat_view.input_field.setPlainText("要停止的任务")
-        window.chat_view.send_btn.click()
-        self._process_events()
+        # 发送首条消息创建会话并启动任务
+        sid = self._send_first_message(window, "要停止的任务")
 
         rt = window._orchestrator.get_runtime(sid)
         assert rt.queue.has_streaming, "应存在正在运行的任务"
@@ -388,13 +385,11 @@ class TestV4Integration:
         window = self._create_window()
 
         # 创建两个会话
-        window.conversation_list._btn_chat.click()
-        self._process_events()
-        sid_a = window._orchestrator.current_session_id
+        sid_a = self._send_first_message(window, "会话 A")
 
         window.conversation_list._btn_chat.click()
         self._process_events()
-        sid_b = window._orchestrator.current_session_id
+        sid_b = self._send_first_message(window, "会话 B")
 
         # 通过真实事件流置顶较早创建的 sid_a
         window._bus.emit(SessionPinEvent(session_id=sid_a, pinned=True))
@@ -420,14 +415,12 @@ class TestV4Integration:
     def test_same_title_sessions_display_distinctly(self):
         window = self._create_window()
 
-        # 默认已有一个"新对话"，再创建两个 Chat 会话
-        window.conversation_list._btn_chat.click()
-        self._process_events()
-        sid_a = window._orchestrator.current_session_id
+        # 创建两个 Chat 会话
+        sid_a = self._send_first_message(window, "会话 A")
 
         window.conversation_list._btn_chat.click()
         self._process_events()
-        sid_b = window._orchestrator.current_session_id
+        sid_b = self._send_first_message(window, "会话 B")
 
         # 通过真实事件流把两个会话重命名为相同标题
         same_title = "同名测试会话"
@@ -458,16 +451,18 @@ class TestV4Integration:
     def test_concurrent_slots_sixth_queues(self):
         window = self._create_window(auto_complete=False)
 
-        # 窗口启动时已有一个默认会话，再创建 5 个，共 6 个会话
-        sids = [window._orchestrator.current_session_id]
-        for _ in range(5):
-            window.conversation_list._btn_chat.click()
-            self._process_events()
-            sids.append(window._orchestrator.current_session_id)
+        # 创建 6 个不同会话：发送消息 → 点击新对话 → 发送消息 ...
+        sids = []
+        for i in range(6):
+            sid = self._send_first_message(window, f"并发任务 {i}")
+            sids.append(sid)
+            if i < 5:
+                window.conversation_list._btn_chat.click()
+                self._process_events()
 
         assert len(set(sids)) == 6, "应存在 6 个不同会话"
 
-        # 每个会话发送一条消息，触发 6 个 Worker 创建请求
+        # 切换到每个会话再发送一条消息，触发 6 个 Worker 创建请求
         for sid in sids:
             window._bus.emit(SessionSwitchEvent(new_session_id=sid))
             self._process_events()
@@ -489,12 +484,8 @@ class TestV4Integration:
     def test_restart_recovery(self):
         window = self._create_window()
 
-        # 创建会话并发送消息，等待 AI 回复写入
-        window.conversation_list._btn_chat.click()
-        self._process_events()
-        sid = window._orchestrator.current_session_id
-        window.chat_view.input_field.setPlainText("持久化消息")
-        window.chat_view.send_btn.click()
+        # 发送首条消息创建会话，等待 AI 回复写入
+        sid = self._send_first_message(window, "持久化消息")
         self._process_events(300)
 
         sessions_before = window._repo.list_sessions()

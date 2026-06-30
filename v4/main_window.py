@@ -22,7 +22,7 @@ from .conversation_list import ConversationListWidget
 from .events import (
     UserSendEvent, UserStopEvent,
     UserConfirmEvent, UserReanalyzeEvent, UserSkipVerifyEvent,
-    SessionCreateEvent, SessionSwitchEvent, SessionDeleteEvent, SessionPinEvent,
+    SessionSwitchEvent, SessionDeleteEvent, SessionPinEvent,
 )
 
 # 接入现有 ChatView
@@ -58,6 +58,10 @@ class MainWindow(QMainWindow):
             current_session_provider=lambda: self._orchestrator.current_session_id or "",
             parent=self,
         )
+
+        # 草稿窗口状态（未写入 DB 的初始化窗口）
+        self._draft_session_type = "chat"
+        self._draft_project_path = ""
 
         self._connect_signals()
         self._init_default_session()
@@ -122,29 +126,20 @@ class MainWindow(QMainWindow):
         self.chat_view.settings_clicked.connect(self._on_settings)
 
     def _init_default_session(self):
-        """有会话则切换首个，无则发射 SessionCreateEvent 创建 chat 会话。"""
-        sessions = self._repo.list_sessions()
-        if sessions:
-            self._on_conversation_selected(sessions[0].session_id)
-        else:
-            self._bus.emit(SessionCreateEvent(
-                title="新对话",
-                session_type="chat",
-                project_path="",
-                mode="ask",
-                model="tool-agent",
-            ))
+        """启动时不自动创建 DB 会话，直接进入草稿窗口状态。"""
+        self._reset_to_draft("chat")
 
     def _on_new_conversation(self, conv_type: str):
-        """chat 则 project_path=''，work 则 project_path 来自 _get_project_path()。"""
-        project_path = "" if conv_type == "chat" else self._get_project_path()
-        self._bus.emit(SessionCreateEvent(
-            title="新对话",
-            session_type=conv_type,
-            project_path=project_path,
-            mode="ask",
-            model="tool-agent",
-        ))
+        """点击新对话：只重置为草稿窗口，不创建会话、不写入 DB、不新增列表项。"""
+        self._reset_to_draft(conv_type)
+
+    def _reset_to_draft(self, conv_type: str):
+        """重置为草稿窗口：清空 UI、重置当前会话指针、聚焦输入框。"""
+        self._draft_session_type = conv_type
+        self._draft_project_path = "" if conv_type == "chat" else self._get_project_path()
+        self._orchestrator.clear_current()
+        self.chat_view.clear_chat()
+        QTimer.singleShot(0, self.chat_view.input_field.setFocus)
 
     def _on_conversation_selected(self, session_id: str):
         self._bus.emit(SessionSwitchEvent(new_session_id=session_id))
@@ -156,15 +151,14 @@ class MainWindow(QMainWindow):
         self._bus.emit(SessionPinEvent(session_id=session_id, pinned=pinned))
 
     def _on_send_message(self, user_text: str):
-        """当前会话发送 UserSendEvent。"""
-        current_sid = self._orchestrator.current_session_id
-        if not current_sid:
-            return
+        """发送消息：草稿窗口首条消息会触发 orchestrator 创建会话。"""
         self.chat_view.clear_input()
         self._bus.emit(UserSendEvent(
-            session_id=current_sid,
+            session_id="",
             user_text=user_text,
             mode="ask",
+            session_type=self._draft_session_type,
+            project_path=self._draft_project_path,
         ))
 
     def _on_stop_generation(self):
