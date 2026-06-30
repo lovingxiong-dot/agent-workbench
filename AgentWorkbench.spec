@@ -31,12 +31,9 @@ a = Analysis(
         'v4.models',
         # v4 agent_engine engines
         'agent_engine',
-        'agent_engine.mode_manager',
         'agent_engine.llm_registry',
         'agent_engine.memory_manager',
-        'agent_engine.proactive_engine',
         'agent_engine.phase_manager',
-        'agent_engine.classifier',
         'agent_engine.orchestrator',
         'agent_engine.agent_session',
         'agent_engine.engines',
@@ -61,7 +58,6 @@ a = Analysis(
         'workers.agent_worker',
         'workers.base_worker',
         'workers.terminal_worker',
-        'workers.verification_worker',
         'workers.session_task',
         'workers.task_capacity',
         'workers.task_queue',
@@ -69,7 +65,6 @@ a = Analysis(
         # services still referenced by tests / fallback paths
         'services',
         'services.pending_queue',
-        'services.session_orchestrator',
         'services.task_service',
         'services.config_service',
         'services.session_service',
