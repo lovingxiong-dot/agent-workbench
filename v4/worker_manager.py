@@ -20,6 +20,7 @@ from .event_bus import MessageBus
 from .events import (
     WorkerCreateEvent, WorkerCreatedEvent, WorkerDestroyEvent, WorkerDestroyedEvent,
     WorkerChunkEvent, WorkerResultEvent, WorkerErrorEvent, WorkerToolEvent,
+    PhaseChangedEvent, PhaseConfirmRequiredEvent, PhaseCompleteEvent, PhaseErrorEvent,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,16 @@ class WorkerManager(QObject):
         # 订阅事件
         self._bus.subscribe_name("worker", "create", self._on_create)
         self._bus.subscribe_name("worker", "destroy", self._on_destroy)
+
+    def get_worker(self, session_id: str) -> Optional[object]:
+        """获取指定会话的 Worker 实例（供 Orchestrator attach 使用）。"""
+        return self._workers.get(session_id)
+
+    def confirm(self, session_id: str, confirmed: bool):
+        """将用户确认结果转发给对应 Worker。"""
+        worker = self._workers.get(session_id)
+        if worker and hasattr(worker, "confirm"):
+            worker.confirm(confirmed)
 
     # ── 属性 ──────────────────────────────────
     @property
@@ -128,6 +139,33 @@ class WorkerManager(QObject):
                 worker_id=worker.session_id,
                 code=code,
                 detail=err_detail,
+            ))
+        )
+        worker.phase_changed.connect(
+            lambda phase, task_count: self._bus.emit(PhaseChangedEvent(
+                session_id=event.session_id,
+                phase=phase,
+                task_count=task_count,
+            ))
+        )
+        worker.confirm_required.connect(
+            lambda task_list: self._bus.emit(PhaseConfirmRequiredEvent(
+                session_id=event.session_id,
+                task_list=task_list,
+            ))
+        )
+        worker.phase_complete.connect(
+            lambda success, message: self._bus.emit(PhaseCompleteEvent(
+                session_id=event.session_id,
+                success=success,
+                message=message,
+            ))
+        )
+        worker.phase_error.connect(
+            lambda code, detail: self._bus.emit(PhaseErrorEvent(
+                session_id=event.session_id,
+                code=code,
+                detail=detail,
             ))
         )
 

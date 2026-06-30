@@ -133,7 +133,16 @@ class TestV4Integration:
         v4 启动时进入草稿窗口，不自动创建会话；需要发送首条消息才会创建会话。
         """
         window = MainWindow()
-        window._stub_wm = StubWorkerManager(window._bus, auto_complete=auto_complete)
+
+        # 解绑默认 WorkerManager，避免真实 V4Worker 干扰测试
+        old_wm = window._worker_mgr
+        window._bus.unsubscribe(old_wm._on_create)
+        window._bus.unsubscribe(old_wm._on_destroy)
+
+        stub = StubWorkerManager(window._bus, auto_complete=auto_complete)
+        window._worker_mgr = stub
+        window._stub_wm = stub
+        window._orchestrator._worker_mgr = stub
         self._process_events()
         return window
 

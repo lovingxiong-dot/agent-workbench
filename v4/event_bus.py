@@ -67,6 +67,12 @@ class MessageBus(QObject):
         """按 session_id 订阅（只接收指定会话的事件）。"""
         self.subscribe(handler, event_filter=lambda e: e.session_id == session_id)
 
+    def unsubscribe(self, handler: Callable[[Event], None]):
+        """移除指定 handler 的所有订阅。"""
+        self._handlers = [
+            (ns, filt, h) for ns, filt, h in self._handlers if h != handler
+        ]
+
     def process(self, event: Event):
         """同步处理单个事件（主要用于测试）。"""
         self._dispatch(event)

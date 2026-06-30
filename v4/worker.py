@@ -22,7 +22,7 @@ from services.config_service import ConfigService
 from agent_engine.llm_registry import LLMRegistry
 from agent_engine.engines import (
     ContextEngine, PromptEngine, InferenceEngine, ToolEngine,
-    MetricsEngine, PolicyEngine, Message,
+    MetricsEngine, PolicyEngine, PhaseEngine, Message,
 )
 from tools import TOOL_MAP, ARUN_MAP
 from workers.agent_worker import TOOL_DEFINITIONS
@@ -32,15 +32,23 @@ from tools import system as system_tools
 class V4Worker(QThread):
     """v4 原生 Worker：八引擎驱动 ReAct 推理循环
 
-    信号接口与旧 AgentWorker 兼容：
-    - chunk_ready(str)          → 流式文本块
-    - result_ready(str, str)    → (session_id, full_text)
-    - error_occurred(str, str)  → (code, detail)
+    信号接口：
+    - chunk_ready(str)              → 流式文本块
+    - result_ready(str, str)        → (session_id, full_text)
+    - error_occurred(str, str)      → (code, detail)
+    - phase_changed(str, int)       → (phase_name, task_count)
+    - confirm_required(list)        → task_list
+    - phase_complete(bool, str)     → (success, message)
+    - phase_error(str, str)         → (code, detail)
     """
 
     chunk_ready = Signal(str)
     result_ready = Signal(str, str)
     error_occurred = Signal(str, str)
+    phase_changed = Signal(str, int)
+    confirm_required = Signal(list)
+    phase_complete = Signal(bool, str)
+    phase_error = Signal(str, str)
 
     def __init__(
         self,
@@ -74,7 +82,21 @@ class V4Worker(QThread):
         self._tool_timeout = self._config.get_tool_timeout(mode_name)
         self._llm_registry = LLMRegistry("config.yaml", "config.yaml")
 
+        # Phase 确认等待机制（QThread 内使用 asyncio.Event）
+        self._confirm_event: Optional[asyncio.Event] = None
+        self._confirm_confirmed: bool = False
+        self._task_list: List[str] = []
+
     # ── 公共 API ──────────────────────────────────────
+
+    def confirm(self, confirmed: bool):
+        """用户确认/取消当前 phase（由 WorkerManager 桥接 UserConfirmEvent 调用）。"""
+        self._confirm_confirmed = confirmed
+        if self._confirm_event:
+            try:
+                self._confirm_event.set()
+            except Exception:
+                pass
 
     def submit(self, user_text: str):
         """将用户文本提交到 Worker 内部事件循环。"""
@@ -142,131 +164,272 @@ class V4Worker(QThread):
     # ── 推理核心 ──────────────────────────────────────
 
     async def _run(self, user_text: str):
-        """异步推理入口：初始化引擎 → ReAct 循环 → 流式输出。"""
+        """异步推理入口：ask 保持直接执行；plan/craft 走 Phase 流程。"""
         self._cancel_event.clear()
         self._streaming_buffer = ""
+        self._task_list = []
 
         try:
-            cfg = self._config.config
-            policy = PolicyEngine(cfg.get("ai_engine", {}))
-            metrics = MetricsEngine()
-            ctx_engine = ContextEngine(policy_engine=policy, metrics_engine=metrics)
-
-            prompt_engine = PromptEngine(
-                base_prompts={
-                    m: c.get("system_prompt", "")
-                    for m, c in cfg.get("manual_modes", {}).items()
-                },
-                user_rules=cfg.get("user_rules", []),
-                app_version=cfg.get("app", {}).get("version", "v4.x"),
-                model_name=self.model_id,
-            )
-            tool_engine = ToolEngine(
-                tool_map=TOOL_MAP,
-                tool_definitions=TOOL_DEFINITIONS,
-                policy_engine=policy,
-                cpu_executor=self._cpu_executor,
-                arun_map=ARUN_MAP,
-            )
-
-            # 构建系统提示
-            system_prompt = prompt_engine.build_system_prompt(self.mode_name, "execute")
-            if self.project_root:
-                system_prompt = prompt_engine.inject_context(
-                    system_prompt, f"当前项目目录: {self.project_root}"
-                )
-
-            # 组装消息
-            messages: List[Message] = [
-                Message(role="system", content=system_prompt),
-                Message(role="user", content=user_text),
-            ]
-
-            # ── ReAct 循环 ──
-            round_count = 0
-            reply = ""
-            while round_count < self._max_tool_rounds:
-                if self._cancel_event.is_set():
-                    reply = self._streaming_buffer or "[已取消]"
-                    break
-
-                response = await self._invoke_llm(messages)
-                if response is None:
-                    break  # 错误已通过 error_occurred 上报
-
-                # 检测 tool_calls
-                if hasattr(response, "tool_calls") and response.tool_calls:
-                    messages.append(Message(
-                        role="assistant", content="",
-                        tool_calls=response.tool_calls,
-                    ))
-                    for tc in response.tool_calls:
-                        if self._cancel_event.is_set():
-                            break
-                        tool_result = await tool_engine.call(
-                            tc["name"], tc.get("args", {}), "execute"
-                        )
-                        result_text = (
-                            tool_result.result if tool_result.success
-                            else f"[工具错误] {tool_result.result}"
-                        )
-                        messages.append(Message(
-                            role="tool", content=result_text,
-                            tool_call_id=tc.get("id", ""),
-                        ))
-                    round_count += 1
-                    # 接近上限时强制 LLM 直接回答
-                    if self._max_tool_rounds - round_count <= 1:
-                        messages.append(Message(
-                            role="system",
-                            content="工具调用轮次即将用尽，请基于已有工具结果直接回答用户。不要再调用工具。",
-                        ))
-                    continue
-
-                # 无 tool_calls → 最终回答
-                reply = response.content or ""
-                if not reply:
-                    # 兜底：收集所有工具结果
-                    tool_results = [
-                        m.content for m in messages if m.role == "tool"
-                    ]
-                    reply = "\n\n".join(tool_results) if tool_results else "[工具执行完成]"
-
-                self._streaming_buffer = reply
-                for line in reply.replace("\r\n", "\n").split("\n"):
-                    self.chunk_ready.emit(line + "\n")
-                break
-
+            if self.mode_name == "ask":
+                await self._execute_loop(user_text)
             else:
-                # 超过最大轮数
-                reply = "[已达到最大工具调用轮数]"
-                self.chunk_ready.emit(reply + "\n")
-
-            self.result_ready.emit(self.session_id, reply.strip())
-
+                await self._run_phased(user_text)
         except Exception as e:
             traceback.print_exc()
-            self.error_occurred.emit("WORKER_RUNTIME", str(e)[:300])
+            self.phase_error.emit("WORKER_RUNTIME", str(e)[:300])
+
+    async def _run_phased(self, user_text: str):
+        """Phase 驱动流程：analyze → confirm → execute → verify → archive。"""
+        phase_engine = PhaseEngine()
+        phases = phase_engine._definitions.get(
+            self.mode_name, ["analyze", "archive"]
+        )
+        if not phases:
+            phases = ["analyze", "archive"]
+
+        current_phase = phases[0]
+        phase_idx = 0
+
+        while current_phase:
+            if self._cancel_event.is_set():
+                self.phase_complete.emit(False, "用户取消了任务")
+                return
+
+            self.phase_changed.emit(current_phase, len(self._task_list))
+
+            if current_phase == "analyze":
+                await self._phase_analyze(user_text)
+            elif current_phase == "confirm":
+                confirmed = await self._phase_confirm()
+                if not confirmed:
+                    self.phase_complete.emit(False, "用户取消了任务执行")
+                    return
+            elif current_phase == "execute":
+                await self._phase_execute(user_text)
+            elif current_phase == "verify":
+                await self._phase_verify()
+            elif current_phase == "archive":
+                # archive 只是收尾占位
+                pass
+
+            phase_idx += 1
+            if phase_idx >= len(phases):
+                break
+            current_phase = phases[phase_idx]
+
+        self.phase_changed.emit("archive", len(self._task_list))
+        self.phase_complete.emit(True, "")
+
+    async def _phase_analyze(self, user_text: str):
+        """分析阶段：让 LLM 输出任务清单，并解析为 task_list。"""
+        engines = self._init_engines()
+        prompt_engine = engines["prompt_engine"]
+        system_prompt = prompt_engine.build_system_prompt(self.mode_name, "analyze")
+        if self.project_root:
+            system_prompt = prompt_engine.inject_context(
+                system_prompt, f"当前项目目录: {self.project_root}"
+            )
+
+        messages: List[Message] = [
+            Message(role="system", content=system_prompt),
+            Message(role="user", content=user_text),
+        ]
+
+        response = await self._invoke_llm(messages, phase="analyze")
+        if response is None:
+            raise RuntimeError("analyze phase LLM 调用失败")
+
+        reply = response.content or ""
+        self._task_list = self._extract_task_list(reply)
+        # 让分析结果也出现在聊天区
+        self._emit_reply(reply)
+
+    async def _phase_confirm(self) -> bool:
+        """确认阶段：发送任务清单并阻塞等待用户确认。"""
+        if not self._task_list:
+            # 没有任务则跳过确认
+            return True
+        self.confirm_required.emit(list(self._task_list))
+
+        self._confirm_event = asyncio.Event()
+        self._confirm_confirmed = False
+        try:
+            await asyncio.wait_for(self._confirm_event.wait(), timeout=600.0)
+        except asyncio.TimeoutError:
+            return False
+        finally:
+            self._confirm_event = None
+        return self._confirm_confirmed
+
+    async def _phase_execute(self, user_text: str):
+        """执行阶段：复用 ReAct 循环，并将任务清单作为上下文注入。"""
+        if self._task_list:
+            context = "## 已确认任务清单\n" + "\n".join(
+                f"{i+1}. {t}" for i, t in enumerate(self._task_list)
+            )
+            if self.project_root:
+                context += f"\n\n当前项目目录: {self.project_root}"
+            await self._execute_loop(user_text, extra_context=context)
+        else:
+            await self._execute_loop(user_text)
+
+    async def _phase_verify(self):
+        """验证阶段：对 execute 结果进行验证性总结。"""
+        result_text = self._streaming_buffer or ""
+        if not result_text:
+            return
+
+        engines = self._init_engines()
+        prompt_engine = engines["prompt_engine"]
+        system_prompt = prompt_engine.build_system_prompt(self.mode_name, "verify")
+        messages: List[Message] = [
+            Message(role="system", content=system_prompt),
+            Message(role="user", content=f"请验证以下执行结果是否完成用户需求，并给出简要总结。\n\n{result_text}"),
+        ]
+
+        response = await self._invoke_llm(messages, phase="verify")
+        if response is not None and response.content:
+            self._emit_reply("\n\n## 验证总结\n" + response.content)
+
+    def _init_engines(self) -> Dict[str, Any]:
+        """初始化并返回八引擎实例（不含 PhaseEngine）。"""
+        cfg = self._config.config
+        policy = PolicyEngine(cfg.get("ai_engine", {}))
+        metrics = MetricsEngine()
+        ContextEngine(policy_engine=policy, metrics_engine=metrics)
+
+        prompt_engine = PromptEngine(
+            base_prompts={
+                m: c.get("system_prompt", "")
+                for m, c in cfg.get("manual_modes", {}).items()
+            },
+            user_rules=cfg.get("user_rules", []),
+            app_version=cfg.get("app", {}).get("version", "v4.x"),
+            model_name=self.model_id,
+        )
+        tool_engine = ToolEngine(
+            tool_map=TOOL_MAP,
+            tool_definitions=TOOL_DEFINITIONS,
+            policy_engine=policy,
+            cpu_executor=self._cpu_executor,
+            arun_map=ARUN_MAP,
+        )
+        return {
+            "policy": policy,
+            "metrics": metrics,
+            "prompt_engine": prompt_engine,
+            "tool_engine": tool_engine,
+        }
+
+    async def _execute_loop(self, user_text: str, extra_context: str = ""):
+        """ReAct 执行循环：ask 与 execute phase 共用。"""
+        engines = self._init_engines()
+        prompt_engine = engines["prompt_engine"]
+        tool_engine = engines["tool_engine"]
+
+        system_prompt = prompt_engine.build_system_prompt(self.mode_name, "execute")
+        if self.project_root:
+            system_prompt = prompt_engine.inject_context(
+                system_prompt, f"当前项目目录: {self.project_root}"
+            )
+        if extra_context:
+            system_prompt = prompt_engine.inject_context(system_prompt, extra_context)
+
+        messages: List[Message] = [
+            Message(role="system", content=system_prompt),
+            Message(role="user", content=user_text),
+        ]
+
+        round_count = 0
+        reply = ""
+        while round_count < self._max_tool_rounds:
+            if self._cancel_event.is_set():
+                reply = self._streaming_buffer or "[已取消]"
+                break
+
+            response = await self._invoke_llm(messages, phase="execute")
+            if response is None:
+                break
+
+            if hasattr(response, "tool_calls") and response.tool_calls:
+                messages.append(Message(
+                    role="assistant", content="",
+                    tool_calls=response.tool_calls,
+                ))
+                for tc in response.tool_calls:
+                    if self._cancel_event.is_set():
+                        break
+                    tool_result = await tool_engine.call(
+                        tc["name"], tc.get("args", {}), "execute"
+                    )
+                    result_text = (
+                        tool_result.result if tool_result.success
+                        else f"[工具错误] {tool_result.result}"
+                    )
+                    messages.append(Message(
+                        role="tool", content=result_text,
+                        tool_call_id=tc.get("id", ""),
+                    ))
+                round_count += 1
+                if self._max_tool_rounds - round_count <= 1:
+                    messages.append(Message(
+                        role="system",
+                        content="工具调用轮次即将用尽，请基于已有工具结果直接回答用户。不要再调用工具。",
+                    ))
+                continue
+
+            reply = response.content or ""
+            if not reply:
+                tool_results = [m.content for m in messages if m.role == "tool"]
+                reply = "\n\n".join(tool_results) if tool_results else "[工具执行完成]"
+
+            self._emit_reply(reply)
+            break
+
+        else:
+            reply = "[已达到最大工具调用轮数]"
+            self._emit_reply(reply)
+
+        self.result_ready.emit(self.session_id, reply.strip())
+
+    def _emit_reply(self, text: str):
+        """将文本通过 chunk_ready 流式发送，并保存到缓冲区。"""
+        self._streaming_buffer = text
+        for line in text.replace("\r\n", "\n").split("\n"):
+            self.chunk_ready.emit(line + "\n")
+
+    def _extract_task_list(self, text: str) -> List[str]:
+        """从 analyze phase 的文本回复中解析任务清单。"""
+        tasks: List[str] = []
+        for raw in text.splitlines():
+            line = raw.strip()
+            if not line:
+                continue
+            # 匹配：1. xxx、- xxx、* xxx、- [ ] xxx
+            if line[0].isdigit() and "." in line[:3]:
+                tasks.append(line.split(".", 1)[-1].strip())
+            elif line.startswith(("- ", "* ", "- [ ] ", "- [x] ")):
+                task = line
+                for prefix in ("- [ ] ", "- [x] ", "- ", "* "):
+                    if task.startswith(prefix):
+                        task = task[len(prefix):]
+                        break
+                tasks.append(task.strip())
+        return tasks
 
     # ── LLM 调用辅助 ──────────────────────────────────
 
-    async def _invoke_llm(self, messages: List[Message]):
+    async def _invoke_llm(self, messages: List[Message], phase: str = "execute"):
         """调用 LLM 并返回原始 AIMessage（含 tool_calls），支持超时和取消。"""
         llm = self._llm_registry.get_llm(self.model_id)
-        # 绑定工具到 LLM
-        try:
-            from agent_engine.engines import ToolEngine
-            allowed_defs = [
-                d for d in TOOL_DEFINITIONS
-                if d.get("function", {}).get("name") in TOOL_MAP
-            ]
-            if allowed_defs:
-                # 跳过 gemma 系列（不支持 bind_tools）
-                model_name = str(llm.model) if hasattr(llm, "model") else ""
-                if not any(m in model_name.lower() for m in ("gemma2", "gemma:")):
-                    llm = llm.bind_tools(allowed_defs)
-        except Exception:
-            pass  # bind_tools 失败时降级为纯文本对话
+        # 仅 execute phase 绑定工具；analyze/verify 只输出文本计划/验证总结
+        if phase == "execute":
+            try:
+                from agent_engine.engines import ToolEngine
+                tool_engine = ToolEngine(tool_map=TOOL_MAP, tool_definitions=TOOL_DEFINITIONS)
+                llm = tool_engine.bind_for_phase(phase, llm)
+            except Exception:
+                pass  # bind_tools 失败时降级为纯文本对话
 
         lc_messages = [m.to_langchain() for m in messages]
 
@@ -276,9 +439,15 @@ class V4Worker(QThread):
             )
             return response
         except asyncio.TimeoutError:
-            self.error_occurred.emit("LLM_TIMEOUT", f"LLM超时 {self._llm_timeout}s")
+            if phase == "execute":
+                self.error_occurred.emit("LLM_TIMEOUT", f"LLM超时 {self._llm_timeout}s")
+            else:
+                self.phase_error.emit(f"{phase.upper()}_TIMEOUT", f"{phase}阶段LLM超时 {self._llm_timeout}s")
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            self.error_occurred.emit("LLM_ERROR", str(e)[:300])
+            if phase == "execute":
+                self.error_occurred.emit("LLM_ERROR", str(e)[:300])
+            else:
+                self.phase_error.emit(f"{phase.upper()}_ERROR", str(e)[:300])
         return None

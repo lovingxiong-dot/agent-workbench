@@ -17,16 +17,17 @@ from .repository import SessionRepository
 from .runtime import SessionRuntime
 from .event_bus import MessageBus
 from .events import (
-    UserSendEvent, UserStopEvent,
+    UserSendEvent, UserStopEvent, UserConfirmEvent,
     SessionCreateEvent, SessionSwitchEvent, SessionDeleteEvent,
     SessionPinEvent, SessionRenameEvent,
     QueueTaskReadyEvent, QueueTaskCompleteEvent,
-    PhaseCompleteEvent, PhaseErrorEvent,
-    WorkerCreateEvent, WorkerDestroyEvent,
+    PhaseChangedEvent, PhaseConfirmRequiredEvent, PhaseCompleteEvent, PhaseErrorEvent,
+    WorkerCreateEvent, WorkerCreatedEvent, WorkerDestroyEvent,
     WorkerChunkEvent, WorkerResultEvent, WorkerErrorEvent,
     UIAppendUserEvent, UIAppendAIEvent, UIAppendSystemEvent,
     UIStreamChunkEvent, UIFinalizeStreamEvent,
-    UISetPhaseEvent, UIClearPhaseEvent, UIClearChatEvent,
+    UISetPhaseEvent, UIClearPhaseEvent, UIShowConfirmEvent, UIHideConfirmEvent,
+    UIClearChatEvent,
     UISetSendEnabledEvent, UIUpdateQueueBarEvent,
     UIUpdateSessionListEvent, UIUpdateSessionBadgeEvent,
     UIFocusInputEvent, UISetActiveSessionEvent,
@@ -36,10 +37,11 @@ from .events import (
 class SessionOrchestrator(QObject):
     """v4 会话协调器"""
 
-    def __init__(self, repository: SessionRepository, message_bus: MessageBus, parent=None):
+    def __init__(self, repository: SessionRepository, message_bus: MessageBus, worker_manager=None, parent=None):
         super().__init__(parent)
         self._repo = repository
         self._bus = message_bus
+        self._worker_mgr = worker_manager
         self._runtimes: Dict[str, SessionRuntime] = {}
         self._current_session_id: Optional[str] = None
 
@@ -65,6 +67,7 @@ class SessionOrchestrator(QObject):
         # user
         self._bus.subscribe_name("user", "send", self._on_user_send)
         self._bus.subscribe_name("user", "stop", self._on_user_stop)
+        self._bus.subscribe_name("user", "confirm", self._on_user_confirm)
 
         # session
         self._bus.subscribe_name("session", "create", self._on_session_create)
@@ -78,10 +81,13 @@ class SessionOrchestrator(QObject):
         self._bus.subscribe_name("queue", "task_complete", self._on_queue_task_complete)
 
         # phase
+        self._bus.subscribe_name("phase", "changed", self._on_phase_changed)
+        self._bus.subscribe_name("phase", "confirm_required", self._on_phase_confirm_required)
         self._bus.subscribe_name("phase", "complete", self._on_phase_complete)
         self._bus.subscribe_name("phase", "error", self._on_phase_error)
 
         # worker
+        self._bus.subscribe_name("worker", "created", self._on_worker_created)
         self._bus.subscribe_name("worker", "chunk", self._on_worker_chunk)
         self._bus.subscribe_name("worker", "result", self._on_worker_result)
         self._bus.subscribe_name("worker", "error", self._on_worker_error)
@@ -127,7 +133,7 @@ class SessionOrchestrator(QObject):
         self._refresh_session_list()
 
     def _on_user_stop(self, event: UserStopEvent):
-        """用户停止：只操作本会话队列状态，不直接操作 Worker。"""
+        """用户停止：取消本会话队列任务，并通知 WorkerManager 销毁 Worker。"""
         rt = self._require_runtime(event.session_id)
         if not rt:
             return
@@ -138,10 +144,21 @@ class SessionOrchestrator(QObject):
             phase=TaskPhase.CANCELLED,
         ))
 
+        # 同步终止 Worker，避免其继续产生 phase 事件覆盖已取消状态
+        self._bus.emit(WorkerDestroyEvent(
+            session_id=event.session_id,
+            worker_id="",
+        ))
+
         if event.session_id == self._current_session_id:
             self._bus.emit(UIClearPhaseEvent(session_id=event.session_id))
 
         self._refresh_session_badge(event.session_id)
+
+    def _on_user_confirm(self, event: UserConfirmEvent):
+        """用户确认/取消 Phase 任务清单：转发给 WorkerManager。"""
+        if self._worker_mgr:
+            self._worker_mgr.confirm(event.session_id, event.confirmed)
 
     # ═══════════════════════════════════════════════════
     # session.* 处理
@@ -336,9 +353,53 @@ class SessionOrchestrator(QObject):
             message=f"[{event.code}] {event.detail}",
         ))
 
+    def _on_phase_changed(self, event: PhaseChangedEvent):
+        """Phase 切换：更新任务状态并通知 UI。"""
+        rt = self._runtimes.get(event.session_id)
+        if rt:
+            rt.save_phase_state({"phase": event.phase, "task_count": event.task_count})
+
+        phase_map = {
+            "analyze": TaskPhase.ANALYZING,
+            "confirm": TaskPhase.CONFIRMING,
+            "execute": TaskPhase.EXECUTING,
+            "verify": TaskPhase.VERIFYING,
+            "archive": TaskPhase.COMPLETED,
+        }
+        db_phase = phase_map.get(event.phase, TaskPhase.ANALYZING)
+        self._repo.update_task_state(TaskState(
+            session_id=event.session_id,
+            phase=db_phase,
+        ))
+
+        if event.session_id == self._current_session_id:
+            self._bus.emit(UISetPhaseEvent(
+                session_id=event.session_id,
+                phase=event.phase,
+                task_count=event.task_count,
+            ))
+        self._refresh_session_badge(event.session_id)
+
+    def _on_phase_confirm_required(self, event: PhaseConfirmRequiredEvent):
+        """需要用户确认任务清单：通知 UI 显示确认面板。"""
+        if event.session_id == self._current_session_id:
+            self._bus.emit(UIShowConfirmEvent(
+                session_id=event.session_id,
+                task_list=event.task_list,
+            ))
+
     # ═══════════════════════════════════════════════════
     # worker.* 处理
     # ═══════════════════════════════════════════════════
+    def _on_worker_created(self, event: WorkerCreatedEvent):
+        """Worker 创建成功：绑定到对应 SessionRuntime。"""
+        if not self._worker_mgr:
+            return
+        worker = self._worker_mgr.get_worker(event.session_id)
+        rt = self._runtimes.get(event.session_id)
+        if rt and worker:
+            rt.attach_worker(worker)
+
     def _on_worker_chunk(self, event: WorkerChunkEvent):
         """Worker 流式 chunk：只转发当前会话。"""
         rt = self._runtimes.get(event.session_id)

@@ -149,6 +149,27 @@ class SimpleChatArea(QWidget):
         self.chat_area.setObjectName("chatArea")
         layout.addWidget(self.chat_area, 1)
 
+        # Phase 确认条（默认隐藏）
+        self.confirm_bar = QWidget()
+        confirm_layout = QHBoxLayout(self.confirm_bar)
+        confirm_layout.setContentsMargins(24, 8, 24, 8)
+        confirm_layout.setSpacing(12)
+        self.confirm_label = QLabel("")
+        self.confirm_label.setWordWrap(True)
+        confirm_layout.addWidget(self.confirm_label, 1)
+        self.confirm_btn = QPushButton("确认执行")
+        self.confirm_btn.setCursor(Qt.PointingHandCursor)
+        self.confirm_btn.setFixedWidth(80)
+        self.cancel_btn = QPushButton("取消")
+        self.cancel_btn.setCursor(Qt.PointingHandCursor)
+        self.cancel_btn.setFixedWidth(64)
+        confirm_layout.addWidget(self.confirm_btn)
+        confirm_layout.addWidget(self.cancel_btn)
+        self.confirm_bar.setVisible(False)
+        self.confirm_btn.clicked.connect(lambda: self._on_confirm(True))
+        self.cancel_btn.clicked.connect(lambda: self._on_confirm(False))
+        layout.addWidget(self.confirm_bar)
+
         # 输入区
         input_panel = QWidget()
         input_layout = QHBoxLayout(input_panel)
@@ -216,6 +237,23 @@ class SimpleChatArea(QWidget):
             }}
             QPushButton:hover {{ background-color: {t['stop_btn_hover']}; }}
         """)
+        self.confirm_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {t['send_btn']}; color: {t['text_inverse']};
+                border: 1px solid {t['send_btn']}; border-radius: 8px;
+                padding: 6px 10px; font-size: 13px;
+            }}
+            QPushButton:hover {{ background-color: {t['send_btn_hover']}; }}
+        """)
+        self.cancel_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {t['stop_btn']}; color: {t['text_primary']};
+                border: 1px solid {t['border']}; border-radius: 8px;
+                padding: 6px 10px; font-size: 13px;
+            }}
+            QPushButton:hover {{ background-color: {t['stop_btn_hover']}; }}
+        """)
+        self.confirm_label.setStyleSheet(f"color: {t['text_primary']}; font-size: 13px;")
         self.chat_area.setStyleSheet(f"""
             QTextEdit {{
                 background-color: {t['bg_primary']}; color: {t['text_primary']};
@@ -235,6 +273,14 @@ class SimpleChatArea(QWidget):
 
     def set_stop_callback(self, callback):
         self.stop_btn.clicked.connect(callback)
+
+    def set_confirm_callback(self, callback):
+        self._confirm_callback = callback
+
+    def _on_confirm(self, confirmed: bool):
+        if hasattr(self, '_confirm_callback') and self._confirm_callback:
+            self._confirm_callback(confirmed)
+        self.confirm_bar.setVisible(False)
 
     def clear_input(self):
         self.input_field.setPlainText("")
@@ -310,15 +356,19 @@ class SimpleChatArea(QWidget):
         pass
 
     def show_confirmation(self, task_list: list):
-        if task_list:
-            lines = ["### 任务清单", ""]
-            for idx, task in enumerate(task_list[:7], 1):
-                desc = task.description if hasattr(task, "description") else str(task)
-                lines.append(f"{idx}. {desc}")
-            self.append_system("\n".join(lines))
+        if not task_list:
+            return
+        lines = ["等待确认：", ""]
+        for idx, task in enumerate(task_list[:7], 1):
+            desc = task.description if hasattr(task, "description") else str(task)
+            lines.append(f"{idx}. {desc}")
+        if len(task_list) > 7:
+            lines.append(f"… 共 {len(task_list)} 项任务")
+        self.confirm_label.setText("\n".join(lines))
+        self.confirm_bar.setVisible(True)
 
     def hide_confirmation(self):
-        pass
+        self.confirm_bar.setVisible(False)
 
     def show_skip_verify(self):
         pass
@@ -437,6 +487,7 @@ class MainWindow(QMainWindow):
         self._orchestrator = SessionOrchestrator(
             repository=self._repo,
             message_bus=self._bus,
+            worker_manager=self._worker_mgr,
             parent=self,
         )
 
@@ -455,6 +506,7 @@ class MainWindow(QMainWindow):
         self._draft_session_type = "chat"
         self._draft_project_path = ""
         self._current_model_name = self._config.get("app.last_model", "tool-agent")
+        self._current_mode = self._config.get("app.last_mode", "ask")
 
         self._connect_signals()
         self._init_default_session()
@@ -478,6 +530,7 @@ class MainWindow(QMainWindow):
         self.conversation_list.conversation_deleted.connect(self._on_conversation_deleted)
         self.conversation_list.conversation_pinned.connect(self._on_conversation_pinned)
         self.conversation_list.model_changed.connect(self._on_model_changed)
+        self.conversation_list.mode_changed.connect(self._on_mode_changed)
         self.conversation_list.theme_changed.connect(self._on_theme_changed)
         main_layout.addWidget(self.conversation_list)
 
@@ -486,6 +539,7 @@ class MainWindow(QMainWindow):
         self.chat_area.set_theme(self._theme_name)
         self.chat_area.set_send_callback(self._on_send_message)
         self.chat_area.set_stop_callback(self._on_stop_generation)
+        self.chat_area.set_confirm_callback(self._on_user_confirm)
         main_layout.addWidget(self.chat_area, 1)
 
     def _apply_theme(self):
@@ -535,11 +589,19 @@ class MainWindow(QMainWindow):
         self._reset_to_draft()
         self.chat_area.set_header("Agent", "准备就绪")
         self._populate_model_selector()
+        self._populate_mode_selector()
 
     def _populate_model_selector(self):
         """从 config 读取模型列表并填充下拉框。"""
         providers = self._config.get("llm_providers", {})
         self.conversation_list.populate_models(providers, self._current_model_name)
+
+    def _populate_mode_selector(self):
+        """从 config 读取模式列表并填充下拉框。"""
+        modes = list(self._config.get("manual_modes", {}).keys())
+        if not modes:
+            modes = ["ask", "plan", "craft"]
+        self.conversation_list.populate_modes(modes, self._current_mode)
 
     def _on_new_task(self):
         """点击「+ 新任务」：只重置为草稿窗口，不创建会话。"""
@@ -580,7 +642,7 @@ class MainWindow(QMainWindow):
         self._bus.emit(UserSendEvent(
             session_id="",
             user_text=user_text,
-            mode="ask",
+            mode=self._current_mode,
             session_type=self._draft_session_type,
             project_path=self._draft_project_path,
             model=self._current_model_name,
@@ -591,10 +653,24 @@ class MainWindow(QMainWindow):
         if current_sid:
             self._bus.emit(UserStopEvent(session_id=current_sid))
 
+    def _on_user_confirm(self, confirmed: bool):
+        """用户点击确认/取消按钮：通知 Orchestrator 继续或中止 Phase。"""
+        current_sid = self._orchestrator.current_session_id
+        if current_sid:
+            self._bus.emit(UserConfirmEvent(session_id=current_sid, confirmed=confirmed))
+
     def _on_model_changed(self, model_name: str):
         """用户切换模型：更新当前模型并持久化到 config.yaml。"""
         if not model_name or model_name == self._current_model_name:
             return
         self._current_model_name = model_name
         self._config.set("app.last_model", model_name)
+        self._config.save()
+
+    def _on_mode_changed(self, mode: str):
+        """用户切换模式：更新当前模式并持久化到 config.yaml。"""
+        if not mode or mode == self._current_mode:
+            return
+        self._current_mode = mode
+        self._config.set("app.last_mode", mode)
         self._config.save()

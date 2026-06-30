@@ -70,6 +70,7 @@ class ConversationListWidget(QWidget):
     conversation_deleted = Signal(str)
     conversation_pinned = Signal(str, bool)
     model_changed = Signal(str)
+    mode_changed = Signal(str)
     theme_changed = Signal(str)
 
     def __init__(self, theme: str = DEFAULT_THEME, parent=None):
@@ -110,6 +111,11 @@ class ConversationListWidget(QWidget):
         self.model_selector.currentTextChanged.connect(self._on_model_changed)
         layout.addWidget(self.model_selector)
 
+        # 模式下拉
+        self.mode_selector = QComboBox()
+        self.mode_selector.currentTextChanged.connect(self._on_mode_changed)
+        layout.addWidget(self.mode_selector)
+
         # 中间：+ 新任务
         self.new_task_btn = QPushButton("+ 新任务")
         self.new_task_btn.setCursor(Qt.PointingHandCursor)
@@ -138,7 +144,7 @@ class ConversationListWidget(QWidget):
         t = self._theme
         self.setStyleSheet(f"background-color: {t['bg_sidebar']};")
 
-        self.model_selector.setStyleSheet(f"""
+        combo_style = f"""
             QComboBox {{
                 background-color: {t['bg_input']}; color: {t['text_primary']};
                 border: 1px solid {t['border']}; border-radius: 8px;
@@ -151,7 +157,9 @@ class ConversationListWidget(QWidget):
                 border: 1px solid {t['border']};
                 selection-background-color: {t['accent']}33;
             }}
-        """)
+        """
+        self.model_selector.setStyleSheet(combo_style)
+        self.mode_selector.setStyleSheet(combo_style)
 
         self.new_task_btn.setStyleSheet(f"""
             QPushButton {{
@@ -307,3 +315,20 @@ class ConversationListWidget(QWidget):
         name = self.model_selector.currentData()
         if name:
             self.model_changed.emit(name)
+
+    def populate_modes(self, modes: list[str], current: str):
+        """填充模式下拉框。"""
+        self.mode_selector.blockSignals(True)
+        self.mode_selector.clear()
+        for mode in modes:
+            display = {"ask": "问答", "plan": "规划", "craft": "执行"}.get(mode, mode)
+            self.mode_selector.addItem(display, mode)
+        idx = self.mode_selector.findData(current)
+        if idx >= 0:
+            self.mode_selector.setCurrentIndex(idx)
+        self.mode_selector.blockSignals(False)
+
+    def _on_mode_changed(self, text: str):
+        mode = self.mode_selector.currentData()
+        if mode:
+            self.mode_changed.emit(mode)
