@@ -17,7 +17,7 @@ from workers.session_task import SessionTask, TaskStatus
 from workers.task_capacity import TaskCapacity
 from workers.task_queue import TaskQueue
 
-# v3: 可选 MessageBus 引用，用于发射 TaskCompletedEvent
+# 可选 MessageBus 引用，用于发射 TaskCompletedEvent
 MessageBus = None
 try:
     from core.event_bus import MessageBus as _MessageBus
@@ -47,11 +47,11 @@ class TaskService(QObject):
         self._active_tools: int = 0
         self._bus = message_bus
 
-        # WorkerPool 延迟创建（v3 后逐步退役）
+        # WorkerPool 由外部注入
         self._pool = None  # type: Optional[WorkerPool]
 
     def set_pool(self, pool):
-        """注入 WorkerPool 实例（兼容旧版，v3 后逐步退役）"""
+        """注入 WorkerPool 实例"""
         self._pool = pool
 
     # ═══════════════════════════════════════════════════════
@@ -230,7 +230,7 @@ class TaskService(QObject):
         status_str = (task.status.value if task else TaskStatus.COMPLETED.value)
         self.task_status_changed.emit(session_id, status_str)
         self._emit_capacity()
-        # v3: 发射 Bus 事件，供 WorkerManager 等订阅者消费
+        # 发射 Bus 事件，供 WorkerManager 等订阅者消费
         self._emit_task_completed_event(session_id, success, error)
         # 尝试从队列中取出下一个任务
         self._drain_queue()
@@ -242,7 +242,7 @@ class TaskService(QObject):
         self.complete_task(session_id, success)
 
     def _emit_task_completed_event(self, session_id: str, success: bool, error: str = ""):
-        """v3: 向 MessageBus 发射 TaskCompletedEvent（如已配置）"""
+        """向 MessageBus 发射 TaskCompletedEvent（如已配置）"""
         if self._bus is None:
             return
         try:

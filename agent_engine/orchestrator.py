@@ -86,7 +86,7 @@ class AgentOrchestrator:
         self.phase_tool_allowlists: Dict[str, Optional[Any]] = dict(self.DEFAULT_PHASE_TOOLS)
         if phase_tool_allowlists:
             self.phase_tool_allowlists.update(phase_tool_allowlists)
-        # v3.11.ai-engine: 绞杀者模式 — 新引擎注入
+        # 注入各引擎实例
         self._engines = engines or {}
 
     # ═══════════════════════════════════════════════════════
@@ -109,7 +109,7 @@ class AgentOrchestrator:
         self._current_phase = phase
         self._current_mode = mode
 
-        # v3.11.ai-engine: PromptEngine 委托
+        # 优先使用 PromptEngine 生成 system prompt
         prompt_engine = self._engines.get("prompt")
         if prompt_engine and hasattr(prompt_engine, "build_system_prompt"):
             self.system_prompt = prompt_engine.build_system_prompt(mode, phase)
@@ -127,7 +127,7 @@ class AgentOrchestrator:
 
     def bind_tools_for_phase(self, phase: str):
         """根据 phase 决定绑定哪些工具；返回绑定后的 LLM"""
-        # v3.11.ai-engine: ToolEngine 委托
+        # 优先使用 ToolEngine 绑定工具
         tool_engine = self._engines.get("tool")
         if tool_engine and hasattr(tool_engine, "bind_for_phase"):
             return tool_engine.bind_for_phase(phase, self.llm)
@@ -383,7 +383,7 @@ class AgentOrchestrator:
     async def _call_tool(self, name: str, args: Any) -> str:
         """调用工具：优先使用 ToolEngine（如有），否则走旧逻辑"""
 
-        # v3.11.ai-engine: ToolEngine 委托
+        # 优先使用 ToolEngine 调用工具
         tool_engine = self._engines.get("tool")
         if tool_engine and hasattr(tool_engine, "call"):
             result = await tool_engine.call(name, args, self._current_phase)
