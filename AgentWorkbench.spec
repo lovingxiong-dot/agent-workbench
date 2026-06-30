@@ -7,6 +7,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ('config/config.yaml', 'config'),
+        ('assets/app.ico', 'assets'),
         ('resources/themes/dark_github.qss', 'resources/themes'),
         ('resources/themes/trae_dark.qss', 'resources/themes'),
         (r'venv\Lib\site-packages\certifi\cacert.pem', 'certifi'),

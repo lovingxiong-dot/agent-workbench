@@ -8,12 +8,20 @@ ProjectService — 项目目录与会话关联管理
 - 与 SessionService 解耦，仅负责目录维度的聚合与配置同步。
 """
 import os
+import sys
 import hashlib
 from datetime import datetime
 from typing import List, Dict, Optional
 
 from services.session_service import SessionService
 from services.config_service import ConfigService
+
+
+def _get_app_root() -> str:
+    """返回应用根目录：打包时为 exe 同级目录，源码时为项目根目录。"""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class ProjectService:
@@ -108,9 +116,7 @@ class ProjectService:
         # 3) 最近活动记录中的 project_path
         try:
             from services.activity_service import ActivityService
-            activity_storage_path = (
-                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "storage", "activities.json")
-            )
+            activity_storage_path = os.path.join(_get_app_root(), "storage", "activities.json")
             activity_service = ActivityService(activity_storage_path)
             for activity in activity_service.list_all():
                 path = activity.get("project_path", "")
