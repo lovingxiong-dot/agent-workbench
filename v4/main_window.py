@@ -454,6 +454,7 @@ class MainWindow(QMainWindow):
         # 草稿窗口状态（未写入 DB 的初始化窗口）
         self._draft_session_type = "chat"
         self._draft_project_path = ""
+        self._current_model_name = self._config.get("app.last_model", "tool-agent")
 
         self._connect_signals()
         self._init_default_session()
@@ -533,6 +534,12 @@ class MainWindow(QMainWindow):
         """启动时不自动创建 DB 会话，直接进入草稿窗口状态。"""
         self._reset_to_draft()
         self.chat_area.set_header("Agent", "准备就绪")
+        self._populate_model_selector()
+
+    def _populate_model_selector(self):
+        """从 config 读取模型列表并填充下拉框。"""
+        providers = self._config.get("llm_providers", {})
+        self.conversation_list.populate_models(providers, self._current_model_name)
 
     def _on_new_task(self):
         """点击「+ 新任务」：只重置为草稿窗口，不创建会话。"""
@@ -576,6 +583,7 @@ class MainWindow(QMainWindow):
             mode="ask",
             session_type=self._draft_session_type,
             project_path=self._draft_project_path,
+            model=self._current_model_name,
         ))
 
     def _on_stop_generation(self):
@@ -584,4 +592,9 @@ class MainWindow(QMainWindow):
             self._bus.emit(UserStopEvent(session_id=current_sid))
 
     def _on_model_changed(self, model_name: str):
-        pass
+        """用户切换模型：更新当前模型并持久化到 config.yaml。"""
+        if not model_name or model_name == self._current_model_name:
+            return
+        self._current_model_name = model_name
+        self._config.set("app.last_model", model_name)
+        self._config.save()

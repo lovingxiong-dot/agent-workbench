@@ -30,6 +30,7 @@ class UserSendEvent(Event):
     mode: str = "ask"
     session_type: str = "chat"
     project_path: str = ""
+    model: str = ""
 
 
 @dataclass

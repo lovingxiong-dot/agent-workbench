@@ -93,11 +93,12 @@ class SessionOrchestrator(QObject):
         """用户发送消息：若当前无会话（草稿窗口），先创建会话；再写 DB，再发 UI；随后入队。"""
         # 草稿窗口首条消息：创建会话并切换
         if not self._current_session_id:
+            model = event.model or "tool-agent"
             self._create_session_from_draft(
                 session_type=event.session_type,
                 project_path=event.project_path,
                 mode=event.mode,
-                model="tool-agent",
+                model=model,
             )
 
         rt = self._require_runtime(self._current_session_id)
