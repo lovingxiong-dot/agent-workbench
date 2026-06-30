@@ -4,10 +4,15 @@
 
 ### feat/ui
 - SimpleChatArea 标题栏从 QLabel 升级为 HeaderToolbar（搜索/更多/展开三键）
-- 搜索键（🔍 Ctrl+F）弹出搜索条，实时高亮跳转
-- 更多键（⋯）预留上下文菜单接口
-- 展开键（⇱ Ctrl+B）联动 MainWindow.toggle_panels() 收起/展开左面板
+- 搜索键（Ctrl+F）弹出搜索条，在当前会话文本中高亮跳转
+- 更多键弹出上下文菜单（导出当前会话 / 复制会话内容 / 打开设置）
+- 展开键（Ctrl+B）联动 MainWindow.toggle_panels() 收起/展开左面板
 - ui_renderer.py 新增 _parse_execute_steps 方法，execute 阶段自动解析步骤条（done/running/pending/fail）
+
+### fix/ui
+- 标题栏三键图标从 Unicode 字符替换为 SVG path 矢量图标，避免字体缺失导致显示异常
+- AgentWorkbench.spec 增加 `PySide6.QtSvg` hiddenimports，确保打包后 SVG 图标正常渲染
+- execute 阶段步骤分隔线颜色改用主题变量，适配深色/浅色主题
 
 ### docs
 - docs/ui/ 归档 6 张 SVG + 2 篇 UI spec（ui-fold-design / ui-header-buttons）

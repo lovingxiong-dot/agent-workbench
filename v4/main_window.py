@@ -18,9 +18,14 @@ import html
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QTextEdit, QTextBrowser, QStyleFactory, QLineEdit,
+    QMenu,
 )
-from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QPalette, QColor, QFont, QTextCursor, QShortcut, QKeySequence
+from PySide6.QtCore import Qt, QTimer, Signal, QByteArray, QSize
+from PySide6.QtGui import (
+    QPalette, QColor, QFont, QTextCursor, QShortcut, QKeySequence,
+    QIcon, QPixmap, QPainter, QAction,
+)
+from PySide6.QtSvg import QSvgRenderer
 
 from markdown import markdown as md
 
@@ -41,6 +46,37 @@ from services.config_service import ConfigService
 def _md_to_html(text: str) -> str:
     raw_html = md(html.escape(text), extensions=['fenced_code', 'tables', 'nl2br', 'codehilite'])
     return html.unescape(raw_html)
+
+
+# ── SVG 图标辅助 ─────────────────────────────────────────────────────────
+
+_ICON_PATHS = {
+    "search": "M10.5 10.5L15 15M10 4a6 6 0 1 0 0 12 6 6 0 0 0 0-12Z",
+    "more": "M5 12h.01M12 12h.01M19 12h.01",
+    "expand": "M4 10V4h6M14 4h6v6M4 14v6h6M14 20h6v-6",
+    "collapse": "M10 10H4V4M14 4V10h6M10 14H4v6M14 20v-6h6",
+    "chevron-up": "M18 15l-6-6-6 6",
+    "chevron-down": "M6 9l6 6 6-6",
+    "close": "M6 6l12 12M18 6L6 18",
+}
+
+
+def _svg_icon(name: str, color: str, size: int = 18) -> QIcon:
+    """根据 SVG path 名称渲染矢量图标，避免依赖系统字体。"""
+    path_data = _ICON_PATHS.get(name, "")
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" '
+        f'viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="2" '
+        f'stroke-linecap="round" stroke-linejoin="round">'
+        f'<path d="{path_data}"/></svg>'
+    )
+    renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    renderer.render(painter)
+    painter.end()
+    return QIcon(pixmap)
 
 
 THEMES = {
@@ -117,9 +153,8 @@ class InputTextEdit(QTextEdit):
 class HeaderToolbar(QWidget):
     """会话区标题栏：左侧标题/环境信息 + 右侧三键操作（搜索/更多/展开）。"""
 
-    search_toggled = Signal()
     expand_toggled = Signal()
-    more_clicked = Signal()
+    search_requested = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -127,10 +162,18 @@ class HeaderToolbar(QWidget):
         self._theme = THEMES[DEFAULT_THEME]
         self._title = ""
         self._env = ""
+        self._search_visible = False
+        self._icon_size = 18
         self._setup_ui()
 
     def _setup_ui(self):
-        layout = QHBoxLayout(self)
+        root_layout = QVBoxLayout(self)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        # ── 标题行 ──
+        header = QWidget()
+        layout = QHBoxLayout(header)
         layout.setContentsMargins(24, 12, 12, 12)
         layout.setSpacing(4)
 
@@ -138,71 +181,151 @@ class HeaderToolbar(QWidget):
         self.title_label = QLabel("")
         layout.addWidget(self.title_label, 1)
 
-        # ── 三键 ──
-        btn_style = """
-            QPushButton {
-                background: transparent; border: none; border-radius: 4px;
-                min-width: 22px; max-width: 22px; min-height: 22px; max-height: 22px;
-                font-size: 14px; padding: 0;
-            }
-            QPushButton:hover { background-color: rgba(128,128,128,0.15); }
-        """
+        # 右侧三键
+        self.search_btn = self._icon_btn("search", "搜索 (Ctrl+F)")
+        self.search_btn.clicked.connect(self._toggle_search)
 
-        self.search_btn = QPushButton("🔍")
-        self.search_btn.setToolTip("搜索 (Ctrl+F)")
-        self.search_btn.setCursor(Qt.PointingHandCursor)
-        self.search_btn.clicked.connect(self.search_toggled)
-        self.search_btn.setStyleSheet(btn_style)
+        self.more_btn = self._icon_btn("more", "更多操作")
+        self._setup_more_menu()
 
-        self.more_btn = QPushButton("⋯")
-        self.more_btn.setToolTip("更多操作")
-        self.more_btn.setCursor(Qt.PointingHandCursor)
-        self.more_btn.clicked.connect(self.more_clicked)
-        self.more_btn.setStyleSheet(btn_style)
-
-        self.expand_btn = QPushButton("⇱")
-        self.expand_btn.setToolTip("展开/收起面板 (Ctrl+B)")
-        self.expand_btn.setCursor(Qt.PointingHandCursor)
+        self.expand_btn = self._icon_btn("collapse", "展开/收起面板 (Ctrl+B)")
         self.expand_btn.clicked.connect(self._toggle_expand)
-        self.expand_btn.setStyleSheet(btn_style)
 
         layout.addWidget(self.search_btn)
         layout.addWidget(self.more_btn)
         layout.addWidget(self.expand_btn)
+        root_layout.addWidget(header)
+
+        # ── 搜索条 ──
+        self.search_bar = QWidget()
+        search_layout = QHBoxLayout(self.search_bar)
+        search_layout.setContentsMargins(24, 4, 12, 8)
+        search_layout.setSpacing(6)
+
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("在当前会话中搜索...")
+        self.search_input.textChanged.connect(self._on_search_text_changed)
+        self.search_input.returnPressed.connect(self._find_next)
+        search_layout.addWidget(self.search_input, 1)
+
+        self.search_prev_btn = self._icon_btn("chevron-up", "上一个")
+        self.search_prev_btn.clicked.connect(self._find_prev)
+        self.search_next_btn = self._icon_btn("chevron-down", "下一个")
+        self.search_next_btn.clicked.connect(self._find_next)
+        self.search_close_btn = self._icon_btn("close", "关闭 (Esc)")
+        self.search_close_btn.clicked.connect(self._hide_search)
+        search_layout.addWidget(self.search_prev_btn)
+        search_layout.addWidget(self.search_next_btn)
+        search_layout.addWidget(self.search_close_btn)
+
+        self.search_bar.setVisible(False)
+        root_layout.addWidget(self.search_bar)
 
         self._apply_theme()
 
+    def _icon_btn(self, icon_name: str, tooltip: str) -> QPushButton:
+        """创建使用 SVG 图标的工具按钮。"""
+        btn = QPushButton()
+        btn.setToolTip(tooltip)
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setFlat(True)
+        btn.setFixedSize(28, 28)
+        btn.setIconSize(QSize(self._icon_size, self._icon_size))
+        btn.setIcon(_svg_icon(icon_name, self._theme["text_secondary"], self._icon_size))
+        btn.setStyleSheet(
+            "QPushButton { background: transparent; border: none; border-radius: 4px; }"
+            "QPushButton:hover { background-color: rgba(128,128,128,0.15); }"
+        )
+        return btn
+
+    def _setup_more_menu(self):
+        self.more_menu = QMenu(self.more_btn)
+        self.action_export = QAction("导出当前会话", self)
+        self.action_copy = QAction("复制会话内容", self)
+        self.action_settings = QAction("打开设置", self)
+        self.more_menu.addAction(self.action_export)
+        self.more_menu.addAction(self.action_copy)
+        self.more_menu.addSeparator()
+        self.more_menu.addAction(self.action_settings)
+        self.more_btn.setMenu(self.more_menu)
+
+    def _toggle_search(self):
+        self._search_visible = not self._search_visible
+        self.search_bar.setVisible(self._search_visible)
+        if self._search_visible:
+            self.search_input.setFocus()
+        else:
+            self.search_input.clear()
+
+    def _hide_search(self):
+        self._search_visible = False
+        self.search_bar.setVisible(False)
+        self.search_input.clear()
+
+    def _on_search_text_changed(self, text: str):
+        self.search_requested.emit(text)
+
+    def _find_next(self):
+        self.search_requested.emit(self.search_input.text())
+
+    def _find_prev(self):
+        self.search_requested.emit(self.search_input.text())
+
     def _toggle_expand(self):
         self._expanded = not self._expanded
-        self.expand_btn.setText("⇲" if self._expanded else "⇱")
+        self._refresh_expand_icon()
         self.expand_toggled.emit()
 
     def update_expand_state(self, expanded: bool):
         self._expanded = expanded
-        self.expand_btn.setText("⇲" if expanded else "⇱")
+        self._refresh_expand_icon()
+
+    def _refresh_expand_icon(self):
+        icon_name = "collapse" if self._expanded else "expand"
+        self.expand_btn.setIcon(_svg_icon(icon_name, self._theme["text_secondary"], self._icon_size))
+        self.expand_btn.setToolTip("收起面板" if self._expanded else "展开面板")
 
     def set_title(self, title: str, env: str = ""):
         self._title = title
         self._env = env
+        self._render_title()
+
+    def _render_title(self):
         t = self._theme
-        if env:
+        if self._env:
             self.title_label.setText(
-                f'<span style="color:{t["text_primary"]};font-size:15px;font-weight:600;">{title}</span>'
-                f'<span style="color:{t["text_secondary"]};font-size:12px;margin-left:8px;">· {env}</span>'
+                f'<span style="color:{t["text_primary"]};font-size:15px;font-weight:600;">{self._title}</span>'
+                f'<span style="color:{t["text_secondary"]};font-size:12px;margin-left:8px;">· {self._env}</span>'
             )
         else:
             self.title_label.setText(
-                f'<span style="color:{t["text_primary"]};font-size:15px;font-weight:600;">{title}</span>'
+                f'<span style="color:{t["text_primary"]};font-size:15px;font-weight:600;">{self._title}</span>'
             )
 
     def set_theme(self, theme_name: str):
         self._theme = THEMES.get(theme_name, THEMES[DEFAULT_THEME])
         self._apply_theme()
-        self.set_title(self._title, self._env)
+        self._render_title()
+        self.search_btn.setIcon(_svg_icon("search", self._theme["text_secondary"], self._icon_size))
+        self.more_btn.setIcon(_svg_icon("more", self._theme["text_secondary"], self._icon_size))
+        self._refresh_expand_icon()
 
     def _apply_theme(self):
         t = self._theme
         self.setStyleSheet(f"background-color: {t['bg_primary']};")
+        self.search_input.setStyleSheet(
+            f"QLineEdit {{ background-color: {t['bg_input']}; color: {t['text_primary']}; "
+            f"border: 1px solid {t['border']}; border-radius: 4px; padding: 4px 8px; }}"
+        )
+
+    def focus_search(self):
+        self._toggle_search()
+
+    def key_escape(self):
+        if self._search_visible:
+            self._hide_search()
+            return True
+        return False
 
 
 class SimpleChatArea(QWidget):
@@ -226,6 +349,7 @@ class SimpleChatArea(QWidget):
 
         # 顶部：会话标题 + 三键操作
         self.header = HeaderToolbar()
+        self.header.search_requested.connect(self._on_search)
         layout.addWidget(self.header)
 
         self.sep = QLabel()
@@ -444,6 +568,21 @@ class SimpleChatArea(QWidget):
 
     def set_header(self, title: str, env: str = ""):
         self.header.set_title(title, env)
+
+    def _on_search(self, text: str):
+        """在当前会话文本中搜索并高亮第一个匹配项。"""
+        browser = self.chat_area
+        if not text:
+            browser.moveCursor(QTextCursor.Start)
+            return
+        cursor = browser.textCursor()
+        start_pos = cursor.position()
+        document = browser.document()
+        found = document.find(text, start_pos)
+        if found.isNull():
+            found = document.find(text, 0)
+        if not found.isNull():
+            browser.setTextCursor(found)
 
     def append_user(self, text: str):
         self._messages.append({"role": "user", "text": text})
@@ -876,6 +1015,18 @@ class MainWindow(QMainWindow):
         self._right_panel.header.expand_toggled.connect(self.toggle_panels)
         self.chat_area = self._right_panel  # 兼容旧引用
         main_layout.addWidget(self._right_panel, 1)
+
+        # ── 全局快捷键 ──
+        self._shortcut_search = QShortcut(QKeySequence("Ctrl+F"), self)
+        self._shortcut_search.activated.connect(self._right_panel.header.focus_search)
+        self._shortcut_expand = QShortcut(QKeySequence("Ctrl+B"), self)
+        self._shortcut_expand.activated.connect(self.toggle_panels)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            if self._right_panel.header.key_escape():
+                return
+        super().keyPressEvent(event)
 
     def _apply_theme(self):
         t = THEMES[self._theme_name]

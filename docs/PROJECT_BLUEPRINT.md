@@ -4,7 +4,7 @@
 | 项目名称 | AI Agent 工作台 | 当前版本 | v4.0.7-alpha | 存档次数 | 34 |
 
 ## 项目概要
-AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v4.0.7-alpha 实现标题栏三键（搜索/更多/展开）+ execute 阶段步骤条自动解析；v4.0.6-alpha 补齐 v4.0.5-alpha 的两处路径遗漏：`AgentWorkbench.spec` 的 `datas` 加入 `assets/app.ico` 以支持打包后读取图标资源；`services/project_service.py` 改用 `_get_app_root()` 定位 `storage/activities.json`，避免 exe 在 CWD 创建 storage。v4.0.5-alpha 完成工程目录标准化改造；v4.0.4-alpha 在 v4 单轨架构基础上实现对话 UI 三层折叠结构；v4.0.3-alpha 已完成 PhaseEngine 接入、PyInstaller 打包适配与零引用旧代码清理。
+AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v4.0.7-alpha 完成标题栏三键（搜索/更多/展开）+ execute 阶段步骤条自动解析，三键图标采用 SVG path 矢量渲染并接入搜索高亮/更多菜单/全局快捷键；v4.0.6-alpha 补齐 v4.0.5-alpha 的两处路径遗漏：`AgentWorkbench.spec` 的 `datas` 加入 `assets/app.ico` 以支持打包后读取图标资源；`services/project_service.py` 改用 `_get_app_root()` 定位 `storage/activities.json`，避免 exe 在 CWD 创建 storage。v4.0.5-alpha 完成工程目录标准化改造；v4.0.4-alpha 在 v4 单轨架构基础上实现对话 UI 三层折叠结构；v4.0.3-alpha 已完成 PhaseEngine 接入、PyInstaller 打包适配与零引用旧代码清理。
 
 ## 技术栈
 | 类别 | 技术 | 版本 | 用途 |
@@ -174,7 +174,7 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
-| v4.0.7-alpha | 2026-07-01 | 标题栏三键（搜索/更多/展开）+ execute步骤条自动解析；docs/ui/归档6 SVG+2 spec | feat/docs | v4/main_window.py, v4/ui_renderer.py, docs/ui/* |
+| v4.0.7-alpha | 2026-07-01 | 标题栏三键（搜索/更多/展开）+ execute步骤条自动解析；三键图标改为SVG path并接入搜索高亮/更多菜单/全局快捷键；docs/ui/归档6 SVG+2 spec | feat/docs/fix | v4/main_window.py, v4/ui_renderer.py, AgentWorkbench.spec, docs/ui/* |
 | v4.0.6-alpha | 2026-07-01 | 补齐目录标准化遗漏：`AgentWorkbench.spec` datas加入`assets/app.ico`；`services/project_service.py`改用`_get_app_root()`定位`storage/activities.json`，避免exe在CWD创建storage | fix/build | AgentWorkbench.spec, services/project_service.py |
 
 ## 历史归档

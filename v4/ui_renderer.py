@@ -236,7 +236,8 @@ class UIRenderer(QObject):
             steps = self._parse_execute_steps(body)
             if steps:
                 step_html = self._build_step_bar(steps)
-                body = step_html if not body.strip() else f'{step_html}<hr style="border:0.5px solid #3e3e42;margin:8px 0;">{body}'
+                border_color = getattr(self._chat_view, "_theme", {}).get("border", "#3e3e42")
+                body = step_html if not body.strip() else f'{step_html}<hr style="border:0.5px solid {border_color};margin:8px 0;">{body}'
 
         self._chat_view.append_ai(body, phase=phase, thinking_fold=thinking_fold)
 

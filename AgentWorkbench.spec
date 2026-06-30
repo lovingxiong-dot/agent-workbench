@@ -15,6 +15,7 @@ a = Analysis(
     hiddenimports=[
         # Core infrastructure
         'yaml',
+        'PySide6.QtSvg',
         'core.event_bus',
         'core.events',
         # v4 single-track architecture
