@@ -219,6 +219,7 @@ class WorkerCreateEvent(Event):
     mode: str = ""
     model: str = ""
     project_root: str = ""
+    user_text: str = ""
 
 
 @dataclass

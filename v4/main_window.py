@@ -34,6 +34,7 @@ from .events import (
     UserConfirmEvent, UserReanalyzeEvent, UserSkipVerifyEvent,
     SessionSwitchEvent, SessionDeleteEvent, SessionPinEvent,
 )
+from .worker_manager import WorkerManager
 from services.config_service import ConfigService
 
 
@@ -410,7 +411,7 @@ class SimpleChatArea(QWidget):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, worker_mgr=None):
         super().__init__()
         self.resize(1200, 800)
         self.setWindowTitle("Agent")
@@ -425,6 +426,14 @@ class MainWindow(QMainWindow):
         self._repo = SessionRepository()
         self._bus = MessageBus(trace=False)
         self._bus.connect_dispatch()
+
+        # ── 八引擎 + WorkerManager 初始化 ──
+        self._engines = self._init_engines()
+        self._worker_mgr = worker_mgr or WorkerManager(
+            message_bus=self._bus,
+            parent=self,
+        )
+
         self._orchestrator = SessionOrchestrator(
             repository=self._repo,
             message_bus=self._bus,
@@ -489,6 +498,33 @@ class MainWindow(QMainWindow):
         p.setColor(QPalette.Button, QColor(t["bg_sidebar"]))
         p.setColor(QPalette.Highlight, QColor(t["accent"]))
         app.setPalette(p)
+
+    # ── 八引擎初始化 ──────────────────────────────
+    def _init_engines(self) -> dict:
+        from agent_engine.llm_registry import LLMRegistry
+        from agent_engine.engines import (
+            PromptEngine, InferenceEngine, ToolEngine,
+            MemoryEngine, MetricsEngine, PolicyEngine,
+        )
+        config = self._config.config if self._config else {}
+        registry = LLMRegistry("config.yaml", "config.yaml")
+        policy = PolicyEngine(config.get("ai_engine", {}))
+        metrics = MetricsEngine()
+        engines = {
+            "registry": registry, "policy": policy, "metrics": metrics,
+            "prompt": PromptEngine(
+                base_prompts={m: c.get("system_prompt", "") for m, c in config.get("manual_modes", {}).items()},
+                user_rules=config.get("user_rules", []),
+                app_version=config.get("app", {}).get("version", "v4.0"),
+            ),
+            "inference": InferenceEngine(policy_engine=policy, metrics_engine=metrics, llm_registry=registry),
+            "tool": ToolEngine(),
+            "memory": MemoryEngine(
+                app_root="F:/Agent/agent_workbench",
+                config=config.get("self_context", {}), policy_engine=policy,
+            ),
+        }
+        return engines
 
     def _connect_signals(self):
         pass

@@ -94,24 +94,14 @@ class WorkerManager(QObject):
 
     # ── 内部方法 ──────────────────────────────────
     def _create_worker(self, event: WorkerCreateEvent):
-        """创建 Worker 并绑定环境"""
-        from workers.agent_worker import AgentWorker
-        from agent_engine.llm_registry import LLMRegistry
+        """创建 V4Worker 并绑定环境，启动后提交用户文本。"""
+        from .worker import V4Worker
 
-        llm = LLMRegistry("config.yaml", "config.yaml").get_llm(event.model)
-        if not llm:
-            self._bus.emit(WorkerErrorEvent(
-                session_id=event.session_id,
-                code="LLM_NOT_FOUND",
-                detail=f"Model {event.model} not found",
-            ))
-            return
-
-        worker = AgentWorker(
+        worker = V4Worker(
             mode_name=event.mode,
-            current_llm=llm,
+            model_id=event.model,
             session_id=event.session_id,
-            project_root=event.project_root,
+            project_root=getattr(event, "project_root", ""),
         )
 
         self._workers[event.session_id] = worker
@@ -121,21 +111,21 @@ class WorkerManager(QObject):
         worker.chunk_ready.connect(
             lambda chunk: self._bus.emit(WorkerChunkEvent(
                 session_id=event.session_id,
-                worker_id=worker.worker_id,
+                worker_id=worker.session_id,
                 chunk=chunk,
             ))
         )
         worker.result_ready.connect(
             lambda sid, text: self._bus.emit(WorkerResultEvent(
                 session_id=event.session_id,
-                worker_id=worker.worker_id,
+                worker_id=worker.session_id,
                 full_text=text,
             ))
         )
         worker.error_occurred.connect(
             lambda code, err_detail: self._bus.emit(WorkerErrorEvent(
                 session_id=event.session_id,
-                worker_id=worker.worker_id,
+                worker_id=worker.session_id,
                 code=code,
                 detail=err_detail,
             ))
@@ -144,12 +134,17 @@ class WorkerManager(QObject):
         # 启动 Worker
         worker.start()
 
+        # 提交用户文本
+        user_text = getattr(event, "user_text", "")
+        if user_text:
+            worker.submit(user_text)
+
         self._bus.emit(WorkerCreatedEvent(
             session_id=event.session_id,
-            worker_id=worker.worker_id,
+            worker_id=worker.session_id,
         ))
 
-        logger.info("Worker created for session %s: %s", event.session_id, worker.worker_id)
+        logger.info("V4Worker created for session %s: %s", event.session_id, worker.session_id)
 
     def _destroy_worker(self, session_id: str):
         """销毁 Worker"""
@@ -164,7 +159,7 @@ class WorkerManager(QObject):
             self.worker_count_changed.emit(self.active_count)
             self._bus.emit(WorkerDestroyedEvent(
                 session_id=session_id,
-                worker_id=getattr(worker, "worker_id", ""),
+                worker_id=session_id,
             ))
 
     # ── 公共查询 ──────────────────────────────────

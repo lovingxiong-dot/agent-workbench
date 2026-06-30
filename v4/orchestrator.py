@@ -263,6 +263,8 @@ class SessionOrchestrator(QObject):
         if not rt:
             return
 
+        task = rt.queue.get_streaming_task()
+        user_text = task.user_text if task else ""
         env = rt.environment
         self._bus.emit(WorkerCreateEvent(
             session_id=event.session_id,
@@ -270,6 +272,7 @@ class SessionOrchestrator(QObject):
             mode=rt.metadata.mode,
             model=rt.metadata.model,
             project_root=env.project_root,
+            user_text=user_text,
         ))
 
         self._repo.update_task_state(TaskState(

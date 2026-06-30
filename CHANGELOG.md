@@ -1,5 +1,24 @@
 # Changelog
 
+## v4.0.2-alpha (2026-06-30) — v4原生Worker八引擎推理
+
+### feat
+- **新建 `v4/worker.py` — V4Worker**：以八引擎（PromptEngine/ContextEngine/ToolEngine/PolicyEngine/MetricsEngine）原生驱动 ReAct 推理循环。
+  - 零绞杀者依赖：不禁旧 AgentWorker / AgentOrchestrator / AgentSession。
+  - 直接通过 `LLMRegistry.get_llm()` + `bind_tools()` 调用 LLM，自行检测 `tool_calls` 并执行工具循环。
+  - 通过 `ToolEngine.call()` 执行工具，支持 Phase 白名单校验。
+  - QThread + asyncio 事件循环架构，`submit(user_text)` 外部注入任务。
+  - 信号兼容旧 AgentWorker：`chunk_ready` / `result_ready` / `error_occurred`。
+
+### refactor
+- **`v4/worker_manager.py`**：`_create_worker` 改用 `V4Worker` 替代 `EngineWorker`；移除 `engines`/`llm_registry` 构造参数（Worker 自行初始化引擎）；`worker.submit(user_text)` 启动任务。
+- **`v4/orchestrator.py`**：`_on_queue_task_ready` 从队列获取 `QueuedTask.user_text` 并传入 `WorkerCreateEvent`。
+- **`v4/events.py`**：`WorkerCreateEvent` 新增 `user_text: str = ""`。
+- **`v4/main_window.py`**：修 `config.load()`→`config.config`；移除 WorkerManager 多余参数。
+
+### test
+- 全量 193 项测试通过，零回归。
+
 ## v4.0.1-alpha (2026-06-30) — v4 Solo极简UI重构与主题切换
 
 ### feat
