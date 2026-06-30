@@ -1,5 +1,19 @@
 # Changelog
 
+## v4.0.1-alpha (2026-06-30) — v4 Solo极简UI重构与主题切换
+
+### feat
+- **Solo极简两栏UI重构**：重写 `v4/main_window.py` 与 `v4/conversation_list.py`，固定两栏布局（左 280px + 右填充）；移除 IDE 元素（三栏布局/状态栏/容量标签/Phase-工具按钮/资源管理器/终端/文档编辑器）。
+  - 左栏：Agent 标题 + 模型下拉 + 主题切换按钮（🌙/☀️）+ 「+ 新任务」按钮 + 极简会话列表（标题 + 预览 + 时间）。
+  - 右栏：SimpleChatArea 含会话标题/环境、消息流（用户/AI气泡 + 系统卡片）、多行输入框（Enter发送/Shift+Enter换行）。
+- **主题切换系统**：定义 dark/light 两套 `THEMES` 配色字典；左栏顶部 🌙/☀️ 按钮即时切换主题，同步更新左栏/聊天区/输入区所有控件样式；主题状态持久化到 `config.yaml` 的 `app.theme`。
+- **延迟创建会话**：点击「+ 新任务」仅重置为草稿窗口（不写 DB），用户发送首条消息后由 `SessionOrchestrator._on_user_send` 创建会话并刷新列表，消除空会话条目。
+
+### test
+- 新增 `tests/test_v4_gui_smoke.py::test_theme_toggle_button_switches_and_persists`：验证按钮 emoji 初始值、点击切换后按钮与配置变更、左右栏样式差异化。
+- 适配 `tests/test_v4_integration.py` 所有用例：`chat_view` → `chat_area`、`_btn_chat` / `_btn_work` → `new_task_btn`，移除会话图标断言。
+- 全量 193 项测试通过。
+
 ## v4.0.0-alpha (2026-06-30) — v4 单轨架构：MessageBus + SessionRuntime + 薄 MainWindow
 
 ### feat

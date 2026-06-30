@@ -1,10 +1,10 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v4.0.0-alpha | 存档次数 | 27 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v4.0.1-alpha | 存档次数 | 28 |
 
 ## 项目概要
-AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v4.0.0-alpha 完成单轨事件总线架构重构：新增 `v4/` 目录，以 `MessageBus` 为核心、`SessionRuntime` 为会话聚合根、`SessionOrchestrator` 统一协调、`MainWindow` 作为薄 UI 编排层，实现消息权威在 DB、切换不中断 Worker、环境感知、并发槽位控制。v3.12 的八引擎模块化能力保留于 `agent_engine/engines/`，旧 v2/v3 UI Manager 层已清理。
+AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v4.0.1-alpha 完成 Solo 极简固定两栏 UI 布局（左 280px + 右填充），新增双主题（dark/light）支持并通过 🌙/☀️ 按钮即时切换并持久化到 config.yaml，会话列表简化为标题+预览+时间格式，实现延迟创建会话（首条消息才写入 DB）。
 
 ## 技术栈
 | 类别 | 技术 | 版本 | 用途 |
@@ -176,6 +176,7 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v4.0.1-alpha | 2026-06-30 | v4 Solo极简UI重构：固定两栏布局（左280px/右填充）、主题切换按钮（🌙/☀️ 暗色/浅色持久化到config.yaml）、会话列表极简化（标题+预览+时间）、延迟创建会话（首条消息才写DB） | feat/test | v4/main_window.py, v4/conversation_list.py, config.yaml, tests/test_v4_gui_smoke.py, tests/test_v4_integration.py |
 | v3.12.0 | 2026-06-30 | AI Engine 架构升级：八引擎模块化 + System Prompt 增强 + LLM 参数可配 + 记忆路径修正 + 绞杀者集成 | feat/refactor/fix | agent_engine/engines/*.py, agent_engine/orchestrator.py, agent_engine/llm_registry.py, services/self_context.py, config.yaml, ui/main_window.py, tests/test_self_context.py |
 | v3.11.4 | 2026-06-29 | MainWindow 架构收敛重构：移除 _pending_queue/_worker/_workers/_phase_manager 等旧全局状态，统一走 v3 MessageBus 路径；修复新会话按钮只能添加一个标签、会话标签名均为"新对话"、Enter 键首次失效（新增 `_focus_input_field` 强制焦点）、切换新会话显示无意义接替上下文；补充 FileTreeWidget.get_root_path 与 SessionManager Qt 导入修复；新增 MainWindow UI 自动化测试 | fix/refactor/test | ui/main_window.py, ui/widgets/sidebar.py, ui/managers/session_manager.py, services/self_context.py, tests/test_main_window_ui_automation.py |
 | v3.11.3 | 2026-06-29 | 修复真实运行时 WorkerManager 无法解析 LLM、Phase 错误后未 reset、空对话守卫导致单标签、新建会话后 Orchestrator 当前会话不同步、SessionManager 标题 data role 错误；新增 pytest.ini 排除 scripts 测试噪音 | fix | ui/managers/worker_manager.py, ui/managers/phase_coordinator.py, services/session_orchestrator.py, ui/main_window.py, ui/managers/session_manager.py, pytest.ini |
@@ -208,7 +209,7 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 3. git commit -m "..." + git tag vX.Y.Z
 4. git push + git push origin vX.Y.Z（仅当前分支 + 当前标签，禁止 --tags）
 
-_更新于 2026-06-30 04:00:00 by AI-Kimi-K2.7-Code_
+_更新于 2026-06-30 06:00:00 by AI-Trae_
 
 ## Agent交接记录
 | 时间 | 方向 | 从 | 到 | 交接点 | 备注 |
