@@ -44,7 +44,7 @@ class DeepSeekMetricsIntegrationTest(unittest.TestCase):
         # 使用临时配置文件，避免污染用户配置
         tmp_dir = tempfile.mkdtemp()
         tmp_config = os.path.join(tmp_dir, "config.yaml")
-        shutil.copy("config.yaml", tmp_config)
+        shutil.copy("config/config.yaml", tmp_config)
         try:
             registry = LLMRegistry(tmp_config, writable_path=tmp_config)
             # 临时注入 deepseek provider

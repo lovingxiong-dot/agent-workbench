@@ -117,16 +117,16 @@ async def main():
 
         t0 = time.perf_counter()
         if phase == "analyze":
-            text = '[{"description": "列出项目根目录并读取 README.md"}]'
+            text = '[{"description": "列出项目根目录并读取 docs/README.md"}]'
         elif phase == "execute":
             # 模拟真实工具调用链
             logger.info("  executing task list via tools...")
             dir_result = await logged_call_tool("list_dir", {"path": project_root})
-            readme_path = os.path.join(project_root, "README.md")
+            readme_path = os.path.join(project_root, "docs", "README.md")
             if os.path.isfile(readme_path):
                 file_result = await logged_call_tool("read_file", {"path": readme_path})
             else:
-                file_result = "README.md not found"
+                file_result = "docs/README.md not found"
             text = (
                 f"已完成任务：\n"
                 f"- list_dir 返回 {len(str(dir_result))} 字符\n"

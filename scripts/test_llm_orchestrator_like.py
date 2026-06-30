@@ -16,7 +16,7 @@ from langchain_core.messages import HumanMessage
 
 
 async def main():
-    config_path = ROOT / "config.yaml"
+    config_path = ROOT / "config" / "config.yaml"
     registry = LLMRegistry(config_path=str(config_path))
 
     provider_name = sys.argv[1] if len(sys.argv) > 1 else "deepseek"

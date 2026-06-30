@@ -6,7 +6,7 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
-        ('config.yaml', '.'),
+        ('config/config.yaml', 'config'),
         ('resources/themes/dark_github.qss', 'resources/themes'),
         ('resources/themes/trae_dark.qss', 'resources/themes'),
         (r'venv\Lib\site-packages\certifi\cacert.pem', 'certifi'),
@@ -93,7 +93,7 @@ a = Analysis(
     ],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=['runtime_hook.py'],
+    runtime_hooks=['scripts/runtime_hook.py'],
     excludes=[
         'PySide6.QtWebEngine', 'PySide6.QtWebEngineCore', 'PySide6.QtWebEngineWidgets',
         'PySide6.QtWebSockets', 'PySide6.QtWebChannel',
@@ -128,7 +128,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['app.ico'],
+    icon=['assets/app.ico'],
 )
 coll = COLLECT(
     exe,

@@ -57,7 +57,7 @@ class TestV4GUISmoke:
     def test_theme_toggle_button_switches_and_persists(self):
         """点击主题按钮可在 dark/light 间切换，并持久化到 config.yaml。"""
         from services.config_service import ConfigService
-        original_theme = ConfigService(config_path="config.yaml").get("app.theme", "dark")
+        original_theme = ConfigService(config_path="config/config.yaml").get("app.theme", "dark")
 
         window = MainWindow()
         self.app.processEvents()

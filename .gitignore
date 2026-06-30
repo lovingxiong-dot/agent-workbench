@@ -8,8 +8,12 @@ __pycache__/
 storage/*.db
 storage/*.json
 storage/vector_store/
-.env
+config/.env
 *.spec.bak
 .trae/
 deepseek_api/
 .memory/
+crash.log
+debug.log
+last_pytest.log
+*.bak

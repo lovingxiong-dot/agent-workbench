@@ -74,14 +74,14 @@ class V4Worker(QThread):
         self._streaming_buffer: str = ""
 
         # 配置
-        self._config = ConfigService(config_path="config.yaml")
+        self._config = ConfigService(config_path="config/config.yaml")
         self._max_tool_rounds = (
             max_tool_rounds if max_tool_rounds is not None
             else self._config.get_max_tool_rounds(mode_name)
         )
         self._llm_timeout = self._config.get_llm_timeout(mode_name)
         self._tool_timeout = self._config.get_tool_timeout(mode_name)
-        self._llm_registry = LLMRegistry("config.yaml", "config.yaml")
+        self._llm_registry = LLMRegistry("config/config.yaml", "config/config.yaml")
 
         # Phase 确认等待机制（QThread 内使用 asyncio.Event）
         self._confirm_event: Optional[asyncio.Event] = None

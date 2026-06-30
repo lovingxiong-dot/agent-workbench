@@ -37,8 +37,8 @@ pip install -r requirements.txt
 ## 2. 配置 API Key
 
 ```bash
-cp .env.example .env
-# 编辑 .env，填入：
+cp config/.env.example config/.env
+# 编辑 config/.env，填入：
 # DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxx
 # DEEPSEEK_PRO_API_KEY=sk-xxxxxxxxxxxxxxxx
 ```
@@ -58,9 +58,9 @@ venv\Scripts\Activate.ps1
 python main.py
 ```
 
-或直接双击根目录的 `start.bat`（已内置 cd + activate + 启动）。
+或直接双击 `scripts\start.bat`（已内置 cd + activate + 启动）。
 
-首次启动自动加载 `config.yaml`，初始化 `AppContext`（全局服务容器），并探测可用的终端解释器。
+首次启动自动加载 `config/config.yaml`，初始化 `AppContext`（全局服务容器），并探测可用的终端解释器。
 
 ---
 
@@ -116,7 +116,7 @@ python -m pytest tests/ -v
 ## 7. 打包
 
 ```powershell
-.\rebuild.ps1
+.\scripts\rebuild.ps1
 ```
 
 脚本自动完成：激活 venv → 清理旧构建 → PyInstaller 打包 → 刷新桌面快捷方式。
@@ -133,7 +133,7 @@ python -m pytest tests/ -v
 A: 确认已激活 venv 并运行 `pip install -r requirements.txt`。不要在系统全局 Python 环境下操作。
 
 ### Q: DeepSeek API 返回 401
-A: 检查 `.env` 中 `DEEPSEEK_API_KEY` 是否正确，是否有多余引号或空格。
+A: 检查 `config/.env` 中 `DEEPSEEK_API_KEY` 是否正确，是否有多余引号或空格。
 
 ### Q: 切换会话后 UI 不更新
 A: 检查 `UIRenderer` 的 `_active_session_id` 是否已同步更新。查看 `ui/managers/ui_renderer.py`。
@@ -142,7 +142,7 @@ A: 检查 `UIRenderer` 的 `_active_session_id` 是否已同步更新。查看 `
 
 ## 下一步
 
-- 系统架构：[ARCHITECTURE.md](../ARCHITECTURE.md)
-- 设计决策：[blueprints/index.md](../blueprints/index.md)
-- 完整目录：[PROJECT_BLUEPRINT.md](../PROJECT_BLUEPRINT.md)
-- 版本历史：[CHANGELOG.md](../CHANGELOG.md)
+- 系统架构：[ARCHITECTURE.md](./ARCHITECTURE.md)
+- 设计决策：[../blueprints/index.md](../blueprints/index.md)
+- 完整目录：[PROJECT_BLUEPRINT.md](./PROJECT_BLUEPRINT.md)
+- 版本历史：[CHANGELOG.md](./CHANGELOG.md)

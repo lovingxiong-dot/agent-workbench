@@ -1,5 +1,30 @@
 # Changelog
 
+## v4.0.5-alpha (2026-06-30) — 工程目录标准化 + PyInstaller 路径适配
+
+### refactor
+- **工程目录标准化改造**：根目录文件按职责分组，结束配置/文档/脚本/图标一股脑堆在根目录的状态。
+  - `config/`：存放 `config.yaml`、`.env`、`.env.example`。
+  - `assets/`：存放 `app.ico` 应用图标。
+  - `scripts/`：存放 `rebuild.ps1`、`runtime_hook.py`、`start.bat`。
+  - `docs/`：存放 `README.md`、`ARCHITECTURE.md`、`CHANGELOG.md`、`PROJECT_BLUEPRINT.md`、`getting-started.md`。
+  - 源码分组（src/）在 `PROJECT_BLUEPRINT.md` 目录树中统一标注：`agent_engine/`、`core/`、`v4/`、`services/`、`tools/`、`workers/`、`ui/`、`resources/`。
+
+### build
+- **PyInstaller 路径同步**：`AgentWorkbench.spec` 更新 `datas`（`config/config.yaml`）、`runtime_hooks`（`scripts/runtime_hook.py`）、`icon`（`assets/app.ico`）。
+- **打包脚本路径修正**：`scripts/rebuild.ps1` 因自身移动到 `scripts/`，改用 `$projectRoot = Split-Path -Parent $PSScriptRoot` 计算工程根目录，并同步更新 `dist/`、`build/`、`assets/app.ico` 路径。
+
+### fix
+- **配置路径解析**：`services/config_service.py` 与 `agent_engine/llm_registry.py` 新增 `_get_app_root()` / `_get_readonly_root()`，打包时读 `_MEIPASS` 内只读副本，写 `exe 同级目录`；相对路径自动解析为绝对路径；`save()` 自动创建 `config/` 子目录。
+- **调用点路径同步**：`v4/worker.py`、`v4/main_window.py`、`tests/test_v4_gui_smoke.py`、`tests/integration_test_deepseek_metrics.py`、`scripts/test_llm_direct.py`、`scripts/test_llm_orchestrator_like.py`、`scripts/smoke_craft_flow.py`、`v4/后续接入指南.md` 统一改为 `config/config.yaml` / `docs/README.md`。
+- **持久化路径适配**：`v4/repository.py`、`services/activity_service.py`、`services/session_service.py` 默认数据文件定位到 `exe 同级 storage/`，避免打包后找不到数据库路径。
+
+### docs
+- **三份核心文档交叉同步**：`docs/README.md` 文件地图、当前状态、启动/打包命令更新为新目录；`docs/PROJECT_BLUEPRINT.md` 目录树重构为 config/assets/scripts/docs/src/tests/storage 分组；`docs/ARCHITECTURE.md`、`docs/getting-started.md`、`blueprints/integration/workspace-context.md` 中的配置与文档链接同步修正。
+
+### test
+- 全量 193 项测试通过，零回归。
+
 ## v4.0.4-alpha (2026-06-30) — v4 对话 UI 三层折叠结构
 
 ### feat

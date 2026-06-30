@@ -68,7 +68,7 @@ async def test_provider(registry: LLMRegistry, provider_name: str, timeout: floa
 
 
 async def main():
-    config_path = ROOT / "config.yaml"
+    config_path = ROOT / "config" / "config.yaml"
     registry = LLMRegistry(config_path=str(config_path))
     providers = registry.list_providers()
     print(f"已配置 providers: {list(providers.keys())}")

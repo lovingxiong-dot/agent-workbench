@@ -1,9 +1,18 @@
 import sqlite3
 import json
 import os
+import sys
 from datetime import datetime
 
-DB_PATH = "storage/conversations.db"
+
+def _get_app_root() -> str:
+    """返回应用根目录：打包时为 exe 同级目录，源码时为项目根目录。"""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+DB_PATH = os.path.join(_get_app_root(), "storage", "conversations.db")
 
 
 class SessionService:

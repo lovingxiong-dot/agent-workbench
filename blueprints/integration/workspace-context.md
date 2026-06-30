@@ -42,7 +42,7 @@ Agent 无法感知当前工作空间，导致：
 
 按以下优先级自动检测：
 
-1. `config.yaml` 中 `ui.explorer.project_root`，且目录仍然存在
+1. `config/config.yaml` 中 `ui.explorer.project_root`，且目录仍然存在
 2. `SessionService` 最近有会话记录的目录
 3. `ActivityService` 最近一条 `project_path` 非空的活动目录
 4. 回退到应用根目录（保持当前行为）
@@ -91,5 +91,5 @@ Token 开销可控（摘要 500 字符 + 元数据）。
 | 影响 | 范围 |
 |---|---|
 | 新增 | `services/context_service.py`、`services/path_resolver.py` |
-| 修改 | `services/project_service.py`、`ui/widgets/sidebar.py`、`ui/widgets/document_editor.py`、`ui/widgets/workspace.py`、`ui/main_window.py`、`workers/agent_worker.py`、`agent_engine/orchestrator.py`、`tools/system.py`、`config.yaml` |
+| 修改 | `services/project_service.py`、`ui/widgets/sidebar.py`、`ui/widgets/document_editor.py`、`ui/widgets/workspace.py`、`ui/main_window.py`、`workers/agent_worker.py`、`agent_engine/orchestrator.py`、`tools/system.py`、`config/config.yaml` |
 | 测试 | `tests/test_context_service.py` |

@@ -1,16 +1,42 @@
 import copy
 import os
 import re
+import sys
 import yaml
+
+
+def _get_app_root() -> str:
+    """返回应用根目录：打包时为 exe 同级目录，源码时为项目根目录。"""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _get_readonly_root() -> str:
+    """返回只读资源根目录：打包时为 PyInstaller 临时目录，源码时同 app root。"""
+    if hasattr(sys, '_MEIPASS'):
+        return sys._MEIPASS
+    return _get_app_root()
+
+
+def _resolve_path(path: str | None, root: str) -> str:
+    """将相对路径解析为基于 root 的绝对路径；绝对路径保持不变。"""
+    if not path:
+        return root
+    if os.path.isabs(path):
+        return path
+    return os.path.join(root, path)
 
 
 class ConfigService:
     """ConfigService: os.environ > .env file > config.yaml placeholders"""
 
-    def __init__(self, config_path="config.yaml", env_path=".env", writable_path=None):
-        self.config_path = config_path
-        self._writable_path = writable_path or config_path
-        self.env_path = env_path
+    def __init__(self, config_path=None, env_path=None, writable_path=None):
+        app_root = _get_app_root()
+        readonly_root = _get_readonly_root()
+        self.config_path = _resolve_path(config_path or "config/config.yaml", readonly_root)
+        self._writable_path = _resolve_path(writable_path or config_path or "config/config.yaml", app_root)
+        self.env_path = _resolve_path(env_path or "config/.env", app_root)
         self.config = {}
         self.reload()
 

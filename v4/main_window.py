@@ -707,7 +707,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Agent")
 
         # 1. 初始化配置与主题
-        self._config = ConfigService(config_path="config.yaml")
+        self._config = ConfigService(config_path="config/config.yaml")
         self._theme_name = self._config.get("app.theme", DEFAULT_THEME)
         if self._theme_name not in THEMES:
             self._theme_name = DEFAULT_THEME
@@ -802,7 +802,7 @@ class MainWindow(QMainWindow):
             MemoryEngine, MetricsEngine, PolicyEngine,
         )
         config = self._config.config if self._config else {}
-        registry = LLMRegistry("config.yaml", "config.yaml")
+        registry = LLMRegistry("config/config.yaml", "config/config.yaml")
         policy = PolicyEngine(config.get("ai_engine", {}))
         metrics = MetricsEngine()
         engines = {

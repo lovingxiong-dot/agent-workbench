@@ -186,7 +186,7 @@ sequenceDiagram
 在 `tools/` 下新增模块，在 `TOOL_DEFINITIONS` 中注册工具元数据，在 `TOOL_MAP` 中绑定实现函数。
 
 ### 新增 LLM 提供商
-在 `config.yaml` 的 `llm_providers` 下新增条目（provider_id、name、api_base、model_id）。
+在 `config/config.yaml` 的 `llm_providers` 下新增条目（provider_id、name、api_base、model_id）。
 
 ### 新增会话状态字段
 在 `SessionRuntime` 添加新字段，在 `SessionOrchestrator` 注册对应事件订阅。注意终态保护逻辑。

@@ -6,16 +6,24 @@ ActivityService — 结构化活动记录服务
 """
 import os
 import json
+import sys
 import uuid
 from datetime import datetime
 from typing import List, Dict, Optional
 
 
+def _get_app_root() -> str:
+    """返回应用根目录：打包时为 exe 同级目录，源码时为项目根目录。"""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
 class ActivityService:
     """活动记录服务，基于 JSON 文件持久化"""
 
-    def __init__(self, storage_path: str = "storage/activities.json"):
-        self.storage_path = storage_path
+    def __init__(self, storage_path: str = None):
+        self.storage_path = storage_path or os.path.join(_get_app_root(), "storage", "activities.json")
         self._activities: List[Dict] = []
         self._load()
 

@@ -1,10 +1,10 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v4.0.4-alpha | 存档次数 | 31 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v4.0.5-alpha | 存档次数 | 32 |
 
 ## 项目概要
-AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v4.0.4-alpha 在 v4 单轨架构基础上实现对话 UI 三层折叠结构：阶段面板始终展开、工具执行与思考过程默认收起、内部命令输出超长折叠；左栏会话列表精简为标题+最后消息预览+时间三字段。v4.0.3-alpha 已完成 PhaseEngine 接入、PyInstaller 打包适配与零引用旧代码清理。
+AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v4.0.5-alpha 完成工程目录标准化改造：根目录文件按职责分组为 config/、assets/、scripts/、docs/，源码目录统一标注为 src/ 分组；同步修正 PyInstaller datas、runtime_hook、图标路径及所有代码中的配置路径引用，确保源码与打包产物均可正常启动。v4.0.4-alpha 在 v4 单轨架构基础上实现对话 UI 三层折叠结构；v4.0.3-alpha 已完成 PhaseEngine 接入、PyInstaller 打包适配与零引用旧代码清理。
 
 ## 技术栈
 | 类别 | 技术 | 版本 | 用途 |
@@ -23,6 +23,40 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 目录结构
 ```
 /
+├── main.py                 # 程序入口
+├── AgentWorkbench.spec     # PyInstaller 打包配置
+├── requirements.txt        # Python 依赖
+├── .gitignore              # Git 忽略规则
+│
+├── config/                 # 配置分组
+│   ├── config.yaml         # 全局配置（打包后可写副本位于 exe 同级 config/）
+│   ├── .env                # 环境变量（API Keys，不提交）
+│   └── .env.example        # 环境变量模板
+│
+├── assets/                 # 资源分组
+│   └── app.ico             # 应用图标
+│
+├── scripts/                # 脚本分组
+│   ├── rebuild.ps1         # 一键打包脚本
+│   ├── runtime_hook.py     # PyInstaller 运行时钩子
+│   └── start.bat           # 启动脚本
+│
+├── docs/                   # 文档分组
+│   ├── README.md           # 项目总入口（定位、启动、文件地图）
+│   ├── ARCHITECTURE.md     # 架构全景（Mermaid 图 + 核心概念 + 设计决策）
+│   ├── CHANGELOG.md        # AI 维护的变更日志
+│   ├── PROJECT_BLUEPRINT.md # 本文件
+│   └── getting-started.md  # 5 分钟上手指南
+│
+├── blueprints/             # 工程蓝图
+│   ├── index.md            # 蓝图索引（按时间线/模块）
+│   ├── session/
+│   │   ├── v3-event-bus-architecture.md  # v3 事件总线架构
+│   │   └── v2-multi-session-design.md    # v2 多会话管理
+│   └── integration/
+│       └── workspace-context.md          # 工作空间上下文感知
+│
+├── # 源码分组（src/）
 ├── agent_engine/           # 引擎层
 │   ├── __init__.py
 │   ├── agent_session.py    # 跨 Phase 复用会话
@@ -30,17 +64,17 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │   ├── memory_manager.py   # 会话记忆管理
 │   ├── orchestrator.py     # 编排器（绞杀者：支持八引擎委托）
 │   ├── phase_manager.py    # Phase-Driven Workflow Engine
-│   ├── engines/            # v3.12 八引擎模块
-│   │   ├── __init__.py
-│   │   ├── interfaces.py       # 8 引擎接口 + 共享 dataclass
-│   │   ├── context_engine.py   # 上下文组装与压缩
-│   │   ├── prompt_engine.py    # System prompt 构建
-│   │   ├── inference_engine.py # LLM 调用 + 重试/降级
-│   │   ├── tool_engine.py      # 工具执行与权限
-│   │   ├── phase_engine.py     # Phase 流转管理
-│   │   ├── memory_engine.py    # 三层记忆系统
-│   │   ├── metrics_engine.py   # 指标采集与聚合
-│   │   └── policy_engine.py    # 策略决策驱动
+│   └── engines/            # 八引擎模块
+│       ├── __init__.py
+│       ├── interfaces.py       # 8 引擎接口 + 共享 dataclass
+│       ├── context_engine.py   # 上下文组装与压缩
+│       ├── prompt_engine.py    # System prompt 构建
+│       ├── inference_engine.py # LLM 调用 + 重试/降级
+│       ├── tool_engine.py      # 工具执行与权限
+│       ├── phase_engine.py     # Phase 流转管理
+│       ├── memory_engine.py    # 三层记忆系统
+│       ├── metrics_engine.py   # 指标采集与聚合
+│       └── policy_engine.py    # 策略决策驱动
 ├── tools/                  # 工具层
 │   ├── __init__.py
 │   ├── system.py           # 系统命令 / 文件读写 / 网络 / 剪贴板 / 通知 / 进程
@@ -93,12 +127,14 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │   ├── __init__.py
 │   ├── models/             # 数据模型
 │   │   └── explorer_model.py   # 资源管理器数据模型
-│   ├── widgets/            # 可复用组件（v3 兼容）
-│   │   └── __init__.py
-├── resources/              # 静态资源
+│   └── widgets/            # 可复用组件（v3 兼容）
+│       └── __init__.py
+├── resources/              # 静态资源（主题、样式）
 │   └── themes/
-│       └── dark_github.qss # GitHub Dark 主题
-├── tests/                  # 单元测试 / 集成测试
+│       ├── dark_github.qss # GitHub Dark 主题
+│       └── trae_dark.qss   # Trae Dark 主题
+│
+├── tests/                  # 测试分组（193 个单元 / 集成 / UI 测试）
 │   ├── __init__.py
 │   ├── integration/
 │   │   ├── __init__.py
@@ -127,40 +163,23 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │   ├── test_task_service_terminal.py
 │   ├── test_threading_baseline.py
 │   └── test_tool_gateway.py
-├── main.py                 # 程序入口
-├── config.yaml             # 全局配置
-├── .env                    # 环境变量（API Keys，不提交）
-├── .env.example            # 环境变量模板
-├── .gitignore              # Git 忽略规则
-├── requirements.txt        # Python 依赖
-├── AgentWorkbench.spec     # PyInstaller 打包配置
-├── runtime_hook.py         # PyInstaller 运行时钩子
-├── rebuild.ps1             # 一键打包脚本
-├── start.bat               # 启动脚本
-├── app.ico                 # 应用图标
-├── README.md               # 项目总入口（定位、启动、文件地图）
-├── ARCHITECTURE.md         # 架构概览（Mermaid 图、核心概念、设计决策）
-├── blueprints/             # 工程蓝图（从 .trae/documents/ 提炼）
-│   ├── index.md            # 蓝图索引（按时间线/模块）
-│   ├── session/
-│   │   ├── v3-event-bus-architecture.md  # v3 事件总线架构
-│   │   └── v2-multi-session-design.md    # v2 多会话管理
-│   └── integration/
-│       └── workspace-context.md          # 工作空间上下文感知
-├── docs/                   # 开发者文档
-│   └── getting-started.md  # 5 分钟上手指南
-├── CHANGELOG.md            # AI 维护的变更日志
-└── PROJECT_BLUEPRINT.md    # 本文件
+│
+└── storage/                # 运行时数据（SQLite / JSON，不提交）
+    ├── conversations_v4.db
+    ├── conversations.db
+    ├── activities.json
+    └── vector_store/
 ```
 
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
-| v4.0.4-alpha | 2026-06-30 | v4对话UI三层折叠结构：阶段面板始终展开、工具执行与思考过程默认收起、内部命令输出超长折叠；左栏会话列表精简为标题+最后消息预览+时间三字段；新增无LLM依赖的UI折叠验证脚本 | feat/test | v4/main_window.py, v4/ui_renderer.py, v4/conversation_list.py, v4/events.py, v4/orchestrator.py, v4/worker.py, v4/worker_manager.py, tests/test_v4_integration.py, scripts/verify_ui_fold.py |
+| v4.0.5-alpha | 2026-06-30 | 工程目录标准化改造：根目录文件按职责分组为config/、assets/、scripts/、docs/，源码目录统一标注为src/分组；同步修正PyInstaller datas、runtime_hook、图标路径、config_service/LLMRegistry路径解析及所有代码配置路径引用；README/ARCHITECTURE/PROJECT_BLUEPRINT/getting-started同步更新 | refactor/docs/build | AgentWorkbench.spec, scripts/rebuild.ps1, services/config_service.py, agent_engine/llm_registry.py, v4/main_window.py, v4/worker.py, v4/repository.py, services/activity_service.py, services/session_service.py, docs/README.md, docs/ARCHITECTURE.md, docs/PROJECT_BLUEPRINT.md, docs/getting-started.md |
 
 ## 历史归档
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v4.0.4-alpha | 2026-06-30 | v4对话UI三层折叠结构：阶段面板始终展开、工具执行与思考过程默认收起、内部命令输出超长折叠；左栏会话列表精简为标题+最后消息预览+时间三字段；新增无LLM依赖的UI折叠验证脚本 | feat/test | v4/main_window.py, v4/ui_renderer.py, v4/conversation_list.py, v4/events.py, v4/orchestrator.py, v4/worker.py, v4/worker_manager.py, tests/test_v4_integration.py, scripts/verify_ui_fold.py |
 | v4.0.3-alpha | 2026-06-30 | Phase工作流接入v4：V4Worker内建PhaseEngine支持craft模式analyze→confirm→execute→verify→archive完整流程；analyze/verify阶段解绑工具强制文本输出；PyInstaller spec适配v4单轨架构；清理27个零引用v2/v3文件；修复用户停止任务CANCELLED状态与Worker销毁 | feat/refactor/fix | v4/worker.py, v4/orchestrator.py, v4/worker_manager.py, v4/event_bus.py, v4/events.py, AgentWorkbench.spec, tests/test_v4_integration.py |
 | v4.0.2-alpha | 2026-06-30 | v4原生Worker八引擎推理：新建v4/worker.py以V4Worker(QThread+asyncio)直驱ReAct循环，零绞杀者依赖旧AgentWorker/AgentOrchestrator/AgentSession；worker_manager接入V4Worker替代EngineWorker；orchestrator传递user_text到WorkerCreateEvent | feat/refactor | v4/worker.py, v4/worker_manager.py, v4/orchestrator.py, v4/events.py, v4/main_window.py |
 | v4.0.1-alpha | 2026-06-30 | v4 Solo极简UI重构：固定两栏布局（左280px/右填充）、主题切换按钮（🌙/☀️ 暗色/浅色持久化到config.yaml）、会话列表极简化（标题+预览+时间）、延迟创建会话（首条消息才写DB） | feat/test | v4/main_window.py, v4/conversation_list.py, config.yaml, tests/test_v4_gui_smoke.py, tests/test_v4_integration.py |
@@ -191,12 +210,12 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 | v0.1 | 2026-06-24 | 初始提交AI工作台项目 | feat | main.py, config.yaml, agent_engine/, tools/ |
 
 ## 存档流程
-1. 更新 CHANGELOG.md + PROJECT_BLUEPRINT.md + README.md + ARCHITECTURE.md + blueprints/ + docs/（全部项目文档）
-2. git add -u && git add ARCHITECTURE.md blueprints/ docs/ README.md（覆盖已跟踪修改 + 新文档）
+1. 更新 docs/CHANGELOG.md + docs/PROJECT_BLUEPRINT.md + docs/README.md + docs/ARCHITECTURE.md + blueprints/ + docs/（全部项目文档）
+2. git add -u && git add docs/CHANGELOG.md docs/PROJECT_BLUEPRINT.md（覆盖已跟踪修改 + 两个维护文件）
 3. git commit -m "..." + git tag vX.Y.Z
-4. git push + git push origin vX.Y.Z（仅当前分支 + 当前标签，禁止 --tags）
+4. git push + git push origin vX.Y.Z（仅当前分支 + 当前标签，禁 --tags）
 
-_更新于 2026-06-30 23:00:00 by AI-Trae_
+_更新于 2026-06-30 23:50:00 by AI-Kimi-K2.7-Code_
 
 ## Agent交接记录
 | 时间 | 方向 | 从 | 到 | 交接点 | 备注 |
