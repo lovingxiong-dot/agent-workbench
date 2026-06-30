@@ -49,6 +49,7 @@ class V4Worker(QThread):
     confirm_required = Signal(list)
     phase_complete = Signal(bool, str)
     phase_error = Signal(str, str)
+    tool_called = Signal(str, dict, str, int, bool)  # name, args, result, elapsed_ms, success
 
     def __init__(
         self,
@@ -359,12 +360,18 @@ class V4Worker(QThread):
                 for tc in response.tool_calls:
                     if self._cancel_event.is_set():
                         break
+                    t0 = time.monotonic()
                     tool_result = await tool_engine.call(
                         tc["name"], tc.get("args", {}), "execute"
                     )
+                    elapsed_ms = int((time.monotonic() - t0) * 1000)
                     result_text = (
                         tool_result.result if tool_result.success
                         else f"[工具错误] {tool_result.result}"
+                    )
+                    self.tool_called.emit(
+                        tc["name"], tc.get("args", {}), result_text,
+                        elapsed_ms, tool_result.success,
                     )
                     messages.append(Message(
                         role="tool", content=result_text,

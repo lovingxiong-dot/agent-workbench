@@ -168,6 +168,17 @@ class WorkerManager(QObject):
                 detail=detail,
             ))
         )
+        worker.tool_called.connect(
+            lambda name, args, result, elapsed_ms, success: self._bus.emit(WorkerToolEvent(
+                session_id=event.session_id,
+                worker_id=worker.session_id,
+                tool_name=name,
+                args=args,
+                result=result,
+                elapsed_ms=elapsed_ms,
+                success=success,
+            ))
+        )
 
         # 启动 Worker
         worker.start()

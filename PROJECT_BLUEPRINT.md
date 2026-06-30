@@ -1,10 +1,10 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v4.0.3-alpha | 存档次数 | 30 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v4.0.4-alpha | 存档次数 | 31 |
 
 ## 项目概要
-AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v4.0.3-alpha 在原生 V4Worker 中内建 PhaseEngine，支持 craft 模式 analyze→confirm→execute→verify→archive 完整流程；同步完成 PyInstaller 打包适配并清理 27 个零引用 v2/v3 文件，实现 v4 单轨架构闭环。
+AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v4.0.4-alpha 在 v4 单轨架构基础上实现对话 UI 三层折叠结构：阶段面板始终展开、工具执行与思考过程默认收起、内部命令输出超长折叠；左栏会话列表精简为标题+最后消息预览+时间三字段。v4.0.3-alpha 已完成 PhaseEngine 接入、PyInstaller 打包适配与零引用旧代码清理。
 
 ## 技术栈
 | 类别 | 技术 | 版本 | 用途 |
@@ -156,6 +156,11 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v4.0.4-alpha | 2026-06-30 | v4对话UI三层折叠结构：阶段面板始终展开、工具执行与思考过程默认收起、内部命令输出超长折叠；左栏会话列表精简为标题+最后消息预览+时间三字段；新增无LLM依赖的UI折叠验证脚本 | feat/test | v4/main_window.py, v4/ui_renderer.py, v4/conversation_list.py, v4/events.py, v4/orchestrator.py, v4/worker.py, v4/worker_manager.py, tests/test_v4_integration.py, scripts/verify_ui_fold.py |
+
+## 历史归档
+| 版本 | 日期 | 描述 | 类型 | 涉及文件 |
+|---|---|---|---|---|
 | v4.0.3-alpha | 2026-06-30 | Phase工作流接入v4：V4Worker内建PhaseEngine支持craft模式analyze→confirm→execute→verify→archive完整流程；analyze/verify阶段解绑工具强制文本输出；PyInstaller spec适配v4单轨架构；清理27个零引用v2/v3文件；修复用户停止任务CANCELLED状态与Worker销毁 | feat/refactor/fix | v4/worker.py, v4/orchestrator.py, v4/worker_manager.py, v4/event_bus.py, v4/events.py, AgentWorkbench.spec, tests/test_v4_integration.py |
 | v4.0.2-alpha | 2026-06-30 | v4原生Worker八引擎推理：新建v4/worker.py以V4Worker(QThread+asyncio)直驱ReAct循环，零绞杀者依赖旧AgentWorker/AgentOrchestrator/AgentSession；worker_manager接入V4Worker替代EngineWorker；orchestrator传递user_text到WorkerCreateEvent | feat/refactor | v4/worker.py, v4/worker_manager.py, v4/orchestrator.py, v4/events.py, v4/main_window.py |
 | v4.0.1-alpha | 2026-06-30 | v4 Solo极简UI重构：固定两栏布局（左280px/右填充）、主题切换按钮（🌙/☀️ 暗色/浅色持久化到config.yaml）、会话列表极简化（标题+预览+时间）、延迟创建会话（首条消息才写DB） | feat/test | v4/main_window.py, v4/conversation_list.py, config.yaml, tests/test_v4_gui_smoke.py, tests/test_v4_integration.py |
@@ -191,7 +196,7 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 3. git commit -m "..." + git tag vX.Y.Z
 4. git push + git push origin vX.Y.Z（仅当前分支 + 当前标签，禁止 --tags）
 
-_更新于 2026-06-30 22:00:00 by AI-Trae_
+_更新于 2026-06-30 23:00:00 by AI-Trae_
 
 ## Agent交接记录
 | 时间 | 方向 | 从 | 到 | 交接点 | 备注 |

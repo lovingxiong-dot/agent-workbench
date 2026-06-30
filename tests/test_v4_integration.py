@@ -226,7 +226,9 @@ class TestV4Integration:
         assert session.project_path == test_path, "Work 会话应记录项目路径"
 
         item = self._current_list_item(window)
-        assert test_path in item.text(), "列表项应显示项目路径标记"
+        # 新 UI：列表项显示 标题 + 最后消息预览 + 时间，不再直接展示项目路径
+        assert "新对话" in item.text(), "列表项应显示会话标题"
+        assert "AI 回复：" in item.text(), "列表项应显示最后消息预览"
 
         # 环境持久化
         env = window._repo.get_environment(sid)

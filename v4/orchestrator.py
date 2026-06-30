@@ -23,8 +23,8 @@ from .events import (
     QueueTaskReadyEvent, QueueTaskCompleteEvent,
     PhaseChangedEvent, PhaseConfirmRequiredEvent, PhaseCompleteEvent, PhaseErrorEvent,
     WorkerCreateEvent, WorkerCreatedEvent, WorkerDestroyEvent,
-    WorkerChunkEvent, WorkerResultEvent, WorkerErrorEvent,
-    UIAppendUserEvent, UIAppendAIEvent, UIAppendSystemEvent,
+    WorkerChunkEvent, WorkerResultEvent, WorkerErrorEvent, WorkerToolEvent,
+    UIAppendUserEvent, UIAppendAIEvent, UIAppendSystemEvent, UIAppendToolEvent,
     UIStreamChunkEvent, UIFinalizeStreamEvent,
     UISetPhaseEvent, UIClearPhaseEvent, UIShowConfirmEvent, UIHideConfirmEvent,
     UIClearChatEvent,
@@ -90,6 +90,7 @@ class SessionOrchestrator(QObject):
         self._bus.subscribe_name("worker", "created", self._on_worker_created)
         self._bus.subscribe_name("worker", "chunk", self._on_worker_chunk)
         self._bus.subscribe_name("worker", "result", self._on_worker_result)
+        self._bus.subscribe_name("worker", "tool", self._on_worker_tool)
         self._bus.subscribe_name("worker", "error", self._on_worker_error)
 
     # ═══════════════════════════════════════════════════
@@ -430,6 +431,18 @@ class SessionOrchestrator(QObject):
 
         rt._chunks_received = False
         self._refresh_session_list()
+
+    def _on_worker_tool(self, event: WorkerToolEvent):
+        """Worker 工具调用：转发到 UI 渲染。"""
+        if event.session_id == self._current_session_id:
+            self._bus.emit(UIAppendToolEvent(
+                session_id=event.session_id,
+                tool_name=event.tool_name,
+                args=event.args,
+                result=event.result,
+                elapsed_ms=event.elapsed_ms,
+                success=event.success,
+            ))
 
     def _on_worker_error(self, event: WorkerErrorEvent):
         """Worker 错误：统一走 Phase 完成失败路径。"""

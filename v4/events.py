@@ -277,6 +277,8 @@ class WorkerToolEvent(Event):
     tool_name: str = ""
     args: dict = field(default_factory=dict)
     result: str = ""
+    elapsed_ms: int = 0
+    success: bool = True
 
 
 # ═══════════════════════════════════════════════════
@@ -301,6 +303,17 @@ class UIAppendSystemEvent(Event):
     namespace: str = "ui"
     name: str = "append_system"
     text: str = ""
+
+
+@dataclass
+class UIAppendToolEvent(Event):
+    namespace: str = "ui"
+    name: str = "append_tool"
+    tool_name: str = ""
+    args: dict = field(default_factory=dict)
+    result: str = ""
+    elapsed_ms: int = 0
+    success: bool = True
 
 
 @dataclass

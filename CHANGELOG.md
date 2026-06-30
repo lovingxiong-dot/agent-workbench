@@ -1,5 +1,23 @@
 # Changelog
 
+## v4.0.4-alpha (2026-06-30) — v4 对话 UI 三层折叠结构
+
+### feat
+- **对话 UI 三层折叠结构**：`v4/main_window.py` 重写 `SimpleChatArea`，支持阶段面板、工具执行、思考过程、内部命令输出的分级折叠。
+  - 阶段面板（第 1 层）始终展开：analyze / execute / verify / archive 对应不同左侧色条与标题。
+  - 工具执行摘要（第 2 层）默认收起：`v4/worker.py` 测量工具耗时与成功状态，`WorkerToolEvent` 上报后由 `UIRenderer._build_tool_fold` 生成可折叠块。
+  - 思考过程（第 3 层）默认收起：`UIRenderer._build_thinking_fold` 从 AI 回复中提取任务列表并显示完成进度。
+  - 内部命令输出（第 3 层）默认收起：工具结果超过 200 字符时折叠，显示行数。
+  - 折叠交互：聊天区改用 `QTextBrowser`，拦截 `anchorClicked` 信号，点击折叠头切换展开/收起状态。
+- **左栏会话列表精简化**：`v4/conversation_list.py` 每项显示标题（20 字）+ 最后消息预览（40 字）+ 时间；注入 `SessionRepository` 获取最后一条消息内容。
+
+### refactor
+- **工具事件路由**：`v4/orchestrator.py` 订阅 `worker.tool` 并转发为 `ui.append_tool`，`v4/ui_renderer.py` 改由 `ui.append_tool` 渲染工具折叠块。
+
+### test
+- 新增 `scripts/verify_ui_fold.py`：无 LLM 依赖的 UI 折叠验证脚本，验证 craft 流程下的阶段面板、思考折叠、工具折叠及点击交互。
+- 全量 193 项测试通过，零回归。
+
 ## v4.0.3-alpha (2026-06-30) — Phase 工作流接入 v4 + PyInstaller 打包适配 + 清理零引用旧代码
 
 ### feat

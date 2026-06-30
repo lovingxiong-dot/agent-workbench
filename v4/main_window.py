@@ -17,7 +17,7 @@ import html
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QLabel, QPushButton, QTextEdit, QStyleFactory,
+    QLabel, QPushButton, QTextEdit, QTextBrowser, QStyleFactory,
 )
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QPalette, QColor, QFont, QTextCursor
@@ -115,7 +115,7 @@ class InputTextEdit(QTextEdit):
 
 
 class SimpleChatArea(QWidget):
-    """极简聊天区，为 UIRenderer 提供与旧 ChatView 兼容的接口。"""
+    """极简聊天区：支持三层折叠结构（阶段面板/工具执行/思考过程）。"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -123,6 +123,9 @@ class SimpleChatArea(QWidget):
         self._streaming_buffer = ""
         self._streaming_start_pos = None
         self._theme = THEMES[DEFAULT_THEME]
+        self._messages: list[dict] = []  # 消息历史，用于重渲染
+        self._current_phase = ""
+        self._fold_states: set[str] = set()  # 已展开的 fold-block id
         self._setup_ui()
 
     def _setup_ui(self):
@@ -143,10 +146,12 @@ class SimpleChatArea(QWidget):
         layout.addWidget(self.sep)
 
         # 消息流
-        self.chat_area = QTextEdit()
+        self.chat_area = QTextBrowser()
         self.chat_area.setReadOnly(True)
         self.chat_area.setFont(QFont("Segoe UI", 13))
         self.chat_area.setObjectName("chatArea")
+        self.chat_area.setOpenLinks(False)
+        self.chat_area.anchorClicked.connect(self._on_anchor_clicked)
         layout.addWidget(self.chat_area, 1)
 
         # Phase 确认条（默认隐藏）
@@ -203,6 +208,7 @@ class SimpleChatArea(QWidget):
             f"color: {self._theme['text_primary']}; font-size: 15px; font-weight: 600; padding: 16px 24px;"
         )
         self.sep.setStyleSheet(f"background-color: {self._theme['border']};")
+        self._render()
 
     def _apply_theme_styles(self):
         t = self._theme
@@ -254,13 +260,61 @@ class SimpleChatArea(QWidget):
             QPushButton:hover {{ background-color: {t['stop_btn_hover']}; }}
         """)
         self.confirm_label.setStyleSheet(f"color: {t['text_primary']}; font-size: 13px;")
-        self.chat_area.setStyleSheet(f"""
+        self.chat_area.setStyleSheet(self._chat_area_stylesheet())
+        self.setStyleSheet(f"background-color: {t['bg_primary']};")
+
+    def _chat_area_stylesheet(self) -> str:
+        t = self._theme
+        text_primary = t['text_primary']
+        text_secondary = t['text_secondary']
+        border = t['border']
+        bg_primary = t['bg_primary']
+        bg_bubble_ai = t['bg_bubble_ai']
+        return f"""
             QTextEdit {{
-                background-color: {t['bg_primary']}; color: {t['text_primary']};
+                background-color: {bg_primary}; color: {text_primary};
                 border: none; font-size: 13px; line-height: 1.65;
             }}
-        """)
-        self.setStyleSheet(f"background-color: {t['bg_primary']};")
+            .phase-panel {{
+                margin: 8px 0; border-radius: 8px; overflow: hidden;
+                background-color: {bg_bubble_ai}; border: 1px solid {border};
+            }}
+            .phase-header {{
+                padding: 8px 12px; font-weight: 600; font-size: 14px;
+                background-color: rgba(128,128,128,0.08);
+                border-bottom: 1px solid {border};
+            }}
+            .phase-body {{
+                padding: 12px 16px; font-size: 14px; line-height: 1.6;
+            }}
+            .phase-panel.analyze {{ border-left: 3px solid #569cd6; }}
+            .phase-panel.execute {{ border-left: 3px solid #dcdcaa; }}
+            .phase-panel.verify {{ border-left: 3px solid #c586c0; }}
+            .phase-panel.archive {{ border-left: 3px solid #4ec9b0; }}
+            .fold-block {{ margin: 4px 0; }}
+            .fold-header {{
+                color: #569cd6; font-size: 13px; cursor: pointer;
+                text-decoration: none; user-select: none;
+            }}
+            .fold-body {{ display: none; }}
+            .tool-entry {{
+                display: block; padding: 3px 8px; margin: 2px 0;
+                font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+                font-size: 12px;
+            }}
+            .tool-ok {{ color: #4ec9b0; }}
+            .tool-fail {{ color: #f14c4c; }}
+            .tool-time {{ color: {text_secondary}; margin-left: 8px; font-size: 11px; }}
+            .think-task {{ padding: 2px 8px; font-size: 12px; color: {text_secondary}; }}
+            .think-task.done {{ color: #4ec9b0; }}
+            .cmd-output, .cmd-full, .tool-args {{
+                font-family: 'Cascadia Code', Consolas, monospace; font-size: 11px;
+                padding: 8px; margin: 4px 0; background-color: rgba(0,0,0,0.15);
+                border-radius: 4px; white-space: pre-wrap;
+                max-height: 120px; overflow-y: auto;
+            }}
+            .cmd-full {{ max-height: 400px; }}
+        """
 
     # ── 兼容 UIRenderer 的接口 ──────────────────────────────────
     def _on_send(self):
@@ -286,6 +340,8 @@ class SimpleChatArea(QWidget):
         self.input_field.setPlainText("")
 
     def clear_chat(self):
+        self._messages.clear()
+        self._current_phase = ""
         self.chat_area.clear()
         self._streaming_buffer = ""
         self._streaming_active = False
@@ -298,13 +354,33 @@ class SimpleChatArea(QWidget):
             self.header.setText(title)
 
     def append_user(self, text: str):
-        self._append_message("user", text)
+        self._messages.append({"role": "user", "text": text})
+        self._render_last()
 
-    def append_ai(self, text: str):
-        self._append_message("ai", text)
+    def append_ai(self, text: str, phase: str = "", thinking_fold: str = ""):
+        self._messages.append({
+            "role": "ai", "text": text or "",
+            "phase": phase or self._current_phase,
+            "thinking_fold": thinking_fold or "",
+            "tools": [],
+        })
+        self._render_last()
 
     def append_system(self, text: str):
-        self._append_message("system", text)
+        self._messages.append({"role": "system", "text": text})
+        self._render_last()
+
+    def append_tool_fold(self, tool_html: str):
+        """将工具执行折叠块追加到当前 AI 消息。"""
+        if self._messages and self._messages[-1]["role"] == "ai":
+            self._messages[-1]["tools"].append(tool_html)
+        else:
+            self._messages.append({"role": "tool_group", "tools": [tool_html]})
+        self._render_last()
+
+    def set_current_phase(self, phase: str):
+        """UIRenderer 设置当前 Phase，影响后续 AI 消息的面板样式。"""
+        self._current_phase = phase
 
     def _append_message(self, role: str, text: str):
         if role in ("user", "ai"):
@@ -318,6 +394,7 @@ class SimpleChatArea(QWidget):
     def append_chunk(self, chunk: str):
         if not chunk:
             return
+        self._streaming_active = True
         self._streaming_buffer += chunk
         cursor = self.chat_area.textCursor()
         if self._streaming_start_pos is not None:
@@ -333,9 +410,21 @@ class SimpleChatArea(QWidget):
 
     def finalize_stream(self):
         self._streaming_active = False
-        self._streaming_start_pos = None
         self.stop_btn.setVisible(False)
         self.send_btn.setVisible(True)
+        text = self._streaming_buffer
+        self._streaming_buffer = ""
+        start = self._streaming_start_pos
+        self._streaming_start_pos = None
+        if not text.strip():
+            return
+        # 移除流式临时气泡，以折叠结构重新渲染
+        if start is not None:
+            cursor = self.chat_area.textCursor()
+            cursor.setPosition(start)
+            cursor.movePosition(QTextCursor.End, QTextCursor.KeepAnchor)
+            cursor.removeSelectedText()
+        self.append_ai(text)
 
     def set_streaming(self, active: bool):
         self._streaming_active = active
@@ -381,6 +470,123 @@ class SimpleChatArea(QWidget):
 
     def append_phase_message(self, phase: str, text: str):
         self.append_system(text)
+
+    # ── 渲染 ──────────────────────────────────
+    def _render(self):
+        """全量重渲染。"""
+        self.chat_area.clear()
+        for msg in self._messages:
+            html_block = self._build_message_html(msg)
+            html_block = self._apply_fold_states(html_block)
+            self.chat_area.moveCursor(QTextCursor.End)
+            self.chat_area.insertHtml(html_block)
+        self.chat_area.moveCursor(QTextCursor.End)
+
+    def _render_last(self):
+        """仅渲染最后一条消息（性能优化）。"""
+        if not self._messages:
+            return
+        html_block = self._build_message_html(self._messages[-1])
+        html_block = self._apply_fold_states(html_block)
+        self.chat_area.moveCursor(QTextCursor.End)
+        self.chat_area.insertHtml(html_block)
+        self.chat_area.moveCursor(QTextCursor.End)
+
+    def _apply_fold_states(self, html_text: str) -> str:
+        """根据已展开 fold id 设置 fold-body 的 display 属性。"""
+        if not self._fold_states:
+            return html_text
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html_text, "html.parser")
+            for fold_id in self._fold_states:
+                body = soup.find(id=f"{fold_id}-body")
+                if body:
+                    body["style"] = "display:block;"
+            return str(soup)
+        except Exception:
+            return html_text
+
+    def _on_anchor_clicked(self, url):
+        """处理折叠头点击事件。"""
+        url_str = url.toString()
+        prefix = "fold://toggle/"
+        if not url_str.startswith(prefix):
+            return
+        fold_id = url_str[len(prefix):]
+        if fold_id in self._fold_states:
+            self._fold_states.discard(fold_id)
+        else:
+            self._fold_states.add(fold_id)
+        self._render()
+
+    def _build_message_html(self, msg: dict) -> str:
+        role = msg["role"]
+        if role == "user":
+            return self._build_bubble("user", msg["text"])
+        if role == "system":
+            return self._build_system_card(msg["text"])
+        if role == "tool_group":
+            return self._build_tool_group(msg["tools"])
+        return self._build_ai_message(msg)
+
+    def _build_ai_message(self, msg: dict) -> str:
+        phase = msg.get("phase", "")
+        thinking_fold = msg.get("thinking_fold", "")
+        tools = msg.get("tools", [])
+        text = msg.get("text", "")
+
+        parts = []
+        if thinking_fold:
+            parts.append(thinking_fold)
+        if tools:
+            parts.append('<div class="tool-group">' + "".join(tools) + '</div>')
+        if text:
+            parts.append(_md_to_html(text))
+        body_html = "".join(parts)
+
+        if phase:
+            return self._build_phase_panel(phase, body_html)
+        return self._build_bubble_from_html("ai", body_html)
+
+    def _build_phase_panel(self, phase: str, body_html: str) -> str:
+        headers = {
+            "analyze": "📋 分析结果",
+            "confirm": "📋 分析结果",
+            "execute": "📝 执行计划",
+            "verify": "🔍 验证结果",
+            "archive": "✅ 完成报告",
+        }
+        header = headers.get(phase, "📋 结果")
+        return f"""
+        <table width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:10px 0;">
+            <tr>
+                <td align="left" valign="top" style="padding:2px 64px 10px 8px;">
+                    {self._avatar_cell_inline("AI", "#6366F1")}
+                    <div class="phase-panel {phase}" style="display:inline-block;max-width:85%;min-width:280px;">
+                        <div class="phase-header">{header}</div>
+                        <div class="phase-body">{body_html}</div>
+                    </div>
+                </td>
+            </tr>
+        </table>
+        <div style="clear:both;"></div>
+        """
+
+    def _build_tool_group(self, tools: list[str]) -> str:
+        return f"""
+        <table width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:4px 0;">
+            <tr>
+                <td align="left" valign="top" style="padding:2px 64px 6px 8px;">
+                    {self._avatar_cell_inline("AI", "#6366F1")}
+                    <div style="display:inline-block;max-width:85%;min-width:280px;">
+                        {''.join(tools)}
+                    </div>
+                </td>
+            </tr>
+        </table>
+        <div style="clear:both;"></div>
+        """
 
     # ── HTML 构建 ──────────────────────────────────
     def _build_system_card(self, text: str) -> str:
@@ -434,6 +640,30 @@ class SimpleChatArea(QWidget):
         <div style="clear:both;"></div>
         """
 
+    def _build_bubble_from_html(self, role: str, html_content: str) -> str:
+        t = self._theme
+        avatar = self._avatar_cell("AI", "left", "#6366F1")
+        bubble_bg = t["bg_bubble_ai"]
+        bubble_border = t["border_bubble_ai"]
+        text_color = t["text_primary"]
+        return f"""
+        <table width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:10px 0;">
+            <tr>
+                {avatar}
+                <td align="left" valign="top" style="padding:2px 64px 10px 8px;">
+                    <div style="display:inline-block;max-width:85%;color:{text_color};
+                                background-color:{bubble_bg};border:1px solid {bubble_border};
+                                border-radius:14px;padding:10px 14px;
+                                font-family:'Segoe UI','Microsoft YaHei',sans-serif;
+                                font-size:13px;line-height:1.65;text-align:left;">
+                        {html_content}
+                    </div>
+                </td>
+            </tr>
+        </table>
+        <div style="clear:both;"></div>
+        """
+
     @staticmethod
     def _avatar_cell(label: str, align: str, bg: str) -> str:
         return f"""
@@ -444,6 +674,16 @@ class SimpleChatArea(QWidget):
                 {label}
             </div>
         </td>
+        """
+
+    @staticmethod
+    def _avatar_cell_inline(label: str, bg: str) -> str:
+        return f"""
+        <div style="float:left;width:32px;height:32px;line-height:32px;text-align:center;
+                    background-color:{bg};color:#FFFFFF;border-radius:50%;
+                    font-size:12px;font-weight:bold;overflow:hidden;margin:4px 8px 0 0;">
+            {label}
+        </div>
         """
 
     @staticmethod
@@ -524,7 +764,7 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(0)
 
         # 左栏
-        self.conversation_list = ConversationListWidget(theme=self._theme_name)
+        self.conversation_list = ConversationListWidget(theme=self._theme_name, repository=self._repo)
         self.conversation_list.new_task_clicked.connect(self._on_new_task)
         self.conversation_list.conversation_selected.connect(self._on_conversation_selected)
         self.conversation_list.conversation_deleted.connect(self._on_conversation_deleted)

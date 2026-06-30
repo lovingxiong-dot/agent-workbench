@@ -17,6 +17,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 
 from .models import SessionMetadata
+from .repository import SessionRepository
 
 
 THEMES = {
@@ -73,10 +74,11 @@ class ConversationListWidget(QWidget):
     mode_changed = Signal(str)
     theme_changed = Signal(str)
 
-    def __init__(self, theme: str = DEFAULT_THEME, parent=None):
+    def __init__(self, theme: str = DEFAULT_THEME, repository: SessionRepository = None, parent=None):
         super().__init__(parent)
         self._theme_name = theme if theme in THEMES else DEFAULT_THEME
         self._theme = THEMES[self._theme_name]
+        self._repo = repository
         self._sessions: dict[str, SessionMetadata] = {}
         self._badges: dict[str, str] = {}
         self._setup_ui()
@@ -239,7 +241,11 @@ class ConversationListWidget(QWidget):
         pin = "📌 " if metadata.pinned else ""
         preview = self._preview_text(metadata)
         time_str = self._format_time(metadata.updated_at)
-        text = f"{pin}{title}\n{preview} · {time_str}"
+        text = (
+            f"{pin}{title[:20]}\n"
+            f"  {preview}\n"
+            f"  {time_str}"
+        )
 
         item = QListWidgetItem(text)
         item.setData(Qt.UserRole, metadata.session_id)
@@ -249,10 +255,14 @@ class ConversationListWidget(QWidget):
         return item
 
     def _preview_text(self, metadata: SessionMetadata) -> str:
-        """生成简短预览。"""
+        """生成简短预览：优先取最后一条消息内容。"""
+        if self._repo:
+            last_msg = self._repo.get_last_message(metadata.session_id)
+            if last_msg:
+                return last_msg.content[:40]
         if metadata.project_path:
             return metadata.project_path[-30:] if len(metadata.project_path) > 30 else metadata.project_path
-        return "新对话"
+        return ""
 
     @staticmethod
     def _format_time(ts: Optional[datetime]) -> str:
