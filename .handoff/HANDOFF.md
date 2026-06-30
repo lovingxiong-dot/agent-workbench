@@ -1,88 +1,79 @@
 ---
-generated: 2026-06-30T05:05:00+08:00
-agent: Kimi-K2.7-Code
+generated: 2026-06-30T06:30:00Z
+agent: AI-Trae
 schema_version: 3.1
----
 
 ## Mission
-修复 Agent Workbench 多会话与状态机问题，并启动轻量化重构：第一步将左侧“新会话”按钮从“创建新标签”改为“重置当前对话框”。
+实现 v4 原生 Worker（V4Worker），以八引擎驱动 ReAct 推理循环，零绞杀者依赖旧 AgentWorker/AgentOrchestrator/AgentSession。
 
 ## Progress
-- [x] PhaseManager 修复：Esc 否定票视为完成（不标记失败）；PLAN/CRAFT analyze 无任务时自动跳过 CONFIRM/EXECUTE/VERIFY
-- [x] config.yaml 恢复 YAML 格式并设置 `app.last_mode: ask`
-- [x] MainWindow 新会话按钮改为重置当前对话框：不新建 session、不新增标签、不终止后台任务
-- [x] 修复会话列表刷新：重置时标题同步更新，项目/全局切换时列表项移动到正确分组
-- [x] UI 自动化测试同步更新，全部 214 项测试通过
-- [x] 停止运行中的 GUI 进程，清理测试用 storage 数据
+- 调研 agent_engine/engines/ 八引擎接口（PromptEngine / ContextEngine / ToolEngine / InferenceEngine / PolicyEngine / MetricsEngine）
+- 新建 v4/worker.py（~280行）：V4Worker(QThread + asyncio) 直驱 ReAct 循环
+- 修改 v4/worker_manager.py：移除 engines/llm_registry 构造参数，_create_worker 改用 V4Worker
+- 修改 v4/orchestrator.py：_on_queue_task_ready 从队列获取 user_text 并传入 WorkerCreateEvent
+- 修改 v4/events.py：WorkerCreateEvent 新增 user_text 字段
+- 修复两处兼容问题：config.load()→config.config；base_prompts 传 dict 而非 system_prompt 字符串
+- 全量 193 测试通过，零回归
+- 存档 v4.0.2-alpha 并推送
 
 ## Blocker
-symptom: 无明确报错。轻量化第一步刚完成，需下一位开发者或用户验证实际 GUI 交互体验。
-failed_attempts:
-  1. 多标签新会话方案 — 导致 UI 线程与后台状态不同步、标签名不刷新、问题难以排查，已放弃并改为单会话重置模式。
+symptom: 无阻塞 — 所有任务已完成，测试通过。
+failed_attempts: []
 
 ## Decision Log
-1. 决策：新会话按钮从“创建新标签”改为“重置当前对话框”
-   排除：继续维护多标签创建/切换逻辑（复杂度高、状态容易覆盖）
-   原因：降低 UI 与后台状态耦合，先让“新会话”回归最简单的窗口初始化
+1. 决策：V4Worker 直接使用八引擎直驱 ReAct 循环（vs 绞杀者模式复用旧 AgentOrchestrator）
+   排除：绞杀者（用户明确要求零绞杀者，不禁旧 AgentWorker/AgentOrchestrator/AgentSession）
    状态：已执行
 
-2. 决策：重置时不中止当前后台任务/队列
-   排除：重置前调用 `_abort_current_session_task()`
-   原因：用户明确要求“没有终止对话，全部都调到后台去了，初始化 UI 对话窗口，和队列任务不冲突”
+2. 决策：tool_calls 检测采用直接调用 LLM（vs 通过 InferenceEngine.invoke()）
+   排除：InferenceEngine.invoke() 只返回文本(content, metrics)，不含 LangChain AIMessage.tool_calls
    状态：已执行
 
-3. 决策：修复 `_new_conversation` 中的会话列表同步（标题刷新 + 项目/全局列表移动）
-   排除：仅清空 UI 不更新列表状态
-   原因：用户测试发现“会话列表不刷新”，需要列表与内存状态保持一致
+3. 决策：user_text 通过 WorkerCreateEvent 新字段传递（vs orchestrator 持有 WorkerManager 引用）
+   排除：跨模块直接引用破坏 v4 事件总线解耦原则
    状态：已执行
 
 ## Key Files
-- `agent_engine/phase_manager.py` — Esc/阶段跳过状态机修复
-- `ui/main_window.py` — `_new_conversation` 重置逻辑 + `_move_conversation_item` 列表同步
-- `tests/test_main_window_ui_automation.py` — 新会话测试改为验证重置行为
-- `tests/test_phase_manager.py` — Esc/阶段跳过对应单元测试
-- `config.yaml` — 恢复格式，`last_mode: ask`
+- `v4/worker.py` — 新建，V4Worker 八引擎 ReAct 推理循环（~280行）
+- `v4/worker_manager.py` — _create_worker 改用 V4Worker，增加 worker.submit()
+- `v4/orchestrator.py` — _on_queue_task_ready 传递 user_text 到 WorkerCreateEvent
+- `v4/events.py` — WorkerCreateEvent 新增 user_text: str = ""
+- `v4/main_window.py` — 修 config.load()→config.config，移除 WorkerManager 多余参数
 
 ## Error Log
-No error. Logic verified by full test suite.
+No error. All 193 tests pass, zero regression.
 
 ## Environment Snapshot
-branch: main
+branch: v4-refactor
 python: Python 3.14.6
 venv: none
-last_commit: 5f66159 chore(handoff): v3.12.0 归档交接 — UI修复/架构收敛/AI Engine评审/分支整理 [hint:v3.12.0-archive] (by AI-Kimi-K2.7-Code)
+last_commit: 750909b feat(v4): v4原生Worker八引擎推理 [test:193/193] [hint:worker-v4-zero-strangler] (by AI-Trae)
 
 ## Working State
 ### Dirty Files
- M agent_engine/phase_manager.py
- M config.yaml
- M tests/test_main_window_ui_automation.py
- M tests/test_phase_manager.py
- M ui/main_window.py
+working tree clean
 
 ### Uncommitted Changes Summary
- agent_engine/phase_manager.py           | 44 ++++++++++++++--------
- config.yaml                             |  2 +-
- tests/test_main_window_ui_automation.py | 32 ++++++++++-----
- tests/test_phase_manager.py             |  9 +++--
- ui/main_window.py                       | 71 ++++++++++++++++++---------------
- 5 files changed, 98 insertions(+), 60 deletions(-)
+no uncommitted changes
 
 ### Recent Conversation
-- 用户：“执行” → 确认按最小改动方案执行第一步。
-- 用户：“清理并启动一下 我测试” → 清理 storage 并启动 GUI。
-- 用户：“新会话按钮...这一层是正确的了。现在 会话列表不刷新 不出现在会话列表 只有一个会话窗口在左侧” → 修复列表刷新。
-- 用户：“你交接吧 我换个人来” → 触发移交流程。
+- 用户选择"八引擎主循环完整迁移"，要求不走绞杀者、不禁旧 AgentWorker
+- 用户指定改动范围：v4/worker.py（新建 ~150行）、v4/worker_manager.py（改10行）、v4/orchestrator.py（改5行）
+- 用户追加「存放push 移交 update项目所有文档」
+- AI 完成 v4/worker.py 编写（~280行含注释），修改3个衔接文件，全量测试通过
+- AI 存档 v4.0.2-alpha 并推送到 remote，更新 CHANGELOG/PROJECT_BLUEPRINT
 
 ## Next Steps (AI-Inferred)
-1. 启动 `python main.py` 进行 GUI 端到端验证：反复点击新会话按钮应只重置对话框；项目/全局切换应正确移动列表项；发送消息后标题应更新。
-2. 根据验证结果继续轻量化第二步（如进一步合并两个新会话按钮为单一重置按钮，或移除会话列表中的冗余分组）。
-3. 验证通过后执行存档/打包流程。
+1. 真实 LLM 端到端冒烟：启动 v4 MainWindow，用真实 Ollama/DeepSeek 模型发消息，验证全链路（会话创建→Worker 创建→推理→流式渲染）
+2. v4 打包适配：调整 PyInstaller .spec 和 rebuild.ps1，使 v4 入口能正常打包成 exe
+3. Phase 工作流接入：如需 analyze/verify 多阶段，在 V4Worker 中接入 PhaseEngine
+4. 监控面板：在 v4 界面补充 Worker 状态/指标的可视化
 
 ## Test Status
-latest: 214/214 passed
-command: python -m pytest tests/ -x --tb=short
+latest: 193/193 passed
+command: pytest --tb=short -q
 
 ## Notes
-- 当前 `_new_conversation` 仅清空内存消息，未删除 DB 中的历史消息；如需真正“全新会话”，后续可考虑删除当前会话记录或引入“后台归档”机制。
-- 运行中的 GUI 进程已停止，下一位接手时需重新启动。
+- V4Worker 目前仅支持 ask 模式（直接 execute phase），plan/craft 的 phase 流程待后续接入
+- gemma2/gemma 系列 LLM 不支持 bind_tools，代码已做跳过处理
+- 旧 agent_engine/agent_session.py 和 workers/agent_worker.py 已不再被 v4 引用，但未删除（保留回退能力）
