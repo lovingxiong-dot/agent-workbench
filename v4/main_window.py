@@ -17,10 +17,10 @@ import html
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QLabel, QPushButton, QTextEdit, QTextBrowser, QStyleFactory,
+    QLabel, QPushButton, QTextEdit, QTextBrowser, QStyleFactory, QLineEdit,
 )
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QPalette, QColor, QFont, QTextCursor
+from PySide6.QtGui import QPalette, QColor, QFont, QTextCursor, QShortcut, QKeySequence
 
 from markdown import markdown as md
 
@@ -114,6 +114,97 @@ class InputTextEdit(QTextEdit):
         super().keyPressEvent(event)
 
 
+class HeaderToolbar(QWidget):
+    """会话区标题栏：左侧标题/环境信息 + 右侧三键操作（搜索/更多/展开）。"""
+
+    search_toggled = Signal()
+    expand_toggled = Signal()
+    more_clicked = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._expanded = True  # 面板展开状态
+        self._theme = THEMES[DEFAULT_THEME]
+        self._title = ""
+        self._env = ""
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(24, 12, 12, 12)
+        layout.setSpacing(4)
+
+        # 左侧标题
+        self.title_label = QLabel("")
+        layout.addWidget(self.title_label, 1)
+
+        # ── 三键 ──
+        btn_style = """
+            QPushButton {
+                background: transparent; border: none; border-radius: 4px;
+                min-width: 22px; max-width: 22px; min-height: 22px; max-height: 22px;
+                font-size: 14px; padding: 0;
+            }
+            QPushButton:hover { background-color: rgba(128,128,128,0.15); }
+        """
+
+        self.search_btn = QPushButton("🔍")
+        self.search_btn.setToolTip("搜索 (Ctrl+F)")
+        self.search_btn.setCursor(Qt.PointingHandCursor)
+        self.search_btn.clicked.connect(self.search_toggled)
+        self.search_btn.setStyleSheet(btn_style)
+
+        self.more_btn = QPushButton("⋯")
+        self.more_btn.setToolTip("更多操作")
+        self.more_btn.setCursor(Qt.PointingHandCursor)
+        self.more_btn.clicked.connect(self.more_clicked)
+        self.more_btn.setStyleSheet(btn_style)
+
+        self.expand_btn = QPushButton("⇱")
+        self.expand_btn.setToolTip("展开/收起面板 (Ctrl+B)")
+        self.expand_btn.setCursor(Qt.PointingHandCursor)
+        self.expand_btn.clicked.connect(self._toggle_expand)
+        self.expand_btn.setStyleSheet(btn_style)
+
+        layout.addWidget(self.search_btn)
+        layout.addWidget(self.more_btn)
+        layout.addWidget(self.expand_btn)
+
+        self._apply_theme()
+
+    def _toggle_expand(self):
+        self._expanded = not self._expanded
+        self.expand_btn.setText("⇲" if self._expanded else "⇱")
+        self.expand_toggled.emit()
+
+    def update_expand_state(self, expanded: bool):
+        self._expanded = expanded
+        self.expand_btn.setText("⇲" if expanded else "⇱")
+
+    def set_title(self, title: str, env: str = ""):
+        self._title = title
+        self._env = env
+        t = self._theme
+        if env:
+            self.title_label.setText(
+                f'<span style="color:{t["text_primary"]};font-size:15px;font-weight:600;">{title}</span>'
+                f'<span style="color:{t["text_secondary"]};font-size:12px;margin-left:8px;">· {env}</span>'
+            )
+        else:
+            self.title_label.setText(
+                f'<span style="color:{t["text_primary"]};font-size:15px;font-weight:600;">{title}</span>'
+            )
+
+    def set_theme(self, theme_name: str):
+        self._theme = THEMES.get(theme_name, THEMES[DEFAULT_THEME])
+        self._apply_theme()
+        self.set_title(self._title, self._env)
+
+    def _apply_theme(self):
+        t = self._theme
+        self.setStyleSheet(f"background-color: {t['bg_primary']};")
+
+
 class SimpleChatArea(QWidget):
     """极简聊天区：支持三层折叠结构（阶段面板/工具执行/思考过程）。"""
 
@@ -133,11 +224,8 @@ class SimpleChatArea(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # 顶部：会话标题 + 环境信息
-        self.header = QLabel("")
-        self.header.setStyleSheet(
-            f"color: {self._theme['text_primary']}; font-size: 15px; font-weight: 600; padding: 16px 24px;"
-        )
+        # 顶部：会话标题 + 三键操作
+        self.header = HeaderToolbar()
         layout.addWidget(self.header)
 
         self.sep = QLabel()
@@ -204,9 +292,7 @@ class SimpleChatArea(QWidget):
         """切换主题并即时重绘样式。"""
         self._theme = THEMES.get(theme_name, THEMES[DEFAULT_THEME])
         self._apply_theme_styles()
-        self.header.setStyleSheet(
-            f"color: {self._theme['text_primary']}; font-size: 15px; font-weight: 600; padding: 16px 24px;"
-        )
+        self.header.set_theme(theme_name)
         self.sep.setStyleSheet(f"background-color: {self._theme['border']};")
         self._render()
 
@@ -314,6 +400,15 @@ class SimpleChatArea(QWidget):
                 max-height: 120px; overflow-y: auto;
             }}
             .cmd-full {{ max-height: 400px; }}
+            .step {{
+                display: block; padding: 6px 0; font-size: 14px; line-height: 1.6;
+            }}
+            .step.done {{ color: #4ec9b0; }}
+            .step.running {{ color: #dcdcaa; }}
+            .step.pending {{ color: {text_secondary}; }}
+            .step.fail {{ color: #f14c4c; }}
+            .step-icon {{ display: inline-block; width: 20px; text-align: center; }}
+            .step-detail {{ color: {text_secondary}; font-size: 12px; margin-left: 6px; }}
         """
 
     # ── 兼容 UIRenderer 的接口 ──────────────────────────────────
@@ -348,10 +443,7 @@ class SimpleChatArea(QWidget):
         self._streaming_start_pos = None
 
     def set_header(self, title: str, env: str = ""):
-        if env:
-            self.header.setText(f"{title}  ·  {env}")
-        else:
-            self.header.setText(title)
+        self.header.set_title(title, env)
 
     def append_user(self, text: str):
         self._messages.append({"role": "user", "text": text})
@@ -764,23 +856,26 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(0)
 
         # 左栏
-        self.conversation_list = ConversationListWidget(theme=self._theme_name, repository=self._repo)
-        self.conversation_list.new_task_clicked.connect(self._on_new_task)
-        self.conversation_list.conversation_selected.connect(self._on_conversation_selected)
-        self.conversation_list.conversation_deleted.connect(self._on_conversation_deleted)
-        self.conversation_list.conversation_pinned.connect(self._on_conversation_pinned)
-        self.conversation_list.model_changed.connect(self._on_model_changed)
-        self.conversation_list.mode_changed.connect(self._on_mode_changed)
-        self.conversation_list.theme_changed.connect(self._on_theme_changed)
-        main_layout.addWidget(self.conversation_list)
+        self._left_panel = ConversationListWidget(theme=self._theme_name, repository=self._repo)
+        self._left_panel.new_task_clicked.connect(self._on_new_task)
+        self._left_panel.conversation_selected.connect(self._on_conversation_selected)
+        self._left_panel.conversation_deleted.connect(self._on_conversation_deleted)
+        self._left_panel.conversation_pinned.connect(self._on_conversation_pinned)
+        self._left_panel.model_changed.connect(self._on_model_changed)
+        self._left_panel.mode_changed.connect(self._on_mode_changed)
+        self._left_panel.theme_changed.connect(self._on_theme_changed)
+        self.conversation_list = self._left_panel  # 兼容旧引用
+        main_layout.addWidget(self._left_panel)
 
         # 右栏
-        self.chat_area = SimpleChatArea()
-        self.chat_area.set_theme(self._theme_name)
-        self.chat_area.set_send_callback(self._on_send_message)
-        self.chat_area.set_stop_callback(self._on_stop_generation)
-        self.chat_area.set_confirm_callback(self._on_user_confirm)
-        main_layout.addWidget(self.chat_area, 1)
+        self._right_panel = SimpleChatArea()
+        self._right_panel.set_theme(self._theme_name)
+        self._right_panel.set_send_callback(self._on_send_message)
+        self._right_panel.set_stop_callback(self._on_stop_generation)
+        self._right_panel.set_confirm_callback(self._on_user_confirm)
+        self._right_panel.header.expand_toggled.connect(self.toggle_panels)
+        self.chat_area = self._right_panel  # 兼容旧引用
+        main_layout.addWidget(self._right_panel, 1)
 
     def _apply_theme(self):
         t = THEMES[self._theme_name]
@@ -875,6 +970,13 @@ class MainWindow(QMainWindow):
         self.chat_area.set_theme(theme_name)
         self._config.set("app.theme", theme_name)
         self._config.save()
+
+    def toggle_panels(self):
+        """切换左面板可见性，展开键图标通过 HeaderToolbar 更新。"""
+        visible = self._left_panel.isVisible()
+        self._left_panel.setVisible(not visible)
+        if hasattr(self.chat_area, 'header') and hasattr(self.chat_area.header, 'update_expand_state'):
+            self.chat_area.header.update_expand_state(expanded=visible)
 
     def _on_send_message(self, user_text: str):
         """发送消息：草稿窗口首条消息会触发 orchestrator 创建会话。"""

@@ -87,6 +87,68 @@ class UIRenderer(QObject):
 
     # ── 折叠渲染辅助 ──────────────────────────────────
 
+    def _parse_execute_steps(self, text: str) -> list[dict]:
+        """从 AI execute 文本中解析步骤列表。
+
+        匹配模式:
+        - ✓ / [x] / done → 状态 done
+        - ⟳ / ▶ / running → 状态 running
+        - ○ / [ ] / pending → 状态 pending
+
+        返回: [{"status": "done|running|pending", "name": "...", "detail": "..."}, ...]
+        """
+        lines = text.split("\n")
+        steps = []
+        step_pattern = re.compile(
+            r'^\s*(?P<icon>✓|⟳|▶|○|✔|✗|❌|⏳)\s+(?P<name>.+?)(?:\s*[-–—]\s*(?P<detail>.+))?\s*$'
+        )
+        # 也匹配 markdown checkbox: - [x] ... / - [ ] ...
+        checkbox_pattern = re.compile(
+            r'^\s*-?\s*\[(?P<mark>[xX\s])\]\s+(?P<name>.+?)(?:\s*[-–—]\s*(?P<detail>.+))?\s*$'
+        )
+        for line in lines:
+            m = step_pattern.match(line)
+            if m:
+                icon = m.group("icon")
+                if icon in ("✓", "✔"):
+                    status = "done"
+                elif icon in ("⟳", "▶", "⏳"):
+                    status = "running"
+                elif icon in ("○",):
+                    status = "pending"
+                elif icon in ("✗", "❌"):
+                    status = "fail"
+                else:
+                    status = "pending"
+                steps.append({
+                    "status": status,
+                    "name": m.group("name").strip(),
+                    "detail": (m.group("detail") or "").strip(),
+                })
+                continue
+            m = checkbox_pattern.match(line)
+            if m:
+                status = "done" if m.group("mark").lower() == "x" else "pending"
+                steps.append({
+                    "status": status,
+                    "name": m.group("name").strip(),
+                    "detail": (m.group("detail") or "").strip(),
+                })
+        return steps
+
+    def _build_step_bar(self, steps: list[dict]) -> str:
+        """将步骤列表渲染为步骤条 HTML。"""
+        if not steps:
+            return ""
+        icons = {"done": "✓", "running": "⟳", "pending": "○", "fail": "✗"}
+        rows = []
+        for s in steps:
+            icon = icons.get(s["status"], "○")
+            name = html.escape(s["name"])
+            detail = f' <span class="step-detail">{html.escape(s["detail"])}</span>' if s["detail"] else ""
+            rows.append(f'<div class="step {s["status"]}"><span class="step-icon">{icon}</span> <span class="step-name">{name}</span>{detail}</div>')
+        return "".join(rows)
+
     def _build_thinking_fold(self, ai_text: str) -> tuple[str, str]:
         """从 AI 回复提取思考过程，返回 (折叠 HTML, 剩余正文)。"""
         lines = ai_text.split("\n")
@@ -168,6 +230,14 @@ class UIRenderer(QObject):
         text = event.text or ""
         thinking_fold, body = self._build_thinking_fold(text)
         phase = getattr(self, "_current_phase", "")
+
+        # execute 阶段：解析步骤条，插入阶段面板
+        if phase == "execute":
+            steps = self._parse_execute_steps(body)
+            if steps:
+                step_html = self._build_step_bar(steps)
+                body = step_html if not body.strip() else f'{step_html}<hr style="border:0.5px solid #3e3e42;margin:8px 0;">{body}'
+
         self._chat_view.append_ai(body, phase=phase, thinking_fold=thinking_fold)
 
     def _handle_append_tool(self, event):
