@@ -1,10 +1,10 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v4.0.2-alpha | 存档次数 | 29 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v4.0.3-alpha | 存档次数 | 30 |
 
 ## 项目概要
-AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v4.0.2-alpha 实现原生 V4Worker，以八引擎（PromptEngine/ContextEngine/ToolEngine/PolicyEngine/MetricsEngine）直接驱动 ReAct 推理循环，零绞杀者依赖旧 AgentWorker/AgentOrchestrator/AgentSession，仅改 3 文件完成基座替换。
+AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v4.0.3-alpha 在原生 V4Worker 中内建 PhaseEngine，支持 craft 模式 analyze→confirm→execute→verify→archive 完整流程；同步完成 PyInstaller 打包适配并清理 27 个零引用 v2/v3 文件，实现 v4 单轨架构闭环。
 
 ## 技术栈
 | 类别 | 技术 | 版本 | 用途 |
@@ -26,13 +26,10 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ├── agent_engine/           # 引擎层
 │   ├── __init__.py
 │   ├── agent_session.py    # 跨 Phase 复用会话
-│   ├── classifier.py       # 意图分类
 │   ├── llm_registry.py     # LLM 提供商注册与持久化
 │   ├── memory_manager.py   # 会话记忆管理
-│   ├── mode_manager.py     # 手动模式管理
 │   ├── orchestrator.py     # 编排器（绞杀者：支持八引擎委托）
 │   ├── phase_manager.py    # Phase-Driven Workflow Engine
-│   ├── proactive_engine.py # 主动引擎
 │   ├── engines/            # v3.12 八引擎模块
 │   │   ├── __init__.py
 │   │   ├── interfaces.py       # 8 引擎接口 + 共享 dataclass
@@ -70,83 +67,66 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │   ├── main_window.py      # v4 薄主窗口
 │   └── tests/              # v4 内部单元测试
 │       └── test_orchestrator.py
-├── services/               # 服务层
+├── services/               # 服务层（v3 兼容，v4 核心逻辑已迁移至 v4/）
 │   ├── __init__.py
 │   ├── config_service.py   # 配置读取与持久化
 │   ├── session_service.py  # SQLite 对话 + Token 用量持久化
 │   ├── theme_service.py    # QSS 主题加载
 │   ├── project_service.py  # 项目目录与会话关联管理
-│   ├── app_context.py      # 服务容器与生命周期管理
 │   ├── activity_service.py # 结构化活动记录与持久化
 │   ├── context_service.py  # 当前工作空间上下文维护
 │   ├── path_resolver.py    # 基于项目根目录的路径解析
 │   ├── python_resolver.py  # 项目 Python 解释器解析
 │   ├── metrics_collector.py # 请求级指标收集（token/耗时）
 │   ├── interpreter_service.py # 终端解释器发现/选择/持久化
-│   ├── pending_queue.py    # 双槽位等待队列
-│   ├── session_runtime.py  # 会话运行时聚合根
-│   ├── session_orchestrator.py # v3 统一协调器
-│   └── task_service.py     # 任务调度中心
-├── workers/                # 后台线程
+│   ├── pending_queue.py    # 双槽位等待队列（v3 兼容）
+│   └── task_service.py     # 任务调度中心（v3 兼容）
+├── workers/                # 后台线程（v3 兼容，v4 使用 v4/worker.py）
 │   ├── __init__.py
 │   ├── agent_worker.py     # 流式 Agent 推理 + 工具调用
 │   ├── base_worker.py      # Worker 基类
 │   ├── terminal_worker.py  # 终端命令输出捕获
-│   ├── verification_worker.py # 本地验证（语法检查/单元测试）
 │   ├── session_task.py     # 会话级任务状态
 │   ├── task_capacity.py    # 资源容量控制
 │   └── task_queue.py       # FIFO 任务排队
-├── ui/                     # 界面层
+├── ui/                     # 界面层（v3 兼容，当前主界面已迁移至 v4/）
 │   ├── __init__.py
-│   ├── main_window.py      # v3 主窗口（当前由 v4/main_window.py 替代）
-│   ├── chat_view.py        # 聊天视图（简约气泡、模型下拉、快捷按钮）
-│   ├── overlay.py          # 覆盖层组件
-│   ├── settings.py         # 设置相关 UI
-│   ├── tools_panel.py      # 工具面板
-│   ├── widgets/            # 可复用组件
-│   │   ├── __init__.py
-│   │   ├── sidebar.py      # 图标栏 + 文件树 + 最近项目
-│   │   ├── conversation.py # 分栏对话列表（当前项目 / 全局）
-│   │   ├── tasks.py        # 任务面板
-│   │   ├── terminal.py     # 终端控制台
-│   │   ├── status_indicator.py # 状态指示器
-│   │   ├── workspace.py    # 右侧工作区（终端/活动/文档标签）
-│   │   ├── document_editor.py  # 文档查看与编辑器
-│   │   ├── activity_panel.py   # 结构化活动面板
-│   │   └── shared_output.py    # 共享输出面板
-│   │   
 │   ├── models/             # 数据模型
 │   │   └── explorer_model.py   # 资源管理器数据模型
-│   ├── dialogs/            # 对话框
-│   │   ├── __init__.py
-│   │   └── settings.py     # 模型设置 / 规则设置
+│   ├── widgets/            # 可复用组件（v3 兼容）
+│   │   └── __init__.py
 ├── resources/              # 静态资源
 │   └── themes/
 │       └── dark_github.qss # GitHub Dark 主题
 ├── tests/                  # 单元测试 / 集成测试
 │   ├── __init__.py
 │   ├── integration/
-│   │   └── test_v3_flow.py       # v3 事件流集成测试
+│   │   ├── __init__.py
+│   │   └── integration_test_deepseek_metrics.py
+│   ├── test_v4_basics.py              # v4 数据模型 / 事件总线 / 仓库基础测试
+│   ├── test_v4_gui_smoke.py           # v4 GUI 冒烟测试（主题切换、输入框、新任务按钮）
+│   ├── test_v4_integration.py         # v4 MainWindow / Orchestrator / Worker 集成测试
 │   ├── test_agent_worker.py
 │   ├── test_agent_session_integration.py
+│   ├── test_agent_session_room.py
 │   ├── test_async_tools.py
 │   ├── test_context_service.py
 │   ├── test_event_bus.py
 │   ├── test_explorer_model.py
-│   ├── test_main_window_mode_agnostic_result.py
-│   ├── test_main_window_session_isolation.py
+│   ├── test_explorer_tree_model.py
+│   ├── test_interpreter_service.py
+│   ├── test_memory_manager.py
 │   ├── test_metrics_collector.py
+│   ├── test_mcp_service.py
+│   ├── test_mt5_signal.py
 │   ├── test_orchestrator_phase.py
-│   ├── test_phase_coordinator.py
-│   ├── test_phase_manager.py
 │   ├── test_pending_queue.py
+│   ├── test_persistence_service.py
+│   ├── test_phase_manager.py
 │   ├── test_self_context.py
-│   ├── test_session_orchestrator.py
-│   ├── test_session_runtime.py
 │   ├── test_task_service_terminal.py
-│   ├── test_tool_gateway.py
-│   ├── test_ui_renderer.py
-│   └── test_interpreter_service.py
+│   ├── test_threading_baseline.py
+│   └── test_tool_gateway.py
 ├── main.py                 # 程序入口
 ├── config.yaml             # 全局配置
 ├── .env                    # 环境变量（API Keys，不提交）
@@ -176,6 +156,7 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v4.0.3-alpha | 2026-06-30 | Phase工作流接入v4：V4Worker内建PhaseEngine支持craft模式analyze→confirm→execute→verify→archive完整流程；analyze/verify阶段解绑工具强制文本输出；PyInstaller spec适配v4单轨架构；清理27个零引用v2/v3文件；修复用户停止任务CANCELLED状态与Worker销毁 | feat/refactor/fix | v4/worker.py, v4/orchestrator.py, v4/worker_manager.py, v4/event_bus.py, v4/events.py, AgentWorkbench.spec, tests/test_v4_integration.py |
 | v4.0.2-alpha | 2026-06-30 | v4原生Worker八引擎推理：新建v4/worker.py以V4Worker(QThread+asyncio)直驱ReAct循环，零绞杀者依赖旧AgentWorker/AgentOrchestrator/AgentSession；worker_manager接入V4Worker替代EngineWorker；orchestrator传递user_text到WorkerCreateEvent | feat/refactor | v4/worker.py, v4/worker_manager.py, v4/orchestrator.py, v4/events.py, v4/main_window.py |
 | v4.0.1-alpha | 2026-06-30 | v4 Solo极简UI重构：固定两栏布局（左280px/右填充）、主题切换按钮（🌙/☀️ 暗色/浅色持久化到config.yaml）、会话列表极简化（标题+预览+时间）、延迟创建会话（首条消息才写DB） | feat/test | v4/main_window.py, v4/conversation_list.py, config.yaml, tests/test_v4_gui_smoke.py, tests/test_v4_integration.py |
 | v3.12.0 | 2026-06-30 | AI Engine 架构升级：八引擎模块化 + System Prompt 增强 + LLM 参数可配 + 记忆路径修正 + 绞杀者集成 | feat/refactor/fix | agent_engine/engines/*.py, agent_engine/orchestrator.py, agent_engine/llm_registry.py, services/self_context.py, config.yaml, ui/main_window.py, tests/test_self_context.py |
@@ -210,7 +191,7 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 3. git commit -m "..." + git tag vX.Y.Z
 4. git push + git push origin vX.Y.Z（仅当前分支 + 当前标签，禁止 --tags）
 
-_更新于 2026-06-30 06:00:00 by AI-Trae_
+_更新于 2026-06-30 22:00:00 by AI-Trae_
 
 ## Agent交接记录
 | 时间 | 方向 | 从 | 到 | 交接点 | 备注 |

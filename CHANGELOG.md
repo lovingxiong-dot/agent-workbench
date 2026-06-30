@@ -1,5 +1,28 @@
 # Changelog
 
+## v4.0.3-alpha (2026-06-30) — Phase 工作流接入 v4 + PyInstaller 打包适配 + 清理零引用旧代码
+
+### feat
+- **V4Worker 内建 PhaseEngine**：craft 模式完整 analyze→confirm→execute→verify→archive 流程。
+  - `v4/worker.py` 重构 `_run` 方法，新增 `_run_phased` 驱动 Phase 循环。
+  - analyze 阶段解绑工具，强制 LLM 输出文本任务清单。
+  - execute 阶段绑定工具执行 ReAct 循环。
+  - verify 阶段解绑工具，强制 LLM 输出验证总结。
+- **`v4/orchestrator.py` Phase 事件路由**：订阅 `PhaseChangedEvent` / `PhaseConfirmRequiredEvent` / `PhaseCompleteEvent`，处理确认门控与任务终态同步。
+- **`v4/event_bus.py` 新增 `unsubscribe`**：支持测试时解绑默认 WorkerManager。
+
+### refactor
+- **PyInstaller 打包适配 v4**：更新 `AgentWorkbench.spec` 的 hiddenimports，加入 v4 模块与 agent_engine 引擎；清理已删除的 v2/v3 模块引用。
+- **清理零引用 v2/v3 旧代码**：扫描并删除 27 个文件（`ui/main_window.py`、`services/app_context.py`、`agent_engine/classifier.py` 等），移除双轨维护成本。
+
+### fix
+- **用户停止任务后状态正确收敛**：`_on_user_stop` 更新任务状态为 `CANCELLED`，并发射 `WorkerDestroyEvent` 终止 Worker，避免 phase 事件覆盖取消状态。
+- **测试 StubWorkerManager 注入**：`tests/test_v4_integration.py` 在创建窗口前解绑默认 WorkerManager，避免真实 V4Worker 干扰集成测试。
+
+### test
+- 新增 `smoke_craft_deepseek.py`：craft 模式端到端冒烟测试，验证 analyze→confirm→execute→verify→archive 完整流程。
+- 全量 193 项测试通过，零回归。
+
 ## v4.0.2-alpha (2026-06-30) — v4原生Worker八引擎推理
 
 ### feat
