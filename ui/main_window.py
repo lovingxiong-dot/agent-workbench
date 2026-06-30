@@ -732,39 +732,46 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(0, lambda: input_field.setFocus(Qt.OtherFocusReason))
 
     def _new_conversation(self, project_path=""):
-        """创建新对话；project_path='' 表示全局纯对话，否则关联项目目录"""
-        print(f"[DIAG] _new_conversation: project_path={project_path}", flush=True)
-        # 中止当前会话的活跃任务，释放队列槽位
-        self._abort_current_session_task()
-        # 守卫：防止信号槽重入导致重复创建（v3.10.1）
-        if getattr(self, '_switching', False):
-            print("[DIAG-NEW] blocked by switching guard", flush=True)
-            return
+        """初始化当前对话框为空白状态（不创建新会话，不终止后台任务）。
 
-        self._switching = True
-        try:
-            session_id = self._session_mgr.create_session(
-                project_path=project_path, mode=self._current_mode,
-                model=self._current_model_name, title="新对话",
-            )
-            self.chat_view.clear()
-            self.chat_view.set_header(self._current_mode, self._current_model_name, "新对话")
-            # 全局对话清除项目上下文，项目对话设置项目上下文
-            self.context_service.set_project_root(project_path)
-            # v3 路径：让 Orchestrator 的当前会话与 SessionManager 保持一致
-            if self._v3_enabled:
-                self._orchestrator.switch_session(session_id)
-            label = "全局" if project_path == "" else project_path
-            self._on_log_message(f"📝 新会话 @ {label}", is_header=True)
-            print(
-                f"[DIAG-NEW] after create: project_items={self.conversation_list.project_list.count()} "
-                f"global_items={self.conversation_list.global_list.count()} current={self._current_session}",
-                flush=True,
-            )
-            # 新建会话后把焦点移回输入框，确保 Enter 键立即生效
-            self._focus_input_field()
-        finally:
-            self._switching = False
+        project_path='' 表示全局纯对话，否则关联项目目录。
+        """
+        print(f"[DIAG] _new_conversation reset: project_path={project_path}", flush=True)
+        self.chat_view.clear()
+        self.chat_view.set_header(self._current_mode, self._current_model_name, "新对话")
+        # 清空当前会话在内存中的消息与标题，保留 session_id 与后台任务
+        if self._current_session and self._current_session in self._session_mgr.sessions:
+            session = self._session_mgr.sessions[self._current_session]
+            old_project_path = session.get("project_path", "")
+            session["messages"] = []
+            session["title"] = "新对话"
+            session["project_path"] = project_path
+            # 同步刷新会话列表：标题重置，必要时跨列表移动
+            self._session_mgr.update_title(self._current_session, "新对话")
+            if old_project_path != project_path:
+                self._move_conversation_item(self._current_session, project_path)
+        # 全局对话清除项目上下文，项目对话设置项目上下文
+        self.context_service.set_project_root(project_path)
+        label = "全局" if project_path == "" else project_path
+        self._on_log_message(f"📝 重置会话 @ {label}", is_header=True)
+        print(
+            f"[DIAG-NEW] after reset: project_items={self.conversation_list.project_list.count()} "
+            f"global_items={self.conversation_list.global_list.count()} current={self._current_session}",
+            flush=True,
+        )
+        # 重置后把焦点移回输入框，确保 Enter 键立即生效
+        self._focus_input_field()
+
+    def _move_conversation_item(self, session_id: str, project_path: str):
+        """将已存在的会话项移动到正确的列表（项目/全局）"""
+        for lst in (self.conversation_list.project_list, self.conversation_list.global_list):
+            for i in range(lst.count()):
+                item = lst.item(i)
+                if item.data(Qt.UserRole) == session_id:
+                    lst.takeItem(i)
+                    self.conversation_list.add_conversation(session_id, item.text(), project_path=project_path)
+                    self.conversation_list.set_active_conversation(session_id)
+                    return
 
     def _switch_conversation(self, session_id):
         """会话列表点击入口：走完整 Session-as-Room 切换协议。"""

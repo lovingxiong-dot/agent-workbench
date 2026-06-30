@@ -206,7 +206,7 @@ feature_flags:
   shared_output_panel: true
 app:
   version: v3.12.0
-  last_mode: plan
+  last_mode: ask
   last_model: deepseek-pro
 task:
   capacity:

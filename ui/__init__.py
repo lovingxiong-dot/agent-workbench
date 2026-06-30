@@ -1,4 +1,3 @@
-from .main_window import MainWindow
 from .chat_view import ChatView
 from .overlay import OverlayWidget
 from .settings import SettingsPage

@@ -287,6 +287,15 @@ class ChatView(QWidget):
         self.input_field.setPlainText("")
         print(f"[DIAG-CHAT] clear_input after: '{self.input_field.toPlainText()[:20]}'", flush=True)
 
+    def clear_chat(self):
+        """清空聊天区域（会话切换时使用）"""
+        self.chat_area.clear()
+        self._streaming_buffer = ""
+        self._streaming_active = False
+        self._has_received_chunks = False
+        if hasattr(self, '_streaming_start_pos'):
+            delattr(self, '_streaming_start_pos')
+
     def _on_log_btn_clicked(self, checked):
         self.log_panel_toggled.emit(checked)
 

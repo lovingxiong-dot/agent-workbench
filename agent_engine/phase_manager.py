@@ -178,8 +178,11 @@ class PhaseManager(QObject):
             self._emit_error("PHASE_MISMATCH", f"期望 CONFIRM，当前是 {self._current_phase.value}")
             return
         if not confirmed:
-            self.flow_finished.emit(False, "用户取消了任务执行")
+            # 用户选择不执行：清空任务清单，视为正常完成（不标记失败）
+            self._context.task_list.clear()
+            self._context.user_confirmed = False
             self.reset()
+            self.flow_finished.emit(True, "用户跳过了任务执行")
             return
         self._context.user_confirmed = True
         self._advance()
@@ -261,22 +264,37 @@ class PhaseManager(QObject):
         self.phase_changed.emit(phase.value, self._context.mode)
 
     def _advance(self):
-        """进入下一个阶段"""
+        """进入下一个阶段。若当前阶段无实际内容（空任务清单、用户未确认、无执行结果），则自动跳过。"""
         print(f"[DIAG-PHASE] _advance: flow_index={self._flow_index}, flow_len={len(self._flow)}, current_phase={self._current_phase.value}", flush=True)
         # 软检查点：记录但不阻塞
         self._run_soft_checkpoints()
 
-        self._flow_index += 1
-        if self._flow_index >= len(self._flow):
-            print(f"[DIAG-PHASE] _advance: flow finished, emitting flow_finished", flush=True)
-            self.reset()
-            self.flow_finished.emit(True, "工作流完成")
-            return
+        ctx = self._context
+        while True:
+            self._flow_index += 1
+            if self._flow_index >= len(self._flow):
+                print(f"[DIAG-PHASE] _advance: flow finished, emitting flow_finished", flush=True)
+                self.reset()
+                self.flow_finished.emit(True, "工作流完成")
+                return
 
-        next_phase = self._flow[self._flow_index]
-        print(f"[DIAG-PHASE] _advance: next_phase={next_phase.value}", flush=True)
+            next_phase = self._flow[self._flow_index]
+            print(f"[DIAG-PHASE] _advance: next_phase={next_phase.value}", flush=True)
 
-        # 硬检查点
+            # 跳过没有实际工作内容的阶段
+            if next_phase == Phase.CONFIRM and not ctx.task_list:
+                print(f"[DIAG-PHASE] _advance: skip CONFIRM, no task list", flush=True)
+                continue
+            if next_phase == Phase.EXECUTE and (not ctx.task_list or not ctx.user_confirmed):
+                print(f"[DIAG-PHASE] _advance: skip EXECUTE, no task list or not confirmed", flush=True)
+                continue
+            if next_phase == Phase.VERIFY and not ctx.execution_results:
+                print(f"[DIAG-PHASE] _advance: skip VERIFY, no execution results", flush=True)
+                continue
+
+            break
+
+        # 硬检查点（兜底：不符合条件仍报错，避免非法状态继续）
         if not self._check_hard_checkpoint(next_phase):
             return
 

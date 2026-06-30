@@ -86,13 +86,14 @@ class TestPhaseManager(unittest.TestCase):
         self.pm.on_analyze_complete([TaskItem("1", "step 1")])
         self.pm.on_user_confirm(False)
         self.assertEqual(self.pm.current_phase(), "idle")
-        self.assertIn(("flow_finished", False, "用户取消了任务执行"), self.events)
+        self.assertIn(("flow_finished", True, "用户跳过了任务执行"), self.events)
 
-    def test_analyze_without_tasks_errors_for_plan(self):
+    def test_analyze_without_tasks_skips_confirm_for_plan(self):
+        """plan 模式 analyze 无任务清单时，跳过 confirm 直接进入 archive"""
         self.pm.start("plan it", "plan")
         self.pm.on_analyze_complete([])
-        self.assertEqual(self.pm.current_phase(), "idle")
-        self.assertIn(("error_occurred", "CHECKPOINT_HARD", "进入 CONFIRM 阶段前必须有 task list"), self.events)
+        self.assertEqual(self.pm.current_phase(), "archive")
+        self.assertIn(("archive_required", "plan"), self.events)
 
     def test_parse_task_list_json(self):
         text = '[{"description": "read file"}, {"description": "write file"}]'
