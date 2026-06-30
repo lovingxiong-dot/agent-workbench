@@ -159,6 +159,7 @@ class SessionOrchestrator(QObject):
 
     def _on_session_switch(self, event: SessionSwitchEvent):
         """切换会话：只切 UI，不中断 Worker。"""
+        self._require_runtime(event.new_session_id)
         self._switch_session(event.new_session_id)
 
     def _on_session_delete(self, event: SessionDeleteEvent):
@@ -172,7 +173,9 @@ class SessionOrchestrator(QObject):
         if self._current_session_id == event.session_id:
             sessions = self._repo.list_sessions()
             if sessions:
-                self._switch_session(sessions[0].session_id)
+                sid = sessions[0].session_id
+                self._require_runtime(sid)
+                self._switch_session(sid)
             else:
                 self._current_session_id = None
 
@@ -189,14 +192,14 @@ class SessionOrchestrator(QObject):
         self._refresh_session_list()
 
     def _switch_session(self, new_session_id: str):
-        """核心切换逻辑：从 DB 加载消息并恢复 UI。"""
-        # 1. 确保目标会话的运行时已存在（切换事件也可能用于恢复当前会话）
-        if not self.has_runtime(new_session_id):
-            metadata = self._repo.get_session(new_session_id)
-            if metadata:
-                rt = SessionRuntime(metadata, parent=self)
-                self._runtimes[new_session_id] = rt
-                self._connect_queue_signals(rt)
+        """核心切换逻辑：从 DB 加载消息并恢复 UI。
+
+        调用方必须保证 new_session_id 对应的 runtime 已存在；
+        若不存在，说明目标会话已被删除或尚未创建，直接返回避免 UI 指向无效 runtime。
+        """
+        rt = self._runtimes.get(new_session_id)
+        if not rt:
+            return
 
         if self._current_session_id == new_session_id:
             return

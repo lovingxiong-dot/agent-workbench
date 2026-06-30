@@ -1,5 +1,29 @@
 # Changelog
 
+## v4.0.0-alpha (2026-06-30) — v4 单轨架构：MessageBus + SessionRuntime + 薄 MainWindow
+
+### feat
+- **v4 单轨事件总线架构**：新增 `v4/` 目录，实现基于 PySide6 Signal 的强类型 MessageBus，统一跨组件通信。
+  - `v4/models.py`：不可变数据模型 `SessionMetadata` / `Message` / `Environment` / `TaskState`。
+  - `v4/event_bus.py`：`MessageBus` 支持 namespace / name / session_id 订阅与全量分发。
+  - `v4/events.py`：44+ 个事件类，覆盖 user / session / queue / phase / worker / ui 六大命名空间。
+  - `v4/repository.py`：基于 SQLite 的会话仓库，消息唯一权威来源；支持置顶排序、环境持久化、任务状态快照。
+  - `v4/queue.py`：会话级双槽位 `QueueManager`，控制消息并发，支持取消、自动出队、状态广播。
+  - `v4/runtime.py`：`SessionRuntime` 聚合根，内聚本会话队列、Worker 引用、Phase 状态、环境上下文。
+  - `v4/worker_manager.py`：系统级 Worker 管理，最多 5 个并发 Worker，超出排队；Worker 绑定会话与项目环境。
+  - `v4/orchestrator.py`：`SessionOrchestrator` 统一协调会话生命周期、消息持久化、事件路由。
+  - `v4/ui_renderer.py`：唯一 UI 更新者，订阅 `ui.*` 事件驱动 `ChatView`、状态栏、会话列表。
+  - `v4/conversation_list.py`：数据驱动会话列表，支持 Chat/Work 类型、置顶、重名、状态徽章。
+  - `v4/main_window.py`：薄编排层，只负责 UI 构建与信号路由，所有业务状态委托给 v4 核心。
+- **main.py 接入 v4**：入口直接实例化 `v4.main_window.MainWindow`，移除对旧 v2/v3 全局服务的依赖。
+
+### refactor
+- **清理 v2/v3 残留**：删除 `ui/managers/*` 下的 `phase_coordinator.py`、`queue_manager.py`、`session_manager.py`、`session_registry.py`、`signal_adapter.py`、`ui_renderer.py`、`worker_manager.py` 及对应测试，避免双轨维护成本。
+
+### test
+- 新增 `tests/test_v4_basics.py`、`tests/test_v4_gui_smoke.py`、`tests/test_v4_integration.py` 共 17 个测试，覆盖会话创建、消息持久化、会话切换、队列满/自动出队、停止任务、置顶、重名、并发槽位、重启恢复。
+- 全量 192 项测试中 191 项通过；剩余 1 项 `tests/test_explorer_model.py::test_delete_non_empty_folder_fails` 与 v4 无关，系 Python 3.14 / Windows 环境下 `os.rmdir` 对非空目录返回成功但不删除的异常行为，已单独记录待跟进。
+
 ## v3.12.0 (2026-06-30) — AI Engine 架构升级：八引擎模块化 + Prompt 增强 + 记忆系统重构
 
 ### feat

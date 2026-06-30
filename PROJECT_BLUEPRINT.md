@@ -1,10 +1,10 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v3.12.0 | 存档次数 | 26 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v4.0.0-alpha | 存档次数 | 27 |
 
 ## 项目概要
-AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v3.12.0 完成 AI Engine 八引擎模块化架构升级：ContextEngine/PromptEngine/InferenceEngine/ToolEngine/PhaseEngine/MemoryEngine/MetricsEngine/PolicyEngine，实现单一职责 + 闭环反馈 + 绞杀者模式集成，同时增强 System Prompt、LLM 参数可配置化、自识别记忆路径修正。
+AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v4.0.0-alpha 完成单轨事件总线架构重构：新增 `v4/` 目录，以 `MessageBus` 为核心、`SessionRuntime` 为会话聚合根、`SessionOrchestrator` 统一协调、`MainWindow` 作为薄 UI 编排层，实现消息权威在 DB、切换不中断 Worker、环境感知、并发槽位控制。v3.12 的八引擎模块化能力保留于 `agent_engine/engines/`，旧 v2/v3 UI Manager 层已清理。
 
 ## 技术栈
 | 类别 | 技术 | 版本 | 用途 |
@@ -51,10 +51,25 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │   ├── mt5.py              # MT5 报价 + 下单
 │   ├── external_apis.py    # 财经新闻 / 宏观数据
 │   └── screen.py           # 屏幕相关工具
-├── core/                   # 核心基础设施
+├── core/                   # 核心基础设施（v3 兼容）
 │   ├── __init__.py
 │   ├── event_bus.py        # 基于 Qt Signal 的事件总线
 │   └── events.py           # 强类型跨组件事件定义
+├── v4/                     # v4 单轨事件总线架构
+│   ├── __init__.py
+│   ├── models.py           # 不可变数据模型
+│   ├── event_bus.py        # v4 MessageBus
+│   ├── events.py           # v4 事件协议
+│   ├── repository.py       # SQLite 会话/消息/环境/任务状态仓库
+│   ├── queue.py            # 会话级双槽位队列
+│   ├── runtime.py          # SessionRuntime 聚合根
+│   ├── worker_manager.py   # 系统级 Worker 并发管理
+│   ├── orchestrator.py     # SessionOrchestrator 统一协调器
+│   ├── ui_renderer.py      # UI 渲染器
+│   ├── conversation_list.py # 会话列表控件
+│   ├── main_window.py      # v4 薄主窗口
+│   └── tests/              # v4 内部单元测试
+│       └── test_orchestrator.py
 ├── services/               # 服务层
 │   ├── __init__.py
 │   ├── config_service.py   # 配置读取与持久化
@@ -83,7 +98,7 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │   └── task_queue.py       # FIFO 任务排队
 ├── ui/                     # 界面层
 │   ├── __init__.py
-│   ├── main_window.py      # 主窗口全局状态与信号协调
+│   ├── main_window.py      # v3 主窗口（当前由 v4/main_window.py 替代）
 │   ├── chat_view.py        # 聊天视图（简约气泡、模型下拉、快捷按钮）
 │   ├── overlay.py          # 覆盖层组件
 │   ├── settings.py         # 设置相关 UI
@@ -102,13 +117,6 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │   │   
 │   ├── models/             # 数据模型
 │   │   └── explorer_model.py   # 资源管理器数据模型
-│   ├── managers/           # v3 事件驱动管理器
-│   │   ├── __init__.py
-│   │   ├── phase_coordinator.py # PhaseManager → MessageBus 桥接
-│   │   ├── queue_manager.py     # 双槽位队列状态机
-│   │   ├── signal_adapter.py    # Worker 信号 → MessageBus 事件
-│   │   ├── ui_renderer.py       # UI 事件统一渲染器
-│   │   └── worker_manager.py    # Worker 生命周期管理
 │   ├── dialogs/            # 对话框
 │   │   ├── __init__.py
 │   │   └── settings.py     # 模型设置 / 规则设置
