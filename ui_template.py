@@ -970,7 +970,13 @@ class ChatArea(QWidget):
         self._view.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._view.setRenderHints(QPainter.Antialiasing | QPainter.TextAntialiasing)
         self._view.setFrameShape(QGraphicsView.NoFrame)
-        self._view.setStyleSheet("border: none; background: transparent;")
+        self._view.setStyleSheet(
+            "QGraphicsView { border: none; background: transparent; }"
+            f"QScrollBar:vertical {{ background: transparent; width: 3px; border: none; margin: 0px; }}"
+            f"QScrollBar::handle:vertical {{ background: {C['border']}; min-height: 24px; max-width: 3px; border-radius: 1px; }}"
+            f"QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; background: transparent; }}"
+            f"QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}"
+        )
         self._scene = ChatScene()
         self._view.setScene(self._scene)
         layout.addWidget(self._view, 1)
