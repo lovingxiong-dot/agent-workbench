@@ -13,7 +13,6 @@ ui_template.py — Agent Workbench 纯 UI 模版（零业务逻辑）
 纯 UI 层，所有数据为 Demo 硬编码。
 """
 import sys
-import ctypes
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QTextEdit, QSplitter, QStackedWidget,
@@ -81,7 +80,9 @@ def mono_font(size: int) -> QFont:
 # ══════════════════════════════════════════════════════════════
 
 class SessionItem(QWidget):
-    """单个会话项：标题 + 预览 + 时间，支持选中高亮。"""
+    """单个会话项：精确对齐 SVG y=108~156。
+       标题(x=24,y=126)、预览(x=24,y=144)、时间(x=24,y=160)，固定高度48。
+    """
     clicked = Signal(int)
 
     def __init__(self, index: int, title: str, preview: str, time_str: str, parent=None):
@@ -91,34 +92,34 @@ class SessionItem(QWidget):
         self.setFixedHeight(48)
         self.setCursor(Qt.PointingHandCursor)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(2)
-
-        self._title_lbl = QLabel(title[:24])
+        self._title_lbl = QLabel(self)
         self._title_lbl.setFont(font(12, bold=True))
-        layout.addWidget(self._title_lbl)
+        self._title_lbl.move(10, 6)
+        self._title_lbl.resize(172, 18)
+        self._title_lbl.setText(title[:24])
 
-        self._preview_lbl = QLabel(preview[:40])
+        self._preview_lbl = QLabel(self)
         self._preview_lbl.setFont(font(10))
-        layout.addWidget(self._preview_lbl)
+        self._preview_lbl.move(10, 24)
+        self._preview_lbl.resize(172, 16)
+        self._preview_lbl.setText(preview[:40])
 
-        self._time_lbl = QLabel(time_str)
+        self._time_lbl = QLabel(self)
         self._time_lbl.setFont(font(9))
-        layout.addWidget(self._time_lbl)
+        self._time_lbl.move(10, 40)
+        self._time_lbl.resize(172, 12)
+        self._time_lbl.setText(time_str)
 
         self._refresh_style()
 
     def _refresh_style(self):
         if self._active:
-            # SVG: active fill=#0f3460 stroke=#007acc rx=6
             self.setStyleSheet(
                 f"SessionItem {{ background-color: {C['bg_selected']}; "
                 f"border: 0.5px solid {C['accent']}; border-radius: 6px; }}"
             )
             self._title_lbl.setStyleSheet(f"color: {C['text_primary']}; background: transparent;")
         else:
-            # SVG: inactive fill=#16213e stroke=#2a2a4a rx=6
             self.setStyleSheet(
                 f"SessionItem {{ background-color: {C['bg_sidebar']}; "
                 f"border: 0.5px solid {C['border']}; border-radius: 6px; }}"
@@ -471,7 +472,6 @@ class FoldBlock(ChatItem):
         self._body_items: list[QGraphicsItem] = []
         self._h = self.FOLD_H + 4
         self.setAcceptHoverEvents(True)
-        self._on_toggled = None  # callback set by scene for re-layout
 
     def set_body(self, items: list[QGraphicsItem], h: float):
         self._body_items = items
@@ -492,8 +492,6 @@ class FoldBlock(ChatItem):
             for item in self._body_items:
                 item.setVisible(True)
         self.prepareGeometryChange()
-        if self._on_toggled:
-            self._on_toggled()
 
     def paint(self, painter, option, widget=None):
         painter.setRenderHint(QPainter.Antialiasing)
@@ -756,18 +754,7 @@ class ChatScene(QGraphicsScene):
         self._y += item.height() + 8
         self._items.append(item)
         self._update_rect()
-        # 如果是可折叠项，绑定 re-layout 回调
-        if hasattr(item, '_on_toggled'):
-            item._on_toggled = self._relayout
         return item
-
-    def _relayout(self):
-        """折叠展开后重新计算所有元素 Y 坐标，防止重叠。"""
-        self._y = 8.0
-        for item in self._items:
-            item.setPos(0, self._y)
-            self._y += item.height() + 8
-        self._update_rect()
 
     def _update_rect(self):
         h = max(self._y + 40, 720)
@@ -863,49 +850,38 @@ class InputArea(QWidget):
         root.setContentsMargins(20, 8, 20, 8)
         root.setSpacing(6)
 
-        # ── 输入框 + 发送按钮（QGridLayout 同 cell 叠放）──
+        # ── 输入框 (SVG: x=241 y=660 w=362 h=56 rx=8) ──
         input_container = QWidget()
+        input_container.setFixedHeight(56)
         input_container.setStyleSheet("background-color: transparent;")
-        grid = QGridLayout(input_container)
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setSpacing(0)
-
-        self._text_edit = QTextEdit()
+        self._text_edit = QTextEdit(input_container)
         self._text_edit.setPlaceholderText("输入 \"/\" 快速使用技能")
-        self._text_edit.setMaximumHeight(120)
-        self._text_edit.setMinimumHeight(40)
+        self._text_edit.setGeometry(0, 0, 362, 56)
         self._text_edit.setFont(font(11))
         self._text_edit.setStyleSheet(
             f"QTextEdit {{ background-color: {C['bg_sidebar']}; color: {C['text_primary']}; "
             f"border: 0.5px solid {C['border']}; border-radius: 8px; "
-            f"padding: 8px 32px 8px 14px; font-size: 11px; }}"
+            f"padding: 8px 36px 8px 14px; font-size: 11px; }}"
         )
-        grid.addWidget(self._text_edit, 0, 0)
 
-        # 发送按钮叠放在输入框右下内侧
-        send_wrapper = QWidget()
-        send_wrapper.setStyleSheet("background-color: transparent;")
-        send_layout = QVBoxLayout(send_wrapper)
-        send_layout.setContentsMargins(0, 0, 6, 6)
-        send_layout.setSpacing(0)
-        self._send_btn = QPushButton()
+        # ── 发送按钮 (SVG: cx=585 cy=688 r=12 fill=#34d399, arrow black) ──
+        self._send_btn = QPushButton(input_container)
         self._send_btn.setFixedSize(24, 24)
+        self._send_btn.move(330, 16)  # 362 - 24 - 8
         self._send_btn.setCursor(Qt.PointingHandCursor)
         self._send_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {C['accent']}; border-radius: 12px; border: none; "
-            f"color: {C['text_inverse']}; font-size: 14px; font-weight: 600; }}"
-            f"QPushButton:hover {{ background-color: #1177bb; }}"
+            f"QPushButton {{ background-color: #34d399; border-radius: 8px; border: none; "
+            f"color: #0f1729; font-size: 16px; font-weight: 700; }}"
+            f"QPushButton:hover {{ background-color: #2ecc71; }}"
         )
         self._send_btn.setText("↑")
         self._send_btn.clicked.connect(self.send_clicked.emit)
-        send_layout.addStretch()
-        send_layout.addWidget(self._send_btn)
-        grid.addWidget(send_wrapper, 0, 0, Qt.AlignRight | Qt.AlignBottom)
 
         root.addWidget(input_container)
 
-        # ── 标签行（SVG: + 模式 模型）──
+        # ── 标签行（SVG: + r=10 at x=257,y=702; 模式 w=62 x=277; 模型 w=76 x=345）──
         tag_row = QHBoxLayout()
+        tag_row.setContentsMargins(0, 0, 0, 0)
         tag_row.setSpacing(8)
 
         self._skill_btn = QPushButton("+")
@@ -1122,6 +1098,15 @@ class RightPanel(QWidget):
             f"border-radius: 3px; font-size: 9px; border: none; }}"
         )
         tb_layout.addWidget(srch)
+
+        # 窗口控制按钮容器（由 MainWindow 注入回调）
+        self._win_btns = QWidget()
+        win_hl = QHBoxLayout(self._win_btns)
+        win_hl.setContentsMargins(0, 0, 8, 0)
+        win_hl.setSpacing(2)
+        self._win_hl = win_hl
+        tb_layout.addWidget(self._win_btns)
+
         tab_bar.setStyleSheet(f"background-color: {C['bg_right']};")
         layout.addWidget(tab_bar)
 
@@ -1203,6 +1188,20 @@ class RightPanel(QWidget):
         )
         return row
 
+    def set_window_buttons(self, minimize_cb, maximize_cb, close_cb):
+        """把系统最小化/最大化/关闭按钮嵌入右栏顶部状态栏最右侧。"""
+        for sym, cb in [("—", minimize_cb), ("□", maximize_cb), ("✕", close_cb)]:
+            btn = QPushButton(sym)
+            btn.setFixedSize(28, 20)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setStyleSheet(
+                f"QPushButton {{ background-color: transparent; color: {C['text_secondary']}; "
+                f"border: none; font-size: 11px; }}"
+                f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
+            )
+            btn.clicked.connect(cb)
+            self._win_hl.addWidget(btn)
+
     def _switch_tab(self, idx: int):
         self._active_tab = idx
         self._stack.setCurrentIndex(idx)
@@ -1240,17 +1239,7 @@ class MainWindow(QMainWindow):
     def _setup_ui(self):
         central = QWidget()
         self.setCentralWidget(central)
-        root = QVBoxLayout(central)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
-
-        # ── 自定义顶部标题栏（替代系统标题栏）──
-        title_bar = self._build_title_bar()
-        root.addWidget(title_bar)
-
-        # ── 工作区（三栏 QSplitter）──
-        work_area = QWidget()
-        ml = QHBoxLayout(work_area)
+        ml = QHBoxLayout(central)
         ml.setContentsMargins(0, 0, 0, 0)
         ml.setSpacing(0)
 
@@ -1258,107 +1247,27 @@ class MainWindow(QMainWindow):
         self._splitter.setHandleWidth(1)
 
         # 左栏
-        try:
-            self._left = LeftPanel()
-            self._splitter.addWidget(self._left)
-        except Exception as e:
-            print(f"[ERROR] LeftPanel init failed: {e}")
-            import traceback; traceback.print_exc()
-            self._left = QLabel(f"左栏加载失败: {e}")
+        self._left = LeftPanel()
+        self._splitter.addWidget(self._left)
 
         # 中栏
-        try:
-            self._center = ChatArea()
-            self._center._header.expand_toggled.connect(self._toggle_panels)
-            self._splitter.addWidget(self._center)
-        except Exception as e:
-            print(f"[ERROR] ChatArea init failed: {e}")
-            import traceback; traceback.print_exc()
-            self._center = QLabel(f"聊天区加载失败: {e}")
+        self._center = ChatArea()
+        self._center._header.expand_toggled.connect(self._toggle_panels)
+        self._splitter.addWidget(self._center)
 
         # 右栏
-        try:
-            self._right = RightPanel()
-            self._splitter.addWidget(self._right)
-        except Exception as e:
-            print(f"[ERROR] RightPanel init failed: {e}")
-            import traceback; traceback.print_exc()
-            self._right = QLabel(f"右栏加载失败: {e}")
+        self._right = RightPanel()
+        self._right.set_window_buttons(self.showMinimized, self._toggle_maximize, self.close)
+        self._splitter.addWidget(self._right)
 
         self._splitter.setSizes([220, 404, 400])
         self._splitter.setStretchFactor(0, 0)
         self._splitter.setStretchFactor(1, 1)
         self._splitter.setStretchFactor(2, 0)
         ml.addWidget(self._splitter)
-        root.addWidget(work_area, 1)
-
-        # ── 底部状态栏（对应截图中的工作区状态栏）──
-        status_bar = self._build_status_bar()
-        root.addWidget(status_bar)
 
         # 全局暗色主题
         self._apply_dark_palette()
-
-    def _build_title_bar(self) -> QWidget:
-        """无边框窗口顶部标题栏：标题 + 窗口控制按钮。"""
-        bar = QWidget()
-        bar.setFixedHeight(28)
-        bar.setStyleSheet(f"background-color: {C['bg_sidebar']};")
-        hl = QHBoxLayout(bar)
-        hl.setContentsMargins(10, 0, 0, 0)
-        hl.setSpacing(0)
-
-        icon = QLabel("🤖")
-        icon.setStyleSheet(f"color: {C['accent']}; background: transparent; font-size: 12px;")
-        hl.addWidget(icon)
-        hl.addSpacing(6)
-
-        title = QLabel(self.windowTitle())
-        title.setFont(font(10))
-        title.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
-        hl.addWidget(title)
-        hl.addStretch()
-
-        # 窗口按钮
-        for sym, cb in [("—", self.showMinimized), ("□", self._toggle_maximize), ("✕", self.close)]:
-            btn = QPushButton(sym)
-            btn.setFixedSize(40, 28)
-            btn.setCursor(Qt.PointingHandCursor)
-            btn.setStyleSheet(
-                f"QPushButton {{ background-color: transparent; color: {C['text_secondary']}; "
-                f"border: none; font-size: 12px; }}"
-                f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
-            )
-            btn.clicked.connect(cb)
-            hl.addWidget(btn)
-        return bar
-
-    def _build_status_bar(self) -> QWidget:
-        """底部状态栏：左侧模型/模式状态，右侧提示信息。"""
-        bar = QWidget()
-        bar.setFixedHeight(22)
-        bar.setStyleSheet(f"background-color: {C['bg_right']}; border-top: 0.5px solid {C['border']};")
-        hl = QHBoxLayout(bar)
-        hl.setContentsMargins(10, 0, 10, 0)
-        hl.setSpacing(12)
-
-        mode_lbl = QLabel("ask")
-        mode_lbl.setFont(font(9))
-        mode_lbl.setStyleSheet(f"color: {C['accent']}; background: transparent;")
-        hl.addWidget(mode_lbl)
-
-        model_lbl = QLabel("flash")
-        model_lbl.setFont(font(9))
-        model_lbl.setStyleSheet(f"color: {C['text_muted']}; background: transparent;")
-        hl.addWidget(model_lbl)
-
-        hl.addStretch()
-
-        hint_lbl = QLabel("Agent Workbench UI Template v0.1")
-        hint_lbl.setFont(font(9))
-        hint_lbl.setStyleSheet(f"color: {C['text_muted']}; background: transparent;")
-        hl.addWidget(hint_lbl)
-        return bar
 
     def _toggle_maximize(self):
         if self.isMaximized():
@@ -1414,24 +1323,8 @@ class MainWindow(QMainWindow):
 
 
 if __name__ == "__main__":
-    import traceback
-    try:
-        app = QApplication(sys.argv)
-        app.setApplicationName("Agent Workbench UI Template")
-        window = MainWindow()
-        # 强制置顶确保窗口可见
-        window.setWindowFlags(window.windowFlags() | Qt.WindowStaysOnTopHint)
-        window.show()
-        window.setWindowFlags(window.windowFlags() & ~Qt.WindowStaysOnTopHint)
-        window.show()
-        window.raise_()
-        window.activateWindow()
-        window.resize(1024, 720)
-        window._set_dark_titlebar(int(window.winId()))
-        print(">>> Agent Workbench UI Template 已启动，请切换到桌面查看窗口 <<<")
-        sys.stdout.flush()
-        sys.exit(app.exec())
-    except Exception:
-        traceback.print_exc()
-        input("按 Enter 退出...")
-        sys.exit(1)
+    app = QApplication(sys.argv)
+    app.setApplicationName("Agent Workbench UI Template")
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())
