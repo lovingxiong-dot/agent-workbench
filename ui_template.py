@@ -266,7 +266,13 @@ class LeftPanel(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setStyleSheet(f"QScrollArea {{ border: none; background: {C['bg_sidebar']}; }}")
+        scroll.setStyleSheet(
+            f"QScrollArea {{ border: none; background: {C['bg_sidebar']}; }}"
+            f"QScrollBar:vertical {{ background: {C['bg_sidebar']}; width: 4px; border: none; border-radius: 2px; }}"
+            f"QScrollBar::handle:vertical {{ background: {C['border']}; min-height: 40px; border-radius: 2px; }}"
+            f"QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; background: transparent; }}"
+            f"QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}"
+        )
 
         sess_widget = QWidget()
         self._sess_layout = QVBoxLayout(sess_widget)
@@ -288,12 +294,12 @@ class LeftPanel(QWidget):
 
         bottom_row = QHBoxLayout()
         bottom_row.setSpacing(6)
-        bottom_row.addStretch()
 
         self._theme_btn = self._make_bottom_btn("🌙")
         self._settings_btn = self._make_bottom_btn("⚙")
         bottom_row.addWidget(self._theme_btn)
         bottom_row.addWidget(self._settings_btn)
+        bottom_row.addStretch()
         layout.addLayout(bottom_row)
 
         # 填充 Demo 会话数据
