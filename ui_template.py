@@ -13,6 +13,7 @@ ui_template.py — Agent Workbench 纯 UI 模版（零业务逻辑）
 纯 UI 层，所有数据为 Demo 硬编码。
 """
 import sys
+import ctypes
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QTextEdit, QSplitter, QStackedWidget,
@@ -470,6 +471,7 @@ class FoldBlock(ChatItem):
         self._body_items: list[QGraphicsItem] = []
         self._h = self.FOLD_H + 4
         self.setAcceptHoverEvents(True)
+        self._on_toggled = None  # callback set by scene for re-layout
 
     def set_body(self, items: list[QGraphicsItem], h: float):
         self._body_items = items
@@ -490,6 +492,8 @@ class FoldBlock(ChatItem):
             for item in self._body_items:
                 item.setVisible(True)
         self.prepareGeometryChange()
+        if self._on_toggled:
+            self._on_toggled()
 
     def paint(self, painter, option, widget=None):
         painter.setRenderHint(QPainter.Antialiasing)
@@ -752,7 +756,18 @@ class ChatScene(QGraphicsScene):
         self._y += item.height() + 8
         self._items.append(item)
         self._update_rect()
+        # 如果是可折叠项，绑定 re-layout 回调
+        if hasattr(item, '_on_toggled'):
+            item._on_toggled = self._relayout
         return item
+
+    def _relayout(self):
+        """折叠展开后重新计算所有元素 Y 坐标，防止重叠。"""
+        self._y = 8.0
+        for item in self._items:
+            item.setPos(0, self._y)
+            self._y += item.height() + 8
+        self._update_rect()
 
     def _update_rect(self):
         h = max(self._y + 40, 720)
@@ -1199,6 +1214,18 @@ class MainWindow(QMainWindow):
         self._right_visible = True
         self._setup_ui()
 
+    @staticmethod
+    def _set_dark_titlebar(hwnd: int):
+        """Windows DWM 深色标题栏 API（替代白色窗口栏）。"""
+        DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+        try:
+            val = ctypes.c_int(1)
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                ctypes.c_void_p(hwnd), DWMWA_USE_IMMERSIVE_DARK_MODE,
+                ctypes.byref(val), ctypes.sizeof(val))
+        except Exception:
+            pass
+
     def _setup_ui(self):
         central = QWidget()
         self.setCentralWidget(central)
@@ -1245,6 +1272,8 @@ class MainWindow(QMainWindow):
 
         # 全局暗色主题
         self._apply_dark_palette()
+        # Windows 深色标题栏
+        self._set_dark_titlebar(int(self.winId()))
 
     def _apply_dark_palette(self):
         app = QApplication.instance()
@@ -1294,6 +1323,7 @@ if __name__ == "__main__":
         window.raise_()
         window.activateWindow()
         window.resize(1024, 720)
+        window._set_dark_titlebar(int(window.winId()))
         print(">>> Agent Workbench UI Template 已启动，请切换到桌面查看窗口 <<<")
         sys.stdout.flush()
         sys.exit(app.exec())
