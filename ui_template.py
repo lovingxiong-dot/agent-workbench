@@ -863,9 +863,12 @@ class InputArea(QWidget):
         root.setContentsMargins(20, 8, 20, 8)
         root.setSpacing(6)
 
-        # 输入框行
-        input_row = QHBoxLayout()
-        input_row.setSpacing(0)
+        # ── 输入框 + 发送按钮（QGridLayout 同 cell 叠放）──
+        input_container = QWidget()
+        input_container.setStyleSheet("background-color: transparent;")
+        grid = QGridLayout(input_container)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setSpacing(0)
 
         self._text_edit = QTextEdit()
         self._text_edit.setPlaceholderText("输入 \"/\" 快速使用技能")
@@ -877,9 +880,14 @@ class InputArea(QWidget):
             f"border: 0.5px solid {C['border']}; border-radius: 8px; "
             f"padding: 8px 32px 8px 14px; font-size: 11px; }}"
         )
-        input_row.addWidget(self._text_edit, 1)
+        grid.addWidget(self._text_edit, 0, 0)
 
-        # 发送按钮叠放（用绝对定位思路：放在同一行的末尾）
+        # 发送按钮叠放在输入框右下内侧
+        send_wrapper = QWidget()
+        send_wrapper.setStyleSheet("background-color: transparent;")
+        send_layout = QVBoxLayout(send_wrapper)
+        send_layout.setContentsMargins(0, 0, 6, 6)
+        send_layout.setSpacing(0)
         self._send_btn = QPushButton()
         self._send_btn.setFixedSize(24, 24)
         self._send_btn.setCursor(Qt.PointingHandCursor)
@@ -890,10 +898,13 @@ class InputArea(QWidget):
         )
         self._send_btn.setText("↑")
         self._send_btn.clicked.connect(self.send_clicked.emit)
+        send_layout.addStretch()
+        send_layout.addWidget(self._send_btn)
+        grid.addWidget(send_wrapper, 0, 0, Qt.AlignRight | Qt.AlignBottom)
 
-        root.addLayout(input_row)
+        root.addWidget(input_container)
 
-        # 标签行（SVG: + 模式 模型）
+        # ── 标签行（SVG: + 模式 模型）──
         tag_row = QHBoxLayout()
         tag_row.setSpacing(8)
 
@@ -916,23 +927,34 @@ class InputArea(QWidget):
         root.addLayout(tag_row)
         self.setStyleSheet(f"background-color: {C['bg_primary']};")
 
-    def _make_tag(self, label: str, value: str, width: int) -> QPushButton:
-        btn = QPushButton()
-        btn.setFixedSize(width, 22)
-        btn.setCursor(Qt.PointingHandCursor)
-        btn.setStyleSheet(
-            f"QPushButton {{ background-color: {C['tag_bg']}; color: {C['text_secondary']}; "
-            f"border: 0.5px solid {C['border']}; border-radius: 6px; "
-            f"font-size: 10px; text-align: left; padding: 2px 4px; }}"
-            f"QPushButton:hover {{ background-color: {C['bg_hover']}; }}"
+    def _make_tag(self, label: str, value: str, width: int) -> QWidget:
+        """标签控件：label 灰色小字 + value 白色大字 + chevron，避免 QPushButton HTML 不渲染。"""
+        tag = QWidget()
+        tag.setFixedSize(width, 22)
+        tag.setCursor(Qt.PointingHandCursor)
+        tag.setStyleSheet(
+            f"QWidget {{ background-color: {C['tag_bg']}; border: 0.5px solid {C['border']}; border-radius: 6px; }}"
         )
-        # 用 HTML 渲染 label + value + chevron
-        btn.setText(
-            f'<span style="color:{C["text_secondary"]};font-size:9px;">{label}</span> '
-            f'<span style="color:{C["text_primary"]};font-size:10px;font-weight:500;">{value}</span> '
-            f'<span style="color:{C["text_muted"]};font-size:9px;">▼</span>'
-        )
-        return btn
+        hl = QHBoxLayout(tag)
+        hl.setContentsMargins(4, 0, 4, 0)
+        hl.setSpacing(2)
+
+        lbl = QLabel(label)
+        lbl.setFont(font(9))
+        lbl.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
+        hl.addWidget(lbl)
+
+        val = QLabel(value)
+        val.setFont(font(10, bold=True))
+        val.setStyleSheet(f"color: {C['text_primary']}; background: transparent;")
+        hl.addWidget(val)
+
+        chev = QLabel("▼")
+        chev.setFont(font(8))
+        chev.setStyleSheet(f"color: {C['text_muted']}; background: transparent;")
+        hl.addWidget(chev)
+        hl.addStretch()
+        return tag
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1206,30 +1228,29 @@ class RightPanel(QWidget):
 
 class MainWindow(QMainWindow):
     def __init__(self):
-        super().__init__()
+        super().__init__(None, Qt.FramelessWindowHint)
         self.resize(1024, 720)
         self.setMinimumWidth(800)
         self.setWindowTitle("Agent Workbench — UI Template")
         self._left_visible = True
         self._right_visible = True
+        self._drag_pos = None
         self._setup_ui()
-
-    @staticmethod
-    def _set_dark_titlebar(hwnd: int):
-        """Windows DWM 深色标题栏 API（替代白色窗口栏）。"""
-        DWMWA_USE_IMMERSIVE_DARK_MODE = 20
-        try:
-            val = ctypes.c_int(1)
-            ctypes.windll.dwmapi.DwmSetWindowAttribute(
-                ctypes.c_void_p(hwnd), DWMWA_USE_IMMERSIVE_DARK_MODE,
-                ctypes.byref(val), ctypes.sizeof(val))
-        except Exception:
-            pass
 
     def _setup_ui(self):
         central = QWidget()
         self.setCentralWidget(central)
-        ml = QHBoxLayout(central)
+        root = QVBoxLayout(central)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # ── 自定义顶部标题栏（替代系统标题栏）──
+        title_bar = self._build_title_bar()
+        root.addWidget(title_bar)
+
+        # ── 工作区（三栏 QSplitter）──
+        work_area = QWidget()
+        ml = QHBoxLayout(work_area)
         ml.setContentsMargins(0, 0, 0, 0)
         ml.setSpacing(0)
 
@@ -1269,11 +1290,94 @@ class MainWindow(QMainWindow):
         self._splitter.setStretchFactor(1, 1)
         self._splitter.setStretchFactor(2, 0)
         ml.addWidget(self._splitter)
+        root.addWidget(work_area, 1)
+
+        # ── 底部状态栏（对应截图中的工作区状态栏）──
+        status_bar = self._build_status_bar()
+        root.addWidget(status_bar)
 
         # 全局暗色主题
         self._apply_dark_palette()
-        # Windows 深色标题栏
-        self._set_dark_titlebar(int(self.winId()))
+
+    def _build_title_bar(self) -> QWidget:
+        """无边框窗口顶部标题栏：标题 + 窗口控制按钮。"""
+        bar = QWidget()
+        bar.setFixedHeight(28)
+        bar.setStyleSheet(f"background-color: {C['bg_sidebar']};")
+        hl = QHBoxLayout(bar)
+        hl.setContentsMargins(10, 0, 0, 0)
+        hl.setSpacing(0)
+
+        icon = QLabel("🤖")
+        icon.setStyleSheet(f"color: {C['accent']}; background: transparent; font-size: 12px;")
+        hl.addWidget(icon)
+        hl.addSpacing(6)
+
+        title = QLabel(self.windowTitle())
+        title.setFont(font(10))
+        title.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
+        hl.addWidget(title)
+        hl.addStretch()
+
+        # 窗口按钮
+        for sym, cb in [("—", self.showMinimized), ("□", self._toggle_maximize), ("✕", self.close)]:
+            btn = QPushButton(sym)
+            btn.setFixedSize(40, 28)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setStyleSheet(
+                f"QPushButton {{ background-color: transparent; color: {C['text_secondary']}; "
+                f"border: none; font-size: 12px; }}"
+                f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
+            )
+            btn.clicked.connect(cb)
+            hl.addWidget(btn)
+        return bar
+
+    def _build_status_bar(self) -> QWidget:
+        """底部状态栏：左侧模型/模式状态，右侧提示信息。"""
+        bar = QWidget()
+        bar.setFixedHeight(22)
+        bar.setStyleSheet(f"background-color: {C['bg_right']}; border-top: 0.5px solid {C['border']};")
+        hl = QHBoxLayout(bar)
+        hl.setContentsMargins(10, 0, 10, 0)
+        hl.setSpacing(12)
+
+        mode_lbl = QLabel("ask")
+        mode_lbl.setFont(font(9))
+        mode_lbl.setStyleSheet(f"color: {C['accent']}; background: transparent;")
+        hl.addWidget(mode_lbl)
+
+        model_lbl = QLabel("flash")
+        model_lbl.setFont(font(9))
+        model_lbl.setStyleSheet(f"color: {C['text_muted']}; background: transparent;")
+        hl.addWidget(model_lbl)
+
+        hl.addStretch()
+
+        hint_lbl = QLabel("Agent Workbench UI Template v0.1")
+        hint_lbl.setFont(font(9))
+        hint_lbl.setStyleSheet(f"color: {C['text_muted']}; background: transparent;")
+        hl.addWidget(hint_lbl)
+        return bar
+
+    def _toggle_maximize(self):
+        if self.isMaximized():
+            self.showNormal()
+        else:
+            self.showMaximized()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._drag_pos = event.globalPosition().toPoint()
+
+    def mouseMoveEvent(self, event):
+        if self._drag_pos and event.buttons() == Qt.LeftButton:
+            delta = event.globalPosition().toPoint() - self._drag_pos
+            self.move(self.pos() + delta)
+            self._drag_pos = event.globalPosition().toPoint()
+
+    def mouseReleaseEvent(self, event):
+        self._drag_pos = None
 
     def _apply_dark_palette(self):
         app = QApplication.instance()
