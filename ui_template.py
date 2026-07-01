@@ -320,12 +320,13 @@ class LeftPanel(QWidget):
         self.setStyleSheet(f"background-color: {C['bg_sidebar']};")
 
     def _make_tab_btn(self, text: str, active: bool) -> QPushButton:
+        """现代化 Tab 标签：柔和背景、小圆角、细字重。"""
         btn = QPushButton(text)
         btn.setCheckable(True)
         btn.setChecked(active)
         btn.setCursor(Qt.PointingHandCursor)
         btn.setMinimumWidth(88)
-        bg = C["accent"] if active else C["btn_bg"]
+        bg = C["accent"] if active else "transparent"
         fg = C["text_inverse"] if active else C["text_secondary"]
         fw = 600 if active else 500
         btn.setStyleSheet(
@@ -337,35 +338,38 @@ class LeftPanel(QWidget):
         return btn
 
     def _make_small_btn(self, text: str, w: int, h: int) -> QPushButton:
+        """现代化图标按钮：无边框、半透明 hover。"""
         btn = QPushButton(text)
         btn.setFixedSize(w, h)
         btn.setCursor(Qt.PointingHandCursor)
         btn.setStyleSheet(
-            f"QPushButton {{ background-color: {C['bg_primary']}; color: {C['text_secondary']}; "
-            f"border: 0.5px solid {C['border']}; border-radius: 6px; font-size: 10px; }}"
-            f"QPushButton:hover {{ background-color: {C['bg_hover']}; }}"
+            f"QPushButton {{ background-color: transparent; color: {C['text_secondary']}; "
+            f"border: none; border-radius: 6px; font-size: 10px; }}"
+            f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
         )
         return btn
 
     def _make_new_btn(self) -> QPushButton:
+        """现代化新会话按钮：细边框、低饱和。"""
         btn = QPushButton("+ 新会话")
         btn.setFixedHeight(22)
         btn.setCursor(Qt.PointingHandCursor)
         btn.setStyleSheet(
-            f"QPushButton {{ background-color: {C['bg_primary']}; color: {C['text_secondary']}; "
-            f"border: 0.5px solid {C['accent']}; border-radius: 6px; font-size: 11px; font-weight: 500; }}"
-            f"QPushButton:hover {{ background-color: {C['bg_hover']}; }}"
+            f"QPushButton {{ background-color: transparent; color: {C['text_secondary']}; "
+            f"border: 0.5px solid {C['border']}; border-radius: 6px; font-size: 11px; font-weight: 500; }}"
+            f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
         )
         return btn
 
     def _make_bottom_btn(self, text: str) -> QPushButton:
+        """现代化底部小标签：无边框、hover 高亮。"""
         btn = QPushButton(text)
         btn.setFixedSize(32, 12)
         btn.setCursor(Qt.PointingHandCursor)
         btn.setStyleSheet(
-            f"QPushButton {{ background-color: {C['btn_bg']}; color: {C['text_secondary']}; "
-            f"border: 1px solid {C['border']}; border-radius: 6px; font-size: 8px; }}"
-            f"QPushButton:hover {{ background-color: {C['bg_hover']}; }}"
+            f"QPushButton {{ background-color: transparent; color: {C['text_secondary']}; "
+            f"border: none; border-radius: 6px; font-size: 8px; }}"
+            f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
         )
         return btn
 
@@ -840,14 +844,15 @@ class HeaderBar(QWidget):
         self.setStyleSheet(f"background-color: {C['bg_primary']};")
 
     def _icon_btn(self, text: str, tooltip: str) -> QPushButton:
+        """现代化图标按钮：无边框、hover 微亮。"""
         btn = QPushButton(text)
         btn.setFixedSize(18, 22)
         btn.setToolTip(tooltip)
         btn.setCursor(Qt.PointingHandCursor)
         btn.setStyleSheet(
-            f"QPushButton {{ background-color: {C['btn_bg']}; color: {C['text_secondary']}; "
-            f"border: 0.5px solid {C['border']}; border-radius: 4px; font-size: 11px; }}"
-            f"QPushButton:hover {{ background-color: {C['btn_hover']}; }}"
+            f"QPushButton {{ background-color: transparent; color: {C['text_secondary']}; "
+            f"border: none; border-radius: 4px; font-size: 11px; }}"
+            f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
         )
         return btn
 
@@ -906,9 +911,9 @@ class InputArea(QWidget):
         self._skill_btn.setFixedSize(20, 20)
         self._skill_btn.setCursor(Qt.PointingHandCursor)
         self._skill_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {C['btn_bg']}; color: {C['text_secondary']}; "
+            f"QPushButton {{ background-color: transparent; color: {C['text_secondary']}; "
             f"border: none; border-radius: 10px; font-size: 14px; font-weight: 600; }}"
-            f"QPushButton:hover {{ background-color: {C['bg_hover']}; }}"
+            f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
         )
         tag_row.addWidget(self._skill_btn)
 
@@ -922,12 +927,13 @@ class InputArea(QWidget):
         self.setStyleSheet(f"background-color: {C['bg_primary']};")
 
     def _make_tag(self, label: str, value: str, width: int) -> QWidget:
-        """标签控件：label 灰色小字 + value 白色大字 + chevron，避免 QPushButton HTML 不渲染。"""
+        """现代化下拉标签：透明背景、细边框、hover 微亮。"""
         tag = QWidget()
         tag.setFixedSize(width, 22)
         tag.setCursor(Qt.PointingHandCursor)
         tag.setStyleSheet(
-            f"QWidget {{ background-color: {C['tag_bg']}; border: 0.5px solid {C['border']}; border-radius: 6px; }}"
+            f"QWidget {{ background-color: transparent; border: 0.5px solid {C['border']}; border-radius: 6px; }}"
+            f"QWidget:hover {{ background-color: {C['bg_hover']}; }}"
         )
         hl = QHBoxLayout(tag)
         hl.setContentsMargins(4, 0, 4, 0)
@@ -935,16 +941,16 @@ class InputArea(QWidget):
 
         lbl = QLabel(label)
         lbl.setFont(font(9))
-        lbl.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
+        lbl.setStyleSheet(f"color: {C['text_muted']}; background: transparent;")
         hl.addWidget(lbl)
 
         val = QLabel(value)
         val.setFont(font(10, bold=True))
-        val.setStyleSheet(f"color: {C['text_primary']}; background: transparent;")
+        val.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
         hl.addWidget(val)
 
-        chev = QLabel("▼")
-        chev.setFont(font(8))
+        chev = QLabel("▾")
+        chev.setFont(font(9))
         chev.setStyleSheet(f"color: {C['text_muted']}; background: transparent;")
         hl.addWidget(chev)
         hl.addStretch()
@@ -1083,8 +1089,9 @@ class RightPanel(QWidget):
         add_btn.setFixedSize(16, 16)
         add_btn.setCursor(Qt.PointingHandCursor)
         add_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {C['bg_hover']}; color: {C['text_secondary']}; "
+            f"QPushButton {{ background-color: transparent; color: {C['text_secondary']}; "
             f"border-radius: 8px; font-size: 10px; border: none; }}"
+            f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
         )
         tb_layout.addWidget(add_btn)
 
@@ -1100,14 +1107,15 @@ class RightPanel(QWidget):
             tb_layout.addWidget(btn)
             self._tab_btns.append(btn)
 
-            # SVG: close btn r=5 (d=10)
+            # 现代化 close 小标签
             if i > 0:  # 第一个标签不可关闭
                 cls = QPushButton("✕")
                 cls.setFixedSize(10, 10)
                 cls.setCursor(Qt.PointingHandCursor)
                 cls.setStyleSheet(
-                    f"QPushButton {{ background-color: {C['bg_right']}; color: {C['text_muted']}; "
+                    f"QPushButton {{ background-color: transparent; color: {C['text_muted']}; "
                     f"border-radius: 5px; font-size: 7px; border: none; }}"
+                    f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
                 )
                 tb_layout.addWidget(cls)
 
@@ -1195,10 +1203,10 @@ class RightPanel(QWidget):
         time_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         hl.addWidget(time_lbl)
 
-        # SVG: row fill=#16213e stroke=#2a2a4a rx=4
+        # 现代化文件标签：无边框、hover 微亮
         row.setStyleSheet(
-            f"QWidget {{ background-color: {C['bg_sidebar']}; "
-            f"border: 0.5px solid {C['border']}; border-radius: 4px; }}"
+            f"QWidget {{ background-color: transparent; border-radius: 4px; }}"
+            f"QWidget:hover {{ background-color: {C['bg_hover']}; }}"
         )
         return row
 
@@ -1232,9 +1240,9 @@ class RightPanel(QWidget):
         self._stack.setCurrentIndex(idx)
         for i, btn in enumerate(self._tab_btns):
             active = (i == idx)
-            bg = C["bg_primary"] if active else C["bg_right"]
+            bg = C["bg_primary"] if active else "transparent"
             fg = C["text_primary"] if active else C["text_secondary"]
-            fw = 600 if active else 400
+            fw = 600 if active else 500
             btn.setChecked(active)
             btn.setStyleSheet(
                 f"QPushButton {{ background-color: {bg}; color: {fg}; "
