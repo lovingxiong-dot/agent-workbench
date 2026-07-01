@@ -15,7 +15,7 @@ ui_template.py — Agent Workbench 纯 UI 模版（零业务逻辑）
 import sys
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QLabel, QPushButton, QTextEdit, QSplitter, QStackedWidget,
+    QLabel, QPushButton, QLineEdit, QTextEdit, QSplitter, QStackedWidget,
     QGraphicsView, QGraphicsScene, QGraphicsItem, QSizePolicy,
     QFrame, QScrollArea, QMenu,
 )
@@ -215,6 +215,207 @@ class SessionGroup(QWidget):
             it.setVisible(self._expanded)
 
 
+class FunctionPage(QWidget):
+    """功能页：按 ui-left-function.svg 精确绘制（工具 / MCP / 技能 / 自动化）。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet(
+            f"QScrollArea {{ border: none; background: {C['bg_sidebar']}; }}"
+            f"QScrollBar:vertical {{ background: transparent; width: 3px; border: none; margin: 0px; }}"
+            f"QScrollBar::handle:vertical {{ background: {C['border']}; min-height: 24px; max-width: 3px; border-radius: 1px; }}"
+            f"QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; background: transparent; }}"
+            f"QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}"
+        )
+
+        content = QWidget()
+        cl = QVBoxLayout(content)
+        cl.setContentsMargins(0, 0, 0, 0)
+        cl.setSpacing(10)
+
+        # 工具
+        cl.addWidget(self._section_header("工具"))
+        cl.addWidget(self._tool_row("run_command", True))
+        cl.addWidget(self._tool_row("grep_files", False))
+        cl.addWidget(self._tool_row("write_file", True))
+
+        cl.addWidget(self._sep())
+
+        # MCP
+        cl.addWidget(self._section_header("MCP"))
+        cl.addWidget(self._mcp_row("GitHub", True))
+        cl.addWidget(self._mcp_row("Notion", False))
+
+        cl.addWidget(self._sep())
+
+        # 技能
+        cl.addWidget(self._section_header("技能"))
+        cl.addWidget(self._skill_row("archive"))
+        cl.addWidget(self._skill_row("handoff"))
+        cl.addWidget(self._skill_row("gitops"))
+
+        cl.addWidget(self._sep())
+
+        # 自动化
+        cl.addWidget(self._section_header("自动化"))
+        cl.addWidget(self._auto_row("每日日报", "08:00"))
+
+        cl.addStretch()
+        scroll.setWidget(content)
+        layout.addWidget(scroll)
+        self.setStyleSheet(f"background-color: {C['bg_sidebar']};")
+
+    def _section_header(self, text: str) -> QLabel:
+        lbl = QLabel(text)
+        lbl.setFont(font(9, bold=True))
+        lbl.setStyleSheet(
+            f"color: {C['text_muted']}; font-size: 9px; font-weight: 600; "
+            f"letter-spacing: 0.5px; padding: 0 0 2px 0; background: transparent;"
+        )
+        return lbl
+
+    def _sep(self) -> QFrame:
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setFixedHeight(1)
+        sep.setStyleSheet(f"background-color: {C['border']};")
+        return sep
+
+    def _tool_row(self, name: str, enabled: bool) -> QWidget:
+        row = QWidget()
+        row.setFixedHeight(24)
+        hl = QHBoxLayout(row)
+        hl.setContentsMargins(10, 0, 10, 0)
+        hl.setSpacing(8)
+
+        dot_color = C["green"] if enabled else C["gray"]
+        name_color = C["text_primary"] if enabled else C["text_secondary"]
+        status_color = C["green"] if enabled else C["gray"]
+        status_text = "开" if enabled else "关"
+
+        dot = QLabel("●")
+        dot.setFont(font(7))
+        dot.setStyleSheet(f"color: {dot_color}; background: transparent;")
+        hl.addWidget(dot)
+
+        name_lbl = QLabel(name)
+        name_lbl.setFont(font(11))
+        name_lbl.setStyleSheet(f"color: {name_color}; background: transparent;")
+        hl.addWidget(name_lbl, 1)
+
+        status = QLabel(status_text)
+        status.setFont(font(9))
+        status.setAlignment(Qt.AlignCenter)
+        status.setFixedSize(26, 12)
+        status.setStyleSheet(
+            f"color: {status_color}; background-color: {status_color}33; "
+            f"border-radius: 6px; padding: 0 2px;"
+        )
+        hl.addWidget(status)
+
+        row.setStyleSheet(
+            f"QWidget {{ background-color: {C['tag_bg']}; border: 0.5px solid {C['border']}; border-radius: 4px; }}"
+            f"QWidget:hover {{ background-color: {C['bg_hover']}; }}"
+        )
+        return row
+
+    def _mcp_row(self, name: str, connected: bool) -> QWidget:
+        row = QWidget()
+        row.setFixedHeight(24)
+        hl = QHBoxLayout(row)
+        hl.setContentsMargins(10, 0, 10, 0)
+        hl.setSpacing(8)
+
+        dot_color = C["green"] if connected else C["gray"]
+        name_color = C["text_primary"] if connected else C["text_secondary"]
+        status_color = C["green"] if connected else C["gray"]
+        status_text = "已连接" if connected else "未连接"
+
+        dot = QLabel("●")
+        dot.setFont(font(7))
+        dot.setStyleSheet(f"color: {dot_color}; background: transparent;")
+        hl.addWidget(dot)
+
+        name_lbl = QLabel(name)
+        name_lbl.setFont(font(11))
+        name_lbl.setStyleSheet(f"color: {name_color}; background: transparent;")
+        hl.addWidget(name_lbl, 1)
+
+        status_lbl = QLabel(status_text)
+        status_lbl.setFont(font(9))
+        status_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        status_lbl.setStyleSheet(f"color: {status_color}; background: transparent;")
+        hl.addWidget(status_lbl)
+
+        row.setStyleSheet(
+            f"QWidget {{ background-color: {C['tag_bg']}; border: 0.5px solid {C['border']}; border-radius: 4px; }}"
+            f"QWidget:hover {{ background-color: {C['bg_hover']}; }}"
+        )
+        return row
+
+    def _skill_row(self, name: str) -> QWidget:
+        row = QWidget()
+        row.setFixedHeight(26)
+        hl = QHBoxLayout(row)
+        hl.setContentsMargins(10, 0, 10, 0)
+        hl.setSpacing(4)
+
+        icon = QLabel("⚡")
+        icon.setFont(font(11))
+        icon.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
+        hl.addWidget(icon)
+
+        name_lbl = QLabel(name)
+        name_lbl.setFont(font(11))
+        name_lbl.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
+        hl.addWidget(name_lbl, 1)
+
+        row.setStyleSheet(
+            f"QWidget {{ background-color: {C['tag_bg']}; border: 0.5px solid {C['border']}; border-radius: 4px; }}"
+            f"QWidget:hover {{ background-color: {C['bg_hover']}; }}"
+        )
+        return row
+
+    def _auto_row(self, name: str, time_str: str) -> QWidget:
+        row = QWidget()
+        row.setFixedHeight(24)
+        hl = QHBoxLayout(row)
+        hl.setContentsMargins(10, 0, 10, 0)
+        hl.setSpacing(8)
+
+        dot = QLabel("●")
+        dot.setFont(font(7))
+        dot.setStyleSheet(f"color: {C['yellow']}; background: transparent;")
+        hl.addWidget(dot)
+
+        name_lbl = QLabel(name)
+        name_lbl.setFont(font(11))
+        name_lbl.setStyleSheet(f"color: {C['text_primary']}; background: transparent;")
+        hl.addWidget(name_lbl, 1)
+
+        time_lbl = QLabel(time_str)
+        time_lbl.setFont(font(9))
+        time_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        time_lbl.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
+        hl.addWidget(time_lbl)
+
+        row.setStyleSheet(
+            f"QWidget {{ background-color: {C['tag_bg']}; border: 0.5px solid {C['border']}; border-radius: 4px; }}"
+            f"QWidget:hover {{ background-color: {C['bg_hover']}; }}"
+        )
+        return row
+
+
 class LeftPanel(QWidget):
     """左栏面板：Tab切换 + 分组会话列表 + 底部控制。"""
     session_selected = Signal(int)
@@ -246,17 +447,49 @@ class LeftPanel(QWidget):
         tab_row.addWidget(self._sess_btn, 1)
         layout.addLayout(tab_row)
 
-        # ── 工具行（SVG: 搜索 + 新会话 + 更多）──
-        tool_row = QHBoxLayout()
-        tool_row.setSpacing(6)
+        # ── 工具行（按 Tab 切换：功能页=搜索框+"+" / 会话页=搜索+新会话+更多）──
+        self._tool_stack = QStackedWidget()
+        self._tool_stack.setFixedHeight(22)
 
+        # 功能页工具行（SVG ui-left-function.svg: x=14 y=42）
+        func_tools = QWidget()
+        ftl = QHBoxLayout(func_tools)
+        ftl.setContentsMargins(0, 0, 0, 0)
+        ftl.setSpacing(6)
+        self._func_search = QLineEdit()
+        self._func_search.setPlaceholderText("🔍")
+        self._func_search.setFixedHeight(22)
+        self._func_search.setStyleSheet(
+            f"QLineEdit {{ background-color: {C['bg_primary']}; color: {C['text_secondary']}; "
+            f"border: 0.5px solid {C['border']}; border-radius: 6px; padding: 0 8px; font-size: 12px; }}"
+            f"QLineEdit:focus {{ border: 0.5px solid {C['accent']}; }}"
+        )
+        self._func_add = QPushButton("+")
+        self._func_add.setFixedSize(30, 22)
+        self._func_add.setCursor(Qt.PointingHandCursor)
+        self._func_add.setStyleSheet(
+            f"QPushButton {{ background-color: {C['tag_bg']}; color: {C['accent']}; "
+            f"border: 0.5px solid {C['accent']}; border-radius: 6px; font-size: 13px; font-weight: 600; }}"
+            f"QPushButton:hover {{ background-color: {C['bg_hover']}; }}"
+        )
+        ftl.addWidget(self._func_search, 1)
+        ftl.addWidget(self._func_add)
+        self._tool_stack.addWidget(func_tools)
+
+        # 会话页工具行（SVG ui-full-dark.svg: x=14 y=42）
+        sess_tools = QWidget()
+        stl = QHBoxLayout(sess_tools)
+        stl.setContentsMargins(0, 0, 0, 0)
+        stl.setSpacing(6)
         self._search_btn = self._make_small_btn("🔍", 28, 22)
         self._new_btn = self._make_new_btn()
         self._more_btn = self._make_small_btn("...", 28, 22)
-        tool_row.addWidget(self._search_btn)
-        tool_row.addWidget(self._new_btn, 1)
-        tool_row.addWidget(self._more_btn)
-        layout.addLayout(tool_row)
+        stl.addWidget(self._search_btn)
+        stl.addWidget(self._new_btn, 1)
+        stl.addWidget(self._more_btn)
+        self._tool_stack.addWidget(sess_tools)
+
+        layout.addWidget(self._tool_stack)
 
         # 工具行下分隔线（SVG: y=76）
         sep1 = QFrame()
@@ -268,10 +501,8 @@ class LeftPanel(QWidget):
         # ── 内容区（QStackedWidget：功能页 / 会话列表）──
         self._stack = QStackedWidget()
 
-        # 功能页占位
-        func_page = QLabel("功能页（工具/MCP/技能/自动化）\n待实现")
-        func_page.setAlignment(Qt.AlignCenter)
-        func_page.setStyleSheet(f"color: {C['text_muted']}; font-size: 11px;")
+        # 功能页
+        func_page = FunctionPage()
         self._stack.addWidget(func_page)
 
         # 会话列表（可滚动）
@@ -377,11 +608,12 @@ class LeftPanel(QWidget):
         self._current_tab = tab
         is_func = (tab == "功能")
         self._stack.setCurrentIndex(0 if is_func else 1)
+        self._tool_stack.setCurrentIndex(0 if is_func else 1)
         self._func_btn.setChecked(is_func)
         self._sess_btn.setChecked(not is_func)
         # 更新按钮样式
         for btn, active in [(self._func_btn, is_func), (self._sess_btn, not is_func)]:
-            bg = C["accent"] if active else C["btn_bg"]
+            bg = C["accent"] if active else "transparent"
             fg = C["text_inverse"] if active else C["text_secondary"]
             fw = 600 if active else 500
             btn.setStyleSheet(
@@ -830,12 +1062,26 @@ class HeaderBar(QWidget):
         layout.addWidget(vsep)
         layout.addSpacing(6)
 
-        # 三按钮
-        self._search_btn = self._icon_btn("🔍", "搜索")
+        # 三按钮（SVG path 矢量图标，ui-header-buttons.svg 规范）
+        search_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="18" height="22" viewBox="0 0 18 22">
+            <path d="M 5 6 a 3.5 3.5 0 1 0 0 7 a 3.5 3.5 0 1 0 0 -7 M 8 13 L 11 16"
+                  fill="none" stroke="{C['text_secondary']}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>'''
+        more_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="18" height="22" viewBox="0 0 18 22">
+            <circle cx="5" cy="7" r="1.2" fill="{C['text_secondary']}"/>
+            <circle cx="9" cy="7" r="1.2" fill="{C['text_secondary']}"/>
+            <circle cx="13" cy="7" r="1.2" fill="{C['text_secondary']}"/>
+        </svg>'''
+        expand_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="18" height="22" viewBox="0 0 18 22">
+            <path d="M 5 4 L 10 4 L 10 9 M 5 10 L 10 10 L 10 5"
+                  fill="none" stroke="{C['text_secondary']}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>'''
+
+        self._search_btn = self._icon_btn(search_svg, "搜索")
         self._search_btn.clicked.connect(self.search_clicked.emit)
-        self._more_btn = self._icon_btn("⋯", "更多操作")
+        self._more_btn = self._icon_btn(more_svg, "更多操作")
         self._more_btn.clicked.connect(self.more_clicked.emit)
-        self._expand_btn = self._icon_btn("⤢", "折叠面板")
+        self._expand_btn = self._icon_btn(expand_svg, "折叠面板")
         self._expand_btn.clicked.connect(self.expand_toggled.emit)
 
         layout.addWidget(self._search_btn)
@@ -843,17 +1089,19 @@ class HeaderBar(QWidget):
         layout.addWidget(self._expand_btn)
         self.setStyleSheet(f"background-color: {C['bg_primary']};")
 
-    def _icon_btn(self, text: str, tooltip: str) -> QPushButton:
-        """现代化图标按钮：无边框、hover 微亮。"""
-        btn = QPushButton(text)
+    def _icon_btn(self, svg_str: str, tooltip: str) -> QPushButton:
+        """现代化 SVG 图标按钮：无边框、hover 背景微亮。"""
+        btn = QPushButton()
         btn.setFixedSize(18, 22)
         btn.setToolTip(tooltip)
         btn.setCursor(Qt.PointingHandCursor)
         btn.setStyleSheet(
-            f"QPushButton {{ background-color: transparent; color: {C['text_secondary']}; "
-            f"border: none; border-radius: 4px; font-size: 11px; }}"
-            f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
+            f"QPushButton {{ background-color: transparent; border: none; border-radius: 4px; }}"
+            f"QPushButton:hover {{ background-color: {C['bg_hover']}; }}"
         )
+        lbl = QLabel(btn)
+        lbl.setPixmap(svg_icon(svg_str, 18, 22))
+        lbl.move(0, 0)
         return btn
 
 
@@ -887,17 +1135,21 @@ class InputArea(QWidget):
             f"padding: 8px 36px 8px 14px; font-size: 11px; }}"
         )
 
-        # ── 发送按钮 (SVG: cx=585 cy=688 r=12 fill=#34d399, arrow black) ──
+        # ── 发送按钮 (SVG: cx=585 cy=688 r=12 fill=#34d399, arrow #0f1729) ──
         self._send_btn = QPushButton(input_container)
         self._send_btn.setFixedSize(24, 24)
         self._send_btn.move(330, 16)  # 362 - 24 - 8
         self._send_btn.setCursor(Qt.PointingHandCursor)
         self._send_btn.setStyleSheet(
-            f"QPushButton {{ background-color: #34d399; border-radius: 8px; border: none; "
-            f"color: #0f1729; font-size: 16px; font-weight: 700; }}"
+            f"QPushButton {{ background-color: #34d399; border-radius: 8px; border: none; }}"
             f"QPushButton:hover {{ background-color: #2ecc71; }}"
         )
-        self._send_btn.setText("↑")
+        send_svg = '''<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+            <path d="M 12 7 L 16 15 L 13 15 L 13 19 L 11 19 L 11 15 L 8 15 Z" fill="#0f1729"/>
+        </svg>'''
+        send_lbl = QLabel(self._send_btn)
+        send_lbl.setPixmap(svg_icon(send_svg, 24, 24))
+        send_lbl.move(0, 0)
         self._send_btn.clicked.connect(self.send_clicked.emit)
 
         root.addWidget(input_container)
