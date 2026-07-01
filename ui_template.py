@@ -1210,17 +1210,32 @@ class MainWindow(QMainWindow):
         self._splitter.setHandleWidth(1)
 
         # 左栏
-        self._left = LeftPanel()
-        self._splitter.addWidget(self._left)
+        try:
+            self._left = LeftPanel()
+            self._splitter.addWidget(self._left)
+        except Exception as e:
+            print(f"[ERROR] LeftPanel init failed: {e}")
+            import traceback; traceback.print_exc()
+            self._left = QLabel(f"左栏加载失败: {e}")
 
         # 中栏
-        self._center = ChatArea()
-        self._center._header.expand_toggled.connect(self._toggle_panels)
-        self._splitter.addWidget(self._center)
+        try:
+            self._center = ChatArea()
+            self._center._header.expand_toggled.connect(self._toggle_panels)
+            self._splitter.addWidget(self._center)
+        except Exception as e:
+            print(f"[ERROR] ChatArea init failed: {e}")
+            import traceback; traceback.print_exc()
+            self._center = QLabel(f"聊天区加载失败: {e}")
 
         # 右栏
-        self._right = RightPanel()
-        self._splitter.addWidget(self._right)
+        try:
+            self._right = RightPanel()
+            self._splitter.addWidget(self._right)
+        except Exception as e:
+            print(f"[ERROR] RightPanel init failed: {e}")
+            import traceback; traceback.print_exc()
+            self._right = QLabel(f"右栏加载失败: {e}")
 
         self._splitter.setSizes([220, 404, 400])
         self._splitter.setStretchFactor(0, 0)
@@ -1266,8 +1281,21 @@ class MainWindow(QMainWindow):
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    app.setApplicationName("Agent Workbench UI Template")
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())
+    import traceback
+    try:
+        app = QApplication(sys.argv)
+        app.setApplicationName("Agent Workbench UI Template")
+        window = MainWindow()
+        # 强制置顶确保窗口可见
+        window.setWindowFlags(window.windowFlags() | Qt.WindowStaysOnTopHint)
+        window.show()
+        window.setWindowFlags(window.windowFlags() & ~Qt.WindowStaysOnTopHint)
+        window.show()
+        window.raise_()
+        window.activateWindow()
+        window.resize(1024, 720)
+        sys.exit(app.exec())
+    except Exception:
+        traceback.print_exc()
+        input("按 Enter 退出...")
+        sys.exit(1)
