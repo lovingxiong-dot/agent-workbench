@@ -1101,16 +1101,6 @@ class RightPanel(QWidget):
 
         tb_layout.addStretch()
 
-        # 搜索按钮（SVG: w=16 h=16 rx=3）
-        srch = QPushButton("🔍")
-        srch.setFixedSize(16, 16)
-        srch.setCursor(Qt.PointingHandCursor)
-        srch.setStyleSheet(
-            f"QPushButton {{ background-color: {C['bg_hover']}; color: {C['text_secondary']}; "
-            f"border-radius: 3px; font-size: 9px; border: none; }}"
-        )
-        tb_layout.addWidget(srch)
-
         # 窗口控制按钮容器（由 MainWindow 注入回调）
         self._win_btns = QWidget()
         win_hl = QHBoxLayout(self._win_btns)
@@ -1201,16 +1191,27 @@ class RightPanel(QWidget):
         return row
 
     def set_window_buttons(self, minimize_cb, maximize_cb, close_cb):
-        """把系统最小化/最大化/关闭按钮嵌入右栏顶部状态栏最右侧。"""
-        for sym, cb in [("—", minimize_cb), ("□", maximize_cb), ("✕", close_cb)]:
-            btn = QPushButton(sym)
+        """把系统最小化/最大化/关闭按钮嵌入右栏顶部状态栏最右侧，使用SVG图标。"""
+        icons = [
+            ("M 6 10 L 18 10", minimize_cb),   # 最小化：一条横线
+            ("M 6 6 L 18 6 L 18 18 L 6 18 Z", maximize_cb),  # 最大化：方框
+            ("M 6 6 L 18 18 M 18 6 L 6 18", close_cb),       # 关闭：X
+        ]
+        for path, cb in icons:
+            btn = QPushButton()
             btn.setFixedSize(28, 20)
             btn.setCursor(Qt.PointingHandCursor)
             btn.setStyleSheet(
-                f"QPushButton {{ background-color: transparent; color: {C['text_secondary']}; "
-                f"border: none; font-size: 11px; }}"
-                f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
+                f"QPushButton {{ background-color: transparent; border: none; }}"
+                f"QPushButton:hover {{ background-color: {C['bg_hover']}; }}"
             )
+            # 用 QLabel 显示 SVG 路径图标
+            svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="24" height="20" viewBox="0 0 24 20">
+                <path d="{path}" fill="none" stroke="{C['text_secondary']}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>'''
+            lbl = QLabel(btn)
+            lbl.setPixmap(svg_icon(svg, 24, 20))
+            lbl.move(2, 0)
             btn.clicked.connect(cb)
             self._win_hl.addWidget(btn)
 
@@ -1246,7 +1247,12 @@ class MainWindow(QMainWindow):
         self._left_visible = True
         self._right_visible = True
         self._drag_pos = None
+        self._corner_radius = 8
         self._setup_ui()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._apply_rounded_mask()
 
     def _setup_ui(self):
         central = QWidget()
@@ -1286,6 +1292,21 @@ class MainWindow(QMainWindow):
             self.showNormal()
         else:
             self.showMaximized()
+
+    def _apply_rounded_mask(self):
+        """Frameless窗口四角圆角遮罩。"""
+        from PySide6.QtGui import QBitmap, QPainterPath, QPainter
+        r = self._corner_radius
+        path = QPainterPath()
+        rect = self.rect()
+        path.addRoundedRect(rect, r, r)
+        mask = QBitmap(self.size())
+        mask.fill(Qt.color0)
+        p = QPainter(mask)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.fillPath(path, Qt.color1)
+        p.end()
+        self.setMask(mask)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
