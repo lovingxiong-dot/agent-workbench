@@ -1062,19 +1062,21 @@ class HeaderBar(QWidget):
         layout.addWidget(vsep)
         layout.addSpacing(6)
 
-        # 三按钮（SVG path 矢量图标，ui-header-buttons.svg 规范）
-        search_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="18" height="22" viewBox="0 0 18 22">
-            <path d="M 5 6 a 3.5 3.5 0 1 0 0 7 a 3.5 3.5 0 1 0 0 -7 M 8 13 L 11 16"
-                  fill="none" stroke="{C['text_secondary']}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        # 右上角三键：统一 20×20 细线 SVG 图标（参照用户截图样式）
+        search_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+            <circle cx="9" cy="9" r="4" fill="none" stroke="{C['text_secondary']}" stroke-width="1.5"/>
+            <line x1="12" y1="12" x2="15.5" y2="15.5" stroke="{C['text_secondary']}" stroke-width="1.5" stroke-linecap="round"/>
         </svg>'''
-        more_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="18" height="22" viewBox="0 0 18 22">
-            <circle cx="5" cy="7" r="1.2" fill="{C['text_secondary']}"/>
-            <circle cx="9" cy="7" r="1.2" fill="{C['text_secondary']}"/>
-            <circle cx="13" cy="7" r="1.2" fill="{C['text_secondary']}"/>
+        more_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+            <circle cx="6" cy="10" r="1.2" fill="{C['text_secondary']}"/>
+            <circle cx="10" cy="10" r="1.2" fill="{C['text_secondary']}"/>
+            <circle cx="14" cy="10" r="1.2" fill="{C['text_secondary']}"/>
         </svg>'''
-        expand_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="18" height="22" viewBox="0 0 18 22">
-            <path d="M 5 4 L 10 4 L 10 9 M 5 10 L 10 10 L 10 5"
-                  fill="none" stroke="{C['text_secondary']}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        # 右侧面板图标：外框 + 右分隔线，表示侧边工作区
+        expand_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+            <rect x="3.5" y="4.5" width="13" height="11" rx="1.5" fill="none" stroke="{C['text_secondary']}" stroke-width="1.5"/>
+            <line x1="11.5" y1="4.5" x2="11.5" y2="15.5" stroke="{C['text_secondary']}" stroke-width="1.5"/>
+            <path d="M 13 8 L 15 10 L 13 12" fill="none" stroke="{C['text_secondary']}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>'''
 
         self._search_btn = self._icon_btn(search_svg, "搜索")
@@ -1084,7 +1086,7 @@ class HeaderBar(QWidget):
         self._expand_btn = self._icon_btn(expand_svg, "折叠右侧面板")
         self._expand_btn.clicked.connect(self.expand_toggled.emit)
 
-        # 右上角三键容器：spacing=2 紧凑排列（SVG 规范）
+        # 右上角三键容器：spacing=2 紧凑排列
         btn_block = QWidget()
         btn_hl = QHBoxLayout(btn_block)
         btn_hl.setContentsMargins(0, 0, 0, 0)
@@ -1097,9 +1099,9 @@ class HeaderBar(QWidget):
         self.setStyleSheet(f"background-color: {C['bg_primary']};")
 
     def _icon_btn(self, svg_str: str, tooltip: str) -> QPushButton:
-        """现代化 SVG 图标按钮：无边框、hover 背景微亮。"""
+        """20×20 方形图标按钮：无边框、hover 背景微亮。"""
         btn = QPushButton()
-        btn.setFixedSize(18, 22)
+        btn.setFixedSize(20, 20)
         btn.setToolTip(tooltip)
         btn.setCursor(Qt.PointingHandCursor)
         btn.setStyleSheet(
@@ -1107,7 +1109,7 @@ class HeaderBar(QWidget):
             f"QPushButton:hover {{ background-color: {C['bg_hover']}; }}"
         )
         lbl = QLabel(btn)
-        lbl.setPixmap(svg_icon(svg_str, 18, 22))
+        lbl.setPixmap(svg_icon(svg_str, 20, 20))
         lbl.move(0, 0)
         return btn
 
