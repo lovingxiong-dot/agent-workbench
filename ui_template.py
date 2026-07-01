@@ -268,8 +268,8 @@ class LeftPanel(QWidget):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet(
             f"QScrollArea {{ border: none; background: {C['bg_sidebar']}; }}"
-            f"QScrollBar:vertical {{ background: {C['bg_sidebar']}; width: 4px; border: none; border-radius: 2px; }}"
-            f"QScrollBar::handle:vertical {{ background: {C['border']}; min-height: 40px; border-radius: 2px; }}"
+            f"QScrollBar:vertical {{ background: transparent; width: 3px; border: none; margin: 0px; }}"
+            f"QScrollBar::handle:vertical {{ background: {C['border']}; min-height: 24px; max-width: 3px; border-radius: 1px; }}"
             f"QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; background: transparent; }}"
             f"QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}"
         )
