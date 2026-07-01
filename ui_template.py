@@ -61,6 +61,18 @@ def qcolor(hex_str: str) -> QColor:
     return QColor(hex_str)
 
 
+def svg_icon(svg_str: str, w: int, h: int) -> QPixmap:
+    """将 SVG 字符串渲染为 QPixmap。"""
+    from PySide6.QtSvg import QSvgRenderer
+    pm = QPixmap(w, h)
+    pm.fill(Qt.transparent)
+    renderer = QSvgRenderer(bytes(svg_str, "utf-8"))
+    p = QPainter(pm)
+    renderer.render(p)
+    p.end()
+    return pm
+
+
 def font(size: int, bold: bool = False, family: str = "Segoe UI") -> QFont:
     f = QFont(family, size)
     f.setBold(bold)
