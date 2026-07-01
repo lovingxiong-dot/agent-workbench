@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.1 (2026-07-01) — UI 模板图标 SVG 化 + 标签背景框恢复 + 输入区拖拽 + 防抖
+
+### feat/ui
+- 左栏功能/会话 Tab 按钮恢复 SVG 设计稿 rx=6 圆角背景框（accent 选中态 / btn_bg 未选中态）
+- 聊天区与输入区之间添加 _ResizeHandle 可拖拽分隔条（4px，50~300px 范围）
+- 中间/右侧分割线添加 80ms 防抖 QTimer，拖动停止后才重建内容，避免撕裂
+- 标题栏搜索/更多/还原/折叠图标 SVG 化
+- Enter 发送按钮 SVG 化（圆形背景 + 箭头）
+
+### fix/ui
+- Tab 按钮主题切换时同步刷新背景色 + 文字色 + 字重
+- 字体恢复 Segoe UI / Cascadia Code point-size 渲染
+
+### docs
+- 新增 .handoff/HANDOFF.md 交接文档（窗口边缘 resize 失败分析 + 决策日志）
+
 ## v4.0.8-alpha (2026-07-01) — 最终发布版三栏 UI 全量重制
 
 ### feat/ui

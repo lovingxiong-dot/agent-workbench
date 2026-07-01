@@ -682,6 +682,18 @@ class LeftPanel(QWidget):
         self.setStyleSheet(f"background-color: {C['bg_sidebar']};")
         self._sep1.setStyleSheet(f"background-color: {C['border']};")
         self._sep2.setStyleSheet(f"background-color: {C['border']};")
+        # Tab 按钮恢复背景框 + 文字颜色
+        for btn, active in [(self._func_btn, self._current_tab == "功能"),
+                             (self._sess_btn, self._current_tab == "会话")]:
+            bg = C["accent"] if active else C["btn_bg"]
+            fg = C["text_inverse"] if active else C["text_secondary"]
+            fw = 600 if active else 500
+            btn.setStyleSheet(
+                f"QPushButton {{ background-color: {bg}; color: {fg}; "
+                f"border: none; border-radius: 6px; padding: 2px 8px; "
+                f"font-size: 11px; font-weight: {fw}; }}"
+                f"QPushButton:hover {{ background-color: {C['btn_hover']}; }}"
+            )
         self._sess_scroll.setStyleSheet(
             f"QScrollArea {{ border: none; background: {C['bg_sidebar']}; }}"
             f"QScrollBar:vertical {{ background: transparent; width: 3px; border: none; margin: 0px; }}"
@@ -737,19 +749,20 @@ class LeftPanel(QWidget):
         self._theme_btn.setText("☀️" if new_theme == "light" else "🌙")
 
     def _make_tab_btn(self, text: str, active: bool) -> QPushButton:
-        """Tab 标签：全透明无背景，仅文字 + 选中态底部指示条。"""
+        """Tab 标签：SVG 92×22 rx=6 背景框，active=accent/#fff，inactive=btn_bg/text_secondary。"""
         btn = QPushButton(text)
         btn.setCheckable(True)
         btn.setChecked(active)
         btn.setCursor(Qt.PointingHandCursor)
         btn.setFixedSize(92, 22)
-        fg = C["accent"] if active else C["text_muted"]
-        fw = 600 if active else 400
+        bg = C["accent"] if active else C["btn_bg"]
+        fg = C["text_inverse"] if active else C["text_secondary"]
+        fw = 600 if active else 500
         btn.setStyleSheet(
-            f"QPushButton {{ background-color: transparent; color: {fg}; "
-            f"border: none; padding: 2px 8px; "
+            f"QPushButton {{ background-color: {bg}; color: {fg}; "
+            f"border: none; border-radius: 6px; padding: 2px 8px; "
             f"font-size: 11px; font-weight: {fw}; }}"
-            f"QPushButton:hover {{ color: {C['text_primary']}; }}"
+            f"QPushButton:hover {{ background-color: {C['btn_hover']}; }}"
         )
         return btn
 
@@ -798,13 +811,14 @@ class LeftPanel(QWidget):
         self._func_btn.setChecked(is_func)
         self._sess_btn.setChecked(not is_func)
         for btn, active in [(self._func_btn, is_func), (self._sess_btn, not is_func)]:
-            fg = C["accent"] if active else C["text_muted"]
-            fw = 600 if active else 400
+            bg = C["accent"] if active else C["btn_bg"]
+            fg = C["text_inverse"] if active else C["text_secondary"]
+            fw = 600 if active else 500
             btn.setStyleSheet(
-                f"QPushButton {{ background-color: transparent; color: {fg}; "
-                f"border: none; padding: 2px 8px; "
+                f"QPushButton {{ background-color: {bg}; color: {fg}; "
+                f"border: none; border-radius: 6px; padding: 2px 8px; "
                 f"font-size: 11px; font-weight: {fw}; }}"
-                f"QPushButton:hover {{ color: {C['text_primary']}; }}"
+                f"QPushButton:hover {{ background-color: {C['btn_hover']}; }}"
             )
 
     def _populate_sessions(self):
@@ -1445,10 +1459,58 @@ class InputArea(QWidget):
 # 聊天区
 # ══════════════════════════════════════════════════════════════
 
+class _ResizeHandle(QWidget):
+    """聊天区/输入区之间可拖拽分隔条：4px 高，中间 1px 着色，上下透明。"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(4)
+        self.setCursor(Qt.SizeVerCursor)
+        self._chat_view = None  # QGraphicsView
+        self._input = None      # InputArea
+        self._rebuild = None    # 防抖回调
+        self._dragging = False
+        self._start_y = 0
+        self._start_h = 0
+        self._start_vh = 0
+        theme.changed.connect(self._refresh_style)
+
+    def bind(self, chat_view, input_area, rebuild_cb=None):
+        self._chat_view = chat_view
+        self._input = input_area
+        self._rebuild = rebuild_cb
+
+    def _refresh_style(self):
+        self.setStyleSheet(f"_ResizeHandle {{ background-color: transparent; border-top: 1px solid {C['border']}; }}")
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and self._input:
+            self._dragging = True
+            p = event.globalPosition().toPoint()
+            self._start_y = p.y()
+            self._start_h = self._input.height()
+            self._start_vh = self._chat_view.height() if self._chat_view else 0
+
+    def mouseMoveEvent(self, event):
+        if self._dragging and self._input:
+            dy = event.globalPosition().toPoint().y() - self._start_y
+            new_input_h = max(50, min(300, self._start_h - dy))
+            self._input.setFixedHeight(new_input_h)
+
+    def mouseReleaseEvent(self, event):
+        if self._dragging:
+            self._dragging = False
+            if self._rebuild:
+                self._rebuild()
+
+
 class ChatArea(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._initialized = False
+        self._rebuild_timer = QTimer(self)
+        self._rebuild_timer.setSingleShot(True)
+        self._rebuild_timer.setInterval(80)
+        self._rebuild_timer.timeout.connect(self._debounced_rebuild)
         self._setup_ui()
         self._populate_demo()
         self._initialized = True
@@ -1487,21 +1549,20 @@ class ChatArea(QWidget):
         self._view.setScene(self._scene)
         layout.addWidget(self._view, 1)
 
-        # 输入区分隔线（SVG: y=652）
-        self._sep2 = QFrame()
-        self._sep2.setFixedHeight(1)
-        self._sep2.setStyleSheet(f"background-color: {C['border']};")
-        layout.addWidget(self._sep2)
+        # 输入区可拖拽分隔条（4px，中间 1px 着色）
+        self._resize_handle = _ResizeHandle()
+        layout.addWidget(self._resize_handle)
 
         # 输入区
         self._input = InputArea()
         layout.addWidget(self._input)
+        self._resize_handle.bind(self._view, self._input, self._debounced_rebuild)
         self.setStyleSheet(f"background-color: {C['bg_primary']};")
 
     def _refresh_theme(self):
         self.setStyleSheet(f"background-color: {C['bg_primary']};")
         self._sep1.setStyleSheet(f"background-color: {C['border']};")
-        self._sep2.setStyleSheet(f"background-color: {C['border']};")
+        self._resize_handle._refresh_style()
         self._view.setStyleSheet(
             "QGraphicsView { border: none; background: transparent; }"
             f"QScrollBar:vertical {{ background: transparent; width: 3px; border: none; margin: 0px; }}"
@@ -1516,7 +1577,16 @@ class ChatArea(QWidget):
         if self._initialized:
             new_w = self._view.viewport().width() if self._view.viewport() else self.width()
             if abs(new_w - ChatScene.CHAT_W) > 4:
-                self._rebuild_content(new_w)
+                self._pending_width = new_w
+                self._rebuild_timer.start()
+
+    def _debounced_rebuild(self):
+        """防抖后重建：拖动停止 80ms 后执行。"""
+        if hasattr(self, '_pending_width') and self._pending_width:
+            self._rebuild_content(self._pending_width)
+            self._pending_width = None
+        else:
+            self._rebuild_content()
 
     def _rebuild_content(self, width: float = None):
         """清除并重绘聊天区内容，适配新宽度。"""
