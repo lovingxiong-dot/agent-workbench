@@ -1072,11 +1072,9 @@ class HeaderBar(QWidget):
             <circle cx="10" cy="10" r="1.2" fill="{C['text_secondary']}"/>
             <circle cx="14" cy="10" r="1.2" fill="{C['text_secondary']}"/>
         </svg>'''
-        # 右侧面板图标：外框 + 右分隔线，表示侧边工作区
+        # 右侧面板图标：简洁圆角矩形窗口/面板
         expand_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
-            <rect x="3.5" y="4.5" width="13" height="11" rx="1.5" fill="none" stroke="{C['text_secondary']}" stroke-width="1.5"/>
-            <line x1="11.5" y1="4.5" x2="11.5" y2="15.5" stroke="{C['text_secondary']}" stroke-width="1.5"/>
-            <path d="M 13 8 L 15 10 L 13 12" fill="none" stroke="{C['text_secondary']}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="4.5" y="5" width="11" height="10" rx="2.5" fill="none" stroke="{C['text_secondary']}" stroke-width="1.5"/>
         </svg>'''
 
         self._search_btn = self._icon_btn(search_svg, "搜索")
