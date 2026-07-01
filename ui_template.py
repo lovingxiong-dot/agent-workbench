@@ -1081,12 +1081,19 @@ class HeaderBar(QWidget):
         self._search_btn.clicked.connect(self.search_clicked.emit)
         self._more_btn = self._icon_btn(more_svg, "更多操作")
         self._more_btn.clicked.connect(self.more_clicked.emit)
-        self._expand_btn = self._icon_btn(expand_svg, "折叠面板")
+        self._expand_btn = self._icon_btn(expand_svg, "折叠右侧面板")
         self._expand_btn.clicked.connect(self.expand_toggled.emit)
 
-        layout.addWidget(self._search_btn)
-        layout.addWidget(self._more_btn)
-        layout.addWidget(self._expand_btn)
+        # 右上角三键容器：spacing=2 紧凑排列（SVG 规范）
+        btn_block = QWidget()
+        btn_hl = QHBoxLayout(btn_block)
+        btn_hl.setContentsMargins(0, 0, 0, 0)
+        btn_hl.setSpacing(2)
+        btn_hl.addWidget(self._search_btn)
+        btn_hl.addWidget(self._more_btn)
+        btn_hl.addWidget(self._expand_btn)
+        layout.addWidget(btn_block)
+        layout.addSpacing(12)
         self.setStyleSheet(f"background-color: {C['bg_primary']};")
 
     def _icon_btn(self, svg_str: str, tooltip: str) -> QPushButton:
@@ -1519,7 +1526,6 @@ class MainWindow(QMainWindow):
         self.resize(1024, 720)
         self.setMinimumWidth(800)
         self.setWindowTitle("Agent Workbench — UI Template")
-        self._left_visible = True
         self._right_visible = True
         self._drag_pos = None
         self._corner_radius = 8
@@ -1545,7 +1551,7 @@ class MainWindow(QMainWindow):
 
         # 中栏
         self._center = ChatArea()
-        self._center._header.expand_toggled.connect(self._toggle_panels)
+        self._center._header.expand_toggled.connect(self._toggle_right_panel)
         self._splitter.addWidget(self._center)
 
         # 右栏
@@ -1608,25 +1614,16 @@ class MainWindow(QMainWindow):
         p.setColor(QPalette.Highlight, qcolor(C["accent"]))
         app.setPalette(p)
 
-    def _toggle_panels(self):
-        """独立折叠/展开左右面板。"""
-        if self._left_visible and self._right_visible:
-            # 当前全展开 → 全收起
-            self._left.hide()
+    def _toggle_right_panel(self):
+        """切换右侧面板显示/隐藏，左侧会话区与中间聊天区保持不变。"""
+        if self._right_visible:
             self._right.hide()
-            self._left_visible = False
+            total = self.width()
+            self._splitter.setSizes([220, total - 220, 0])
             self._right_visible = False
-        elif not self._left_visible and not self._right_visible:
-            # 当前全收起 → 全展开
-            self._left.show()
-            self._right.show()
-            self._left_visible = True
-            self._right_visible = True
         else:
-            # 部分收起 → 全展开
-            self._left.show()
             self._right.show()
-            self._left_visible = True
+            self._splitter.setSizes([220, 404, 400])
             self._right_visible = True
 
 
