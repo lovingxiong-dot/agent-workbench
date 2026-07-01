@@ -1179,12 +1179,12 @@ class InputArea(QWidget):
         self.setStyleSheet(f"background-color: {C['bg_primary']};")
 
     def _make_tag(self, label: str, value: str, width: int) -> QWidget:
-        """现代化下拉标签：透明背景、细边框、hover 微亮。"""
+        """SVG: tag fill=#0f3460 stroke=#2a2a4a rx=6, w=62/76 h=22。"""
         tag = QWidget()
         tag.setFixedSize(width, 22)
         tag.setCursor(Qt.PointingHandCursor)
         tag.setStyleSheet(
-            f"QWidget {{ background-color: transparent; border: 0.5px solid {C['border']}; border-radius: 6px; }}"
+            f"QWidget {{ background-color: {C['tag_bg']}; border: 0.5px solid {C['border']}; border-radius: 6px; }}"
             f"QWidget:hover {{ background-color: {C['bg_hover']}; }}"
         )
         hl = QHBoxLayout(tag)
@@ -1337,12 +1337,13 @@ class RightPanel(QWidget):
         tb_layout.setContentsMargins(8, 2, 8, 2)
         tb_layout.setSpacing(2)
 
+        # SVG: add btn circle r=7 (d=14) fill=#2a2a4a
         add_btn = QPushButton("+")
-        add_btn.setFixedSize(16, 16)
+        add_btn.setFixedSize(14, 14)
         add_btn.setCursor(Qt.PointingHandCursor)
         add_btn.setStyleSheet(
-            f"QPushButton {{ background-color: transparent; color: {C['text_secondary']}; "
-            f"border-radius: 8px; font-size: 10px; border: none; }}"
+            f"QPushButton {{ background-color: {C['btn_bg']}; color: {C['text_secondary']}; "
+            f"border-radius: 7px; font-size: 9px; font-weight: 600; border: none; }}"
             f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
         )
         tb_layout.addWidget(add_btn)
@@ -1359,14 +1360,14 @@ class RightPanel(QWidget):
             tb_layout.addWidget(btn)
             self._tab_btns.append(btn)
 
-            # 现代化 close 小标签
+            # SVG: close btn circle r=5 (d=10) fill=#0f1729
             if i > 0:  # 第一个标签不可关闭
                 cls = QPushButton("✕")
                 cls.setFixedSize(10, 10)
                 cls.setCursor(Qt.PointingHandCursor)
                 cls.setStyleSheet(
-                    f"QPushButton {{ background-color: transparent; color: {C['text_muted']}; "
-                    f"border-radius: 5px; font-size: 7px; border: none; }}"
+                    f"QPushButton {{ background-color: {C['bg_right']}; color: {C['text_muted']}; "
+                    f"border-radius: 5px; font-size: 6px; border: none; }}"
                     f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
                 )
                 tb_layout.addWidget(cls)
@@ -1455,9 +1456,10 @@ class RightPanel(QWidget):
         time_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         hl.addWidget(time_lbl)
 
-        # 现代化文件标签：无边框、hover 微亮
+        # SVG: row fill=#16213e stroke=#2a2a4a rx=4
         row.setStyleSheet(
-            f"QWidget {{ background-color: transparent; border-radius: 4px; }}"
+            f"QWidget {{ background-color: {C['bg_sidebar']}; "
+            f"border: 0.5px solid {C['border']}; border-radius: 4px; }}"
             f"QWidget:hover {{ background-color: {C['bg_hover']}; }}"
         )
         return row
@@ -1492,17 +1494,18 @@ class RightPanel(QWidget):
         self._stack.setCurrentIndex(idx)
         for i, btn in enumerate(self._tab_btns):
             active = (i == idx)
-            bg = C["bg_primary"] if active else "transparent"
+            bg = C["bg_sidebar"] if active else "transparent"
             fg = C["text_primary"] if active else C["text_secondary"]
             fw = 600 if active else 500
+            border = f"0.5px solid {C['border']}" if active else "none"
             btn.setChecked(active)
             btn.setStyleSheet(
                 f"QPushButton {{ background-color: {bg}; color: {fg}; "
-                f"border: none; border-radius: 6px; padding: 2px 10px; "
+                f"border: {border}; border-radius: 6px; padding: 2px 10px; "
                 f"font-size: 10px; font-weight: {fw}; text-align: left; }}"
                 f"QPushButton:hover {{ background-color: {C['bg_hover']}; }}"
-                f"QPushButton:checked {{ background-color: {C['bg_primary']}; color: {C['text_primary']}; "
-                f"font-weight: 600; }}"
+                f"QPushButton:checked {{ background-color: {C['bg_sidebar']}; color: {C['text_primary']}; "
+                f"border: 0.5px solid {C['border']}; font-weight: 600; }}"
             )
 
 
