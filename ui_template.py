@@ -1294,6 +1294,8 @@ if __name__ == "__main__":
         window.raise_()
         window.activateWindow()
         window.resize(1024, 720)
+        print(">>> Agent Workbench UI Template 已启动，请切换到桌面查看窗口 <<<")
+        sys.stdout.flush()
         sys.exit(app.exec())
     except Exception:
         traceback.print_exc()
