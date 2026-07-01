@@ -20,12 +20,13 @@ from .events import *
 
 
 class UIRenderer(QObject):
-    def __init__(self, message_bus, chat_view, status_indicator=None, conversation_list=None, capacity_label=None, queue_bar=None, current_session_provider=None, parent=None):
+    def __init__(self, message_bus, chat_view, status_indicator=None, conversation_list=None, right_panel=None, capacity_label=None, queue_bar=None, current_session_provider=None, parent=None):
         super().__init__(parent)
         self._bus = message_bus
         self._chat_view = chat_view
         self._status_indicator = status_indicator
         self._conversation_list = conversation_list
+        self._right_panel = right_panel
         self._capacity_label = capacity_label
         self._queue_bar = queue_bar
         self._current_session_provider = current_session_provider
@@ -84,6 +85,56 @@ class UIRenderer(QObject):
     def _handle_focus_input(self, event):
         if self._is_current(event) and hasattr(self._chat_view, "input_field"):
             self._chat_view.input_field.setFocus()
+
+    # ── 右栏事件处理 ──────────────────────────────────
+
+    def _handle_open_file(self, event):
+        if self._right_panel and event.path:
+            try:
+                self._right_panel.open_file(event.path)
+            except Exception as e:
+                print(f"UIRenderer open_file error: {e}", flush=True)
+
+    def _handle_update_terminal(self, event):
+        if self._right_panel:
+            try:
+                self._right_panel.update_terminal(event.text)
+            except Exception as e:
+                print(f"UIRenderer update_terminal error: {e}", flush=True)
+
+    def _handle_right_panel_tab(self, event):
+        if self._right_panel and event.tab_name:
+            try:
+                self._right_panel.switch_tab(event.tab_name)
+            except Exception as e:
+                print(f"UIRenderer right_panel_tab error: {e}", flush=True)
+
+    def _handle_load_url(self, event):
+        if self._right_panel and event.url:
+            try:
+                self._right_panel.load_url(event.url)
+            except Exception as e:
+                print(f"UIRenderer load_url error: {e}", flush=True)
+
+    def _handle_update_file_reader(self, event):
+        if not self._right_panel:
+            return
+        try:
+            if event.path:
+                self._right_panel.file_reader.open_file(event.path)
+            elif event.content:
+                self._right_panel.file_reader.set_content(event.content)
+        except Exception as e:
+            print(f"UIRenderer update_file_reader error: {e}", flush=True)
+
+    def _handle_analyze_project(self, event):
+        """触发「帮我分析当前项目」：向当前会话发送用户消息。"""
+        sid = self._current_session_id() or event.session_id
+        if sid:
+            self._bus.emit(UserSendEvent(
+                session_id=sid,
+                user_text="帮我分析当前项目",
+            ))
 
     # ── 折叠渲染辅助 ──────────────────────────────────
 
@@ -236,7 +287,7 @@ class UIRenderer(QObject):
             steps = self._parse_execute_steps(body)
             if steps:
                 step_html = self._build_step_bar(steps)
-                border_color = getattr(self._chat_view, "_theme", {}).get("border", "#3e3e42")
+                border_color = getattr(self._chat_view, "_theme", {}).get("border", "#cccccc")
                 body = step_html if not body.strip() else f'{step_html}<hr style="border:0.5px solid {border_color};margin:8px 0;">{body}'
 
         self._chat_view.append_ai(body, phase=phase, thinking_fold=thinking_fold)

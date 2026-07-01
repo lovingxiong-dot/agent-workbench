@@ -278,13 +278,16 @@ class SessionOrchestrator(QObject):
     # ═══════════════════════════════════════════════════
     def _on_queue_task_ready(self, event: QueueTaskReadyEvent):
         """队列任务就绪：请求 WorkerManager 创建 Worker。"""
+        print(f"[DEBUG orch task_ready] sid={event.session_id[-8:]}", flush=True)
         rt = self._require_runtime(event.session_id)
         if not rt:
+            print("[DEBUG orch task_ready] no rt", flush=True)
             return
 
         task = rt.queue.get_streaming_task()
         user_text = task.user_text if task else ""
         env = rt.environment
+        print(f"[DEBUG orch task_ready] emit WorkerCreateEvent sid={event.session_id[-8:]}", flush=True)
         self._bus.emit(WorkerCreateEvent(
             session_id=event.session_id,
             worker_id="",
@@ -416,6 +419,7 @@ class SessionOrchestrator(QObject):
     def _on_worker_result(self, event: WorkerResultEvent):
         """Worker 结果：持久化 AI 消息，更新 UI。"""
         rt = self._runtimes.get(event.session_id)
+        print(f"[DEBUG worker_result] sid={event.session_id[-8:]} rt={rt is not None} text={event.full_text[:30]!r}", flush=True)
         if not rt:
             return
 
@@ -423,6 +427,7 @@ class SessionOrchestrator(QObject):
         if text.strip():
             msg = Message.new(event.session_id, "ai", text)
             self._repo.add_message(msg)
+            print(f"[DEBUG worker_result] saved ai msg", flush=True)
 
         if event.session_id == self._current_session_id:
             self._bus.emit(UIFinalizeStreamEvent(session_id=event.session_id))
@@ -512,11 +517,15 @@ class SessionOrchestrator(QObject):
     def _connect_queue_signals(self, rt: SessionRuntime):
         """将会话队列信号桥接到 MessageBus 事件。"""
         qm = rt.queue
+        print(f"[DEBUG orch connect_queue] sid={rt.session_id[-8:]}", flush=True)
         qm.task_ready.connect(
-            lambda task: self._bus.emit(QueueTaskReadyEvent(
-                session_id=rt.session_id,
-                task_id=task.task_id,
-            ))
+            lambda task: (
+                print(f"[DEBUG orch queue->bus] task_ready sid={rt.session_id[-8:]}", flush=True),
+                self._bus.emit(QueueTaskReadyEvent(
+                    session_id=rt.session_id,
+                    task_id=task.task_id,
+                )),
+            )[-1]
         )
         qm.task_complete.connect(
             lambda task_id: self._bus.emit(QueueTaskCompleteEvent(

@@ -163,16 +163,20 @@ class ProjectExplorer(QWidget):
         self.model.open_documents_changed.connect(self._on_model_open_documents_changed)
 
     def _connect_view(self):
-        # 默认展开当前项目
-        self.tree_view.expandAll()
-        # 此电脑默认折叠
+        """初始化展开状态：仅展开非文件系统的顶层分类，避免 expandAll 触发此电脑下驱动器递归加载。"""
         root_index = QModelIndex()
+        expandable = {
+            ExplorerTreeModel.CATEGORY_OPEN_EDITORS,
+            ExplorerTreeModel.CATEGORY_CURRENT_PROJECT,
+            ExplorerTreeModel.CATEGORY_RECENT_PROJECTS,
+            ExplorerTreeModel.CATEGORY_GLOBAL_CONFIG,
+        }
         for row in range(self.tree_model.rowCount(root_index)):
             idx = self.tree_model.index(row, 0, root_index)
             cat = self.tree_model.category_key_from_index(idx)
             if cat == ExplorerTreeModel.CATEGORY_THIS_PC:
                 self.tree_view.setExpanded(idx, False)
-            elif cat == ExplorerTreeModel.CATEGORY_CURRENT_PROJECT:
+            elif cat in expandable:
                 self.tree_view.setExpanded(idx, True)
 
     # ═══════════════════════════════════════════════════

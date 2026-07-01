@@ -1,39 +1,40 @@
 """
-main_window.py — v4 主窗口（Solo 极简风格 + Trae 暗色/浅色主题）
+main_window.py — v4 主窗口（最终发布版三栏 UI）
 
 布局：
-- 固定两栏：左栏 280px，右栏填充
-- 左栏：模型下拉 + 主题切换 + 「+ 新任务」按钮 + 会话列表
-- 右栏：会话标题/环境信息 + 消息流 + 输入框
+- QSplitter 三栏：左 250px + 中 stretch + 右 320px
+- 左栏：功能/会话 Tab + 工具行 + 分组折叠会话列表 + 底部控制
+- 中栏：标题栏 + 卡片化消息流 + 新输入区
+- 右栏：v4 架构 / 终端 / 文件编辑器 / 浏览器
 
 主题：
-- 支持 dark / light 两套配色，通过左栏顶部 🌙/☀️ 切换
+- 支持 dark / light 两套配色，通过左栏底部主题按钮切换
 - 主题状态持久化到 config.yaml 的 app.theme
-
-禁止：
-- 三栏布局、大型状态栏、容量标签、Phase/工具按钮、资源管理器/终端/文档编辑器
 """
 import html
+import os
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QTextEdit, QTextBrowser, QStyleFactory, QLineEdit,
-    QMenu,
+    QMenu, QSplitter, QSizePolicy,
 )
-from PySide6.QtCore import Qt, QTimer, Signal, QByteArray, QSize
+from PySide6.QtCore import Qt, QTimer, Signal, QSize
 from PySide6.QtGui import (
     QPalette, QColor, QFont, QTextCursor, QShortcut, QKeySequence,
-    QIcon, QPixmap, QPainter, QAction,
+    QAction,
 )
-from PySide6.QtSvg import QSvgRenderer
 
 from markdown import markdown as md
 
-from .repository import SessionRepository
+from .repository import SessionRepository, _get_app_root
 from .event_bus import MessageBus
 from .orchestrator import SessionOrchestrator
 from .ui_renderer import UIRenderer
 from .conversation_list import ConversationListWidget
+from .input_area import InputAreaWidget
+from .right_panel import RightPanelWidget
+from .icons import svg_icon
 from .events import (
     UserSendEvent, UserStopEvent,
     UserConfirmEvent, UserReanalyzeEvent, UserSkipVerifyEvent,
@@ -48,72 +49,67 @@ def _md_to_html(text: str) -> str:
     return html.unescape(raw_html)
 
 
-# ── SVG 图标辅助 ─────────────────────────────────────────────────────────
-
-_ICON_PATHS = {
-    "search": "M10.5 10.5L15 15M10 4a6 6 0 1 0 0 12 6 6 0 0 0 0-12Z",
-    "more": "M5 12h.01M12 12h.01M19 12h.01",
-    "expand": "M4 10V4h6M14 4h6v6M4 14v6h6M14 20h6v-6",
-    "collapse": "M10 10H4V4M14 4V10h6M10 14H4v6M14 20v-6h6",
-    "chevron-up": "M18 15l-6-6-6 6",
-    "chevron-down": "M6 9l6 6 6-6",
-    "close": "M6 6l12 12M18 6L6 18",
-}
-
-
-def _svg_icon(name: str, color: str, size: int = 18) -> QIcon:
-    """根据 SVG path 名称渲染矢量图标，避免依赖系统字体。"""
-    path_data = _ICON_PATHS.get(name, "")
-    svg = (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" '
-        f'viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="2" '
-        f'stroke-linecap="round" stroke-linejoin="round">'
-        f'<path d="{path_data}"/></svg>'
-    )
-    renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
-    pixmap = QPixmap(size, size)
-    pixmap.fill(Qt.transparent)
-    painter = QPainter(pixmap)
-    renderer.render(painter)
-    painter.end()
-    return QIcon(pixmap)
-
+# ── 主题定义 ─────────────────────────────────────────────────────────
 
 THEMES = {
     "dark": {
-        "bg_primary": "#1e1e1e",
-        "bg_sidebar": "#252526",
-        "bg_input": "#2d2d30",
-        "bg_hover": "#2a2d2e",
-        "bg_selected": "#37373d",
-        "bg_bubble_user": "#0e639c",
-        "bg_bubble_ai": "#2d2d30",
-        "bg_system_card": "#252526",
-        "border": "#3e3e42",
-        "border_bubble_ai": "#3e3e42",
-        "text_primary": "#cccccc",
-        "text_secondary": "#858585",
+        "bg_primary": "#1a1a2e",
+        "bg_sidebar": "#16213e",
+        "bg_input": "#1a1a2e",
+        "bg_hover": "#2a2a4a",
+        "bg_selected": "#0f3460",
+        "bg_group_header": "#16213e",
+        "bg_bubble_user": "#007acc",
+        "bg_bubble_ai": "#16213e",
+        "bg_system_card": "#16213e",
+        "header_btn_bg": "#2a2a4a",
+        "header_btn_hover": "#3a3a5a",
+        "header_btn_active": "#0f3460",
+        "border": "#2a2a4a",
+        "border_bubble_ai": "#2a2a4a",
+        "text_primary": "#e0e0e0",
+        "text_secondary": "#a0a0b0",
+        "text_muted": "#6a6a8a",
         "text_inverse": "#ffffff",
         "accent": "#007acc",
         "accent_hover": "#1177bb",
-        "send_btn": "#0e639c",
+        "send_btn": "#007acc",
         "send_btn_hover": "#1177bb",
-        "stop_btn": "#3e3e42",
-        "stop_btn_hover": "#4e4e52",
+        "stop_btn": "#2a2a4a",
+        "stop_btn_hover": "#3a3a5a",
+        "tag_bg": "#0f3460",
+        "tag_text": "#a0a0b0",
+        "card_analyze_bg": "#16213e",
+        "card_analyze_border": "#569cd6",
+        "card_execute_bg": "#16213e",
+        "card_execute_border": "#dcdcaa",
+        "card_verify_bg": "#16213e",
+        "card_verify_border": "#c586c0",
+        "card_archive_bg": "#16213e",
+        "card_archive_border": "#4ec9b0",
+        "card_tool_bg": "#16213e",
+        "card_tool_border": "#4ec9b0",
+        "card_output_bg": "#1a1a2e",
+        "card_output_border": "#2a2a4a",
     },
     "light": {
-        "bg_primary": "#ffffff",
-        "bg_sidebar": "#f3f3f3",
+        "bg_primary": "#f8f9fa",
+        "bg_sidebar": "#e9ecef",
         "bg_input": "#ffffff",
-        "bg_hover": "#e8e8e8",
-        "bg_selected": "#e0e0e0",
+        "bg_hover": "#e9ecef",
+        "bg_selected": "#e7f1ff",
+        "bg_group_header": "#e9ecef",
         "bg_bubble_user": "#007acc",
-        "bg_bubble_ai": "#f3f3f3",
-        "bg_system_card": "#f9f9f9",
-        "border": "#e5e5e5",
-        "border_bubble_ai": "#e5e5e5",
-        "text_primary": "#333333",
-        "text_secondary": "#666666",
+        "bg_bubble_ai": "#ffffff",
+        "bg_system_card": "#f8f9fa",
+        "header_btn_bg": "#e9ecef",
+        "header_btn_hover": "#dee2e6",
+        "header_btn_active": "#ced4da",
+        "border": "#dee2e6",
+        "border_bubble_ai": "#dee2e6",
+        "text_primary": "#212529",
+        "text_secondary": "#495057",
+        "text_muted": "#adb5bd",
         "text_inverse": "#ffffff",
         "accent": "#007acc",
         "accent_hover": "#005a9e",
@@ -121,44 +117,37 @@ THEMES = {
         "send_btn_hover": "#005a9e",
         "stop_btn": "#e5e5e5",
         "stop_btn_hover": "#d0d0d0",
+        "tag_bg": "#e9ecef",
+        "tag_text": "#6c757d",
+        "card_analyze_bg": "#e8f4fd",
+        "card_analyze_border": "#007acc",
+        "card_execute_bg": "#fffbe6",
+        "card_execute_border": "#ffc107",
+        "card_verify_bg": "#f3e5f5",
+        "card_verify_border": "#9c27b0",
+        "card_archive_bg": "#e8f5e9",
+        "card_archive_border": "#4caf50",
+        "card_tool_bg": "#e8f5e9",
+        "card_tool_border": "#4caf50",
+        "card_output_bg": "#f5f5f5",
+        "card_output_border": "#bdbdbd",
     },
 }
 
 DEFAULT_THEME = "dark"
 
 
-class InputTextEdit(QTextEdit):
-    """多行输入框：Enter 发送，Shift+Enter 换行。"""
-    send_requested = Signal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setPlaceholderText("输入消息，Enter 发送，Shift+Enter 换行...")
-        self.setMaximumHeight(120)
-        self.setMinimumHeight(44)
-        self.setFont(QFont("Segoe UI", 13))
-
-    def keyPressEvent(self, event):
-        if event.isAutoRepeat():
-            return
-        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
-            if event.modifiers() & Qt.ShiftModifier:
-                self.insertPlainText("\n")
-            else:
-                self.send_requested.emit()
-            return
-        super().keyPressEvent(event)
-
-
 class HeaderToolbar(QWidget):
     """会话区标题栏：左侧标题/环境信息 + 右侧三键操作（搜索/更多/展开）。"""
 
     expand_toggled = Signal()
-    search_requested = Signal(str)
+    search_requested = Signal(str, bool)
+    export_requested = Signal()
+    settings_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._expanded = True  # 面板展开状态
+        self._expanded = True
         self._theme = THEMES[DEFAULT_THEME]
         self._title = ""
         self._env = ""
@@ -177,11 +166,9 @@ class HeaderToolbar(QWidget):
         layout.setContentsMargins(24, 12, 12, 12)
         layout.setSpacing(4)
 
-        # 左侧标题
         self.title_label = QLabel("")
         layout.addWidget(self.title_label, 1)
 
-        # 右侧三键
         self.search_btn = self._icon_btn("search", "搜索 (Ctrl+F)")
         self.search_btn.clicked.connect(self._toggle_search)
 
@@ -224,19 +211,28 @@ class HeaderToolbar(QWidget):
         self._apply_theme()
 
     def _icon_btn(self, icon_name: str, tooltip: str) -> QPushButton:
-        """创建使用 SVG 图标的工具按钮。"""
+        """创建使用 SVG 图标的工具按钮，带背景色以匹配设计模板。"""
         btn = QPushButton()
         btn.setToolTip(tooltip)
         btn.setCursor(Qt.PointingHandCursor)
         btn.setFlat(True)
-        btn.setFixedSize(28, 28)
+        btn.setFixedSize(28, 24)
         btn.setIconSize(QSize(self._icon_size, self._icon_size))
-        btn.setIcon(_svg_icon(icon_name, self._theme["text_secondary"], self._icon_size))
-        btn.setStyleSheet(
-            "QPushButton { background: transparent; border: none; border-radius: 4px; }"
-            "QPushButton:hover { background-color: rgba(128,128,128,0.15); }"
-        )
+        btn.setIcon(svg_icon(icon_name, self._theme.get("text_secondary", "#a0a0b0"), self._icon_size))
+        self._apply_icon_btn_style(btn)
         return btn
+
+    def _apply_icon_btn_style(self, btn: QPushButton):
+        """应用标题栏按钮 normal/hover/active 背景色。"""
+        t = self._theme
+        bg = t.get("header_btn_bg", t["bg_hover"])
+        hover = t.get("header_btn_hover", t["border"])
+        active = t.get("header_btn_active", t["bg_selected"])
+        btn.setStyleSheet(
+            f"QPushButton {{ background-color: {bg}; border: none; border-radius: 4px; }}"
+            f"QPushButton:hover {{ background-color: {hover}; }}"
+            f"QPushButton:pressed {{ background-color: {active}; }}"
+        )
 
     def _setup_more_menu(self):
         self.more_menu = QMenu(self.more_btn)
@@ -248,6 +244,14 @@ class HeaderToolbar(QWidget):
         self.more_menu.addSeparator()
         self.more_menu.addAction(self.action_settings)
         self.more_btn.setMenu(self.more_menu)
+        self.action_export.triggered.connect(self.export_requested.emit)
+        self.action_copy.triggered.connect(self._copy_session_content)
+        self.action_settings.triggered.connect(self.settings_requested.emit)
+
+    def _copy_session_content(self):
+        from PySide6.QtWidgets import QApplication
+        text = self.parent().chat_area.toPlainText() if hasattr(self.parent(), "chat_area") else ""
+        QApplication.clipboard().setText(text)
 
     def _toggle_search(self):
         self._search_visible = not self._search_visible
@@ -263,13 +267,13 @@ class HeaderToolbar(QWidget):
         self.search_input.clear()
 
     def _on_search_text_changed(self, text: str):
-        self.search_requested.emit(text)
+        self.search_requested.emit(text, True)
 
     def _find_next(self):
-        self.search_requested.emit(self.search_input.text())
+        self.search_requested.emit(self.search_input.text(), True)
 
     def _find_prev(self):
-        self.search_requested.emit(self.search_input.text())
+        self.search_requested.emit(self.search_input.text(), False)
 
     def _toggle_expand(self):
         self._expanded = not self._expanded
@@ -282,8 +286,9 @@ class HeaderToolbar(QWidget):
 
     def _refresh_expand_icon(self):
         icon_name = "collapse" if self._expanded else "expand"
-        self.expand_btn.setIcon(_svg_icon(icon_name, self._theme["text_secondary"], self._icon_size))
+        self.expand_btn.setIcon(svg_icon(icon_name, self._theme.get("text_secondary", "#a0a0b0"), self._icon_size))
         self.expand_btn.setToolTip("收起面板" if self._expanded else "展开面板")
+        self._apply_icon_btn_style(self.expand_btn)
 
     def set_title(self, title: str, env: str = ""):
         self._title = title
@@ -306,9 +311,15 @@ class HeaderToolbar(QWidget):
         self._theme = THEMES.get(theme_name, THEMES[DEFAULT_THEME])
         self._apply_theme()
         self._render_title()
-        self.search_btn.setIcon(_svg_icon("search", self._theme["text_secondary"], self._icon_size))
-        self.more_btn.setIcon(_svg_icon("more", self._theme["text_secondary"], self._icon_size))
+        self.search_btn.setIcon(svg_icon("search", self._theme.get("text_secondary", "#a0a0b0"), self._icon_size))
+        self.more_btn.setIcon(svg_icon("more", self._theme.get("text_secondary", "#a0a0b0"), self._icon_size))
         self._refresh_expand_icon()
+        self._apply_icon_btn_style(self.search_btn)
+        self._apply_icon_btn_style(self.more_btn)
+        self._apply_icon_btn_style(self.expand_btn)
+        self.search_prev_btn.setIcon(svg_icon("chevron-up", self._theme.get("text_secondary", "#a0a0b0"), self._icon_size))
+        self.search_next_btn.setIcon(svg_icon("chevron-down", self._theme.get("text_secondary", "#a0a0b0"), self._icon_size))
+        self.search_close_btn.setIcon(svg_icon("close", self._theme.get("text_secondary", "#a0a0b0"), self._icon_size))
 
     def _apply_theme(self):
         t = self._theme
@@ -337,9 +348,9 @@ class SimpleChatArea(QWidget):
         self._streaming_buffer = ""
         self._streaming_start_pos = None
         self._theme = THEMES[DEFAULT_THEME]
-        self._messages: list[dict] = []  # 消息历史，用于重渲染
+        self._messages: list[dict] = []
         self._current_phase = ""
-        self._fold_states: set[str] = set()  # 已展开的 fold-block id
+        self._fold_states: set[str] = set()
         self._setup_ui()
 
     def _setup_ui(self):
@@ -366,6 +377,13 @@ class SimpleChatArea(QWidget):
         self.chat_area.anchorClicked.connect(self._on_anchor_clicked)
         layout.addWidget(self.chat_area, 1)
 
+        # 「帮我分析当前项目」大按钮（Work 模式下可见）
+        self.analyze_project_btn = QPushButton("帮我分析当前项目")
+        self.analyze_project_btn.setCursor(Qt.PointingHandCursor)
+        self.analyze_project_btn.setVisible(False)
+        self.analyze_project_btn.clicked.connect(self._on_analyze_project)
+        layout.addWidget(self.analyze_project_btn)
+
         # Phase 确认条（默认隐藏）
         self.confirm_bar = QWidget()
         confirm_layout = QHBoxLayout(self.confirm_bar)
@@ -387,30 +405,18 @@ class SimpleChatArea(QWidget):
         self.cancel_btn.clicked.connect(lambda: self._on_confirm(False))
         layout.addWidget(self.confirm_bar)
 
-        # 输入区
-        input_panel = QWidget()
-        input_layout = QHBoxLayout(input_panel)
-        input_layout.setContentsMargins(24, 12, 24, 16)
-        input_layout.setSpacing(10)
+        # 输入区（新 InputAreaWidget）
+        self.input_area = InputAreaWidget(self._theme)
+        self.input_area.send_requested.connect(self._on_send)
+        self.input_area.stop_requested.connect(self._on_stop)
+        layout.addWidget(self.input_area)
 
-        self.input_field = InputTextEdit()
-        self.input_field.send_requested.connect(self._on_send)
-        input_layout.addWidget(self.input_field, 1)
-
-        self.send_btn = QPushButton("发送")
-        self.send_btn.setFixedWidth(64)
-        self.send_btn.setCursor(Qt.PointingHandCursor)
-        self.send_btn.clicked.connect(self._on_send)
-        input_layout.addWidget(self.send_btn)
-
-        self.stop_btn = QPushButton("停止")
-        self.stop_btn.setFixedWidth(64)
-        self.stop_btn.setVisible(False)
-        self.stop_btn.setCursor(Qt.PointingHandCursor)
-        input_layout.addWidget(self.stop_btn)
-
-        layout.addWidget(input_panel)
         self._apply_theme_styles()
+
+    # 兼容旧引用：input_field 指向 text_edit
+    @property
+    def input_field(self):
+        return self.input_area.text_edit
 
     def set_theme(self, theme_name: str):
         """切换主题并即时重绘样式。"""
@@ -418,40 +424,18 @@ class SimpleChatArea(QWidget):
         self._apply_theme_styles()
         self.header.set_theme(theme_name)
         self.sep.setStyleSheet(f"background-color: {self._theme['border']};")
+        self.input_area.set_theme(self._theme)
         self._render()
 
     def _apply_theme_styles(self):
         t = self._theme
-        self.input_field.setStyleSheet(f"""
-            QTextEdit {{
-                background-color: {t['bg_input']};
-                color: {t['text_primary']};
-                border: 1px solid {t['border']};
-                border-radius: 8px;
-                padding: 8px 12px;
-                font-size: 13px;
-                line-height: 1.65;
-            }}
-        """)
-        self.send_btn.setStyleSheet(f"""
+        self.analyze_project_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {t['send_btn']}; color: {t['text_inverse']};
-                border: 1px solid {t['send_btn']}; border-radius: 8px;
-                padding: 8px 12px; font-size: 13px; font-weight: 600;
+                background-color: {t['bg_input']}; color: {t['accent']}; border: 1px solid {t['accent']};
+                border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 600;
+                margin: 0 24px 8px 24px;
             }}
-            QPushButton:hover {{ background-color: {t['send_btn_hover']}; }}
-            QPushButton:disabled {{
-                background-color: {t['border']}; color: {t['text_secondary']};
-                border: 1px solid {t['border']};
-            }}
-        """)
-        self.stop_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {t['stop_btn']}; color: {t['text_primary']};
-                border: 1px solid {t['border']}; border-radius: 8px;
-                padding: 8px 12px; font-size: 13px;
-            }}
-            QPushButton:hover {{ background-color: {t['stop_btn_hover']}; }}
+            QPushButton:hover {{ background-color: {t['bg_hover']}; }}
         """)
         self.confirm_btn.setStyleSheet(f"""
             QPushButton {{
@@ -497,13 +481,13 @@ class SimpleChatArea(QWidget):
             .phase-body {{
                 padding: 12px 16px; font-size: 14px; line-height: 1.6;
             }}
-            .phase-panel.analyze {{ border-left: 3px solid #569cd6; }}
-            .phase-panel.execute {{ border-left: 3px solid #dcdcaa; }}
-            .phase-panel.verify {{ border-left: 3px solid #c586c0; }}
-            .phase-panel.archive {{ border-left: 3px solid #4ec9b0; }}
+            .phase-panel.analyze {{ border-left: 3px solid {t['card_analyze_border']}; }}
+            .phase-panel.execute {{ border-left: 3px solid {t['card_execute_border']}; }}
+            .phase-panel.verify {{ border-left: 3px solid {t['card_verify_border']}; }}
+            .phase-panel.archive {{ border-left: 3px solid {t['card_archive_border']}; }}
             .fold-block {{ margin: 4px 0; }}
             .fold-header {{
-                color: #569cd6; font-size: 13px; cursor: pointer;
+                color: {t['card_analyze_border']}; font-size: 13px; cursor: pointer;
                 text-decoration: none; user-select: none;
             }}
             .fold-body {{ display: none; }}
@@ -512,14 +496,14 @@ class SimpleChatArea(QWidget):
                 font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
                 font-size: 12px;
             }}
-            .tool-ok {{ color: #4ec9b0; }}
+            .tool-ok {{ color: {t['card_archive_border']}; }}
             .tool-fail {{ color: #f14c4c; }}
             .tool-time {{ color: {text_secondary}; margin-left: 8px; font-size: 11px; }}
             .think-task {{ padding: 2px 8px; font-size: 12px; color: {text_secondary}; }}
-            .think-task.done {{ color: #4ec9b0; }}
+            .think-task.done {{ color: {t['card_archive_border']}; }}
             .cmd-output, .cmd-full, .tool-args {{
                 font-family: 'Cascadia Code', Consolas, monospace; font-size: 11px;
-                padding: 8px; margin: 4px 0; background-color: rgba(0,0,0,0.15);
+                padding: 8px; margin: 4px 0; background-color: {t['card_output_bg']};
                 border-radius: 4px; white-space: pre-wrap;
                 max-height: 120px; overflow-y: auto;
             }}
@@ -527,8 +511,8 @@ class SimpleChatArea(QWidget):
             .step {{
                 display: block; padding: 6px 0; font-size: 14px; line-height: 1.6;
             }}
-            .step.done {{ color: #4ec9b0; }}
-            .step.running {{ color: #dcdcaa; }}
+            .step.done {{ color: {t['card_archive_border']}; }}
+            .step.running {{ color: {t['card_execute_border']}; }}
             .step.pending {{ color: {text_secondary}; }}
             .step.fail {{ color: #f14c4c; }}
             .step-icon {{ display: inline-block; width: 20px; text-align: center; }}
@@ -537,18 +521,32 @@ class SimpleChatArea(QWidget):
 
     # ── 兼容 UIRenderer 的接口 ──────────────────────────────────
     def _on_send(self):
-        text = self.input_field.toPlainText().strip()
+        text = self.input_area.toPlainText().strip()
         if text and hasattr(self, '_send_callback'):
             self._send_callback(text)
+
+    def _on_stop(self):
+        if hasattr(self, '_stop_callback') and self._stop_callback:
+            self._stop_callback()
+
+    def _on_analyze_project(self):
+        if hasattr(self, '_analyze_callback') and self._analyze_callback:
+            self._analyze_callback()
 
     def set_send_callback(self, callback):
         self._send_callback = callback
 
     def set_stop_callback(self, callback):
-        self.stop_btn.clicked.connect(callback)
+        self._stop_callback = callback
 
     def set_confirm_callback(self, callback):
         self._confirm_callback = callback
+
+    def set_analyze_callback(self, callback):
+        self._analyze_callback = callback
+
+    def set_analyze_button_visible(self, visible: bool):
+        self.analyze_project_btn.setVisible(visible)
 
     def _on_confirm(self, confirmed: bool):
         if hasattr(self, '_confirm_callback') and self._confirm_callback:
@@ -556,7 +554,7 @@ class SimpleChatArea(QWidget):
         self.confirm_bar.setVisible(False)
 
     def clear_input(self):
-        self.input_field.setPlainText("")
+        self.input_area.clear_input()
 
     def clear_chat(self):
         self._messages.clear()
@@ -569,8 +567,7 @@ class SimpleChatArea(QWidget):
     def set_header(self, title: str, env: str = ""):
         self.header.set_title(title, env)
 
-    def _on_search(self, text: str):
-        """在当前会话文本中搜索并高亮第一个匹配项。"""
+    def _on_search(self, text: str, forward: bool = True):
         browser = self.chat_area
         if not text:
             browser.moveCursor(QTextCursor.Start)
@@ -578,9 +575,13 @@ class SimpleChatArea(QWidget):
         cursor = browser.textCursor()
         start_pos = cursor.position()
         document = browser.document()
-        found = document.find(text, start_pos)
+        flags = QTextDocument.FindFlags()
+        if not forward:
+            flags |= QTextDocument.FindBackward
+        found = document.find(text, start_pos, flags)
         if found.isNull():
-            found = document.find(text, 0)
+            wrap_pos = document.characterCount() - 1 if forward else 0
+            found = document.find(text, wrap_pos, flags)
         if not found.isNull():
             browser.setTextCursor(found)
 
@@ -641,15 +642,13 @@ class SimpleChatArea(QWidget):
 
     def finalize_stream(self):
         self._streaming_active = False
-        self.stop_btn.setVisible(False)
-        self.send_btn.setVisible(True)
+        self.input_area.set_streaming(False)
         text = self._streaming_buffer
         self._streaming_buffer = ""
         start = self._streaming_start_pos
         self._streaming_start_pos = None
         if not text.strip():
             return
-        # 移除流式临时气泡，以折叠结构重新渲染
         if start is not None:
             cursor = self.chat_area.textCursor()
             cursor.setPosition(start)
@@ -659,16 +658,15 @@ class SimpleChatArea(QWidget):
 
     def set_streaming(self, active: bool):
         self._streaming_active = active
-        self.stop_btn.setVisible(active)
-        self.send_btn.setVisible(not active)
+        self.input_area.set_streaming(active)
         if active:
             self._streaming_buffer = ""
             self._streaming_start_pos = None
 
     def set_send_enabled(self, enabled: bool):
-        self.send_btn.setEnabled(enabled)
+        self.input_area.set_send_enabled(enabled)
 
-    # Phase UI：极简风格下不显示按钮，仅追加系统文本
+    # Phase UI
     def set_phase_indicator(self, phase: str, task_count: int = 0):
         pass
 
@@ -781,6 +779,7 @@ class SimpleChatArea(QWidget):
         return self._build_bubble_from_html("ai", body_html)
 
     def _build_phase_panel(self, phase: str, body_html: str) -> str:
+        t = self._theme
         headers = {
             "analyze": "📋 分析结果",
             "confirm": "📋 分析结果",
@@ -789,6 +788,7 @@ class SimpleChatArea(QWidget):
             "archive": "✅ 完成报告",
         }
         header = headers.get(phase, "📋 结果")
+        border_color = t.get(f"card_{phase}_border", t['border'])
         return f"""
         <table width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:10px 0;">
             <tr>
@@ -934,7 +934,8 @@ class SimpleChatArea(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self, worker_mgr=None):
         super().__init__()
-        self.resize(1200, 800)
+        self.resize(1400, 900)
+        self.setMinimumWidth(1200)
         self.setWindowTitle("Agent")
 
         # 1. 初始化配置与主题
@@ -942,6 +943,7 @@ class MainWindow(QMainWindow):
         self._theme_name = self._config.get("app.theme", DEFAULT_THEME)
         if self._theme_name not in THEMES:
             self._theme_name = DEFAULT_THEME
+        self._theme = THEMES[self._theme_name]
 
         # 2. 初始化 v4 核心组件
         self._repo = SessionRepository()
@@ -969,11 +971,12 @@ class MainWindow(QMainWindow):
             message_bus=self._bus,
             chat_view=self.chat_area,
             conversation_list=self.conversation_list,
+            right_panel=self.right_panel,
             current_session_provider=lambda: self._orchestrator.current_session_id or "",
             parent=self,
         )
 
-        # 草稿窗口状态（未写入 DB 的初始化窗口）
+        # 草稿窗口状态
         self._draft_session_type = "chat"
         self._draft_project_path = ""
         self._current_model_name = self._config.get("app.last_model", "tool-agent")
@@ -987,44 +990,60 @@ class MainWindow(QMainWindow):
         return ""
 
     def _setup_ui(self):
-        """Solo 两栏布局：左 280px + 右填充。"""
+        """QSplitter 三栏布局：左 250 + 中 stretch + 右 320。"""
         central = QWidget()
         self.setCentralWidget(central)
         main_layout = QHBoxLayout(central)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
+        self.splitter = QSplitter(Qt.Horizontal)
+        self.splitter.setHandleWidth(1)
+        main_layout.addWidget(self.splitter)
+
         # 左栏
-        self._left_panel = ConversationListWidget(theme=self._theme_name, repository=self._repo)
+        self._left_panel = ConversationListWidget(theme=self._theme, repository=self._repo)
         self._left_panel.new_task_clicked.connect(self._on_new_task)
         self._left_panel.conversation_selected.connect(self._on_conversation_selected)
         self._left_panel.conversation_deleted.connect(self._on_conversation_deleted)
         self._left_panel.conversation_pinned.connect(self._on_conversation_pinned)
-        self._left_panel.model_changed.connect(self._on_model_changed)
-        self._left_panel.mode_changed.connect(self._on_mode_changed)
         self._left_panel.theme_changed.connect(self._on_theme_changed)
-        self.conversation_list = self._left_panel  # 兼容旧引用
-        main_layout.addWidget(self._left_panel)
+        self._left_panel.search_clicked.connect(self._on_search_clicked)
+        self.conversation_list = self._left_panel
+        self.splitter.addWidget(self._left_panel)
+
+        # 中栏
+        self._center_panel = SimpleChatArea()
+        self._center_panel.set_theme(self._theme_name)
+        self._center_panel.set_send_callback(self._on_send_message)
+        self._center_panel.set_stop_callback(self._on_stop_generation)
+        self._center_panel.set_confirm_callback(self._on_user_confirm)
+        self._center_panel.set_analyze_callback(self._on_analyze_project)
+        self._center_panel.header.expand_toggled.connect(self.toggle_panels)
+        self._center_panel.header.export_requested.connect(self._on_export_session)
+        self._center_panel.header.settings_requested.connect(self._on_open_settings)
+        self.chat_area = self._center_panel
+        self.splitter.addWidget(self._center_panel)
 
         # 右栏
-        self._right_panel = SimpleChatArea()
-        self._right_panel.set_theme(self._theme_name)
-        self._right_panel.set_send_callback(self._on_send_message)
-        self._right_panel.set_stop_callback(self._on_stop_generation)
-        self._right_panel.set_confirm_callback(self._on_user_confirm)
-        self._right_panel.header.expand_toggled.connect(self.toggle_panels)
-        self.chat_area = self._right_panel  # 兼容旧引用
-        main_layout.addWidget(self._right_panel, 1)
+        self._right_panel = RightPanelWidget(theme=self._theme)
+        self._right_panel.set_project_root(self._get_project_path())
+        self._right_panel.setFixedWidth(400)
+        self.right_panel = self._right_panel
+        self.splitter.addWidget(self._right_panel)
+
+        # 设置初始尺寸：左 220 / 中 stretch / 右 400，匹配 UI 模板
+        self.splitter.setSizes([220, 780, 400])
 
         # ── 全局快捷键 ──
         self._shortcut_search = QShortcut(QKeySequence("Ctrl+F"), self)
-        self._shortcut_search.activated.connect(self._right_panel.header.focus_search)
+        self._shortcut_search.activated.connect(self._center_panel.header.focus_search)
         self._shortcut_expand = QShortcut(QKeySequence("Ctrl+B"), self)
         self._shortcut_expand.activated.connect(self.toggle_panels)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
-            if self._right_panel.header.key_escape():
+            if self._center_panel.header.key_escape():
                 return
         super().keyPressEvent(event)
 
@@ -1061,14 +1080,16 @@ class MainWindow(QMainWindow):
             "inference": InferenceEngine(policy_engine=policy, metrics_engine=metrics, llm_registry=registry),
             "tool": ToolEngine(),
             "memory": MemoryEngine(
-                app_root="F:/Agent/agent_workbench",
+                app_root=_get_app_root(),
                 config=config.get("self_context", {}), policy_engine=policy,
             ),
         }
         return engines
 
     def _connect_signals(self):
-        pass
+        # 输入区 mode/model 变更
+        self._center_panel.input_area.mode_changed.connect(self._on_mode_changed)
+        self._center_panel.input_area.model_changed.connect(self._on_model_changed)
 
     def _init_default_session(self):
         """启动时不自动创建 DB 会话，直接进入草稿窗口状态。"""
@@ -1080,14 +1101,14 @@ class MainWindow(QMainWindow):
     def _populate_model_selector(self):
         """从 config 读取模型列表并填充下拉框。"""
         providers = self._config.get("llm_providers", {})
-        self.conversation_list.populate_models(providers, self._current_model_name)
+        self._center_panel.input_area.set_models(providers, self._current_model_name)
 
     def _populate_mode_selector(self):
         """从 config 读取模式列表并填充下拉框。"""
         modes = list(self._config.get("manual_modes", {}).keys())
         if not modes:
             modes = ["ask", "plan", "craft"]
-        self.conversation_list.populate_modes(modes, self._current_mode)
+        self._center_panel.input_area.set_modes(modes, self._current_mode)
 
     def _on_new_task(self):
         """点击「+ 新任务」：只重置为草稿窗口，不创建会话。"""
@@ -1100,6 +1121,7 @@ class MainWindow(QMainWindow):
         self._draft_session_type = "work" if self._draft_project_path else "chat"
         self._orchestrator.clear_current()
         self.chat_area.clear_chat()
+        self.chat_area.set_analyze_button_visible(self._draft_session_type == "work")
         QTimer.singleShot(0, self.chat_area.input_field.setFocus)
 
     def _on_conversation_selected(self, session_id: str):
@@ -1111,23 +1133,36 @@ class MainWindow(QMainWindow):
     def _on_conversation_pinned(self, session_id: str, pinned: bool):
         self._bus.emit(SessionPinEvent(session_id=session_id, pinned=pinned))
 
+    def _on_search_clicked(self):
+        self._center_panel.header.focus_search()
+
     def _on_theme_changed(self, theme_name: str):
         """用户切换主题：应用新主题并持久化到 config.yaml。"""
         if theme_name not in THEMES or theme_name == self._theme_name:
             return
         self._theme_name = theme_name
+        self._theme = THEMES[theme_name]
         self._apply_theme()
-        self.conversation_list.set_theme(theme_name)
+        self.conversation_list.set_theme(self._theme)
         self.chat_area.set_theme(theme_name)
+        self.right_panel.set_theme(self._theme)
         self._config.set("app.theme", theme_name)
         self._config.save()
 
     def toggle_panels(self):
-        """切换左面板可见性，展开键图标通过 HeaderToolbar 更新。"""
-        visible = self._left_panel.isVisible()
-        self._left_panel.setVisible(not visible)
-        if hasattr(self.chat_area, 'header') and hasattr(self.chat_area.header, 'update_expand_state'):
-            self.chat_area.header.update_expand_state(expanded=visible)
+        """切换左右面板可见性，展开键图标通过 HeaderToolbar 更新。"""
+        left_visible = self._left_panel.isVisible()
+        right_visible = self._right_panel.isVisible()
+        if left_visible or right_visible:
+            # 当前处于展开态，收起两侧
+            self._left_panel.hide()
+            self._right_panel.hide()
+            self._center_panel.header.update_expand_state(expanded=False)
+        else:
+            # 当前处于收起态，展开两侧
+            self._left_panel.show()
+            self._right_panel.show()
+            self._center_panel.header.update_expand_state(expanded=True)
 
     def _on_send_message(self, user_text: str):
         """发送消息：草稿窗口首条消息会触发 orchestrator 创建会话。"""
@@ -1151,6 +1186,41 @@ class MainWindow(QMainWindow):
         current_sid = self._orchestrator.current_session_id
         if current_sid:
             self._bus.emit(UserConfirmEvent(session_id=current_sid, confirmed=confirmed))
+
+    def _on_analyze_project(self):
+        """用户点击「帮我分析当前项目」：直接向当前/草稿会话发送用户消息。"""
+        self._bus.emit(UserSendEvent(
+            session_id=self._orchestrator.current_session_id or "",
+            user_text="帮我分析当前项目",
+            mode=self._current_mode,
+            session_type=self._draft_session_type,
+            project_path=self._draft_project_path,
+            model=self._current_model_name,
+        ))
+
+    def _on_export_session(self):
+        """导出当前会话内容到文本文件。"""
+        from PySide6.QtWidgets import QFileDialog
+        sid = self._orchestrator.current_session_id
+        if not sid:
+            return
+        messages = self._repo.get_messages(sid)
+        lines = []
+        for m in messages:
+            role_label = {"user": "我", "ai": "AI", "system": "系统"}.get(m.role, m.role)
+            lines.append(f"[{role_label}] {m.content}")
+        text = "\n\n".join(lines)
+        path, _ = QFileDialog.getSaveFileName(self, "导出会话", f"session_{sid[-8:]}.txt", "Text Files (*.txt)")
+        if path:
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(text)
+            except Exception as e:
+                print(f"导出会话失败: {e}", flush=True)
+
+    def _on_open_settings(self):
+        """打开设置：临时通过终端面板提示用户（设置对话框待后续实现）。"""
+        self._right_panel.update_terminal("[设置] 设置对话框将在后续版本提供。")
 
     def _on_model_changed(self, model_name: str):
         """用户切换模型：更新当前模型并持久化到 config.yaml。"""

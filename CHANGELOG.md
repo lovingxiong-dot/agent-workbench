@@ -1,5 +1,20 @@
 # Changelog
 
+## v4.0.8-alpha (2026-07-01) — 最终发布版三栏 UI 全量重制
+
+### feat/ui
+- 主窗口从两栏升级为 QSplitter 三栏布局：左栏 220px + 中栏伸缩 + 右栏 400px
+- 新增 `v4/input_area.py`：底部输入区含圆形发送按钮、技能按钮、mode/model 标签，Enter 发送 / Shift+Enter 换行
+- 新增 `v4/right_panel.py`：右栏四标签页（v4 架构 / 终端 / 文件编辑器 / 浏览器），支持命令执行、文件读取、网页浏览
+- 重构 `v4/conversation_list.py`：左栏「功能/会话」Tab、搜索/+新会话/更多工具行、按项目路径分组的折叠会话列表
+- 扩展 `v4/events.py`：新增 `UIOpenFileEvent`、`UIUpdateTerminalEvent`、`UIRightPanelTabEvent`、`UIAnalyzeProjectEvent`、`UILoadUrlEvent`、`UIUpdateFileReaderEvent` 等右栏交互事件
+- 扩展主题令牌：新增 `card_analyze_*`、`card_execute_*`、`card_verify_*`、`card_archive_*`、`card_tool_*`、`card_output_*` 等卡片配色
+
+### fix/ui
+- `v4/ui_renderer.py` 接收 `right_panel` 参数并统一处理右栏事件，移除硬编码颜色
+- `v4/conversation_list.py` 修复取消置顶后会话未按更新时间倒序排列的问题
+- 新增/更新测试：`test_v4_input_area.py`、`test_v4_right_panel.py`、`test_v4_gui_smoke.py`、`test_v4_integration.py`，全量 204 项通过
+
 ## v4.0.7-alpha (2026-07-01) — 标题栏三键 + execute 步骤条
 
 ### feat/ui

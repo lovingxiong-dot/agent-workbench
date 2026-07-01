@@ -1,268 +1,74 @@
 """
-conversation_list.py — v4 会话列表（Solo 极简风格 + 主题切换）
+conversation_list.py — v4 左栏会话列表
 
-左栏只包含：
-- 顶部小标题 + 模型下拉 + 🌙/☀️ 主题切换
-- 中间「+ 新任务」按钮
-- 下方会话列表（标题 + 简短预览 + 时间）
+结构：
+- Tab 行：功能 | 会话
+- 工具行：搜索 / + 新会话 / ... 更多
+- 内容区：功能占位页 或 分组折叠会话列表
+- 底部：主题切换 / 设置
+
+分组规则：按 project_path 基名分组，空路径归入「全局会话」。
 """
 from datetime import datetime
 from typing import Optional
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem,
-    QPushButton, QComboBox, QLabel, QMenu,
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
+    QMenu, QFrame, QStackedWidget, QButtonGroup, QApplication,
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QSize
+from PySide6.QtGui import QAction, QFont
 
+from .icons import svg_icon, svg_pixmap
 from .models import SessionMetadata
 from .repository import SessionRepository
 
 
-THEMES = {
-    "dark": {
-        "bg_sidebar": "#252526",
-        "bg_widget": "#252526",
-        "bg_input": "#2d2d30",
-        "bg_hover": "#2a2d2e",
-        "bg_selected": "#37373d",
-        "border": "#3e3e42",
-        "text_primary": "#cccccc",
-        "text_secondary": "#858585",
-        "accent": "#007acc",
-        "accent_hover": "#1177bb",
-        "new_task_btn": "#2d2d30",
-        "new_task_hover": "#3e3e42",
-    },
-    "light": {
-        "bg_sidebar": "#f3f3f3",
-        "bg_widget": "#f3f3f3",
-        "bg_input": "#ffffff",
-        "bg_hover": "#e8e8e8",
-        "bg_selected": "#e0e0e0",
-        "border": "#e5e5e5",
-        "text_primary": "#333333",
-        "text_secondary": "#666666",
-        "accent": "#007acc",
-        "accent_hover": "#005a9e",
-        "new_task_btn": "#ffffff",
-        "new_task_hover": "#e8e8e8",
-    },
-}
-
 DEFAULT_THEME = "dark"
 
 
-class ConversationListWidget(QWidget):
-    """Solo 风格会话列表
+class SessionItemWidget(QWidget):
+    """单个会话项：标题 + 预览 + 时间。"""
 
-    信号：
-    - new_task_clicked(): 用户点击「+ 新任务」
-    - conversation_selected(session_id: str): 用户点击某个会话
-    - conversation_deleted(session_id: str): 用户删除某个会话
-    - conversation_pinned(session_id: str, pinned: bool): 用户置顶/取消置顶
-    - model_changed(model_name: str): 用户切换模型
-    - theme_changed(theme_name: str): 用户切换主题
-    """
+    clicked = Signal(str)
+    context_menu_requested = Signal(str, object)
 
-    new_task_clicked = Signal()
-    conversation_selected = Signal(str)
-    conversation_deleted = Signal(str)
-    conversation_pinned = Signal(str, bool)
-    model_changed = Signal(str)
-    mode_changed = Signal(str)
-    theme_changed = Signal(str)
-
-    def __init__(self, theme: str = DEFAULT_THEME, repository: SessionRepository = None, parent=None):
+    def __init__(self, session: SessionMetadata, preview: str, theme: dict, parent=None):
         super().__init__(parent)
-        self._theme_name = theme if theme in THEMES else DEFAULT_THEME
-        self._theme = THEMES[self._theme_name]
-        self._repo = repository
-        self._sessions: dict[str, SessionMetadata] = {}
-        self._badges: dict[str, str] = {}
-        self._setup_ui()
+        self._session_id = session.session_id
+        self._pinned = session.pinned
+        self._theme = theme
+        self._setup_ui(session, preview)
+        self._apply_theme()
 
-    def _setup_ui(self):
-        self.setFixedWidth(280)
+    def _setup_ui(self, session: SessionMetadata, preview: str):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(2)
 
-        # 顶部：小标题 + 主题切换
-        top_row = QHBoxLayout()
-        top_row.setSpacing(8)
+        title_text = ("📌 " if session.pinned else "") + (session.title or "新对话")
+        self.title_label = QLabel(title_text[:24])
+        self.title_label.setFont(self._font(12, bold=True))
+        layout.addWidget(self.title_label)
 
-        header = QLabel("Agent")
-        header.setStyleSheet(
-            f"color: {self._theme['text_primary']}; font-size: 16px; font-weight: 600;"
-        )
-        top_row.addWidget(header)
-        top_row.addStretch()
+        self.preview_label = QLabel(preview[:40] or "等待第一条消息...")
+        self.preview_label.setFont(self._font(10))
+        layout.addWidget(self.preview_label)
 
-        self.theme_btn = QPushButton("🌙" if self._theme_name == "dark" else "☀️")
-        self.theme_btn.setFixedSize(28, 28)
-        self.theme_btn.setCursor(Qt.PointingHandCursor)
-        self.theme_btn.setToolTip("切换主题")
-        self.theme_btn.clicked.connect(self._on_theme_clicked)
-        top_row.addWidget(self.theme_btn)
-        layout.addLayout(top_row)
+        self.time_label = QLabel(self._format_time(session.updated_at))
+        self.time_label.setFont(self._font(9))
+        layout.addWidget(self.time_label)
 
-        # 模型下拉
-        self.model_selector = QComboBox()
-        self.model_selector.currentTextChanged.connect(self._on_model_changed)
-        layout.addWidget(self.model_selector)
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._on_context_menu)
 
-        # 模式下拉
-        self.mode_selector = QComboBox()
-        self.mode_selector.currentTextChanged.connect(self._on_mode_changed)
-        layout.addWidget(self.mode_selector)
-
-        # 中间：+ 新任务
-        self.new_task_btn = QPushButton("+ 新任务")
-        self.new_task_btn.setCursor(Qt.PointingHandCursor)
-        self.new_task_btn.clicked.connect(self.new_task_clicked.emit)
-        layout.addWidget(self.new_task_btn)
-
-        # 下方：会话列表
-        self._list = QListWidget()
-        self._list.setObjectName("conversationList")
-        self._list.itemClicked.connect(self._on_item_clicked)
-        self._list.setContextMenuPolicy(Qt.CustomContextMenu)
-        self._list.customContextMenuRequested.connect(self._on_context_menu)
-        layout.addWidget(self._list, 1)
-
-        self._apply_theme_styles()
-
-    def set_theme(self, theme_name: str):
-        """切换主题并即时重绘样式。"""
-        self._theme_name = theme_name if theme_name in THEMES else DEFAULT_THEME
-        self._theme = THEMES[self._theme_name]
-        self.theme_btn.setText("🌙" if self._theme_name == "dark" else "☀️")
-        self._apply_theme_styles()
-        self.refresh(list(self._sessions.values()))
-
-    def _apply_theme_styles(self):
-        t = self._theme
-        self.setStyleSheet(f"background-color: {t['bg_sidebar']};")
-
-        combo_style = f"""
-            QComboBox {{
-                background-color: {t['bg_input']}; color: {t['text_primary']};
-                border: 1px solid {t['border']}; border-radius: 8px;
-                padding: 6px 10px; font-size: 13px;
-            }}
-            QComboBox:hover {{ border: 1px solid {t['accent']}; }}
-            QComboBox::drop-down {{ border: none; width: 18px; }}
-            QComboBox QAbstractItemView {{
-                background-color: {t['bg_widget']}; color: {t['text_primary']};
-                border: 1px solid {t['border']};
-                selection-background-color: {t['accent']}33;
-            }}
-        """
-        self.model_selector.setStyleSheet(combo_style)
-        self.mode_selector.setStyleSheet(combo_style)
-
-        self.new_task_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {t['new_task_btn']}; color: {t['text_primary']};
-                border: 1px solid {t['border']}; border-radius: 8px;
-                padding: 10px; font-size: 13px; font-weight: 500;
-                text-align: left;
-            }}
-            QPushButton:hover {{
-                background-color: {t['new_task_hover']};
-                border: 1px solid {t['accent']};
-            }}
-        """)
-
-        self.theme_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: transparent; color: {t['text_secondary']};
-                border: none; border-radius: 6px; font-size: 14px;
-            }}
-            QPushButton:hover {{ background-color: {t['bg_hover']}; color: {t['text_primary']}; }}
-        """)
-
-        self._list.setStyleSheet(f"""
-            QListWidget {{
-                background-color: {t['bg_sidebar']}; border: none; outline: none;
-                color: {t['text_primary']}; font-size: 13px;
-            }}
-            QListWidget::item {{
-                border-radius: 8px; padding: 10px 12px; margin: 2px 0;
-            }}
-            QListWidget::item:selected {{
-                background-color: {t['bg_selected']};
-                border-left: 3px solid {t['accent']};
-            }}
-            QListWidget::item:hover {{
-                background-color: {t['bg_hover']};
-            }}
-        """)
-
-    def _on_theme_clicked(self):
-        new_theme = "light" if self._theme_name == "dark" else "dark"
-        self.theme_changed.emit(new_theme)
-
-    def populate_models(self, providers: dict, current: str):
-        """填充模型下拉框。"""
-        self.model_selector.blockSignals(True)
-        self.model_selector.clear()
-        for name, cfg in providers.items():
-            self.model_selector.addItem(f"{name}  ({cfg.get('model', '?')})", name)
-        idx = self.model_selector.findData(current)
-        if idx >= 0:
-            self.model_selector.setCurrentIndex(idx)
-        self.model_selector.blockSignals(False)
-
-    # ── 数据刷新（全量）─────────────────────────────────
-    def refresh(self, sessions: list[SessionMetadata]):
-        """接收 SessionMetadata 列表，全量重建列表项，保持当前选中项。"""
-        self._sessions = {s.session_id: s for s in sessions}
-
-        current_sid = None
-        current_item = self._list.currentItem()
-        if current_item:
-            current_sid = current_item.data(Qt.UserRole)
-
-        self._list.clear()
-        for s in sessions:
-            item = self._create_item(s)
-            self._list.addItem(item)
-            if s.session_id == current_sid:
-                self._list.setCurrentItem(item)
-
-        for sid, phase in self._badges.items():
-            self._update_badge_text(sid, phase)
-
-    def _create_item(self, metadata: SessionMetadata) -> QListWidgetItem:
-        title = metadata.title or "新对话"
-        pin = "📌 " if metadata.pinned else ""
-        preview = self._preview_text(metadata)
-        time_str = self._format_time(metadata.updated_at)
-        text = (
-            f"{pin}{title[:20]}\n"
-            f"  {preview}\n"
-            f"  {time_str}"
-        )
-
-        item = QListWidgetItem(text)
-        item.setData(Qt.UserRole, metadata.session_id)
-        item.setToolTip(title)
-        if metadata.pinned:
-            item.setBackground(QColor(self._theme["bg_selected"]))
-        return item
-
-    def _preview_text(self, metadata: SessionMetadata) -> str:
-        """生成简短预览：优先取最后一条消息内容。"""
-        if self._repo:
-            last_msg = self._repo.get_last_message(metadata.session_id)
-            if last_msg:
-                return last_msg.content[:40]
-        if metadata.project_path:
-            return metadata.project_path[-30:] if len(metadata.project_path) > 30 else metadata.project_path
-        return ""
+    @staticmethod
+    def _font(size: int, bold: bool = False):
+        from PySide6.QtGui import QFont
+        f = QFont("Segoe UI", size)
+        f.setBold(bold)
+        return f
 
     @staticmethod
     def _format_time(ts: Optional[datetime]) -> str:
@@ -275,70 +81,574 @@ class ConversationListWidget(QWidget):
             return ts.strftime("%m-%d")
         return ts.strftime("%Y-%m-%d")
 
-    # ── 徽章更新 ──────────────────────────────────
-    def update_badge(self, session_id: str, phase: str):
-        """更新会话状态徽章。"""
-        self._badges[session_id] = phase
-        self._update_badge_text(session_id, phase)
+    def _apply_theme(self):
+        t = self._theme
+        self.title_label.setStyleSheet(f"color: {t['text_primary']};")
+        self.preview_label.setStyleSheet(f"color: {t['text_secondary']};")
+        self.time_label.setStyleSheet(f"color: {t.get('text_muted', t['text_secondary'])};")
+        self.setStyleSheet(
+            f"SessionItemWidget {{ background-color: transparent; border-radius: 6px; }}"
+            f"SessionItemWidget:hover {{ background-color: {t['bg_hover']}; }}"
+        )
 
-    def _update_badge_text(self, session_id: str, phase: str):
-        """Solo 极简风格：不在列表项中显示 Phase 徽章。"""
-        pass
+    def set_theme(self, theme: dict):
+        self._theme = theme
+        self._apply_theme()
 
-    # ── 事件处理 ──────────────────────────────────
-    def _on_item_clicked(self, item: QListWidgetItem):
-        sid = item.data(Qt.UserRole)
-        if sid:
-            self.conversation_selected.emit(sid)
+    def set_active(self, active: bool):
+        t = self._theme
+        if active:
+            self.setStyleSheet(
+                f"SessionItemWidget {{ background-color: {t['bg_selected']}; "
+                f"border-left: 3px solid {t['accent']}; border-radius: 6px; }}"
+            )
+        else:
+            self._apply_theme()
 
-    def set_active_session(self, session_id: str):
-        """设置当前选中项（不触发 itemClicked 信号）。"""
-        for i in range(self._list.count()):
-            item = self._list.item(i)
-            if item.data(Qt.UserRole) == session_id:
-                self._list.blockSignals(True)
-                self._list.setCurrentItem(item)
-                self._list.blockSignals(False)
-                break
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit(self._session_id)
+        super().mousePressEvent(event)
 
     def _on_context_menu(self, pos):
-        item = self._list.itemAt(pos)
-        if not item:
-            return
+        self.context_menu_requested.emit(self._session_id, self.mapToGlobal(pos))
 
-        sid = item.data(Qt.UserRole)
-        metadata = self._sessions.get(sid)
+
+class SessionGroupWidget(QWidget):
+    """可折叠会话分组。"""
+
+    toggled = Signal(str, bool)
+    session_selected = Signal(str)
+    session_context_menu_requested = Signal(str, object)
+
+    def __init__(self, group_name: str, sessions: list, preview_provider, theme: dict, parent=None):
+        super().__init__(parent)
+        self._group_name = group_name
+        self._expanded = True
+        self._theme = theme
+        self._preview_provider = preview_provider
+        self._items: dict[str, SessionItemWidget] = {}
+        self._setup_ui()
+        self._apply_theme()
+        self.update_sessions(sessions)
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        # 分组头部
+        self.header = QWidget()
+        header_layout = QHBoxLayout(self.header)
+        header_layout.setContentsMargins(8, 4, 8, 4)
+        header_layout.setSpacing(6)
+
+        self.toggle_btn = QPushButton("▼")
+        self.toggle_btn.setFixedSize(18, 18)
+        self.toggle_btn.setCursor(Qt.PointingHandCursor)
+        self.toggle_btn.setFlat(True)
+        self.toggle_btn.clicked.connect(self._on_toggle)
+        header_layout.addWidget(self.toggle_btn)
+
+        self.name_label = QLabel(self._group_name)
+        from PySide6.QtGui import QFont
+        f = QFont("Segoe UI", 10)
+        f.setBold(True)
+        self.name_label.setFont(f)
+        header_layout.addWidget(self.name_label, 1)
+
+        self.count_label = QLabel("0")
+        self.count_label.setFont(QFont("Segoe UI", 9))
+        header_layout.addWidget(self.count_label)
+
+        self.header.mousePressEvent = self._header_clicked
+        layout.addWidget(self.header)
+
+        # 分隔线
+        self.sep = QFrame()
+        self.sep.setFrameShape(QFrame.HLine)
+        self.sep.setFixedHeight(1)
+        layout.addWidget(self.sep)
+
+        # 会话列表
+        self.items_layout = QVBoxLayout()
+        self.items_layout.setContentsMargins(4, 4, 4, 4)
+        self.items_layout.setSpacing(4)
+        self.items_layout.addStretch()
+        layout.addLayout(self.items_layout)
+
+    def _header_clicked(self, event):
+        self._on_toggle()
+
+    def _on_toggle(self):
+        self._expanded = not self._expanded
+        self.toggle_btn.setText("▼" if self._expanded else "▶")
+        for i in range(self.items_layout.count()):
+            item = self.items_layout.itemAt(i).widget()
+            if item:
+                item.setVisible(self._expanded)
+        self.toggled.emit(self._group_name, self._expanded)
+
+    def _apply_theme(self):
+        t = self._theme
+        self.header.setStyleSheet(f"background-color: {t.get('bg_group_header', t['bg_sidebar'])}; border-radius: 4px;")
+        self.name_label.setStyleSheet(f"color: {t['text_secondary']};")
+        self.count_label.setStyleSheet(f"color: {t.get('text_muted', t['text_secondary'])};")
+        self.toggle_btn.setStyleSheet(
+            f"QPushButton {{ color: {t['text_secondary']}; background: transparent; border: none; font-size: 10px; }}"
+        )
+        self.sep.setStyleSheet(f"background-color: {t['border']};")
+
+    def set_theme(self, theme: dict):
+        self._theme = theme
+        self._apply_theme()
+        for item in self._items.values():
+            item.set_theme(theme)
+
+    def update_sessions(self, sessions: list[SessionMetadata]):
+        # 清空旧项（保留 stretch）
+        while self.items_layout.count() > 1:
+            item = self.items_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._items.clear()
+
+        for s in sessions:
+            preview = self._preview_provider(s) if self._preview_provider else ""
+            item = SessionItemWidget(s, preview, self._theme)
+            item.clicked.connect(self.session_selected.emit)
+            item.context_menu_requested.connect(self.session_context_menu_requested.emit)
+            item.setVisible(self._expanded)
+            self.items_layout.insertWidget(self.items_layout.count() - 1, item)
+            self._items[s.session_id] = item
+
+        self.count_label.setText(str(len(sessions)))
+
+    def set_active_session(self, session_id: str):
+        for sid, item in self._items.items():
+            item.set_active(sid == session_id)
+
+
+class FunctionPageWidget(QWidget):
+    """「功能」Tab 页：工具 / MCP / 技能 / 自动化，带状态徽章。"""
+
+    def __init__(self, theme: dict, parent=None):
+        super().__init__(parent)
+        self._theme = theme
+        self._rows: list[tuple[QWidget, str, Optional[QLabel]]] = []
+        self._setup_ui()
+        self._apply_theme()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+
+        sections = [
+            ("工具", [
+                ("run_command", "开"),
+                ("grep_files", "关"),
+                ("write_file", "开"),
+            ], "dot"),
+            ("MCP", [
+                ("GitHub", "已连接"),
+                ("Notion", "未连接"),
+            ], "dot"),
+            ("技能", [
+                ("archive", ""),
+                ("handoff", ""),
+                ("gitops", ""),
+            ], "lightning"),
+            ("自动化", [
+                ("每日日报", "08:00"),
+            ], "dot"),
+        ]
+
+        for title, items, icon_type in sections:
+            header = QLabel(title)
+            from PySide6.QtGui import QFont
+            f = QFont("Segoe UI", 9)
+            f.setBold(True)
+            header.setFont(f)
+            layout.addWidget(header)
+
+            for name, status in items:
+                row, badge = self._build_item_row(name, status, icon_type)
+                layout.addWidget(row)
+                self._rows.append((row, icon_type, badge))
+
+            line = QFrame()
+            line.setFrameShape(QFrame.HLine)
+            line.setFixedHeight(1)
+            layout.addWidget(line)
+            self._rows.append((line, "sep", None))
+
+        layout.addStretch()
+
+    def _build_item_row(self, name: str, status: str, icon_type: str) -> tuple[QWidget, Optional[QLabel]]:
+        row = QWidget()
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(8)
+
+        if icon_type == "lightning":
+            dot = QLabel()
+            dot.setFixedSize(12, 12)
+            dot.setAlignment(Qt.AlignCenter)
+        else:
+            dot = QLabel("●")
+            dot.setFixedWidth(12)
+        row_layout.addWidget(dot)
+
+        label = QLabel(name)
+        label.setFont(QFont("Segoe UI", 11))
+        row_layout.addWidget(label, 1)
+
+        badge: Optional[QLabel] = None
+        if status:
+            badge = QLabel(status)
+            badge.setFont(QFont("Segoe UI", 9))
+            row_layout.addWidget(badge)
+
+        return row, badge
+
+    def _apply_theme(self):
+        t = self._theme
+        self.setStyleSheet(f"background-color: {t['bg_sidebar']};")
+        icon_color = t.get("text_secondary", "#a0a0b0")
+        accent = t.get("accent", "#007acc")
+        muted = t.get("text_muted", t['text_secondary'])
+
+        for widget, icon_type, badge in self._rows:
+            if icon_type == "sep":
+                widget.setStyleSheet(f"background-color: {t['border']};")
+                continue
+            row = widget.layout()
+            dot = row.itemAt(0).widget()
+            label = row.itemAt(1).widget()
+            if icon_type == "lightning":
+                dot.setPixmap(svg_pixmap("lightning", icon_color, 10))
+            else:
+                dot.setStyleSheet(f"color: {accent};")
+            label.setStyleSheet(f"color: {t['text_secondary']};")
+            if badge is not None:
+                text = badge.text()
+                if text in ("开", "已连接"):
+                    badge.setStyleSheet(f"color: {t.get('card_archive_border', '#4ec9b0')};")
+                elif text in ("关", "未连接"):
+                    badge.setStyleSheet(f"color: {muted};")
+                else:
+                    badge.setStyleSheet(f"color: {t['text_secondary']};")
+
+    def set_theme(self, theme: dict):
+        self._theme = theme
+        self._apply_theme()
+
+
+class ConversationListWidget(QWidget):
+    """v4 左栏：Tab + 工具行 + 分组会话列表/功能页 + 底部控制。"""
+
+    new_task_clicked = Signal()
+    conversation_selected = Signal(str)
+    conversation_deleted = Signal(str)
+    conversation_pinned = Signal(str, bool)
+    theme_changed = Signal(str)
+    search_clicked = Signal()
+    more_clicked = Signal()
+    tab_changed = Signal(str)
+
+    def __init__(self, theme: dict = None, repository: SessionRepository = None, parent=None):
+        super().__init__(parent)
+        self._theme = theme or {}
+        self._repo = repository
+        self._sessions: dict[str, SessionMetadata] = {}
+        self._badges: dict[str, str] = {}
+        self._active_session_id: str = ""
+        self._current_tab = "会话"
+        self.setFixedWidth(220)
+        self._setup_ui()
+        self._apply_theme()
+
+    # ═══════════════════════════════════════════════════
+    # UI 构建
+    # ═══════════════════════════════════════════════════
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+
+        # ── Tab 行 ──
+        tab_row = QHBoxLayout()
+        tab_row.setSpacing(6)
+
+        self.tab_group = QButtonGroup(self)
+        self.tab_group.setExclusive(True)
+
+        self.function_tab_btn = QPushButton("功能")
+        self.function_tab_btn.setCheckable(True)
+        self.function_tab_btn.setCursor(Qt.PointingHandCursor)
+        self.function_tab_btn.clicked.connect(lambda: self._on_tab_changed("功能"))
+        self.tab_group.addButton(self.function_tab_btn)
+        tab_row.addWidget(self.function_tab_btn)
+
+        self.session_tab_btn = QPushButton("会话")
+        self.session_tab_btn.setCheckable(True)
+        self.session_tab_btn.setChecked(True)
+        self.session_tab_btn.setCursor(Qt.PointingHandCursor)
+        self.session_tab_btn.clicked.connect(lambda: self._on_tab_changed("会话"))
+        self.tab_group.addButton(self.session_tab_btn)
+        tab_row.addWidget(self.session_tab_btn)
+
+        layout.addLayout(tab_row)
+
+        # ── 工具行 ──
+        tool_row = QHBoxLayout()
+        tool_row.setSpacing(6)
+
+        self.search_btn = QPushButton()
+        self.search_btn.setFixedSize(28, 24)
+        self.search_btn.setCursor(Qt.PointingHandCursor)
+        self.search_btn.setToolTip("搜索")
+        self.search_btn.setIconSize(QSize(14, 14))
+        self.search_btn.setIcon(svg_icon("search", self._theme.get("text_secondary", "#a0a0b0"), 14))
+        self.search_btn.clicked.connect(self.search_clicked.emit)
+        tool_row.addWidget(self.search_btn)
+
+        self.new_task_btn = QPushButton("+ 新会话")
+        self.new_task_btn.setCursor(Qt.PointingHandCursor)
+        self.new_task_btn.clicked.connect(self.new_task_clicked.emit)
+        tool_row.addWidget(self.new_task_btn, 1)
+
+        self.more_btn = QPushButton()
+        self.more_btn.setFixedSize(28, 24)
+        self.more_btn.setCursor(Qt.PointingHandCursor)
+        self.more_btn.setToolTip("更多")
+        self.more_btn.setIconSize(QSize(14, 14))
+        self.more_btn.setIcon(svg_icon("more", self._theme.get("text_secondary", "#a0a0b0"), 14))
+        self.more_btn.clicked.connect(self._on_more_clicked)
+        tool_row.addWidget(self.more_btn)
+
+        layout.addLayout(tool_row)
+
+        # ── 内容区 ──
+        self.stack = QStackedWidget()
+
+        self.function_page = FunctionPageWidget(self._theme)
+        self.stack.addWidget(self.function_page)
+
+        self.session_container = QWidget()
+        self.session_layout = QVBoxLayout(self.session_container)
+        self.session_layout.setContentsMargins(0, 0, 0, 0)
+        self.session_layout.setSpacing(8)
+        self.session_layout.addStretch()
+        self.stack.addWidget(self.session_container)
+
+        layout.addWidget(self.stack, 1)
+
+        # ── 底部控制 ──
+        bottom_row = QHBoxLayout()
+        bottom_row.setSpacing(8)
+        bottom_row.addStretch()
+
+        self.theme_btn = QPushButton("🌙" if self._is_dark() else "☀️")
+        self.theme_btn.setFixedSize(32, 20)
+        self.theme_btn.setCursor(Qt.PointingHandCursor)
+        self.theme_btn.setToolTip("切换主题")
+        self.theme_btn.clicked.connect(self._on_theme_clicked)
+        bottom_row.addWidget(self.theme_btn)
+
+        self.settings_btn = QPushButton("⚙")
+        self.settings_btn.setFixedSize(32, 20)
+        self.settings_btn.setCursor(Qt.PointingHandCursor)
+        self.settings_btn.setToolTip("设置")
+        bottom_row.addWidget(self.settings_btn)
+
+        layout.addLayout(bottom_row)
+
+        # 更多菜单
+        self._setup_more_menu()
+
+    def _setup_more_menu(self):
+        self.more_menu = QMenu(self)
+        self.action_export = QAction("导出当前会话", self)
+        self.action_copy = QAction("复制会话内容", self)
+        self.action_settings = QAction("打开设置", self)
+        self.action_theme = QAction("切换主题", self)
+        self.more_menu.addAction(self.action_export)
+        self.more_menu.addAction(self.action_copy)
+        self.more_menu.addSeparator()
+        self.more_menu.addAction(self.action_settings)
+        self.more_menu.addAction(self.action_theme)
+        self.action_theme.triggered.connect(self._on_theme_clicked)
+
+    def _on_more_clicked(self):
+        self.more_clicked.emit()
+        self.more_menu.exec(self.more_btn.mapToGlobal(self.more_btn.rect().bottomLeft()))
+
+    def _on_tab_changed(self, tab_name: str):
+        self._current_tab = tab_name
+        if tab_name == "功能":
+            self.stack.setCurrentIndex(0)
+            self.function_tab_btn.setChecked(True)
+        else:
+            self.stack.setCurrentIndex(1)
+            self.session_tab_btn.setChecked(True)
+        self.tab_changed.emit(tab_name)
+
+    # ═══════════════════════════════════════════════════
+    # 主题
+    # ═══════════════════════════════════════════════════
+    def _is_dark(self) -> bool:
+        bg = self._theme.get("bg_sidebar", "#252526").lower()
+        return bg in ("#16213e", "#252526", "#1e1e1e", "#1a1a2e", "#0f1729")
+
+    def set_theme(self, theme: dict):
+        self._theme = theme
+        self._apply_theme()
+        self.function_page.set_theme(theme)
+        for group in self._iter_groups():
+            group.set_theme(theme)
+
+    def _apply_theme(self):
+        t = self._theme
+        self.setStyleSheet(f"background-color: {t['bg_sidebar']};")
+
+        tab_base = (
+            f"QPushButton {{ background-color: {t['bg_sidebar']}; color: {t['text_secondary']}; "
+            f"border: 1px solid {t['border']}; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 500; }}"
+            f"QPushButton:hover {{ background-color: {t['bg_hover']}; }}"
+            f"QPushButton:checked {{ background-color: {t['accent']}; color: #ffffff; border-color: {t['accent']}; }}"
+        )
+        self.function_tab_btn.setStyleSheet(tab_base)
+        self.session_tab_btn.setStyleSheet(tab_base)
+
+        tool_btn_style = (
+            f"QPushButton {{ background-color: {t['bg_primary']}; color: {t['text_secondary']}; "
+            f"border: 1px solid {t['border']}; border-radius: 6px; font-size: 11px; }}"
+            f"QPushButton:hover {{ background-color: {t['bg_hover']}; border-color: {t['accent']}; }}"
+        )
+        self.search_btn.setStyleSheet(tool_btn_style)
+        self.search_btn.setIcon(svg_icon("search", t.get("text_secondary", "#a0a0b0"), 14))
+        self.new_task_btn.setStyleSheet(tool_btn_style)
+        self.more_btn.setStyleSheet(tool_btn_style)
+        self.more_btn.setIcon(svg_icon("more", t.get("text_secondary", "#a0a0b0"), 14))
+
+        bottom_style = (
+            f"QPushButton {{ background-color: {t.get('tag_bg', t['bg_input'])}; color: {t.get('tag_text', t['text_secondary'])}; "
+            f"border: 1px solid {t['border']}; border-radius: 6px; font-size: 10px; }}"
+            f"QPushButton:hover {{ background-color: {t['bg_hover']}; }}"
+        )
+        self.theme_btn.setStyleSheet(bottom_style)
+        self.settings_btn.setStyleSheet(bottom_style)
+        self.theme_btn.setText("🌙" if self._is_dark() else "☀️")
+
+    def _on_theme_clicked(self):
+        new_theme = "light" if self._is_dark() else "dark"
+        self.theme_changed.emit(new_theme)
+
+    # ═══════════════════════════════════════════════════
+    # 数据刷新
+    # ═══════════════════════════════════════════════════
+    def refresh(self, sessions: list[SessionMetadata]):
+        self._sessions = {s.session_id: s for s in sessions}
+
+        # 清空现有分组
+        while self.session_layout.count() > 1:
+            item = self.session_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        # 按 project_path 分组
+        groups: dict[str, list[SessionMetadata]] = {}
+        global_sessions = []
+        for s in sessions:
+            if s.pinned:
+                # 置顶项仍然保留在对应组内，排序时靠前
+                pass
+            if s.project_path:
+                name = self._group_name(s.project_path)
+                groups.setdefault(name, []).append(s)
+            else:
+                global_sessions.append(s)
+
+        # 排序：组内按 pinned 降序 + updated_at 降序
+        def sort_key(s: SessionMetadata):
+            ts = (s.updated_at or datetime.max).timestamp()
+            return (not s.pinned, -ts)
+
+        for name in sorted(groups.keys()):
+            groups[name].sort(key=sort_key)
+        global_sessions.sort(key=sort_key)
+
+        # 先添加有项目的分组，再添加全局会话
+        for name in sorted(groups.keys()):
+            self._add_group(name, groups[name])
+        if global_sessions:
+            self._add_group("全局会话", global_sessions)
+
+        self.set_active_session(self._active_session_id)
+
+    def _group_name(self, project_path: str) -> str:
+        import os
+        return os.path.basename(project_path) or project_path
+
+    def _add_group(self, name: str, sessions: list[SessionMetadata]):
+        group = SessionGroupWidget(
+            name, sessions, self._preview_text, self._theme, parent=self.session_container
+        )
+        group.session_selected.connect(self._on_session_selected)
+        group.session_context_menu_requested.connect(self._on_session_context_menu)
+        self.session_layout.insertWidget(self.session_layout.count() - 1, group)
+
+    def _iter_groups(self):
+        for i in range(self.session_layout.count()):
+            w = self.session_layout.itemAt(i).widget()
+            if isinstance(w, SessionGroupWidget):
+                yield w
+
+    def _preview_text(self, metadata: SessionMetadata) -> str:
+        if self._repo:
+            last_msg = self._repo.get_last_message(metadata.session_id)
+            if last_msg:
+                print(f"[DEBUG preview] sid={metadata.session_id[-8:]} role={last_msg.role} content={last_msg.content[:30]!r}", flush=True)
+                return last_msg.content[:40]
+        if metadata.project_path:
+            return metadata.project_path[-30:] if len(metadata.project_path) > 30 else metadata.project_path
+        return ""
+
+    # ═══════════════════════════════════════════════════
+    # 事件处理
+    # ═══════════════════════════════════════════════════
+    def _on_session_selected(self, session_id: str):
+        self._active_session_id = session_id
+        self.conversation_selected.emit(session_id)
+        self.set_active_session(session_id)
+
+    def _on_session_context_menu(self, session_id: str, global_pos):
+        metadata = self._sessions.get(session_id)
         if not metadata:
             return
-
         menu = QMenu(self)
         pin_label = "📌 取消置顶" if metadata.pinned else "📌 置顶"
         pin_action = menu.addAction(pin_label)
-        pin_action.triggered.connect(lambda: self.conversation_pinned.emit(sid, not metadata.pinned))
-
+        pin_action.triggered.connect(lambda: self.conversation_pinned.emit(session_id, not metadata.pinned))
         delete_action = menu.addAction("🗑 删除")
-        delete_action.triggered.connect(lambda: self.conversation_deleted.emit(sid))
+        delete_action.triggered.connect(lambda: self.conversation_deleted.emit(session_id))
+        menu.exec(global_pos)
 
-        menu.exec(self._list.viewport().mapToGlobal(pos))
+    def set_active_session(self, session_id: str):
+        self._active_session_id = session_id
+        for group in self._iter_groups():
+            group.set_active_session(session_id)
 
-    def _on_model_changed(self, text: str):
-        name = self.model_selector.currentData()
-        if name:
-            self.model_changed.emit(name)
+    # ═══════════════════════════════════════════════════
+    # 兼容旧 API（将逐步移除）
+    # ═══════════════════════════════════════════════════
+    def populate_models(self, providers: dict, current: str):
+        pass
 
     def populate_modes(self, modes: list[str], current: str):
-        """填充模式下拉框。"""
-        self.mode_selector.blockSignals(True)
-        self.mode_selector.clear()
-        for mode in modes:
-            display = {"ask": "问答", "plan": "规划", "craft": "执行"}.get(mode, mode)
-            self.mode_selector.addItem(display, mode)
-        idx = self.mode_selector.findData(current)
-        if idx >= 0:
-            self.mode_selector.setCurrentIndex(idx)
-        self.mode_selector.blockSignals(False)
+        pass
 
-    def _on_mode_changed(self, text: str):
-        mode = self.mode_selector.currentData()
-        if mode:
-            self.mode_changed.emit(mode)
+    def update_badge(self, session_id: str, phase: str):
+        self._badges[session_id] = phase

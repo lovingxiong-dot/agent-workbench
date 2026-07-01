@@ -31,6 +31,11 @@ a = Analysis(
         'v4.ui_renderer',
         'v4.conversation_list',
         'v4.models',
+        'v4.input_area',
+        'v4.right_panel',
+        'v4.icons',
+        'PySide6.QtWebEngineWidgets',
+        'PySide6.QtWebEngineCore',
         # v4 agent_engine engines
         'agent_engine',
         'agent_engine.llm_registry',
@@ -97,7 +102,6 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=['scripts/runtime_hook.py'],
     excludes=[
-        'PySide6.QtWebEngine', 'PySide6.QtWebEngineCore', 'PySide6.QtWebEngineWidgets',
         'PySide6.QtWebSockets', 'PySide6.QtWebChannel',
         'PySide6.QtSql', 'PySide6.QtQml', 'PySide6.QtQuick',
         'PySide6.QtMultimedia', 'PySide6.QtMultimediaWidgets',

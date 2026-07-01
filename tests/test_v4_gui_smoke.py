@@ -33,6 +33,29 @@ class TestV4GUISmoke:
         window.deleteLater()
         self.app.processEvents()
 
+    def test_three_column_layout_initial_state(self):
+        """验证三栏布局初始尺寸与右栏标签页数量。"""
+        window = MainWindow()
+        self.app.processEvents()
+
+        # 左栏固定 220px，右栏固定 400px；splitter 保证存在三栏
+        assert window._left_panel.width() == 220
+        assert window._right_panel.width() == 400
+        sizes = window.splitter.sizes()
+        assert len(sizes) == 3, "应存在三栏"
+
+        # 右栏四个标签页
+        assert window.right_panel.tabs.count() == 4, "右栏应包含 4 个标签页"
+        tab_texts = [window.right_panel.tabs.tabText(i).lower() for i in range(window.right_panel.tabs.count())]
+        assert "v4 架构" in tab_texts
+        assert "终端" in tab_texts
+        assert "文件编辑器" in tab_texts or "文件读取器" in tab_texts
+        assert "浏览器" in tab_texts
+
+        window.close()
+        window.deleteLater()
+        self.app.processEvents()
+
     def test_new_task_button_does_not_create_empty_session(self):
         window = MainWindow()
         initial_count = len(window._repo.list_sessions())

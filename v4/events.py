@@ -423,3 +423,45 @@ class UISetActiveSessionEvent(Event):
     namespace: str = "ui"
     name: str = "set_active_session"
     active_session_id: str = ""
+
+
+@dataclass
+class UIOpenFileEvent(Event):
+    namespace: str = "ui"
+    name: str = "open_file"
+    path: str = ""
+
+
+@dataclass
+class UIUpdateTerminalEvent(Event):
+    namespace: str = "ui"
+    name: str = "update_terminal"
+    text: str = ""
+
+
+@dataclass
+class UIRightPanelTabEvent(Event):
+    namespace: str = "ui"
+    name: str = "right_panel_tab"
+    tab_name: str = ""
+
+
+@dataclass
+class UIAnalyzeProjectEvent(Event):
+    namespace: str = "ui"
+    name: str = "analyze_project"
+
+
+@dataclass
+class UILoadUrlEvent(Event):
+    namespace: str = "ui"
+    name: str = "load_url"
+    url: str = ""
+
+
+@dataclass
+class UIUpdateFileReaderEvent(Event):
+    namespace: str = "ui"
+    name: str = "update_file_reader"
+    path: str = ""
+    content: str = ""

@@ -48,6 +48,7 @@ class QueueManager(QObject):
                     )
                     self._slots[i] = task
                     if i == 0:
+                        print(f"[DEBUG queue] emit task_ready sid={self._session_id[-8:]}", flush=True)
                         self.task_ready.emit(task)
                     self._emit_state()
                     return task

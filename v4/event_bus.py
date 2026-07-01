@@ -36,7 +36,7 @@ class MessageBus(QObject):
 
     def emit(self, event: Event):
         """发射事件。默认 QueuedConnection。"""
-        if self._trace:
+        if self._trace or (event.namespace == "worker" and event.name == "create"):
             print(f"[BUS] emit {event.namespace}.{event.name}", flush=True)
         self.event_emitted.emit(event)
 
@@ -53,6 +53,7 @@ class MessageBus(QObject):
         :param namespace: 仅接收指定 namespace 的事件
         :param event_filter: 额外过滤函数，返回 True 才调用 handler
         """
+        print(f"[DEBUG bus subscribe] ns={namespace} handler={handler}", flush=True)
         self._handlers.append((namespace, event_filter, handler))
 
     def subscribe_namespace(self, namespace: str, handler: Callable[[Event], None]):
@@ -69,9 +70,11 @@ class MessageBus(QObject):
 
     def unsubscribe(self, handler: Callable[[Event], None]):
         """移除指定 handler 的所有订阅。"""
+        before = len(self._handlers)
         self._handlers = [
             (ns, filt, h) for ns, filt, h in self._handlers if h != handler
         ]
+        print(f"[DEBUG bus unsubscribe] handler={handler} removed={before - len(self._handlers)} left={len(self._handlers)}", flush=True)
 
     def process(self, event: Event):
         """同步处理单个事件（主要用于测试）。"""
@@ -79,11 +82,16 @@ class MessageBus(QObject):
 
     def _dispatch(self, event: Event):
         """内部分发逻辑。"""
+        print(f"[DEBUG bus dispatch] ns={event.namespace} name={event.name}", flush=True)
+        if event.namespace == "worker" and event.name == "create":
+            print(f"[DEBUG bus dispatch] worker.create handlers={len(self._handlers)}", flush=True)
         for ns, filt, handler in self._handlers:
             if ns is not None and event.namespace != ns:
                 continue
             if filt is not None and not filt(event):
                 continue
+            if event.namespace == "worker" and event.name == "create":
+                print(f"[DEBUG bus dispatch] calling handler={handler}", flush=True)
             try:
                 handler(event)
             except Exception as e:

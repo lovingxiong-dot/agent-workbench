@@ -83,6 +83,7 @@ class WorkerManager(QObject):
     # ── 事件处理 ──────────────────────────────────
     def _on_create(self, event: WorkerCreateEvent):
         """处理 Worker 创建请求"""
+        print(f"[DEBUG wm _on_create] sid={event.session_id[-8:]} cls={self.__class__.__name__}", flush=True)
         if event.session_id in self._workers:
             logger.warning("Worker exists for %s, skip", event.session_id)
             return
