@@ -1,15 +1,16 @@
 """
-input_area.py — v4 输入区组件
+input_area.py — v4 输入区组件 (对齐 agent-workbench-ui SVG v2 设计稿)
 
 包含：
-- SkillSendButton：圆形 SVG 箭头发送按钮
-- InputAreaWidget：多行输入框 + 技能按钮 + mode/model 标签 + 发送/停止按钮
+- TagSelectButton：模式/模型标签按钮（标签+值+▼弹出菜单）
+- SkillSendButton：圆形 SVG 箭头发送按钮（r=12, d=24）
+- InputAreaWidget：输入框 + 技能按钮 + 标签按钮 + 发送/停止按钮
 """
 import html
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QTextEdit,
-    QLabel, QComboBox, QMenu, QSizePolicy,
+    QLabel, QMenu, QSizePolicy,
 )
 from PySide6.QtCore import Qt, Signal, QByteArray, QSize
 from PySide6.QtGui import QFont, QIcon, QPixmap, QPainter, QAction
@@ -23,7 +24,7 @@ def _svg_icon(path_data: str, color: str, size: int = 18) -> QIcon:
     """根据 SVG path 数据渲染矢量图标。"""
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" '
-        f'viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="2" '
+        f'viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="1.5" '
         f'stroke-linecap="round" stroke-linejoin="round">'
         f'<path d="{path_data}"/></svg>'
     )
@@ -36,33 +37,92 @@ def _svg_icon(path_data: str, color: str, size: int = 18) -> QIcon:
     return QIcon(pixmap)
 
 
+class TagSelectButton(QPushButton):
+    """标签样式按钮：标签名 + 值 + chevron ▼，点击弹出菜单选择。"""
+
+    clicked_value = Signal(str)
+
+    def __init__(self, label_text: str, theme: dict, parent=None):
+        super().__init__(parent)
+        self._label = label_text
+        self._value = ""
+        self._options: list[tuple[str, str]] = []  # (display, data)
+        self._theme = theme
+        self._menu: QMenu | None = None
+        self.setCursor(Qt.PointingHandCursor)
+        self.clicked.connect(self._show_menu)
+        self._apply_theme()
+
+    def set_theme(self, theme: dict):
+        self._theme = theme
+        self._apply_theme()
+
+    def set_options(self, options: list[tuple[str, str]], current: str = ""):
+        """设置选项列表 (display_text, data_value)。"""
+        self._options = options
+        self._menu = QMenu(self)
+        for display, data in options:
+            action = self._menu.addAction(display)
+            action.setData(data)
+            action.triggered.connect(lambda checked, d=data: self._on_select(d))
+        self.set_value(current)
+
+    def set_value(self, value: str):
+        """更新当前选中值。"""
+        self._value = value
+        self._update_text()
+
+    def _update_text(self):
+        t = self._theme
+        label_color = t.get("tag_text", t["text_secondary"])
+        value_color = t["text_primary"]
+        self.setText(
+            f'<span style="color:{label_color};font-size:9px;margin-right:4px;">{self._label}</span>'
+            f'<span style="color:{value_color};font-size:10px;font-weight:500;">{self._value}</span>'
+            f'<span style="color:{label_color};font-size:9px;margin-left:2px;">▼</span>'
+        )
+
+    def _show_menu(self):
+        if self._menu:
+            self._menu.exec(self.mapToGlobal(self.rect().bottomLeft()))
+
+    def _on_select(self, data: str):
+        self.set_value(data)
+        self.clicked_value.emit(data)
+
+    def _apply_theme(self):
+        t = self._theme
+        self.setStyleSheet(
+            f"QPushButton {{ background-color: {t['tag_bg']}; color: {t['tag_text']}; "
+            f"border: 0.5px solid {t['border']}; border-radius: 6px; "
+            f"padding: 2px 6px; font-size: 12px; text-align: left; }}"
+            f"QPushButton:hover {{ background-color: {t['bg_hover']}; }}"
+        )
+        self._update_text()
+
+
 class SkillSendButton(QPushButton):
-    """圆形发送按钮，内部绘制上箭头 SVG。"""
+    """圆形发送按钮，内部绘制上箭头 SVG（r=12, d=24）。"""
 
     def __init__(self, theme: dict, parent=None):
         super().__init__(parent)
         self._theme = theme
-        self.setFixedSize(36, 36)
+        self.setFixedSize(24, 24)
         self.setCursor(Qt.PointingHandCursor)
-        self.setIconSize(QSize(18, 18))
+        self.setIconSize(QSize(12, 12))
         self._refresh_icon()
-        self.setStyleSheet(
-            "QPushButton { border-radius: 18px; border: none; }"
-            "QPushButton:hover { background-color: rgba(128,128,128,0.15); }"
-        )
 
     def set_theme(self, theme: dict):
         self._theme = theme
         self._refresh_icon()
 
     def _refresh_icon(self):
-        # 上箭头 path
         arrow_path = "M12 19V5M5 12l7-7 7 7"
         color = self._theme.get("text_inverse", "#ffffff")
-        self.setIcon(_svg_icon(arrow_path, color, 18))
+        self.setIcon(_svg_icon(arrow_path, color, 12))
         self.setStyleSheet(
             f"QPushButton {{ background-color: {self._theme['send_btn']}; "
-            f"border-radius: 18px; border: none; }}"
+            f"border-radius: 12px; border: none; }}"
             f"QPushButton:hover {{ background-color: {self._theme['send_btn_hover']}; }}"
             f"QPushButton:disabled {{ background-color: {self._theme['border']}; }}"
         )
@@ -92,7 +152,7 @@ class InputTextEdit(QTextEdit):
 
 
 class InputAreaWidget(QWidget):
-    """底部输入区：输入框 + 技能按钮 + mode/model 标签 + 发送/停止按钮。"""
+    """底部输入区：输入框 + 技能按钮 + 标签按钮 + 发送/停止按钮。"""
 
     send_requested = Signal()
     stop_requested = Signal()
@@ -109,16 +169,16 @@ class InputAreaWidget(QWidget):
 
     def _setup_ui(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(24, 12, 24, 16)
+        root.setContentsMargins(20, 12, 20, 12)
         root.setSpacing(8)
 
         # ── 输入框行 ──
         input_row = QHBoxLayout()
-        input_row.setSpacing(10)
+        input_row.setSpacing(8)
 
-        # 技能按钮
+        # 技能按钮（圆形，r=10 → d=20）
         self.skill_btn = QPushButton("+")
-        self.skill_btn.setFixedSize(32, 32)
+        self.skill_btn.setFixedSize(20, 20)
         self.skill_btn.setCursor(Qt.PointingHandCursor)
         self.skill_btn.setToolTip("技能菜单")
         self.skill_btn.clicked.connect(self.skill_menu_requested.emit)
@@ -135,7 +195,7 @@ class InputAreaWidget(QWidget):
         input_row.addWidget(self.send_btn)
 
         self.stop_btn = QPushButton("停止")
-        self.stop_btn.setFixedSize(64, 36)
+        self.stop_btn.setFixedSize(56, 24)
         self.stop_btn.setCursor(Qt.PointingHandCursor)
         self.stop_btn.setVisible(False)
         self.stop_btn.clicked.connect(self.stop_requested.emit)
@@ -143,22 +203,22 @@ class InputAreaWidget(QWidget):
 
         root.addLayout(input_row)
 
-        # ── 底部标签行 ──
+        # ── 底部标签行：模式标签 + 模型标签 ──
         tag_row = QHBoxLayout()
         tag_row.setSpacing(8)
         tag_row.addStretch()
 
-        # 模式下拉（以标签样式展示）
-        self.mode_selector = QComboBox()
-        self.mode_selector.setFixedWidth(70)
-        self.mode_selector.currentTextChanged.connect(self._on_mode_changed)
-        tag_row.addWidget(self.mode_selector)
+        # 模式标签
+        self.mode_tag = TagSelectButton("模式", self._theme)
+        self.mode_tag.setFixedWidth(72)
+        self.mode_tag.clicked_value.connect(self._on_mode_changed)
+        tag_row.addWidget(self.mode_tag)
 
-        # 模型下拉（以标签样式展示）
-        self.model_selector = QComboBox()
-        self.model_selector.setFixedWidth(90)
-        self.model_selector.currentTextChanged.connect(self._on_model_changed)
-        tag_row.addWidget(self.model_selector)
+        # 模型标签
+        self.model_tag = TagSelectButton("模型", self._theme)
+        self.model_tag.setFixedWidth(80)
+        self.model_tag.clicked_value.connect(self._on_model_changed)
+        tag_row.addWidget(self.model_tag)
 
         root.addLayout(tag_row)
         self._apply_theme_styles()
@@ -167,6 +227,8 @@ class InputAreaWidget(QWidget):
         self._theme = theme
         self._apply_theme_styles()
         self.send_btn.set_theme(theme)
+        self.mode_tag.set_theme(theme)
+        self.model_tag.set_theme(theme)
 
     def _apply_theme_styles(self):
         t = self._theme
@@ -176,7 +238,7 @@ class InputAreaWidget(QWidget):
             QTextEdit {{
                 background-color: {t['bg_input']};
                 color: {t['text_primary']};
-                border: 1px solid {t['border']};
+                border: 0.5px solid {t['border']};
                 border-radius: 8px;
                 padding: 8px 12px;
                 font-size: 13px;
@@ -186,11 +248,11 @@ class InputAreaWidget(QWidget):
 
         self.skill_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {t['tag_bg']};
-                color: {t['tag_text']};
-                border: 1px solid {t['border']};
-                border-radius: 6px;
-                font-size: 16px; font-weight: 600;
+                background-color: {t.get('tag_bg', t['bg_input'])};
+                color: {t['text_secondary']};
+                border: 0.5px solid {t['border']};
+                border-radius: 10px;
+                font-size: 14px; font-weight: 600;
             }}
             QPushButton:hover {{ background-color: {t['bg_hover']}; }}
         """)
@@ -199,65 +261,33 @@ class InputAreaWidget(QWidget):
             QPushButton {{
                 background-color: {t['stop_btn']};
                 color: {t['text_primary']};
-                border: 1px solid {t['border']};
-                border-radius: 8px;
-                font-size: 13px;
+                border: 0.5px solid {t['border']};
+                border-radius: 6px;
+                font-size: 12px;
             }}
             QPushButton:hover {{ background-color: {t['stop_btn_hover']}; }}
         """)
 
-        combo_style = f"""
-            QComboBox {{
-                background-color: {t['tag_bg']};
-                color: {t['tag_text']};
-                border: 1px solid {t['border']};
-                border-radius: 6px;
-                padding: 2px 6px;
-                font-size: 12px;
-            }}
-            QComboBox::drop-down {{ border: none; width: 14px; }}
-            QComboBox QAbstractItemView {{
-                background-color: {t['bg_input']};
-                color: {t['text_primary']};
-                border: 1px solid {t['border']};
-            }}
-        """
-        self.mode_selector.setStyleSheet(combo_style)
-        self.model_selector.setStyleSheet(combo_style)
-
     def set_models(self, providers: dict, current: str):
-        self.model_selector.blockSignals(True)
-        self.model_selector.clear()
-        self._models = providers
+        options = []
         for name, cfg in providers.items():
             model = cfg.get("model", "?") if isinstance(cfg, dict) else "?"
-            self.model_selector.addItem(f"{name}", name)
-        idx = self.model_selector.findData(current)
-        if idx >= 0:
-            self.model_selector.setCurrentIndex(idx)
-        self.model_selector.blockSignals(False)
+            display = name if len(name) <= 8 else name[:7] + "…"
+            options.append((display, name))
+        self._models = providers
+        self.model_tag.set_options(options, current)
 
     def set_modes(self, modes: list, current: str):
-        self.mode_selector.blockSignals(True)
-        self.mode_selector.clear()
         self._modes = modes
         display_map = {"ask": "ask", "plan": "plan", "craft": "craft"}
-        for mode in modes:
-            self.mode_selector.addItem(display_map.get(mode, mode), mode)
-        idx = self.mode_selector.findData(current)
-        if idx >= 0:
-            self.mode_selector.setCurrentIndex(idx)
-        self.mode_selector.blockSignals(False)
+        options = [(display_map.get(m, m), m) for m in modes]
+        self.mode_tag.set_options(options, current)
 
     def set_model(self, name: str):
-        idx = self.model_selector.findData(name)
-        if idx >= 0:
-            self.model_selector.setCurrentIndex(idx)
+        self.model_tag.set_value(name)
 
     def set_mode(self, name: str):
-        idx = self.mode_selector.findData(name)
-        if idx >= 0:
-            self.mode_selector.setCurrentIndex(idx)
+        self.mode_tag.set_value(name)
 
     def set_streaming(self, active: bool):
         self.stop_btn.setVisible(active)
@@ -278,12 +308,10 @@ class InputAreaWidget(QWidget):
     def setFocus(self):
         self.text_edit.setFocus()
 
-    def _on_model_changed(self):
-        name = self.model_selector.currentData()
+    def _on_model_changed(self, name: str):
         if name:
             self.model_changed.emit(name)
 
-    def _on_mode_changed(self):
-        mode = self.mode_selector.currentData()
+    def _on_mode_changed(self, mode: str):
         if mode:
             self.mode_changed.emit(mode)

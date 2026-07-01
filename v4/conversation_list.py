@@ -387,17 +387,19 @@ class ConversationListWidget(QWidget):
         self.function_tab_btn = QPushButton("功能")
         self.function_tab_btn.setCheckable(True)
         self.function_tab_btn.setCursor(Qt.PointingHandCursor)
+        self.function_tab_btn.setMinimumWidth(80)
         self.function_tab_btn.clicked.connect(lambda: self._on_tab_changed("功能"))
         self.tab_group.addButton(self.function_tab_btn)
-        tab_row.addWidget(self.function_tab_btn)
+        tab_row.addWidget(self.function_tab_btn, 1)
 
         self.session_tab_btn = QPushButton("会话")
         self.session_tab_btn.setCheckable(True)
         self.session_tab_btn.setChecked(True)
         self.session_tab_btn.setCursor(Qt.PointingHandCursor)
+        self.session_tab_btn.setMinimumWidth(80)
         self.session_tab_btn.clicked.connect(lambda: self._on_tab_changed("会话"))
         self.tab_group.addButton(self.session_tab_btn)
-        tab_row.addWidget(self.session_tab_btn)
+        tab_row.addWidget(self.session_tab_btn, 1)
 
         layout.addLayout(tab_row)
 

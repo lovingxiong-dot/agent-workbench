@@ -152,7 +152,7 @@ class HeaderToolbar(QWidget):
         self._title = ""
         self._env = ""
         self._search_visible = False
-        self._icon_size = 18
+        self._icon_size = 14
         self._setup_ui()
 
     def _setup_ui(self):
@@ -216,7 +216,7 @@ class HeaderToolbar(QWidget):
         btn.setToolTip(tooltip)
         btn.setCursor(Qt.PointingHandCursor)
         btn.setFlat(True)
-        btn.setFixedSize(28, 24)
+        btn.setFixedSize(18, 22)
         btn.setIconSize(QSize(self._icon_size, self._icon_size))
         btn.setIcon(svg_icon(icon_name, self._theme.get("text_secondary", "#a0a0b0"), self._icon_size))
         self._apply_icon_btn_style(btn)
@@ -228,8 +228,9 @@ class HeaderToolbar(QWidget):
         bg = t.get("header_btn_bg", t["bg_hover"])
         hover = t.get("header_btn_hover", t["border"])
         active = t.get("header_btn_active", t["bg_selected"])
+        border = t.get("border", "#2a2a4a")
         btn.setStyleSheet(
-            f"QPushButton {{ background-color: {bg}; border: none; border-radius: 4px; }}"
+            f"QPushButton {{ background-color: {bg}; border: 0.5px solid {border}; border-radius: 3px; }}"
             f"QPushButton:hover {{ background-color: {hover}; }}"
             f"QPushButton:pressed {{ background-color: {active}; }}"
         )
@@ -299,12 +300,12 @@ class HeaderToolbar(QWidget):
         t = self._theme
         if self._env:
             self.title_label.setText(
-                f'<span style="color:{t["text_primary"]};font-size:15px;font-weight:600;">{self._title}</span>'
-                f'<span style="color:{t["text_secondary"]};font-size:12px;margin-left:8px;">· {self._env}</span>'
+                f'<span style="color:{t["text_primary"]};font-size:12px;font-weight:500;">{self._title}</span>'
+                f'<span style="color:{t.get("text_muted", t["text_secondary"])};font-size:10px;margin-left:8px;">· {self._env}</span>'
             )
         else:
             self.title_label.setText(
-                f'<span style="color:{t["text_primary"]};font-size:15px;font-weight:600;">{self._title}</span>'
+                f'<span style="color:{t["text_primary"]};font-size:12px;font-weight:500;">{self._title}</span>'
             )
 
     def set_theme(self, theme_name: str):
@@ -463,38 +464,21 @@ class SimpleChatArea(QWidget):
         text_secondary = t['text_secondary']
         border = t['border']
         bg_primary = t['bg_primary']
-        bg_bubble_ai = t['bg_bubble_ai']
         return f"""
             QTextEdit {{
                 background-color: {bg_primary}; color: {text_primary};
                 border: none; font-size: 13px; line-height: 1.65;
             }}
-            .phase-panel {{
-                margin: 8px 0; border-radius: 8px; overflow: hidden;
-                background-color: {bg_bubble_ai}; border: 1px solid {border};
-            }}
-            .phase-header {{
-                padding: 8px 12px; font-weight: 600; font-size: 14px;
-                background-color: rgba(128,128,128,0.08);
-                border-bottom: 1px solid {border};
-            }}
-            .phase-body {{
-                padding: 12px 16px; font-size: 14px; line-height: 1.6;
-            }}
-            .phase-panel.analyze {{ border-left: 3px solid {t['card_analyze_border']}; }}
-            .phase-panel.execute {{ border-left: 3px solid {t['card_execute_border']}; }}
-            .phase-panel.verify {{ border-left: 3px solid {t['card_verify_border']}; }}
-            .phase-panel.archive {{ border-left: 3px solid {t['card_archive_border']}; }}
-            .fold-block {{ margin: 4px 0; }}
+            .fold-block {{ margin: 4px 0; border: 0.5px solid {border}; border-radius: 4px; overflow: hidden; }}
             .fold-header {{
-                color: {t['card_analyze_border']}; font-size: 13px; cursor: pointer;
-                text-decoration: none; user-select: none;
+                color: {t['card_analyze_border']}; font-size: 11px; cursor: pointer;
+                text-decoration: none; user-select: none; padding: 4px 8px; display: block;
             }}
             .fold-body {{ display: none; }}
             .tool-entry {{
                 display: block; padding: 3px 8px; margin: 2px 0;
                 font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
-                font-size: 12px;
+                font-size: 10px;
             }}
             .tool-ok {{ color: {t['card_archive_border']}; }}
             .tool-fail {{ color: #f14c4c; }}
@@ -789,19 +773,24 @@ class SimpleChatArea(QWidget):
         }
         header = headers.get(phase, "📋 结果")
         border_color = t.get(f"card_{phase}_border", t['border'])
+        bg = t.get(f"card_{phase}_bg", t["bg_bubble_ai"])
         return f"""
-        <table width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:10px 0;">
-            <tr>
-                <td align="left" valign="top" style="padding:2px 64px 10px 8px;">
-                    {self._avatar_cell_inline("AI", "#6366F1")}
-                    <div class="phase-panel {phase}" style="display:inline-block;max-width:85%;min-width:280px;">
-                        <div class="phase-header">{header}</div>
-                        <div class="phase-body">{body_html}</div>
-                    </div>
-                </td>
-            </tr>
-        </table>
-        <div style="clear:both;"></div>
+        <div style="margin:10px 8px;">
+            <div class="phase-panel {phase}" style="
+                background-color:{bg}; border:0.5px solid {t['border']};
+                border-left:4px solid {border_color}; border-radius:8px;
+                margin:0; overflow:hidden;
+            ">
+                <div class="phase-header" style="
+                    background-color:{t['bg_primary']}; padding:8px 12px;
+                    font-weight:600; font-size:12px; color:{t['text_primary']};
+                    border-bottom:0.5px solid {t['border']};
+                ">{header}</div>
+                <div class="phase-body" style="padding:12px 16px; font-size:13px; line-height:1.6;">
+                    {body_html}
+                </div>
+            </div>
+        </div>
         """
 
     def _build_tool_group(self, tools: list[str]) -> str:

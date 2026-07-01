@@ -33,7 +33,7 @@ def _render_svg(name: str, color: str, size: int) -> QPixmap:
     path_data = ICON_PATHS.get(name, "")
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" '
-        f'viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="2" '
+        f'viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="1.5" '
         f'stroke-linecap="round" stroke-linejoin="round">'
         f'<path d="{path_data}"/></svg>'
     )

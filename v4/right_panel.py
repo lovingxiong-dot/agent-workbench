@@ -399,32 +399,82 @@ class BrowserWidget(QWidget):
         self.url_input.setText(url.toString())
 
 
-class FunctionPageWidget(QWidget):
-    """左栏「功能」Tab 对应的占位页：工具 / MCP / 技能 / 自动化。"""
+class RecentFilesList(QWidget):
+    """最近文件列表：路径 + 相对时间。"""
+
+    file_clicked = Signal(str)
 
     def __init__(self, theme: dict, parent=None):
         super().__init__(parent)
         self._theme = theme
+        self._files: list[tuple[str, str]] = []  # (path, time_label)
         self._setup_ui()
         self._apply_theme()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
-        self.label = QLabel("功能面板\n\n工具、MCP、技能、自动化等功能将在此展开。")
-        self.label.setAlignment(Qt.AlignCenter)
-        self.label.setWordWrap(True)
-        layout.addWidget(self.label, 1)
+        layout.setContentsMargins(16, 8, 16, 8)
+        layout.setSpacing(0)
+
+        # 标题
+        self.header = QLabel("最近文件")
+        self.header.setFont(QFont("Segoe UI", 9))
+        layout.addWidget(self.header)
+
+        # 文件列表容器
+        self.list_container = QVBoxLayout()
+        self.list_container.setSpacing(0)
+        layout.addLayout(self.list_container)
+        layout.addStretch()
 
     def _apply_theme(self):
         t = self._theme
         self.setStyleSheet(f"background-color: {t['bg_primary']};")
-        self.label.setStyleSheet(f"color: {t['text_secondary']}; font-size: 13px;")
+        self.header.setStyleSheet(
+            f"color: {t.get('text_muted', t['text_secondary'])}; "
+            f"font-size: 9px; font-weight: 600; letter-spacing: 0.5px; "
+            f"padding: 0 0 4px 0;"
+        )
 
     def set_theme(self, theme: dict):
         self._theme = theme
         self._apply_theme()
+
+    def set_files(self, files: list[tuple[str, str]]):
+        """设置文件列表 [(path, time_label), ...]"""
+        self._files = files
+        # 清空旧项
+        while self.list_container.count():
+            item = self.list_container.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        t = self._theme
+        for path, time_label in files:
+            row = QWidget()
+            row.setFixedHeight(28)
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(8)
+
+            name_label = QLabel(path)
+            name_label.setFont(QFont("Segoe UI", 11))
+            name_label.setStyleSheet(f"color: {t['text_primary']}; border: none;")
+
+            time_label_w = QLabel(time_label)
+            time_label_w.setFont(QFont("Segoe UI", 9))
+            time_label_w.setStyleSheet(f"color: {t.get('text_muted', t['text_secondary'])}; border: none;")
+            time_label_w.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+            row_layout.addWidget(name_label, 1)
+            row_layout.addWidget(time_label_w)
+            self.list_container.addWidget(row)
+
+    def add_file(self, path: str):
+        """追加一个文件到列表顶部。"""
+        import time
+        now = time.strftime("%H:%M")
+        self._files.insert(0, (path, now))
+        self.set_files(self._files[:20])
 
 
 class RightPanelWidget(QWidget):
@@ -446,7 +496,18 @@ class RightPanelWidget(QWidget):
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
         self.tabs.setTabPosition(QTabWidget.North)
+        self.tabs.setTabsClosable(True)
+        self.tabs.tabCloseRequested.connect(self._on_tab_close_requested)
         layout.addWidget(self.tabs, 1)
+
+        # 搜索按钮（右侧角落）
+        self.search_corner_btn = QPushButton()
+        self.search_corner_btn.setFixedSize(16, 16)
+        self.search_corner_btn.setCursor(Qt.PointingHandCursor)
+        self.search_corner_btn.setToolTip("搜索文件")
+        self.search_corner_btn.setStyleSheet("QPushButton { border: none; font-size: 9px; }")
+        self.search_corner_btn.setText("🔍")
+        self.tabs.setCornerWidget(self.search_corner_btn, Qt.TopRightCorner)
 
         # v4 架构
         self.explorer = ProjectExplorer(project_root="", storage_dir="", parent=self)
@@ -465,16 +526,30 @@ class RightPanelWidget(QWidget):
         self.browser = BrowserWidget(self._theme, parent=self)
         self.tabs.addTab(self.browser, "浏览器")
 
+    def _on_tab_close_requested(self, index: int):
+        """关闭标签页（保留至少第一个）。"""
+        if self.tabs.count() <= 1 or index == 0:
+            return
+        widget = self.tabs.widget(index)
+        self.tabs.removeTab(index)
+        if widget and widget not in (self.explorer, self.terminal, self.file_reader, self.browser):
+            widget.deleteLater()
+
     def _apply_theme(self):
         t = self._theme
         self.setStyleSheet(f"background-color: {t['bg_primary']};")
         self.tabs.setStyleSheet(
             f"QTabWidget::pane {{ border: none; background-color: {t['bg_primary']}; }}"
-            f"QTabBar::tab {{ background-color: {t['bg_primary']}; color: {t['text_secondary']}; "
-            f"border: none; padding: 6px 14px; font-size: 12px; }}"
-            f"QTabBar::tab:selected {{ background-color: {t['bg_input']}; color: {t['text_primary']}; "
-            f"border-top-left-radius: 6px; border-top-right-radius: 6px; }}"
+            f"QTabBar::tab {{ background-color: {t.get('bg_tab_inactive', t['bg_primary'])}; "
+            f"color: {t['text_secondary']}; border: none; padding: 5px 12px; "
+            f"font-size: 10px; border-radius: 6px; margin: 2px 1px; }}"
+            f"QTabBar::tab:selected {{ background-color: {t['bg_input']}; color: {t['text_primary']}; }}"
             f"QTabBar::tab:hover {{ background-color: {t['bg_hover']}; }}"
+            f"QTabBar::close-button {{ image: none; width: 12px; height: 12px; }}"
+        )
+        self.search_corner_btn.setStyleSheet(
+            f"QPushButton {{ background-color: {t.get('tag_bg', t['bg_input'])}; "
+            f"color: {t['text_secondary']}; border-radius: 3px; font-size: 9px; }}"
         )
 
     def set_theme(self, theme: dict):

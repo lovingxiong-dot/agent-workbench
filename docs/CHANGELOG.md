@@ -1,5 +1,22 @@
 # Changelog
 
+## v4.0.8-alpha (2026-07-01) — v4全量UI三位一体对齐SVG设计稿
+
+### feat
+- **HeaderToolbar 按钮尺寸/样式对齐 SVG**：按钮 28×24→18×22，图标 18px→14px，SVG stroke-width 2→1.5，标题字号 15/12px→12/10px，边框加 0.5px solid + border-radius 3px。
+- **InputArea 标签式 mode/model 替代 QComboBox**：`TagSelectButton` 实现"标签名 + 值 + ▼"弹出菜单，模式/模型选择从下拉框改为贴纸标签样式；`SkillSendButton` 36×36→24×24（r=12），技能按钮 32×32→20×20（r=10）。
+- **RightPanel 标签栏交互增强**：`setTabsClosable(True)` + `tabCloseRequested` 支持关闭非核心标签；新增搜索角标按钮（🔍）；标签栏样式改为圆角 + 紧凑边距；新增 `RecentFilesList` 组件（路径+时间列表）。
+- **聊天区 Phase 面板与折叠块样式对齐**：去掉 `max-width:85%` 限制 + 4px 左边色条卡片化；fold-block 加 0.5px solid border；Phase 面板 header 加底部 border-bottom；清理旧 CSS。
+- **左栏 Tag 等宽**：功能/会话标签页使用 `addWidget(btn, 1)` 均分宽度。
+- **死代码清理**：删除 `v4/right_panel.py` 中未使用的 `FunctionPageWidget`（与 conversation_list 中的同名类无关）。
+
+### refactor
+- `v4/input_area.py` 重写：QComboBox → TagSelectButton，SkillSendButton 尺寸对齐 SVG，InputTextEdit 封装 Enter/Shift+Enter 逻辑。
+
+### test
+- 修复 `tests/test_v4_input_area.py` 适配新 TagSelectButton API（`mode_selector` → `mode_tag`、`model_selector` → `model_tag`）。
+- 全量 29 项测试通过，零回归。
+
 ## v4.0.5-alpha (2026-06-30) — 工程目录标准化 + PyInstaller 路径适配
 
 ### refactor

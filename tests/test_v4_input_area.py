@@ -67,9 +67,9 @@ class TestV4InputArea:
         captured = []
         self.widget.mode_changed.connect(captured.append)
 
-        # 切换到 plan
-        idx = self.widget.mode_selector.findData("plan")
-        self.widget.mode_selector.setCurrentIndex(idx)
+        # 通过标签按钮模拟选择 plan
+        self.widget.mode_tag.set_value("plan")
+        self.widget._on_mode_changed("plan")
         self.app.processEvents()
 
         assert captured == ["plan"], f"mode_changed 应发射 plan，实际 {captured}"
@@ -80,8 +80,9 @@ class TestV4InputArea:
         captured = []
         self.widget.model_changed.connect(captured.append)
 
-        idx = self.widget.model_selector.findData("flash")
-        self.widget.model_selector.setCurrentIndex(idx)
+        # 通过标签按钮模拟选择 flash
+        self.widget.model_tag.set_value("flash")
+        self.widget._on_model_changed("flash")
         self.app.processEvents()
 
         assert captured == ["flash"], f"model_changed 应发射 flash，实际 {captured}"
