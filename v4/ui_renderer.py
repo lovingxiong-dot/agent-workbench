@@ -201,7 +201,13 @@ class UIRenderer(QObject):
         return "".join(rows)
 
     def _build_thinking_fold(self, ai_text: str) -> tuple[str, str]:
-        """从 AI 回复提取思考过程，返回 (折叠 HTML, 剩余正文)。"""
+        """从 AI 回复提取思考过程，返回 (折叠 HTML, 剩余正文)。
+        
+        精确对齐 SVG：
+        ┌─ 362×22 rx=4 fill=#16213e ───────────────┐
+        │ ▶ 思考过程                    [5/7 已完成] │
+        └───────────────────────────────────────────┘
+        """
         lines = ai_text.split("\n")
         tasks = []
         in_thinking = False
@@ -231,45 +237,64 @@ class UIRenderer(QObject):
         )
         fold_id = f"think-{id(tasks)}"
         html_fold = (
-            f'<div class="fold-block" id="{fold_id}">'
-            f'<a class="fold-header" href="fold://toggle/{fold_id}">▶ 思考过程  [{done}/{total} 已完成]</a>'
-            f'<div class="fold-body" id="{fold_id}-body">{task_html}</div></div>'
+            f'<div class="fold-block" id="{fold_id}" style="border-radius:4px;">'
+            f'<a class="fold-header" href="fold://toggle/{fold_id}" style="display:block;padding:4px 8px;">'
+            f'▶ 思考过程 <span style="font-size:10px;color:#6a6a8a;margin-left:8px;">[{done}/{total} 已完成]</span></a>'
+            f'<div class="fold-body" id="{fold_id}-body" style="padding:4px 8px;">{task_html}</div></div>'
         )
         return html_fold, "\n".join(body_lines).strip()
 
     def _build_tool_fold(self, event) -> str:
-        """构建工具执行折叠块。"""
+        """构建工具执行条目，精确对齐 SVG：
+        ┌─ 4px 左 bar ─┬─ ✓ run_command ─── 0.8s ─ ▶ 参数 ─┐
+        """
         name = event.tool_name or "unknown"
         elapsed = event.elapsed_ms or 0
+        elapsed_s = f"{elapsed / 1000:.1f}s" if elapsed >= 100 else f"{elapsed}ms"
         success = getattr(event, "success", True)
         icon = "✓" if success else "✗"
-        cls = "tool-ok" if success else "tool-fail"
+        icon_color = "#4ec9b0" if success else "#f14c4c"
         args_json = html.escape(json.dumps(event.args or {}, ensure_ascii=False, indent=2))
         result_text = event.result or ""
         fold_id = f"tool-{id(event)}"
 
+        # 内部命令输出折叠块（SVG: collapsed 22px bar）
         output_fold = ""
         if len(result_text) > 200:
             preview = html.escape(result_text[:200])
             full = html.escape(result_text)
             lines = result_text.count("\n") + 1
             output_fold = (
-                f'<div class="fold-block" id="{fold_id}-out">'
-                f'<a class="fold-header" href="fold://toggle/{fold_id}-out">▶ 内部命令输出  [{lines} 行]</a>'
+                f'<div class="fold-block" id="{fold_id}-out" style="border-radius:4px;">'
+                f'<a class="fold-header" href="fold://toggle/{fold_id}-out" style="display:block;padding:4px 8px;">'
+                f'▶ 内部命令输出 <span style="font-size:10px;color:#6a6a8a;margin-left:8px;">[{lines} 行]</span></a>'
                 f'<div class="fold-body" id="{fold_id}-out-body"><pre class="cmd-full">{full}</pre></div></div>'
             )
-        else:
+        elif result_text:
             output_fold = f'<pre class="cmd-output">{html.escape(result_text)}</pre>'
 
-        return (
-            f'<div class="tool-entry {cls}">'
-            f'<span class="tool-icon">{icon}</span>'
-            f'<span class="tool-name">{html.escape(name)}</span>'
-            f'<span class="tool-time">{elapsed}ms</span>'
-            f'<div class="fold-block" id="{fold_id}">'
-            f'<a class="fold-header" href="fold://toggle/{fold_id}">▶ 参数</a>'
+        # 参数折叠块
+        args_fold = (
+            f'<a class="fold-header" href="fold://toggle/{fold_id}" '
+            f'style="display:inline;color:#569cd6;font-size:9px;font-family:\'Cascadia Code\',Consolas,monospace;'
+            f'text-decoration:none;cursor:pointer;">▶ 参数</a>'
+            f'<div class="fold-block" id="{fold_id}" style="border-radius:4px;display:inline;">'
             f'<div class="fold-body" id="{fold_id}-body"><pre class="tool-args">{args_json}</pre></div></div>'
-            f'</div>'
+        )
+
+        # SVG 对齐：table 布局，4px 左边条 + 工具条目行
+        return (
+            f'<table cellspacing="0" cellpadding="0" border="0" style="margin:0;">'
+            f'<tr>'
+            f'<td style="width:4px;background-color:#2a2a4a;border-radius:2px;"></td>'
+            f'<td style="padding:1px 8px;font-family:\'Cascadia Code\',Consolas,monospace;font-size:10px;">'
+            f'<span style="color:{icon_color};">{icon}</span> '
+            f'<span style="color:#d4d4d4;">{html.escape(name)}</span> '
+            f'<span style="color:#6a6a8a;font-size:9px;">{elapsed_s}</span> '
+            f'{args_fold}'
+            f'</td>'
+            f'</tr>'
+            f'</table>'
             f'{output_fold}'
         )
 

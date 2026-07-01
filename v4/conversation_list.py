@@ -86,8 +86,10 @@ class SessionItemWidget(QWidget):
         self.title_label.setStyleSheet(f"color: {t['text_primary']};")
         self.preview_label.setStyleSheet(f"color: {t['text_secondary']};")
         self.time_label.setStyleSheet(f"color: {t.get('text_muted', t['text_secondary'])};")
+        # SVG: inactive bg=#16213e, border=#2a2a4a, rx=6
         self.setStyleSheet(
-            f"SessionItemWidget {{ background-color: transparent; border-radius: 6px; }}"
+            f"SessionItemWidget {{ background-color: {t['bg_sidebar']}; border: 0.5px solid {t['border']}; "
+            f"border-radius: 6px; }}"
             f"SessionItemWidget:hover {{ background-color: {t['bg_hover']}; }}"
         )
 
@@ -100,7 +102,8 @@ class SessionItemWidget(QWidget):
         if active:
             self.setStyleSheet(
                 f"SessionItemWidget {{ background-color: {t['bg_selected']}; "
-                f"border-left: 3px solid {t['accent']}; border-radius: 6px; }}"
+                f"border: 0.5px solid {t['accent']}; border-radius: 6px; }}"
+                f"SessionItemWidget:hover {{ background-color: {t['bg_selected']}; }}"
             )
         else:
             self._apply_theme()
@@ -287,8 +290,9 @@ class FunctionPageWidget(QWidget):
 
     def _build_item_row(self, name: str, status: str, icon_type: str) -> tuple[QWidget, Optional[QLabel]]:
         row = QWidget()
+        row.setFixedHeight(24)  # SVG: h=24
         row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setContentsMargins(10, 0, 10, 0)
         row_layout.setSpacing(8)
 
         if icon_type == "lightning":
@@ -326,11 +330,16 @@ class FunctionPageWidget(QWidget):
             row = widget.layout()
             dot = row.itemAt(0).widget()
             label = row.itemAt(1).widget()
+            # SVG: row background fill=#0f3460 stroke=#2a2a4a rx=4
+            widget.setStyleSheet(
+                f"QWidget {{ background-color: {t.get('tag_bg', '#0f3460')}; "
+                f"border: 0.5px solid {t['border']}; border-radius: 4px; }}"
+            )
             if icon_type == "lightning":
                 dot.setPixmap(svg_pixmap("lightning", icon_color, 10))
             else:
-                dot.setStyleSheet(f"color: {accent};")
-            label.setStyleSheet(f"color: {t['text_secondary']};")
+                dot.setStyleSheet(f"color: {accent}; background: transparent; border: none;")
+            label.setStyleSheet(f"color: {t['text_secondary']}; background: transparent; border: none;")
             if badge is not None:
                 text = badge.text()
                 if text in ("开", "已连接"):
@@ -408,7 +417,7 @@ class ConversationListWidget(QWidget):
         tool_row.setSpacing(6)
 
         self.search_btn = QPushButton()
-        self.search_btn.setFixedSize(28, 24)
+        self.search_btn.setFixedSize(28, 22)
         self.search_btn.setCursor(Qt.PointingHandCursor)
         self.search_btn.setToolTip("搜索")
         self.search_btn.setIconSize(QSize(14, 14))
@@ -417,12 +426,13 @@ class ConversationListWidget(QWidget):
         tool_row.addWidget(self.search_btn)
 
         self.new_task_btn = QPushButton("+ 新会话")
+        self.new_task_btn.setFixedHeight(22)
         self.new_task_btn.setCursor(Qt.PointingHandCursor)
         self.new_task_btn.clicked.connect(self.new_task_clicked.emit)
         tool_row.addWidget(self.new_task_btn, 1)
 
         self.more_btn = QPushButton()
-        self.more_btn.setFixedSize(28, 24)
+        self.more_btn.setFixedSize(28, 22)
         self.more_btn.setCursor(Qt.PointingHandCursor)
         self.more_btn.setToolTip("更多")
         self.more_btn.setIconSize(QSize(14, 14))
@@ -431,6 +441,12 @@ class ConversationListWidget(QWidget):
         tool_row.addWidget(self.more_btn)
 
         layout.addLayout(tool_row)
+
+        # SVG: 工具行下分隔线 y=76 (stroke=#2a2a4a 0.5px)
+        self.tool_sep = QFrame()
+        self.tool_sep.setFrameShape(QFrame.HLine)
+        self.tool_sep.setFixedHeight(1)
+        layout.addWidget(self.tool_sep)
 
         # ── 内容区 ──
         self.stack = QStackedWidget()
@@ -448,19 +464,25 @@ class ConversationListWidget(QWidget):
         layout.addWidget(self.stack, 1)
 
         # ── 底部控制 ──
+        # SVG: 分隔线 y=700
+        self.bottom_sep = QFrame()
+        self.bottom_sep.setFrameShape(QFrame.HLine)
+        self.bottom_sep.setFixedHeight(1)
+        layout.addWidget(self.bottom_sep)
+
         bottom_row = QHBoxLayout()
         bottom_row.setSpacing(8)
         bottom_row.addStretch()
 
         self.theme_btn = QPushButton("🌙" if self._is_dark() else "☀️")
-        self.theme_btn.setFixedSize(32, 20)
+        self.theme_btn.setFixedSize(32, 12)
         self.theme_btn.setCursor(Qt.PointingHandCursor)
         self.theme_btn.setToolTip("切换主题")
         self.theme_btn.clicked.connect(self._on_theme_clicked)
         bottom_row.addWidget(self.theme_btn)
 
         self.settings_btn = QPushButton("⚙")
-        self.settings_btn.setFixedSize(32, 20)
+        self.settings_btn.setFixedSize(32, 12)
         self.settings_btn.setCursor(Qt.PointingHandCursor)
         self.settings_btn.setToolTip("设置")
         bottom_row.addWidget(self.settings_btn)
@@ -517,21 +539,28 @@ class ConversationListWidget(QWidget):
 
         tab_base = (
             f"QPushButton {{ background-color: {t['bg_sidebar']}; color: {t['text_secondary']}; "
-            f"border: 1px solid {t['border']}; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 500; }}"
+            f"border: 0.5px solid {t['border']}; border-radius: 6px; "
+            f"padding: 2px 8px; font-size: 11px; font-weight: 500; "
+            f"min-width: 88px; max-width: 96px; }}"
             f"QPushButton:hover {{ background-color: {t['bg_hover']}; }}"
-            f"QPushButton:checked {{ background-color: {t['accent']}; color: #ffffff; border-color: {t['accent']}; }}"
+            f"QPushButton:checked {{ background-color: {t['accent']}; color: #ffffff; border-color: {t['accent']}; font-weight: 600; }}"
         )
         self.function_tab_btn.setStyleSheet(tab_base)
         self.session_tab_btn.setStyleSheet(tab_base)
 
         tool_btn_style = (
             f"QPushButton {{ background-color: {t['bg_primary']}; color: {t['text_secondary']}; "
-            f"border: 1px solid {t['border']}; border-radius: 6px; font-size: 11px; }}"
-            f"QPushButton:hover {{ background-color: {t['bg_hover']}; border-color: {t['accent']}; }}"
+            f"border: 0.5px solid {t['border']}; border-radius: 6px; font-size: 11px; }}"
+            f"QPushButton:hover {{ background-color: {t['bg_hover']}; }}"
         )
         self.search_btn.setStyleSheet(tool_btn_style)
         self.search_btn.setIcon(svg_icon("search", t.get("text_secondary", "#a0a0b0"), 14))
-        self.new_task_btn.setStyleSheet(tool_btn_style)
+        # SVG: "+ 新会话" 按钮带 accent 边框
+        self.new_task_btn.setStyleSheet(
+            f"QPushButton {{ background-color: {t['bg_primary']}; color: {t['text_secondary']}; "
+            f"border: 0.5px solid {t['accent']}; border-radius: 6px; font-size: 11px; }}"
+            f"QPushButton:hover {{ background-color: {t['bg_hover']}; }}"
+        )
         self.more_btn.setStyleSheet(tool_btn_style)
         self.more_btn.setIcon(svg_icon("more", t.get("text_secondary", "#a0a0b0"), 14))
 
@@ -543,6 +572,9 @@ class ConversationListWidget(QWidget):
         self.theme_btn.setStyleSheet(bottom_style)
         self.settings_btn.setStyleSheet(bottom_style)
         self.theme_btn.setText("🌙" if self._is_dark() else "☀️")
+        # 分隔线
+        self.tool_sep.setStyleSheet(f"background-color: {t['border']};")
+        self.bottom_sep.setStyleSheet(f"background-color: {t['border']};")
 
     def _on_theme_clicked(self):
         new_theme = "light" if self._is_dark() else "dark"

@@ -1,16 +1,15 @@
 """
-input_area.py — v4 输入区组件 (对齐 agent-workbench-ui SVG v2 设计稿)
+input_area.py — v4 输入区组件 (精确对齐 SVG 设计稿)
 
-包含：
-- TagSelectButton：模式/模型标签按钮（标签+值+▼弹出菜单）
-- SkillSendButton：圆形 SVG 箭头发送按钮（r=12, d=24）
-- InputAreaWidget：输入框 + 技能按钮 + 标签按钮 + 发送/停止按钮
+SVG 布局：
+  [────────── 输入框 ───────────] [🔵]  发送按钮叠在输入框右边
+  [+]  [模式 ask ▼]  [模型 flash ▼]       标签行在输入框下方
 """
 import html
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QTextEdit,
-    QLabel, QMenu, QSizePolicy,
+    QLabel, QMenu, QSizePolicy, QGridLayout,
 )
 from PySide6.QtCore import Qt, Signal, QByteArray, QSize
 from PySide6.QtGui import QFont, QIcon, QPixmap, QPainter, QAction
@@ -21,7 +20,6 @@ DEFAULT_THEME = "dark"
 
 
 def _svg_icon(path_data: str, color: str, size: int = 18) -> QIcon:
-    """根据 SVG path 数据渲染矢量图标。"""
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" '
         f'viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="1.5" '
@@ -46,7 +44,7 @@ class TagSelectButton(QPushButton):
         super().__init__(parent)
         self._label = label_text
         self._value = ""
-        self._options: list[tuple[str, str]] = []  # (display, data)
+        self._options: list[tuple[str, str]] = []
         self._theme = theme
         self._menu: QMenu | None = None
         self.setCursor(Qt.PointingHandCursor)
@@ -58,7 +56,6 @@ class TagSelectButton(QPushButton):
         self._apply_theme()
 
     def set_options(self, options: list[tuple[str, str]], current: str = ""):
-        """设置选项列表 (display_text, data_value)。"""
         self._options = options
         self._menu = QMenu(self)
         for display, data in options:
@@ -68,7 +65,6 @@ class TagSelectButton(QPushButton):
         self.set_value(current)
 
     def set_value(self, value: str):
-        """更新当前选中值。"""
         self._value = value
         self._update_text()
 
@@ -117,9 +113,24 @@ class SkillSendButton(QPushButton):
         self._refresh_icon()
 
     def _refresh_icon(self):
-        arrow_path = "M12 19V5M5 12l7-7 7 7"
+        # SVG send arrow: filled up-arrow (matching ui-full-dark.svg)
+        arrow_path = "M12 5L8 11H11V17H13V11H16Z"
         color = self._theme.get("text_inverse", "#ffffff")
-        self.setIcon(_svg_icon(arrow_path, color, 12))
+        svg = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" '
+            f'viewBox="0 0 24 24" fill="{color}" stroke="none">'
+            f'<path d="{arrow_path}"/></svg>'
+        )
+        from PySide6.QtCore import QByteArray
+        from PySide6.QtGui import QPixmap, QPainter
+        from PySide6.QtSvg import QSvgRenderer
+        renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+        pixmap = QPixmap(12, 12)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        renderer.render(painter)
+        painter.end()
+        self.setIcon(QIcon(pixmap))
         self.setStyleSheet(
             f"QPushButton {{ background-color: {self._theme['send_btn']}; "
             f"border-radius: 12px; border: none; }}"
@@ -137,7 +148,7 @@ class InputTextEdit(QTextEdit):
         self.setPlaceholderText("输入 '/' 快速使用技能")
         self.setMaximumHeight(120)
         self.setMinimumHeight(44)
-        self.setFont(QFont("Segoe UI", 13))
+        self.setFont(QFont("Segoe UI", 12))
 
     def keyPressEvent(self, event):
         if event.isAutoRepeat():
@@ -152,7 +163,7 @@ class InputTextEdit(QTextEdit):
 
 
 class InputAreaWidget(QWidget):
-    """底部输入区：输入框 + 技能按钮 + 标签按钮 + 发送/停止按钮。"""
+    """底部输入区：输入框 + 叠放在输入框右内侧的发送按钮 + 下方标签行。"""
 
     send_requested = Signal()
     stop_requested = Signal()
@@ -172,9 +183,45 @@ class InputAreaWidget(QWidget):
         root.setContentsMargins(20, 12, 20, 12)
         root.setSpacing(8)
 
-        # ── 输入框行 ──
-        input_row = QHBoxLayout()
-        input_row.setSpacing(8)
+        # ── 输入框行（发送按钮叠放在输入框右内侧）──
+        input_container = QWidget()
+        input_container.setStyleSheet("background-color: transparent;")
+        container_layout = QGridLayout(input_container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(0)
+
+        # 多行输入框（占满整个容器）
+        self.text_edit = InputTextEdit()
+        self.text_edit.send_requested.connect(self.send_requested.emit)
+        container_layout.addWidget(self.text_edit, 0, 0)
+
+        # 发送按钮叠放在输入框右内侧，用 QGridLayout 同 cell
+        send_wrapper = QWidget()
+        send_wrapper.setStyleSheet("background-color: transparent;")
+        send_layout = QVBoxLayout(send_wrapper)
+        send_layout.setContentsMargins(0, 0, 6, 6)
+        send_layout.setSpacing(0)
+
+        # 发送/停止按钮
+        self.send_btn = SkillSendButton(self._theme)
+        self.send_btn.clicked.connect(self.send_requested.emit)
+        send_layout.addStretch()
+        send_layout.addWidget(self.send_btn)
+
+        self.stop_btn = QPushButton("停止")
+        self.stop_btn.setFixedSize(56, 24)
+        self.stop_btn.setCursor(Qt.PointingHandCursor)
+        self.stop_btn.setVisible(False)
+        self.stop_btn.clicked.connect(self.stop_requested.emit)
+
+        # 用 QGridWidget 同 cell 放置：text_edit (大) + send_wrapper (右下角)
+        container_layout.addWidget(send_wrapper, 0, 0, Qt.AlignRight | Qt.AlignBottom)
+
+        root.addWidget(input_container)
+
+        # ── 底部标签行：技能按钮 + 模式标签 + 模型标签 ──
+        tag_row = QHBoxLayout()
+        tag_row.setSpacing(8)
 
         # 技能按钮（圆形，r=10 → d=20）
         self.skill_btn = QPushButton("+")
@@ -182,44 +229,21 @@ class InputAreaWidget(QWidget):
         self.skill_btn.setCursor(Qt.PointingHandCursor)
         self.skill_btn.setToolTip("技能菜单")
         self.skill_btn.clicked.connect(self.skill_menu_requested.emit)
-        input_row.addWidget(self.skill_btn)
+        tag_row.addWidget(self.skill_btn)
 
-        # 多行输入框
-        self.text_edit = InputTextEdit()
-        self.text_edit.send_requested.connect(self.send_requested.emit)
-        input_row.addWidget(self.text_edit, 1)
-
-        # 发送/停止按钮
-        self.send_btn = SkillSendButton(self._theme)
-        self.send_btn.clicked.connect(self.send_requested.emit)
-        input_row.addWidget(self.send_btn)
-
-        self.stop_btn = QPushButton("停止")
-        self.stop_btn.setFixedSize(56, 24)
-        self.stop_btn.setCursor(Qt.PointingHandCursor)
-        self.stop_btn.setVisible(False)
-        self.stop_btn.clicked.connect(self.stop_requested.emit)
-        input_row.addWidget(self.stop_btn)
-
-        root.addLayout(input_row)
-
-        # ── 底部标签行：模式标签 + 模型标签 ──
-        tag_row = QHBoxLayout()
-        tag_row.setSpacing(8)
-        tag_row.addStretch()
-
-        # 模式标签
+        # 模式标签（SVG: w=62 h=22）
         self.mode_tag = TagSelectButton("模式", self._theme)
-        self.mode_tag.setFixedWidth(72)
+        self.mode_tag.setFixedWidth(62)
         self.mode_tag.clicked_value.connect(self._on_mode_changed)
         tag_row.addWidget(self.mode_tag)
 
-        # 模型标签
+        # 模型标签（SVG: w=76 h=22）
         self.model_tag = TagSelectButton("模型", self._theme)
-        self.model_tag.setFixedWidth(80)
+        self.model_tag.setFixedWidth(76)
         self.model_tag.clicked_value.connect(self._on_model_changed)
         tag_row.addWidget(self.model_tag)
 
+        tag_row.addStretch()
         root.addLayout(tag_row)
         self._apply_theme_styles()
 
@@ -240,8 +264,8 @@ class InputAreaWidget(QWidget):
                 color: {t['text_primary']};
                 border: 0.5px solid {t['border']};
                 border-radius: 8px;
-                padding: 8px 12px;
-                font-size: 13px;
+                padding: 8px 28px 8px 12px;
+                font-size: 12px;
                 line-height: 1.65;
             }}
         """)

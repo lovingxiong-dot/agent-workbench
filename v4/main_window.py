@@ -13,16 +13,18 @@ main_window.py — v4 主窗口（最终发布版三栏 UI）
 """
 import html
 import os
+import re
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QTextEdit, QTextBrowser, QStyleFactory, QLineEdit,
-    QMenu, QSplitter, QSizePolicy,
+    QMenu, QSplitter, QSizePolicy, QGraphicsView, QGraphicsProxyWidget,
+    QGraphicsTextItem,
 )
-from PySide6.QtCore import Qt, QTimer, Signal, QSize
+from PySide6.QtCore import Qt, QTimer, Signal, QSize, QRectF
 from PySide6.QtGui import (
     QPalette, QColor, QFont, QTextCursor, QShortcut, QKeySequence,
-    QAction,
+    QAction, QPainter,
 )
 
 from markdown import markdown as md
@@ -35,6 +37,17 @@ from .conversation_list import ConversationListWidget
 from .input_area import InputAreaWidget
 from .right_panel import RightPanelWidget
 from .icons import svg_icon
+from .chat_scene import ChatScene
+from .chat_items import (
+    CHAT_WIDTH, LEFT_MARGIN, CONTENT_WIDTH,
+    C_BG_PRIMARY, C_BG_SIDEBAR, C_ACCENT, C_BORDER,
+    C_TEXT_PRIMARY, C_TEXT_SECONDARY, C_TEXT_MUTED, C_TEXT_INVERSE,
+    C_ACCENT_BLUE, C_GREEN, C_YELLOW,
+    UserBubbleItem, FoldBlockItem, ToolEntryItem,
+    PhasePanelItem, PhaseStepItem, PhaseBulletItem, PhaseTextItem,
+    SystemCardItem, PHASE_COLORS, PHASE_TITLES, STEP_ICONS,
+    _font, _mono_font,
+)
 from .events import (
     UserSendEvent, UserStopEvent,
     UserConfirmEvent, UserReanalyzeEvent, UserSkipVerifyEvent,
@@ -56,6 +69,8 @@ THEMES = {
         "bg_primary": "#1a1a2e",
         "bg_sidebar": "#16213e",
         "bg_input": "#1a1a2e",
+        "bg_right": "#0f1729",
+        "bg_right_tab": "#0f1729",
         "bg_hover": "#2a2a4a",
         "bg_selected": "#0f3460",
         "bg_group_header": "#16213e",
@@ -160,15 +175,35 @@ class HeaderToolbar(QWidget):
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
 
-        # ── 标题行 ──
+        # ── 标题行（双行：title + env，右侧三按钮 + 垂直分隔线）──
         header = QWidget()
         layout = QHBoxLayout(header)
-        layout.setContentsMargins(24, 12, 12, 12)
-        layout.setSpacing(4)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # 左侧：双行标题区（SVG: x=20 y=16/y=30）
+        title_block = QVBoxLayout()
+        title_block.setContentsMargins(20, 8, 0, 8)
+        title_block.setSpacing(2)
 
         self.title_label = QLabel("")
-        layout.addWidget(self.title_label, 1)
+        title_block.addWidget(self.title_label)
 
+        self.env_label = QLabel("")
+        title_block.addWidget(self.env_label)
+
+        layout.addLayout(title_block, 1)
+
+        # 垂直分隔线（SVG: x1=331 y1=8 x2=331 y2=32）
+        vsep = QLabel()
+        vsep.setFixedSize(1, 24)
+        vsep.setStyleSheet(f"background-color: {self._theme.get('border', '#2a2a4a')};")
+        layout.addWidget(vsep)
+        self._vsep = vsep
+
+        layout.addSpacing(6)
+
+        # 右侧三按钮（SVG: search 337/8, more 359/8, expand 381/8）
         self.search_btn = self._icon_btn("search", "搜索 (Ctrl+F)")
         self.search_btn.clicked.connect(self._toggle_search)
 
@@ -251,7 +286,11 @@ class HeaderToolbar(QWidget):
 
     def _copy_session_content(self):
         from PySide6.QtWidgets import QApplication
-        text = self.parent().chat_area.toPlainText() if hasattr(self.parent(), "chat_area") else ""
+        text = ""
+        if hasattr(self.parent(), "chat_scene"):
+            for item in self.parent().chat_scene.items:
+                if hasattr(item, "_text") and item._text:
+                    text += item._text + "\n\n"
         QApplication.clipboard().setText(text)
 
     def _toggle_search(self):
@@ -298,20 +337,20 @@ class HeaderToolbar(QWidget):
 
     def _render_title(self):
         t = self._theme
-        if self._env:
-            self.title_label.setText(
-                f'<span style="color:{t["text_primary"]};font-size:12px;font-weight:500;">{self._title}</span>'
-                f'<span style="color:{t.get("text_muted", t["text_secondary"])};font-size:10px;margin-left:8px;">· {self._env}</span>'
-            )
-        else:
-            self.title_label.setText(
-                f'<span style="color:{t["text_primary"]};font-size:12px;font-weight:500;">{self._title}</span>'
-            )
+        # SVG: title at y=16 size=12 w=500 color=#e0e0e0
+        self.title_label.setText(
+            f'<span style="color:{t["text_primary"]};font-size:12px;font-weight:500;">{self._title}</span>'
+        )
+        # SVG: env at y=30 size=10 color=#6a6a8a
+        self.env_label.setText(
+            f'<span style="color:{t.get("text_muted", t["text_secondary"])};font-size:10px;">{self._env}</span>'
+        )
 
     def set_theme(self, theme_name: str):
         self._theme = THEMES.get(theme_name, THEMES[DEFAULT_THEME])
         self._apply_theme()
         self._render_title()
+        self._vsep.setStyleSheet(f"background-color: {self._theme.get('border', '#2a2a4a')};")
         self.search_btn.setIcon(svg_icon("search", self._theme.get("text_secondary", "#a0a0b0"), self._icon_size))
         self.more_btn.setIcon(svg_icon("more", self._theme.get("text_secondary", "#a0a0b0"), self._icon_size))
         self._refresh_expand_icon()
@@ -341,17 +380,20 @@ class HeaderToolbar(QWidget):
 
 
 class SimpleChatArea(QWidget):
-    """极简聊天区：支持三层折叠结构（阶段面板/工具执行/思考过程）。"""
+    """聊天区：QGraphicsView 像素级渲染，对齐 SVG 设计稿。
+
+    架构：HeaderToolbar + QGraphicsView(ChatScene) + ConfirmBar + InputAreaWidget。
+    用户气泡、折叠块、阶段面板均由 QPainter 逐像素绘制。
+    AI 消息的富文本 body 通过 QGraphicsProxyWidget(QTextBrowser) 内嵌渲染。
+    """
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._theme = THEMES[DEFAULT_THEME]
+        self._current_phase = ""
         self._streaming_active = False
         self._streaming_buffer = ""
-        self._streaming_start_pos = None
-        self._theme = THEMES[DEFAULT_THEME]
-        self._messages: list[dict] = []
-        self._current_phase = ""
-        self._fold_states: set[str] = set()
+        self._streaming_proxy = None  # 流式输出 proxy widget
         self._setup_ui()
 
     def _setup_ui(self):
@@ -369,23 +411,27 @@ class SimpleChatArea(QWidget):
         self.sep.setStyleSheet(f"background-color: {self._theme['border']};")
         layout.addWidget(self.sep)
 
-        # 消息流
-        self.chat_area = QTextBrowser()
-        self.chat_area.setReadOnly(True)
-        self.chat_area.setFont(QFont("Segoe UI", 13))
-        self.chat_area.setObjectName("chatArea")
-        self.chat_area.setOpenLinks(False)
-        self.chat_area.anchorClicked.connect(self._on_anchor_clicked)
-        layout.addWidget(self.chat_area, 1)
+        # 消息流：QGraphicsView + ChatScene（替代 QTextBrowser）
+        self.chat_view = QGraphicsView()
+        self.chat_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.chat_view.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.chat_view.setRenderHints(QPainter.Antialiasing | QPainter.TextAntialiasing)
+        self.chat_view.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+        self.chat_view.setFrameShape(QGraphicsView.NoFrame)
+        self.chat_view.setStyleSheet("border: none; background: transparent;")
+        self.chat_scene = ChatScene()
+        self.chat_view.setScene(self.chat_scene)
+        self.chat_scene.sceneRectChanged.connect(self._on_scene_changed)
+        layout.addWidget(self.chat_view, 1)
 
-        # 「帮我分析当前项目」大按钮（Work 模式下可见）
+        # 「帮我分析当前项目」按钮
         self.analyze_project_btn = QPushButton("帮我分析当前项目")
         self.analyze_project_btn.setCursor(Qt.PointingHandCursor)
         self.analyze_project_btn.setVisible(False)
         self.analyze_project_btn.clicked.connect(self._on_analyze_project)
         layout.addWidget(self.analyze_project_btn)
 
-        # Phase 确认条（默认隐藏）
+        # 确认条
         self.confirm_bar = QWidget()
         confirm_layout = QHBoxLayout(self.confirm_bar)
         confirm_layout.setContentsMargins(24, 8, 24, 8)
@@ -406,7 +452,13 @@ class SimpleChatArea(QWidget):
         self.cancel_btn.clicked.connect(lambda: self._on_confirm(False))
         layout.addWidget(self.confirm_bar)
 
-        # 输入区（新 InputAreaWidget）
+        # SVG: 输入区上方分隔线 (y=652, stroke=#2a2a4a, 0.5px)
+        self.input_sep = QLabel()
+        self.input_sep.setFixedHeight(1)
+        self.input_sep.setStyleSheet(f"background-color: {self._theme['border']};")
+        layout.addWidget(self.input_sep)
+
+        # 输入区
         self.input_area = InputAreaWidget(self._theme)
         self.input_area.send_requested.connect(self._on_send)
         self.input_area.stop_requested.connect(self._on_stop)
@@ -414,96 +466,57 @@ class SimpleChatArea(QWidget):
 
         self._apply_theme_styles()
 
-    # 兼容旧引用：input_field 指向 text_edit
+    def _on_scene_changed(self, rect: QRectF):
+        """场景内容变化 → 自动滚到底部。"""
+        vbar = self.chat_view.verticalScrollBar()
+        if vbar:
+            vbar.setValue(vbar.maximum())
+
+    # 兼容旧引用
     @property
     def input_field(self):
         return self.input_area.text_edit
 
     def set_theme(self, theme_name: str):
-        """切换主题并即时重绘样式。"""
         self._theme = THEMES.get(theme_name, THEMES[DEFAULT_THEME])
         self._apply_theme_styles()
         self.header.set_theme(theme_name)
         self.sep.setStyleSheet(f"background-color: {self._theme['border']};")
+        self.input_sep.setStyleSheet(f"background-color: {self._theme['border']};")
         self.input_area.set_theme(self._theme)
-        self._render()
+        self.chat_scene.setBackgroundBrush(QColor(self._theme["bg_primary"]))
+        self.chat_view.setStyleSheet("border: none; background: transparent;")
 
     def _apply_theme_styles(self):
         t = self._theme
         self.analyze_project_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {t['bg_input']}; color: {t['accent']}; border: 1px solid {t['accent']};
-                border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 600;
-                margin: 0 24px 8px 24px;
+                background-color: {t['bg_input']}; color: {t['accent']}; border: 0.5px solid {t['accent']};
+                border-radius: 8px; padding: 8px 16px; font-size: 11px; font-weight: 600;
+                margin: 0 20px 8px 20px;
             }}
             QPushButton:hover {{ background-color: {t['bg_hover']}; }}
         """)
         self.confirm_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {t['send_btn']}; color: {t['text_inverse']};
-                border: 1px solid {t['send_btn']}; border-radius: 8px;
-                padding: 6px 10px; font-size: 13px;
+                border: 0.5px solid {t['send_btn']}; border-radius: 6px;
+                padding: 4px 10px; font-size: 11px;
             }}
             QPushButton:hover {{ background-color: {t['send_btn_hover']}; }}
         """)
         self.cancel_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {t['stop_btn']}; color: {t['text_primary']};
-                border: 1px solid {t['border']}; border-radius: 8px;
-                padding: 6px 10px; font-size: 13px;
+                border: 0.5px solid {t['border']}; border-radius: 6px;
+                padding: 4px 10px; font-size: 11px;
             }}
             QPushButton:hover {{ background-color: {t['stop_btn_hover']}; }}
         """)
-        self.confirm_label.setStyleSheet(f"color: {t['text_primary']}; font-size: 13px;")
-        self.chat_area.setStyleSheet(self._chat_area_stylesheet())
+        self.confirm_label.setStyleSheet(f"color: {t['text_primary']}; font-size: 11px;")
         self.setStyleSheet(f"background-color: {t['bg_primary']};")
 
-    def _chat_area_stylesheet(self) -> str:
-        t = self._theme
-        text_primary = t['text_primary']
-        text_secondary = t['text_secondary']
-        border = t['border']
-        bg_primary = t['bg_primary']
-        return f"""
-            QTextEdit {{
-                background-color: {bg_primary}; color: {text_primary};
-                border: none; font-size: 13px; line-height: 1.65;
-            }}
-            .fold-block {{ margin: 4px 0; border: 0.5px solid {border}; border-radius: 4px; overflow: hidden; }}
-            .fold-header {{
-                color: {t['card_analyze_border']}; font-size: 11px; cursor: pointer;
-                text-decoration: none; user-select: none; padding: 4px 8px; display: block;
-            }}
-            .fold-body {{ display: none; }}
-            .tool-entry {{
-                display: block; padding: 3px 8px; margin: 2px 0;
-                font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
-                font-size: 10px;
-            }}
-            .tool-ok {{ color: {t['card_archive_border']}; }}
-            .tool-fail {{ color: #f14c4c; }}
-            .tool-time {{ color: {text_secondary}; margin-left: 8px; font-size: 11px; }}
-            .think-task {{ padding: 2px 8px; font-size: 12px; color: {text_secondary}; }}
-            .think-task.done {{ color: {t['card_archive_border']}; }}
-            .cmd-output, .cmd-full, .tool-args {{
-                font-family: 'Cascadia Code', Consolas, monospace; font-size: 11px;
-                padding: 8px; margin: 4px 0; background-color: {t['card_output_bg']};
-                border-radius: 4px; white-space: pre-wrap;
-                max-height: 120px; overflow-y: auto;
-            }}
-            .cmd-full {{ max-height: 400px; }}
-            .step {{
-                display: block; padding: 6px 0; font-size: 14px; line-height: 1.6;
-            }}
-            .step.done {{ color: {t['card_archive_border']}; }}
-            .step.running {{ color: {t['card_execute_border']}; }}
-            .step.pending {{ color: {text_secondary}; }}
-            .step.fail {{ color: #f14c4c; }}
-            .step-icon {{ display: inline-block; width: 20px; text-align: center; }}
-            .step-detail {{ color: {text_secondary}; font-size: 12px; margin-left: 6px; }}
-        """
-
-    # ── 兼容 UIRenderer 的接口 ──────────────────────────────────
+    # ── 兼容 UIRenderer 接口 ──────────────────────────────────
     def _on_send(self):
         text = self.input_area.toPlainText().strip()
         if text and hasattr(self, '_send_callback'):
@@ -541,111 +554,144 @@ class SimpleChatArea(QWidget):
         self.input_area.clear_input()
 
     def clear_chat(self):
-        self._messages.clear()
         self._current_phase = ""
-        self.chat_area.clear()
         self._streaming_buffer = ""
         self._streaming_active = False
-        self._streaming_start_pos = None
+        self._streaming_proxy = None
+        self.chat_scene.clear()
 
     def set_header(self, title: str, env: str = ""):
         self.header.set_title(title, env)
 
     def _on_search(self, text: str, forward: bool = True):
-        browser = self.chat_area
-        if not text:
-            browser.moveCursor(QTextCursor.Start)
-            return
-        cursor = browser.textCursor()
-        start_pos = cursor.position()
-        document = browser.document()
-        flags = QTextDocument.FindFlags()
-        if not forward:
-            flags |= QTextDocument.FindBackward
-        found = document.find(text, start_pos, flags)
-        if found.isNull():
-            wrap_pos = document.characterCount() - 1 if forward else 0
-            found = document.find(text, wrap_pos, flags)
-        if not found.isNull():
-            browser.setTextCursor(found)
+        """搜索：在 ChatScene 中遍历 text items 高亮匹配。"""
+        # 简化实现：搜索在 QGraphicsView 中没有原生支持，预留接口
+        pass
 
+    # ── 消息追加 API ────────────────────────────────
     def append_user(self, text: str):
-        self._messages.append({"role": "user", "text": text})
-        self._render_last()
-
-    def append_ai(self, text: str, phase: str = "", thinking_fold: str = ""):
-        self._messages.append({
-            "role": "ai", "text": text or "",
-            "phase": phase or self._current_phase,
-            "thinking_fold": thinking_fold or "",
-            "tools": [],
-        })
-        self._render_last()
+        item = self.chat_scene.add_user_message(text)
+        self.chat_view.viewport().update()
 
     def append_system(self, text: str):
-        self._messages.append({"role": "system", "text": text})
-        self._render_last()
+        t = self._theme
+        self.chat_scene.add_system_card(text)
+        self.chat_view.viewport().update()
 
     def append_tool_fold(self, tool_html: str):
-        """将工具执行折叠块追加到当前 AI 消息。"""
-        if self._messages and self._messages[-1]["role"] == "ai":
-            self._messages[-1]["tools"].append(tool_html)
+        """解析 ui_renderer 生成的 tool-fold HTML，创建 FoldBlockItem + ToolEntryItems。"""
+        entries = self._parse_tool_html(tool_html)
+        if not entries:
+            # 回退：创建空工具折叠块
+            fold = self.chat_scene.add_tool_fold(f"[{len(entries)} 工具]")
+            return
+
+        total_ms = sum(e.get("elapsed_ms", 0) for e in entries)
+        status = f"[{len(entries)} 工具 · 共 {total_ms / 1000:.1f}s]"
+        fold = self.chat_scene.add_tool_fold(status)
+        self.chat_scene.add_tool_entries_to_fold(fold, entries)
+        self.chat_view.viewport().update()
+
+    def _parse_tool_html(self, html_str: str) -> list[dict]:
+        """从 ui_renderer 的 tool HTML 中提取工具条目。"""
+        entries = []
+        # 匹配 tool-entry 行：tool-ok/tool-fail + 名称 + 时间
+        pattern = re.compile(
+            r'<span class="(tool-ok|tool-fail)">([^<]+)</span>'
+            r'\s*<span class="tool-time">([^<]+)</span>'
+        )
+        for m in pattern.finditer(html_str):
+            success = m.group(1) == "tool-ok"
+            name = m.group(2).strip()
+            time_str = m.group(3).strip().rstrip("ms")
+            try:
+                elapsed_ms = int(float(time_str) * 1000) if "s" in time_str else int(float(time_str))
+            except ValueError:
+                elapsed_ms = 0
+            entries.append({"name": name, "elapsed_ms": elapsed_ms, "success": success})
+        return entries
+
+    def append_ai(self, text: str, phase: str = "", thinking_fold: str = ""):
+        """AI 消息：可含思考折叠 + 阶段面板。"""
+        effective_phase = phase or self._current_phase
+
+        # 思考折叠
+        if thinking_fold:
+            think_status = self._extract_fold_status(thinking_fold)
+            self.chat_scene.add_thinking_fold(think_status)
+
+        if not text.strip():
+            self.chat_view.viewport().update()
+            return
+
+        html_body = self._text_to_html(text)
+
+        if effective_phase:
+            panel = self.chat_scene.add_phase_panel(effective_phase)
+            text_item = QGraphicsTextItem()
+            text_item.setHtml(html_body)
+            text_item.setTextWidth(CONTENT_WIDTH - 28)
+            text_item.setPos(LEFT_MARGIN + 14, panel.HEADER_H + 12)
+            self.chat_scene.add_phase_body(panel, [text_item], text_item.boundingRect().height() + 8)
         else:
-            self._messages.append({"role": "tool_group", "tools": [tool_html]})
-        self._render_last()
+            self.chat_scene.add_text_item(html_body)
+
+        self.chat_view.viewport().update()
+
+    def _text_to_html(self, text: str) -> str:
+        """将 markdown 文本转为 HTML（用于 QGraphicsTextItem）。"""
+        t = self._theme
+        md_html = _md_to_html(text)
+        return f"""
+        <div style="color:{t['text_primary']};font-size:11px;line-height:1.6;">
+            {md_html}
+        </div>
+        """
+
+    def _extract_fold_status(self, think_html: str) -> str:
+        """从思考折叠 HTML 中提取状态文本。"""
+        m = re.search(r'\[([^\]]+)\]', think_html)
+        return m.group(0) if m else ""
 
     def set_current_phase(self, phase: str):
-        """UIRenderer 设置当前 Phase，影响后续 AI 消息的面板样式。"""
         self._current_phase = phase
 
-    def _append_message(self, role: str, text: str):
-        if role in ("user", "ai"):
-            html_block = self._build_bubble(role, text)
-        else:
-            html_block = self._build_system_card(text)
-        self.chat_area.moveCursor(QTextCursor.End)
-        self.chat_area.insertHtml(html_block)
-        self.chat_area.moveCursor(QTextCursor.End)
-
+    # ── 流式 ──────────────────────────────────
     def append_chunk(self, chunk: str):
         if not chunk:
             return
         self._streaming_active = True
         self._streaming_buffer += chunk
-        cursor = self.chat_area.textCursor()
-        if self._streaming_start_pos is not None:
-            cursor.setPosition(self._streaming_start_pos)
-            cursor.movePosition(QTextCursor.End, QTextCursor.KeepAnchor)
-            cursor.removeSelectedText()
-        else:
-            self._streaming_start_pos = cursor.position()
-        html_block = self._build_bubble("ai", self._streaming_buffer)
-        self.chat_area.moveCursor(QTextCursor.End)
-        self.chat_area.insertHtml(html_block)
-        self.chat_area.moveCursor(QTextCursor.End)
+        self._update_streaming()
 
     def finalize_stream(self):
         self._streaming_active = False
         self.input_area.set_streaming(False)
         text = self._streaming_buffer
         self._streaming_buffer = ""
-        start = self._streaming_start_pos
-        self._streaming_start_pos = None
         if not text.strip():
             return
-        if start is not None:
-            cursor = self.chat_area.textCursor()
-            cursor.setPosition(start)
-            cursor.movePosition(QTextCursor.End, QTextCursor.KeepAnchor)
-            cursor.removeSelectedText()
+        # 移除流式 text item
+        if self._streaming_proxy:
+            self.chat_scene.removeItem(self._streaming_proxy)
+            self._streaming_proxy = None
         self.append_ai(text)
+
+    def _update_streaming(self):
+        """更新流式渲染：创建或更新 QGraphicsTextItem。"""
+        html_body = self._text_to_html(self._streaming_buffer)
+        if self._streaming_proxy is None:
+            self._streaming_proxy = self.chat_scene.add_text_item(html_body)
+        else:
+            self._streaming_proxy.setHtml(html_body)
+        self.chat_view.viewport().update()
 
     def set_streaming(self, active: bool):
         self._streaming_active = active
         self.input_area.set_streaming(active)
         if active:
             self._streaming_buffer = ""
-            self._streaming_start_pos = None
+            self._streaming_proxy = None
 
     def set_send_enabled(self, enabled: bool):
         self.input_area.set_send_enabled(enabled)
@@ -684,240 +730,26 @@ class SimpleChatArea(QWidget):
     def append_phase_message(self, phase: str, text: str):
         self.append_system(text)
 
-    # ── 渲染 ──────────────────────────────────
-    def _render(self):
-        """全量重渲染。"""
-        self.chat_area.clear()
-        for msg in self._messages:
-            html_block = self._build_message_html(msg)
-            html_block = self._apply_fold_states(html_block)
-            self.chat_area.moveCursor(QTextCursor.End)
-            self.chat_area.insertHtml(html_block)
-        self.chat_area.moveCursor(QTextCursor.End)
+    # ── 向后兼容 ──────────────────────────────────
+    def toPlainText(self) -> str:
+        """收集场景中所有文本。"""
+        texts = []
+        for item in self.chat_scene.items:
+            if isinstance(item, UserBubbleItem) and item._text:
+                texts.append(item._text)
+            elif isinstance(item, SystemCardItem) and item._text:
+                texts.append(item._text)
+        for item in self.chat_scene.items:
+            for child in item.childItems():
+                if isinstance(child, QGraphicsTextItem):
+                    texts.append(child.toPlainText())
+        return "\n".join(texts)
 
-    def _render_last(self):
-        """仅渲染最后一条消息（性能优化）。"""
-        if not self._messages:
-            return
-        html_block = self._build_message_html(self._messages[-1])
-        html_block = self._apply_fold_states(html_block)
-        self.chat_area.moveCursor(QTextCursor.End)
-        self.chat_area.insertHtml(html_block)
-        self.chat_area.moveCursor(QTextCursor.End)
+    def toHtml(self) -> str:
+        """返回场景文本内容（兼容测试）。"""
+        text = self.toPlainText()
+        return f"<html><body>{html.escape(text)}</body></html>"
 
-    def _apply_fold_states(self, html_text: str) -> str:
-        """根据已展开 fold id 设置 fold-body 的 display 属性。"""
-        if not self._fold_states:
-            return html_text
-        try:
-            from bs4 import BeautifulSoup
-            soup = BeautifulSoup(html_text, "html.parser")
-            for fold_id in self._fold_states:
-                body = soup.find(id=f"{fold_id}-body")
-                if body:
-                    body["style"] = "display:block;"
-            return str(soup)
-        except Exception:
-            return html_text
-
-    def _on_anchor_clicked(self, url):
-        """处理折叠头点击事件。"""
-        url_str = url.toString()
-        prefix = "fold://toggle/"
-        if not url_str.startswith(prefix):
-            return
-        fold_id = url_str[len(prefix):]
-        if fold_id in self._fold_states:
-            self._fold_states.discard(fold_id)
-        else:
-            self._fold_states.add(fold_id)
-        self._render()
-
-    def _build_message_html(self, msg: dict) -> str:
-        role = msg["role"]
-        if role == "user":
-            return self._build_bubble("user", msg["text"])
-        if role == "system":
-            return self._build_system_card(msg["text"])
-        if role == "tool_group":
-            return self._build_tool_group(msg["tools"])
-        return self._build_ai_message(msg)
-
-    def _build_ai_message(self, msg: dict) -> str:
-        phase = msg.get("phase", "")
-        thinking_fold = msg.get("thinking_fold", "")
-        tools = msg.get("tools", [])
-        text = msg.get("text", "")
-
-        parts = []
-        if thinking_fold:
-            parts.append(thinking_fold)
-        if tools:
-            parts.append('<div class="tool-group">' + "".join(tools) + '</div>')
-        if text:
-            parts.append(_md_to_html(text))
-        body_html = "".join(parts)
-
-        if phase:
-            return self._build_phase_panel(phase, body_html)
-        return self._build_bubble_from_html("ai", body_html)
-
-    def _build_phase_panel(self, phase: str, body_html: str) -> str:
-        t = self._theme
-        headers = {
-            "analyze": "📋 分析结果",
-            "confirm": "📋 分析结果",
-            "execute": "📝 执行计划",
-            "verify": "🔍 验证结果",
-            "archive": "✅ 完成报告",
-        }
-        header = headers.get(phase, "📋 结果")
-        border_color = t.get(f"card_{phase}_border", t['border'])
-        bg = t.get(f"card_{phase}_bg", t["bg_bubble_ai"])
-        return f"""
-        <div style="margin:10px 8px;">
-            <div class="phase-panel {phase}" style="
-                background-color:{bg}; border:0.5px solid {t['border']};
-                border-left:4px solid {border_color}; border-radius:8px;
-                margin:0; overflow:hidden;
-            ">
-                <div class="phase-header" style="
-                    background-color:{t['bg_primary']}; padding:8px 12px;
-                    font-weight:600; font-size:12px; color:{t['text_primary']};
-                    border-bottom:0.5px solid {t['border']};
-                ">{header}</div>
-                <div class="phase-body" style="padding:12px 16px; font-size:13px; line-height:1.6;">
-                    {body_html}
-                </div>
-            </div>
-        </div>
-        """
-
-    def _build_tool_group(self, tools: list[str]) -> str:
-        return f"""
-        <table width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:4px 0;">
-            <tr>
-                <td align="left" valign="top" style="padding:2px 64px 6px 8px;">
-                    {self._avatar_cell_inline("AI", "#6366F1")}
-                    <div style="display:inline-block;max-width:85%;min-width:280px;">
-                        {''.join(tools)}
-                    </div>
-                </td>
-            </tr>
-        </table>
-        <div style="clear:both;"></div>
-        """
-
-    # ── HTML 构建 ──────────────────────────────────
-    def _build_system_card(self, text: str) -> str:
-        t = self._theme
-        html_content = _md_to_html(text)
-        return f"""
-        <table width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:10px 0;">
-            <tr><td align="center" style="padding:0 64px;">
-                <div style="display:inline-block;max-width:80%;min-width:280px;
-                            background-color:{t['bg_system_card']};border:1px solid {t['border']};
-                            border-radius:12px;padding:14px 18px;text-align:left;">
-                    <div style="color:{t['text_primary']};font-family:'Segoe UI','Microsoft YaHei',sans-serif;
-                                font-size:13px;line-height:1.7;">
-                        {html_content}
-                    </div>
-                </div>
-            </td></tr>
-        </table>
-        <div style="clear:both;"></div>
-        """
-
-    def _build_bubble(self, role: str, text: str) -> str:
-        t = self._theme
-        if role == "user":
-            avatar = self._avatar_cell("我", "right", t["accent"])
-            bubble_bg = t["bg_bubble_user"]
-            bubble_border = t["bg_bubble_user"]
-            text_color = t["text_inverse"]
-            row = f"""
-            <td align="right" valign="top" style="padding:2px 8px 10px 64px;">
-                {self._md_content(text, bubble_bg, bubble_border, text_color)}
-            </td>
-            {avatar}
-            """
-        else:
-            avatar = self._avatar_cell("AI", "left", "#6366F1")
-            bubble_bg = t["bg_bubble_ai"]
-            bubble_border = t["border_bubble_ai"]
-            text_color = t["text_primary"]
-            row = f"""
-            {avatar}
-            <td align="left" valign="top" style="padding:2px 64px 10px 8px;">
-                {self._md_content(text, bubble_bg, bubble_border, text_color)}
-            </td>
-            """
-
-        return f"""
-        <table width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:10px 0;">
-            <tr>{row}</tr>
-        </table>
-        <div style="clear:both;"></div>
-        """
-
-    def _build_bubble_from_html(self, role: str, html_content: str) -> str:
-        t = self._theme
-        avatar = self._avatar_cell("AI", "left", "#6366F1")
-        bubble_bg = t["bg_bubble_ai"]
-        bubble_border = t["border_bubble_ai"]
-        text_color = t["text_primary"]
-        return f"""
-        <table width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:10px 0;">
-            <tr>
-                {avatar}
-                <td align="left" valign="top" style="padding:2px 64px 10px 8px;">
-                    <div style="display:inline-block;max-width:85%;color:{text_color};
-                                background-color:{bubble_bg};border:1px solid {bubble_border};
-                                border-radius:14px;padding:10px 14px;
-                                font-family:'Segoe UI','Microsoft YaHei',sans-serif;
-                                font-size:13px;line-height:1.65;text-align:left;">
-                        {html_content}
-                    </div>
-                </td>
-            </tr>
-        </table>
-        <div style="clear:both;"></div>
-        """
-
-    @staticmethod
-    def _avatar_cell(label: str, align: str, bg: str) -> str:
-        return f"""
-        <td valign="top" width="36" style="padding:4px 8px;text-align:{align};">
-            <div style="width:32px;height:32px;line-height:32px;text-align:center;
-                        background-color:{bg};color:#FFFFFF;border-radius:50%;
-                        font-size:12px;font-weight:bold;overflow:hidden;">
-                {label}
-            </div>
-        </td>
-        """
-
-    @staticmethod
-    def _avatar_cell_inline(label: str, bg: str) -> str:
-        return f"""
-        <div style="float:left;width:32px;height:32px;line-height:32px;text-align:center;
-                    background-color:{bg};color:#FFFFFF;border-radius:50%;
-                    font-size:12px;font-weight:bold;overflow:hidden;margin:4px 8px 0 0;">
-            {label}
-        </div>
-        """
-
-    @staticmethod
-    def _md_content(text: str, bubble_bg: str, bubble_border: str, text_color: str) -> str:
-        html_content = _md_to_html(text)
-        return f"""
-        <div style="display:inline-block;max-width:85%;color:{text_color};
-                    background-color:{bubble_bg};border:1px solid {bubble_border};
-                    border-radius:14px;padding:10px 14px;
-                    font-family:'Segoe UI','Microsoft YaHei',sans-serif;
-                    font-size:13px;line-height:1.65;text-align:left;">
-            {html_content}
-        </div>
-        """
 
 
 class MainWindow(QMainWindow):

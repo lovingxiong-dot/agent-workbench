@@ -94,7 +94,7 @@ class TestV4GUISmoke:
             assert window.conversation_list.theme_btn.text() == expected_emoji
 
             # 记录切换前的样式，用于验证切换后确实变化
-            chat_area_before = window.chat_area.chat_area.styleSheet()
+            chat_area_before = window.chat_area.chat_scene.backgroundBrush().color().name()
             sidebar_before = window.conversation_list.styleSheet()
 
             window.conversation_list.theme_btn.click()
@@ -103,7 +103,7 @@ class TestV4GUISmoke:
             # 按钮图标、配置、UI 样式均应变更为对应主题
             assert window.conversation_list.theme_btn.text() == other_emoji
             assert window._config.get("app.theme") == other_theme
-            assert window.chat_area.chat_area.styleSheet() != chat_area_before
+            assert window.chat_area.chat_scene.backgroundBrush().color().name() != chat_area_before
             assert window.conversation_list.styleSheet() != sidebar_before
         finally:
             # 恢复原始主题，避免影响其他测试和真实配置文件

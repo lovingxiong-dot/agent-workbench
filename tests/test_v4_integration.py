@@ -219,7 +219,7 @@ class TestV4Integration:
         assert user_messages[0].role == "user"
         assert user_messages[0].content == "你好，v4"
 
-        html = window.chat_area.chat_area.toHtml()
+        html = window.chat_area.toHtml()
         assert "你好，v4" in html, "ChatView 应显示用户消息"
 
         window.close()
@@ -284,7 +284,7 @@ class TestV4Integration:
         assert user_messages[0].content == "测试消息"
 
         assert window.chat_area.input_field.toPlainText().strip() == "", "发送后输入框应清空"
-        assert "测试消息" in window.chat_area.chat_area.toHtml()
+        assert "测试消息" in window.chat_area.toHtml()
 
         window.close()
         window.deleteLater()
@@ -311,7 +311,7 @@ class TestV4Integration:
         self._process_events()
 
         assert window._orchestrator.current_session_id == sid_a
-        html = window.chat_area.chat_area.toHtml()
+        html = window.chat_area.toHtml()
         assert "消息 A" in html, "切换回 A 应加载 A 的消息"
         assert "消息 B" not in html, "切换回 A 不应显示 B 的消息"
 
@@ -352,7 +352,7 @@ class TestV4Integration:
         assert len(messages) == 3, "即使第 3 条被拒绝，用户消息仍应写入 DB"
 
         # UI 显示队列已满提示
-        html = window.chat_area.chat_area.toHtml()
+        html = window.chat_area.toHtml()
         assert "队列已满" in html, "应提示用户队列已满"
 
         # 发送按钮被禁用
@@ -547,7 +547,7 @@ class TestV4Integration:
         messages_after = window2._repo.get_messages(sid)
         assert len(messages_after) == len(messages_before), "重启后消息数量应一致"
         assert any("持久化消息" in m.content for m in messages_after)
-        assert "持久化消息" in window2.chat_area.chat_area.toHtml()
+        assert "持久化消息" in window2.chat_area.toHtml()
 
         window2.close()
         window2.deleteLater()

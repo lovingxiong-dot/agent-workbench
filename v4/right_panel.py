@@ -451,19 +451,25 @@ class RecentFilesList(QWidget):
         t = self._theme
         for path, time_label in files:
             row = QWidget()
-            row.setFixedHeight(28)
+            row.setFixedHeight(24)
             row_layout = QHBoxLayout(row)
             row_layout.setContentsMargins(0, 0, 0, 0)
             row_layout.setSpacing(8)
 
             name_label = QLabel(path)
             name_label.setFont(QFont("Segoe UI", 11))
-            name_label.setStyleSheet(f"color: {t['text_primary']}; border: none;")
+            name_label.setStyleSheet(f"color: {t['text_primary']}; border: none; background: transparent;")
 
             time_label_w = QLabel(time_label)
             time_label_w.setFont(QFont("Segoe UI", 9))
-            time_label_w.setStyleSheet(f"color: {t.get('text_muted', t['text_secondary'])}; border: none;")
+            time_label_w.setStyleSheet(f"color: {t.get('text_muted', t['text_secondary'])}; border: none; background: transparent;")
             time_label_w.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+            # SVG: row background fill=#16213e stroke=#2a2a4a rx=4
+            row.setStyleSheet(
+                f"QWidget {{ background-color: {t['bg_sidebar']}; "
+                f"border: 0.5px solid {t['border']}; border-radius: 4px; }}"
+            )
 
             row_layout.addWidget(name_label, 1)
             row_layout.addWidget(time_label_w)
@@ -478,9 +484,9 @@ class RecentFilesList(QWidget):
 
 
 class RightPanelWidget(QWidget):
-    """右栏容器：v4 架构 / 终端 / 文件编辑器 / 浏览器。"""
+    """右栏容器：v4 架构 / 终端 / 文件编辑器 / 浏览器，标签栏对齐 SVG。"""
 
-    file_open_requested = Signal(str)  # 用户从资源管理器打开文件
+    file_open_requested = Signal(str)
 
     def __init__(self, theme: dict, parent=None):
         super().__init__(parent)
@@ -493,68 +499,182 @@ class RightPanelWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
+        # ── 自定义标签栏 ──
+        self._tab_bar = QWidget()
+        self._tab_bar.setFixedHeight(28)
+        tab_layout = QHBoxLayout(self._tab_bar)
+        tab_layout.setContentsMargins(8, 2, 8, 2)
+        tab_layout.setSpacing(2)
+
+        # + 新建标签按钮（r=7 → d=14）
+        self._add_tab_btn = QPushButton("+")
+        self._add_tab_btn.setFixedSize(14, 14)
+        self._add_tab_btn.setCursor(Qt.PointingHandCursor)
+        self._add_tab_btn.setToolTip("新建标签")
+
+        # 标签按钮列表 [(btn, close_btn, widget)]
+        self._tab_buttons: list[tuple[QPushButton, QPushButton, QWidget]] = []
+
+        # 搜索按钮
+        self._search_right_btn = QPushButton()
+        self._search_right_btn.setFixedSize(16, 16)
+        self._search_right_btn.setCursor(Qt.PointingHandCursor)
+        self._search_right_btn.setToolTip("搜索文件")
+        self._search_right_btn.setText("🔍")
+
+        tab_layout.addWidget(self._add_tab_btn)
+        self._tab_btn_container = QHBoxLayout()
+        self._tab_btn_container.setSpacing(2)
+        tab_layout.addLayout(self._tab_btn_container, 1)
+        tab_layout.addWidget(self._search_right_btn)
+        layout.addWidget(self._tab_bar)
+
+        # 分隔线
+        sep = QLabel()
+        sep.setFixedHeight(1)
+        layout.addWidget(sep)
+        self._tab_sep = sep
+
+        # ── 内容区（QStackedWidget 简化：直接 QTabWidget 保留）──
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
         self.tabs.setTabPosition(QTabWidget.North)
-        self.tabs.setTabsClosable(True)
         self.tabs.tabCloseRequested.connect(self._on_tab_close_requested)
+        self.tabs.tabBar().hide()  # 隐藏原生标签栏，用自定义的
         layout.addWidget(self.tabs, 1)
 
-        # 搜索按钮（右侧角落）
+        # 搜索按钮（右侧角落，用于原生标签兼容）
         self.search_corner_btn = QPushButton()
         self.search_corner_btn.setFixedSize(16, 16)
         self.search_corner_btn.setCursor(Qt.PointingHandCursor)
         self.search_corner_btn.setToolTip("搜索文件")
-        self.search_corner_btn.setStyleSheet("QPushButton { border: none; font-size: 9px; }")
         self.search_corner_btn.setText("🔍")
         self.tabs.setCornerWidget(self.search_corner_btn, Qt.TopRightCorner)
 
-        # v4 架构
+        # v4 架构（含项目资源管理器 + 最近文件）
+        self._v4_tab = QWidget()
+        v4_layout = QVBoxLayout(self._v4_tab)
+        v4_layout.setContentsMargins(0, 0, 0, 0)
+        v4_layout.setSpacing(0)
         self.explorer = ProjectExplorer(project_root="", storage_dir="", parent=self)
         self.explorer.file_selected.connect(self._on_file_selected)
-        self.tabs.addTab(self.explorer, "v4 架构")
+        self._recent_files = RecentFilesList(self._theme)
+        v4_layout.addWidget(self.explorer, 3)
+        v4_layout.addWidget(self._recent_files, 1)
+        self._add_tab("v4 架构", self._v4_tab)
 
         # 终端
         self.terminal = TerminalWidget(self._theme, parent=self)
-        self.tabs.addTab(self.terminal, "终端")
+        self._add_tab("终端", self.terminal)
 
         # 文件编辑器
         self.file_reader = FileReaderWidget(self._theme, parent=self)
-        self.tabs.addTab(self.file_reader, "文件编辑器")
+        self._add_tab("文件编辑器", self.file_reader)
 
         # 浏览器
         self.browser = BrowserWidget(self._theme, parent=self)
-        self.tabs.addTab(self.browser, "浏览器")
+        self._add_tab("浏览器", self.browser)
+
+        # 默认选中第一个
+        self._on_tab_button_clicked(0)
+
+    def _add_tab(self, title: str, widget: QWidget) -> int:
+        idx = self.tabs.addTab(widget, title)
+        # 创建自定义标签按钮
+        btn = QPushButton(title)
+        btn.setCheckable(True)
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setFixedHeight(24)
+        btn.clicked.connect(lambda: self._on_tab_button_clicked(
+            self._tab_buttons.index(next((t for t in self._tab_buttons if t[2] is widget), (None, None, None)))))
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(10, 10)
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setToolTip("关闭标签")
+        close_btn.clicked.connect(lambda: self._on_custom_tab_close(
+            self._tab_buttons.index(next((t for t in self._tab_buttons if t[2] is widget), (None, None, None)))))
+
+        self._tab_buttons.append((btn, close_btn, widget))
+        self._tab_btn_container.addWidget(btn)
+        self._tab_btn_container.addWidget(close_btn)
+        self._apply_tab_btn_styles()
+        return idx
+
+    def _on_tab_button_clicked(self, idx: int):
+        if 0 <= idx < self.tabs.count():
+            self.tabs.setCurrentIndex(idx)
+            for i, (btn, _, _) in enumerate(self._tab_buttons):
+                btn.setChecked(i == idx)
+
+    def _on_custom_tab_close(self, idx: int):
+        self._on_tab_close_requested(idx)
 
     def _on_tab_close_requested(self, index: int):
-        """关闭标签页（保留至少第一个）。"""
         if self.tabs.count() <= 1 or index == 0:
             return
         widget = self.tabs.widget(index)
         self.tabs.removeTab(index)
-        if widget and widget not in (self.explorer, self.terminal, self.file_reader, self.browser):
+        if widget and widget not in (self._v4_tab, self.terminal, self.file_reader, self.browser):
             widget.deleteLater()
+        # 移除自定义标签
+        if 0 <= index < len(self._tab_buttons):
+            btn, close_btn, _ = self._tab_buttons.pop(index)
+            self._tab_btn_container.removeWidget(btn)
+            self._tab_btn_container.removeWidget(close_btn)
+            btn.deleteLater()
+            close_btn.deleteLater()
+
+    def _apply_tab_btn_styles(self):
+        t = self._theme
+        active_bg = t["bg_primary"]
+        inactive_bg = t.get("bg_right_tab", "#0f1729")
+        for i, (btn, close_btn, _) in enumerate(self._tab_buttons):
+            is_current = (i == self.tabs.currentIndex())
+            bg = active_bg if is_current else inactive_bg
+            text_color = t["text_primary"] if is_current else t["text_secondary"]
+            btn.setStyleSheet(
+                f"QPushButton {{ background-color: {bg}; color: {text_color}; "
+                f"border: none; border-radius: 6px; padding: 2px 10px; "
+                f"font-size: 10px; font-weight: {'600' if is_current else '400'}; text-align: left; }}"
+                f"QPushButton:hover {{ background-color: {t['bg_hover']}; }}"
+                f"QPushButton:checked {{ background-color: {active_bg}; color: {t['text_primary']}; "
+                f"font-weight: 600; }}"
+            )
+            close_btn.setStyleSheet(
+                f"QPushButton {{ background-color: {'#1a1a2e' if is_current else t.get('bg_right_tab', '#0f1729')}; "
+                f"color: {t['text_muted']}; border: none; border-radius: 6px; font-size: 9px; }}"
+                f"QPushButton:hover {{ background-color: {t['bg_hover']}; }}"
+            )
 
     def _apply_theme(self):
         t = self._theme
-        self.setStyleSheet(f"background-color: {t['bg_primary']};")
+        bg_right = t.get("bg_right", "#0f1729")
+        self.setStyleSheet(f"background-color: {bg_right};")
+        self._tab_bar.setStyleSheet(f"background-color: {bg_right};")
+        self._tab_sep.setStyleSheet(f"background-color: {t['border']};")
+
         self.tabs.setStyleSheet(
-            f"QTabWidget::pane {{ border: none; background-color: {t['bg_primary']}; }}"
-            f"QTabBar::tab {{ background-color: {t.get('bg_tab_inactive', t['bg_primary'])}; "
-            f"color: {t['text_secondary']}; border: none; padding: 5px 12px; "
-            f"font-size: 10px; border-radius: 6px; margin: 2px 1px; }}"
-            f"QTabBar::tab:selected {{ background-color: {t['bg_input']}; color: {t['text_primary']}; }}"
-            f"QTabBar::tab:hover {{ background-color: {t['bg_hover']}; }}"
-            f"QTabBar::close-button {{ image: none; width: 12px; height: 12px; }}"
+            f"QTabWidget::pane {{ border: none; background-color: {bg_right}; }}"
         )
+        self._add_tab_btn.setStyleSheet(
+            f"QPushButton {{ background-color: {t['bg_hover']}; color: {t['text_secondary']}; "
+            f"border: none; border-radius: 7px; font-size: 10px; font-weight: 600; }}"
+            f"QPushButton:hover {{ background-color: {t['bg_selected']}; }}"
+        )
+        self._search_right_btn.setStyleSheet(
+            f"QPushButton {{ background-color: {t['bg_hover']}; color: {t['text_secondary']}; "
+            f"border-radius: 3px; font-size: 9px; border: none; }}"
+        )
+        self._apply_tab_btn_styles()
         self.search_corner_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {t.get('tag_bg', t['bg_input'])}; "
-            f"color: {t['text_secondary']}; border-radius: 3px; font-size: 9px; }}"
+            f"QPushButton {{ background-color: {t['bg_hover']}; color: {t['text_secondary']}; "
+            f"border-radius: 3px; font-size: 9px; }}"
         )
 
     def set_theme(self, theme: dict):
         self._theme = theme
         self._apply_theme()
+        self._recent_files.set_theme(theme)
         self.terminal.set_theme(theme)
         self.file_reader.set_theme(theme)
         self.browser.set_theme(theme)
@@ -570,6 +690,9 @@ class RightPanelWidget(QWidget):
 
     def set_open_documents(self, documents: list):
         self.explorer.set_open_documents(documents)
+        # 同步到最近文件
+        files = [(d, "——") for d in documents[:15]]
+        self._recent_files.set_files(files)
 
     def switch_tab(self, tab_name: str):
         name_map = {
@@ -582,10 +705,12 @@ class RightPanelWidget(QWidget):
         idx = name_map.get(tab_name, -1)
         if idx >= 0:
             self.tabs.setCurrentIndex(idx)
+            self._on_tab_button_clicked(idx)
 
     def open_file(self, path: str):
         self.switch_tab("文件编辑器")
         self.file_reader.open_file(path)
+        self._recent_files.add_file(path)
 
     def update_terminal(self, text: str):
         self.switch_tab("终端")
