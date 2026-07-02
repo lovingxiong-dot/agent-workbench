@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.1 (2026-07-01) — UI 模板图标 SVG 化 + 标签背景框恢复 + 输入区拖拽 + 防抖
+## v0.4-alpha (2026-07-02) — UI 模板图标 SVG 化 + 标签背景框恢复 + 输入区拖拽 + 防抖 + 交接
 
 ### feat/ui
 - 左栏功能/会话 Tab 按钮恢复 SVG 设计稿 rx=6 圆角背景框（accent 选中态 / btn_bg 未选中态）
@@ -12,9 +12,12 @@
 ### fix/ui
 - Tab 按钮主题切换时同步刷新背景色 + 文字色 + 字重
 - 字体恢复 Segoe UI / Cascadia Code point-size 渲染
+- 窗口边缘 resize 分析：确认根因为 MainWindow.mouseEvent 被子控件遮挡，eventFilter/QSplitter 方案均不可行，暂搁置
 
 ### docs
 - 新增 .handoff/HANDOFF.md 交接文档（窗口边缘 resize 失败分析 + 决策日志）
+- 新增 .handoff/CONVERSATION_LOG.md 完整会话记录
+- PROJECT_BLUEPRINT.md 同步更新至 v0.4-alpha
 
 ## v4.0.8-alpha (2026-07-01) — 最终发布版三栏 UI 全量重制
 
