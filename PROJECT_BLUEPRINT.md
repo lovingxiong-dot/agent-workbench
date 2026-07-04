@@ -1,8 +1,8 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 分支 | ui-template | 存档次数 | 26 (main) + 2 (ui-template) |
-| 主分支版本 | v3.12.0 | ui-template 版本 | v0.5-alpha | 最后更新 | 2026-07-04 |
+| 项目名称 | AI Agent 工作台 | 分支 | ui-template | 存档次数 | 26 (main) + 3 (ui-template) |
+| 主分支版本 | v3.12.0 | ui-template 版本 | v0.6-alpha | 最后更新 | 2026-07-04 |
 
 ## 项目概要
 AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v3.12.0 完成 AI Engine 八引擎模块化架构升级：ContextEngine/PromptEngine/InferenceEngine/ToolEngine/PhaseEngine/MemoryEngine/MetricsEngine/PolicyEngine，实现单一职责 + 闭环反馈 + 绞杀者模式集成，同时增强 System Prompt、LLM 参数可配置化、自识别记忆路径修正。

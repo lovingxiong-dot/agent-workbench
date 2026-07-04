@@ -19,13 +19,14 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QLineEdit, QTextEdit, QSplitter, QStackedWidget,
     QGraphicsView, QGraphicsScene, QGraphicsItem, QSizePolicy,
-    QFrame, QScrollArea, QMenu,
+    QFrame, QScrollArea, QListWidget, QFileDialog,
 )
 from PySide6.QtCore import Qt, Signal, QRectF, QPointF, QSize, QTimer, QObject, QEvent
 from PySide6.QtGui import (
     QPainter, QPainterPath, QPen, QBrush, QColor, QFont, QFontMetrics,
-    QPalette, QAction, QIcon, QPixmap, QLinearGradient, QCursor,
+    QPalette, QIcon, QPixmap, QLinearGradient, QCursor,
 )
+import PySide6.QtWidgets as QtW  # for qApp access
 
 # ══════════════════════════════════════════════════════════════
 # 主题系统（深色/浅色，精确来自 ui-full-dark.svg / ui-full-light.svg）
@@ -288,6 +289,127 @@ def install_invisible_handles(splitter: QSplitter, hot_zone_width: int = 4):
 
 
 # ══════════════════════════════════════════════════════════════
+# AppleMenu — Apple 风格弹出菜单（圆角、hover 高亮、非原生）
+# ══════════════════════════════════════════════════════════════
+class AppleMenuItem(QLabel):
+    """菜单项：文本标签 + hover 圆角高亮"""
+    clicked = Signal()
+    __ACTIVE_BG = "#007AFF1A"  # 10% accent (light & dark 通用)
+
+    def __init__(self, text: str, is_separator=False):
+        super().__init__()
+        self._is_sep = is_separator
+        self._hover = False
+        if is_separator:
+            self.setFixedHeight(1)
+        else:
+            self.setText(text)
+            self.setFixedHeight(32)
+            self.setCursor(Qt.PointingHandCursor)
+            self.setMouseTracking(True)
+            self.setIndent(12)
+            self._style()
+
+    def _style(self):
+        if self._is_sep:
+            return
+        if self._hover:
+            self.setStyleSheet(
+                f"AppleMenuItem {{ background-color: {self.__ACTIVE_BG}; "
+                f"color: {C['text_primary']}; font-size: 13px; "
+                f"border-radius: 6px; margin: 1px 6px; }}"
+            )
+        else:
+            self.setStyleSheet(
+                f"AppleMenuItem {{ background-color: transparent; "
+                f"color: {C['text_primary']}; font-size: 13px; "
+                f"border-radius: 6px; margin: 1px 6px; }}"
+            )
+
+    def enterEvent(self, e): self._hover = True; self._style()
+    def leaveEvent(self, e): self._hover = False; self._style()
+    def mouseReleaseEvent(self, e):
+        if e.button() == Qt.LeftButton and not self._is_sep:
+            self.clicked.emit()
+
+
+class AppleMenu(QWidget):
+    """Apple 风格弹出菜单：圆角背景 + 像素级阴影边框"""
+    MENU_WIDTH = 180
+    CORNER = 8
+
+    def __init__(self, parent=None):
+        super().__init__(None, Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.setFixedWidth(self.MENU_WIDTH)
+        self._items: list[AppleMenuItem] = []
+
+    def add_item(self, text: str) -> AppleMenuItem:
+        item = AppleMenuItem(text)
+        self._items.append(item)
+        return item
+
+    def add_separator(self):
+        sep = AppleMenuItem("", is_separator=True)
+        self._items.append(sep)
+
+    def build(self):
+        """构建内部布局，计算总高度"""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(0)
+        for it in self._items:
+            if it._is_sep:
+                sep_w = QWidget()
+                sep_w.setFixedHeight(9)
+                sep_w.setStyleSheet(f"border-top: 1px solid {C['border']}; margin: 4px 6px;")
+                layout.addWidget(sep_w)
+            else:
+                layout.addWidget(it)
+                it.clicked.connect(self.close)
+        h = sum(it.height() if not it._is_sep else 9 for it in self._items) + 12
+        self.setFixedHeight(h)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        # 外侧微阴影边框
+        p.setBrush(QColor(0, 0, 0, 40))
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), self.CORNER, self.CORNER)
+        # 主背景
+        p.setBrush(QColor(C["bg_card"]))
+        p.drawRoundedRect(self.rect().adjusted(2, 2, -2, -2), self.CORNER - 1, self.CORNER - 1)
+        # 细边框
+        p.setPen(QPen(QColor(C["border"]), 0.5))
+        p.setBrush(Qt.NoBrush)
+        p.drawRoundedRect(QRectF(1.5, 1.5, self.width() - 3, self.height() - 3), self.CORNER, self.CORNER)
+        p.end()
+
+    def show_at(self, pos: QPoint):
+        self.build()
+        self.move(pos)
+        self.show()
+        QTimer.singleShot(100, self._install_close_filter)
+
+    def _install_close_filter(self):
+        QtW.QApplication.instance().installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.MouseButtonPress:
+            gp = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
+            if not self.geometry().contains(gp):
+                self.close()
+                return True
+        return super().eventFilter(obj, event)
+
+    def closeEvent(self, event):
+        QtW.QApplication.instance().removeEventFilter(self)
+        super().closeEvent(event)
+
+
+# ══════════════════════════════════════════════════════════════
 # EdgeResizeWidget — 透明窗口边缘 resize 手柄（startSystemResize）
 # ══════════════════════════════════════════════════════════════
 # 原理：在 centralWidget 最上层放置 8px 宽的透明 QWidget，
@@ -333,26 +455,26 @@ class SessionItem(QWidget):
         self._index = index
         self._active = False
         self._hover = False
-        # 48px 放不下三行文字，时间会被裁掉；调整为 54px
-        self.setFixedHeight(54)
+        # 48px 放不下三行文字，时间会被裁掉；调整为 58px（12bold + 9 + 8 + spacing + margins）
+        self.setFixedHeight(58)
         self.setCursor(Qt.PointingHandCursor)
         self.setMouseTracking(True)
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._show_context_menu)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 7, 10, 5)
-        layout.setSpacing(1)
+        layout.setContentsMargins(10, 6, 10, 4)
+        layout.setSpacing(5)
 
         self._title_lbl = QLabel(title[:24])
-        self._title_lbl.setFont(font(12))
+        self._title_lbl.setFont(font(12, bold=True))
+        self._title_lbl.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         layout.addWidget(self._title_lbl)
 
         self._preview_lbl = QLabel(preview[:40])
-        self._preview_lbl.setFont(font(10))
+        self._preview_lbl.setFont(font(9))
+        self._preview_lbl.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         layout.addWidget(self._preview_lbl)
-
-        self._time_lbl = QLabel(time_str)
-        self._time_lbl.setFont(font(9))
-        layout.addWidget(self._time_lbl)
 
         self._refresh_style()
         theme.changed.connect(self._refresh_style)
@@ -367,7 +489,6 @@ class SessionItem(QWidget):
         else:
             self._title_lbl.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
             self._preview_lbl.setStyleSheet(f"color: {C['text_muted']}; background: transparent;")
-        self._time_lbl.setStyleSheet(f"color: {C['text_muted']}; background: transparent;")
         self.update()  # 触发 paintEvent 重绘圆角背景
 
     def paintEvent(self, event):
@@ -388,12 +509,15 @@ class SessionItem(QWidget):
         p.setPen(Qt.NoPen)
         p.drawRoundedRect(rect, r, r)
 
-        # 边框
+        # 边框：1px 内缩确保笔完全在 widget 内，四边厚度一致（无裁切/无 sub-pixel 漂移）
         border_color = C["accent"] if self._active else C["border"]
-        pen = QPen(QColor(border_color), 0.5, Qt.SolidLine)
+        pen = QPen(QColor(border_color), 1.0, Qt.SolidLine)
+        pen.setJoinStyle(Qt.RoundJoin)
         p.setPen(pen)
         p.setBrush(Qt.NoBrush)
-        p.drawRoundedRect(rect.adjusted(0.25, 0.25, -0.25, -0.25), r, r)
+        border_rect = QRectF(1.0, 1.0, rect.width() - 2.0, rect.height() - 2.0)
+        border_r = max(r - 1.0, 0.5)
+        p.drawRoundedRect(border_rect, border_r, border_r)
 
         p.end()
 
@@ -415,6 +539,41 @@ class SessionItem(QWidget):
         if event.button() == Qt.LeftButton:
             self.clicked.emit(self._index)
         super().mousePressEvent(event)
+
+    def _show_context_menu(self, pos):
+        """右键菜单：Apple 风格"""
+        m = AppleMenu()
+        new_item = m.add_item("新会话")
+        proj_item = m.add_item("项目会话")
+        m.add_separator()
+        rename_item = m.add_item("重命名")
+        m.add_separator()
+        del_item = m.add_item("删除会话")
+        # 点击 → 关闭菜单 → 下一帧执行业务（纯开关模式）
+        new_item.clicked.connect(lambda: self._handle_menu_click("new"))
+        proj_item.clicked.connect(lambda: self._handle_menu_click("project"))
+        rename_item.clicked.connect(lambda: self._handle_menu_click("rename"))
+        del_item.clicked.connect(lambda: self._handle_menu_click("delete"))
+        m.show_at(self.mapToGlobal(pos))
+        self._active_menu = m
+
+    def _handle_menu_click(self, action: str):
+        """菜单项点击 → close() → 下一帧执行，主循环不阻塞"""
+        self._active_menu.close()
+        QTimer.singleShot(0, lambda a=action: self._execute_menu_action(a))
+
+    def _execute_menu_action(self, action: str):
+        """菜单动作执行（菜单已关闭，主循环空闲）"""
+        if action == "project":
+            path = QFileDialog.getExistingDirectory(None, "选择项目路径")
+            if path:
+                pass  # 占位：主线接入时创建项目会话
+        elif action == "new":
+            pass
+        elif action == "rename":
+            pass
+        elif action == "delete":
+            pass
 
 
 class SessionGroup(QWidget):
@@ -460,6 +619,13 @@ class SessionGroup(QWidget):
         self._cnt_lbl.setStyleSheet(f"color: {C['text_muted']}; background: transparent;")
         hl.addWidget(self._cnt_lbl)
 
+        self._add_btn = QLabel("+")
+        self._add_btn.setFont(font(11, bold=True))
+        self._add_btn.setCursor(Qt.PointingHandCursor)
+        self._add_btn.setStyleSheet(f"color: {C['text_muted']}; background: transparent; padding: 0px 2px;")
+        self._add_btn.mousePressEvent = lambda e: None  # 占位，主线接入时改为 emit new_session_requested
+        hl.addWidget(self._add_btn)
+
         self._hdr.mousePressEvent = lambda e: self._toggle() if e.button() == Qt.LeftButton else None
         layout.addWidget(self._hdr)
 
@@ -477,6 +643,7 @@ class SessionGroup(QWidget):
         self._toggle_btn.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
         self._name_lbl.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
         self._cnt_lbl.setStyleSheet(f"color: {C['text_muted']}; background: transparent;")
+        self._add_btn.setStyleSheet(f"color: {C['text_muted']}; background: transparent; padding: 0px 2px;")
 
     def add_session(self, item: SessionItem):
         item.clicked.connect(self.session_clicked.emit)
@@ -766,6 +933,7 @@ class LeftPanel(QWidget):
         self._groups: list[SessionGroup] = []
         self._all_items: list[SessionItem] = []
         self._active_idx = 0
+        self._file_mode = False
         self._setup_ui()
         theme.changed.connect(self._refresh_theme)
 
@@ -823,6 +991,23 @@ class LeftPanel(QWidget):
         stl.addWidget(self._search_btn)
         stl.addWidget(self._new_btn)
         stl.addWidget(self._more_btn)
+
+        # 搜索框（初始隐藏，点击🔍后展开占满 new_btn + more_btn 宽度）
+        self._search_input = QLineEdit()
+        self._search_input.setFixedHeight(22)
+        self._search_input.setPlaceholderText("搜索会话...")
+        self._search_input.hide()
+        stl.addWidget(self._search_input, 1)
+
+        # 搜索关闭按钮（初始隐藏）
+        self._search_close = self._make_small_btn("✕", 28, 22, C["text_muted"], 10)
+        self._search_close.hide()
+        stl.addWidget(self._search_close)
+
+        self._search_btn.clicked.connect(self._toggle_search)
+        self._search_close.clicked.connect(self._close_search)
+        self._more_btn.clicked.connect(self._on_more_clicked)
+
         self._tool_stack.addWidget(sess_tools)
 
         layout.addWidget(self._tool_stack)
@@ -852,6 +1037,33 @@ class LeftPanel(QWidget):
         self._sess_layout.addStretch()
         self._sess_scroll.setWidget(sess_widget)
         self._stack.addWidget(self._sess_scroll)
+
+        # 文件管理器页面（索引 2）
+        self._file_page = QWidget()
+        fpl = QVBoxLayout(self._file_page)
+        fpl.setContentsMargins(6, 4, 6, 4)
+        fpl.setSpacing(6)
+        path_row = QHBoxLayout()
+        path_row.setSpacing(6)
+        self._file_back_btn = QPushButton("←")
+        self._file_back_btn.setFixedSize(28, 22)
+        self._file_back_btn.setCursor(Qt.PointingHandCursor)
+        self._file_path_lbl = QLabel("agent_workbench")
+        self._file_path_lbl.setFont(font(10))
+        self._file_path_lbl.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
+        path_row.addWidget(self._file_back_btn)
+        path_row.addWidget(self._file_path_lbl, 1)
+        fpl.addLayout(path_row)
+        self._file_list = QListWidget()
+        self._file_list.addItems(["📁 agent_engine", "📁 core", "📁 services", "📁 ui", "📁 v4", "📁 experiments"])
+        self._file_list.addItems(["📄 main.py", "📄 requirements.txt", "📄 README.md", "📄 CHANGELOG.md"])
+        self._file_list.setStyleSheet(
+            f"QListWidget {{ background: transparent; border: none; color: {C['text_primary']}; font-size: 11px; }}"
+            f"QListWidget::item {{ padding: 4px 8px; border-radius: 4px; }}"
+            f"QListWidget::item:hover {{ background: {C['bg_hover']}; }}"
+        )
+        fpl.addWidget(self._file_list)
+        self._stack.addWidget(self._file_page)
 
         self._stack.setCurrentIndex(1)
         layout.addWidget(self._stack, 1)
@@ -927,6 +1139,16 @@ class LeftPanel(QWidget):
         self._more_btn.setStyleSheet(
             f"QPushButton {{ background-color: {C['bg_primary']}; color: {C['text_muted']}; "
             f"border: 0.5px solid {C['border']}; border-radius: 6px; font-size: 11px; font-weight: 500; }}"
+            f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
+        )
+        # 搜索输入框 & 关闭按钮（主题适配）
+        self._search_input.setStyleSheet(
+            f"QLineEdit {{ background-color: {C['bg_primary']}; color: {C['text_primary']}; "
+            f"border: 0.5px solid {C['accent']}; border-radius: 6px; padding: 2px 8px; font-size: 11px; }}"
+        )
+        self._search_close.setStyleSheet(
+            f"QPushButton {{ background-color: {C['bg_primary']}; color: {C['text_muted']}; "
+            f"border: 0.5px solid {C['border']}; border-radius: 6px; font-size: 10px; font-weight: 500; }}"
             f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
         )
         # 底部按钮
@@ -1006,6 +1228,7 @@ class LeftPanel(QWidget):
     def _switch_tab(self, tab: str):
         self._current_tab = tab
         is_func = (tab == "功能")
+        self._file_mode = False
         self._stack.setCurrentIndex(0 if is_func else 1)
         self._tool_stack.setCurrentIndex(0 if is_func else 1)
         self._func_btn.setChecked(is_func)
@@ -1020,6 +1243,34 @@ class LeftPanel(QWidget):
                 f"font-size: 11px; font-weight: {fw}; }}"
                 f"QPushButton:hover {{ background-color: {C['btn_hover']}; }}"
             )
+
+    def _toggle_search(self):
+        """展开/收起会话搜索框"""
+        if self._new_btn.isVisible():
+            self._new_btn.hide()
+            self._more_btn.hide()
+            self._search_input.show()
+            self._search_close.show()
+            self._search_input.setFocus()
+        else:
+            self._close_search()
+
+    def _close_search(self):
+        """关闭搜索框，恢复工具行"""
+        self._search_input.clear()
+        self._search_input.hide()
+        self._search_close.hide()
+        self._new_btn.show()
+        self._more_btn.show()
+
+    def _on_more_clicked(self):
+        """切换文件管理器 / 会话列表"""
+        if self._file_mode:
+            self._file_mode = False
+            self._stack.setCurrentIndex(1)
+        else:
+            self._file_mode = True
+            self._stack.setCurrentIndex(2)
 
     def _populate_sessions(self):
         """填充 Demo 分组会话数据（对应 SVG 设计稿）。"""

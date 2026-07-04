@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.6-alpha (2026-07-04) — 左侧栏交互系统：右键菜单/搜索框/文件管理器/分组加号
+
+### feat/ui
+- **SessionItem 右键菜单**：Apple 风格自定义菜单（新会话/项目会话/重命名/删除会话），异步 close→action 零延迟模式
+- **搜索框展开**：点击🔍 → QLineEdit 展开占满工具行，✕/ESC 关闭
+- **文件管理器**：点击 `...` → QStackedWidget 切换到文件浏览页（路径栏 + 文件列表）
+- **SessionGroup 加号**：分组头右侧 "+" 标签，占位新建会话
+- **AppleMenu 组件**：圆角背景 + 微阴影 + hover 高亮的自定义弹出菜单类
+- **SessionItem 布局优化**：58px 固定高度、12bold/9 两行、spacing 5px、AlignTop 对齐
+- **PaintEvent 边框修复**：1px 整数笔宽 + 内缩整数坐标 + border_r 同步缩小，四边描边一致
+
 ## v0.5-alpha (2026-07-04) — 补丁注入 + 边缘 resize + 响应式布局 + 左侧折叠 + 选中框
 
 ### feat/ui
