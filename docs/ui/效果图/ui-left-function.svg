@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 720" style="font-family: -apple-system, 'Segoe UI', sans-serif; background: #16213e;">
+  <rect width="220" height="720" fill="#16213e"/>
+
+  <rect x="14" y="12" width="92" height="22" rx="6" fill="#007acc"/>
+  <text x="25" y="27" fill="#fff" font-size="11" font-weight="600">功能</text>
+  <rect x="110" y="12" width="92" height="22" rx="6" fill="#2a2a4a"/>
+  <text x="128" y="27" fill="#a0a0b0" font-size="11" font-weight="500">会话</text>
+
+  <rect x="14" y="42" width="156" height="22" rx="6" fill="#1a1a2e" stroke="#2a2a4a" stroke-width="0.5"/>
+  <text x="22" y="57" fill="#a0a0b0" font-size="12">🔍</text>
+
+  <rect x="176" y="42" width="30" height="22" rx="6" fill="#0f3460" stroke="#007acc" stroke-width="0.5"/>
+  <text x="191" y="58" fill="#007acc" font-size="13" text-anchor="middle" font-weight="600">+</text>
+
+  <text x="14" y="88" fill="#6a6a8a" font-size="9" font-weight="600" letter-spacing="0.5">工具</text>
+  <rect x="14" y="94" width="192" height="24" rx="4" fill="#0f3460" stroke="#2a2a4a" stroke-width="0.5"/>
+  <circle cx="26" cy="106" r="3" fill="#4ec9b0"/>
+  <text x="36" y="110" fill="#e0e0e0" font-size="11">run_command</text>
+  <rect x="176" y="100" width="26" height="12" rx="6" fill="#4ec9b0" opacity="0.2"/>
+  <text x="189" y="110" fill="#4ec9b0" font-size="9" text-anchor="middle">开</text>
+  <rect x="14" y="122" width="192" height="24" rx="4" fill="#0f3460" stroke="#2a2a4a" stroke-width="0.5"/>
+  <circle cx="26" cy="134" r="3" fill="#6a6a6a"/>
+  <text x="36" y="138" fill="#a0a0b0" font-size="11">grep_files</text>
+  <rect x="176" y="128" width="26" height="12" rx="6" fill="#6a6a6a" opacity="0.2"/>
+  <text x="189" y="138" fill="#6a6a6a" font-size="9" text-anchor="middle">关</text>
+  <rect x="14" y="150" width="192" height="24" rx="4" fill="#0f3460" stroke="#2a2a4a" stroke-width="0.5"/>
+  <circle cx="26" cy="162" r="3" fill="#4ec9b0"/>
+  <text x="36" y="166" fill="#e0e0e0" font-size="11">write_file</text>
+  <rect x="176" y="156" width="26" height="12" rx="6" fill="#4ec9b0" opacity="0.2"/>
+  <text x="189" y="166" fill="#4ec9b0" font-size="9" text-anchor="middle">开</text>
+
+  <line x1="14" y1="186" x2="206" y2="186" stroke="#2a2a4a" stroke-width="0.5"/>
+
+  <text x="14" y="204" fill="#6a6a8a" font-size="9" font-weight="600" letter-spacing="0.5">MCP</text>
+  <rect x="14" y="210" width="192" height="24" rx="4" fill="#0f3460" stroke="#2a2a4a" stroke-width="0.5"/>
+  <circle cx="26" cy="222" r="3" fill="#4ec9b0"/>
+  <text x="36" y="226" fill="#e0e0e0" font-size="11">GitHub</text>
+  <text x="190" y="226" fill="#4ec9b0" font-size="9" text-anchor="end">已连接</text>
+  <rect x="14" y="238" width="192" height="24" rx="4" fill="#0f3460" stroke="#2a2a4a" stroke-width="0.5"/>
+  <circle cx="26" cy="250" r="3" fill="#6a6a6a"/>
+  <text x="36" y="254" fill="#a0a0b0" font-size="11">Notion</text>
+  <text x="190" y="254" fill="#6a6a6a" font-size="9" text-anchor="end">未连接</text>
+
+  <line x1="14" y1="274" x2="206" y2="274" stroke="#2a2a4a" stroke-width="0.5"/>
+
+  <text x="14" y="292" fill="#6a6a8a" font-size="9" font-weight="600" letter-spacing="0.5">技能</text>
+  <rect x="14" y="298" width="192" height="26" rx="4" fill="#0f3460" stroke="#2a2a4a" stroke-width="0.5"/>
+  <text x="24" y="316" fill="#a0a0b0" font-size="11">⚡ archive</text>
+  <rect x="14" y="328" width="192" height="26" rx="4" fill="#0f3460" stroke="#2a2a4a" stroke-width="0.5"/>
+  <text x="24" y="346" fill="#a0a0b0" font-size="11">⚡ handoff</text>
+  <rect x="14" y="358" width="192" height="26" rx="4" fill="#0f3460" stroke="#2a2a4a" stroke-width="0.5"/>
+  <text x="24" y="376" fill="#a0a0b0" font-size="11">⚡ gitops</text>
+
+  <line x1="14" y1="396" x2="206" y2="396" stroke="#2a2a4a" stroke-width="0.5"/>
+
+  <text x="14" y="414" fill="#6a6a8a" font-size="9" font-weight="600" letter-spacing="0.5">自动化</text>
+  <rect x="14" y="420" width="192" height="24" rx="4" fill="#0f3460" stroke="#2a2a4a" stroke-width="0.5"/>
+  <circle cx="26" cy="432" r="3" fill="#dcdcaa"/>
+  <text x="36" y="436" fill="#e0e0e0" font-size="11">每日日报</text>
+  <text x="190" y="436" fill="#a0a0b0" font-size="9" text-anchor="end">08:00</text>
+
+  <line x1="14" y1="700" x2="206" y2="700" stroke="#2a2a4a" stroke-width="0.5"/>
+  <rect x="14" y="706" width="32" height="12" rx="6" fill="#2a2a4a"/>
+  <text x="30" y="715" fill="#a0a0b0" font-size="9" text-anchor="middle">🌙</text>
+  <rect x="56" y="706" width="32" height="12" rx="6" fill="#2a2a4a"/>
+  <text x="72" y="715" fill="#a0a0b0" font-size="9" text-anchor="middle">⚙</text>
+</svg>

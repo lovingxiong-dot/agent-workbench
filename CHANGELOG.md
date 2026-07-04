@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.5-alpha (2026-07-04) — 补丁注入 + 边缘 resize + 响应式布局 + 左侧折叠 + 选中框
+
+### feat/ui
+- **InvisibleResizeHandle 补丁注入**：QSplitter handleWidth=1 时叠加 4px 透明拖拽热区，视觉 1px 交互 4px
+- **EdgeResizeWidget 窗口边缘 resize**：8 个透明边角手柄，`startSystemResize()` 驱动，上/下/左/右/四角全支持
+- **HeaderBar 左侧折叠按钮**：对称于右侧折叠键，隐藏/显示 LeftPanel，中栏自动延伸/收缩
+- **HeaderBar 双击最大化**：`mouseDoubleClickEvent` → `_toggle_maximize`
+- **HeaderBar 窗口拖动**：拖动逻辑从 MainWindow 移至 HeaderBar
+
+### fix/ui
+- **InputArea 响应式改造**：`QHBoxLayout` + stretch=1 替代 `setGeometry(0,0,362,56)`，文本框自动适配窗口宽度
+- **QSplitter 拖拽联动**：`splitterMoved` → `_on_splitter_moved` → 聊天内容自动重绘
+- **InputArea 最小高度保护**：`setMinimumHeight(104)`，标签行 + 发送按钮不被压缩隐藏
+- **SessionItem 选中框**：`paintEvent` 绘制单个圆角矩形（rx=6），统一包围标题+预览+时间
+
+### refactor
+- 移除失效的 nativeEvent+WM_NCHITTEST 方案（`FramelessWindowHint` 移除 `WS_THICKFRAME` 导致不可用）
+- 移除 ctypes、QSizeGrip 相关代码
+
 ## v0.4-alpha (2026-07-02) — UI 模板图标 SVG 化 + 标签背景框恢复 + 输入区拖拽 + 防抖 + 交接
 
 ### feat/ui

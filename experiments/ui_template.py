@@ -1,5 +1,5 @@
 """
-ui_template.py — Agent Workbench 纯 UI 模版（零业务逻辑）
+ui_template.py — Agent Workbench 纯 UI 模版（零业务逻辑）v0.5-alpha
 
 三栏 QSplitter 布局，精确对齐 SVG 设计稿（ui-full-dark.svg 1024×720）：
   左 220px | 中 stretch | 右 400px
@@ -9,6 +9,8 @@ ui_template.py — Agent Workbench 纯 UI 模版（零业务逻辑）
   - 中栏标题栏三按钮 + 聊天区 QGraphicsView 像素级 Demo 内容
   - 右栏标签栏 + 最近文件 + 终端/编辑器占位
   - 左栏/右栏独立折叠展开
+  - QSplitter InvisibleResizeHandle 透明拖拽热区（4px交互宽度）
+  - 窗口边缘 resize（WM_NCHITTEST 8px 边缘 + SizeGrip 右下角）
 
 纯 UI 层，所有数据为 Demo 硬编码。
 """
@@ -19,10 +21,10 @@ from PySide6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsItem, QSizePolicy,
     QFrame, QScrollArea, QMenu,
 )
-from PySide6.QtCore import Qt, Signal, QRectF, QPointF, QSize, QTimer, QObject
+from PySide6.QtCore import Qt, Signal, QRectF, QPointF, QSize, QTimer, QObject, QEvent
 from PySide6.QtGui import (
     QPainter, QPainterPath, QPen, QBrush, QColor, QFont, QFontMetrics,
-    QPalette, QAction, QIcon, QPixmap, QLinearGradient,
+    QPalette, QAction, QIcon, QPixmap, QLinearGradient, QCursor,
 )
 
 # ══════════════════════════════════════════════════════════════
@@ -152,6 +154,171 @@ def mono_font(size: int) -> QFont:
 
 
 # ══════════════════════════════════════════════════════════════
+# InvisibleResizeHandle — 透明拖拽热区（解决 QSplitter handleWidth=1 无法拖拽）
+# ══════════════════════════════════════════════════════════════
+# 原理：在 QSplitter 的 handle 位置叠加透明 QWidget，扩展交互热区至 4px，
+#       视觉上 handleWidth 仍为 1px，但鼠标在 handle 左右各 2px 内均可触发拖拽。
+# 零侵入：不修改 QSplitter 任何属性，仅叠加一层透明控件。
+
+class InvisibleResizeHandle(QWidget):
+    """透明拖拽热区控件 —— 放置在 QSplitter handle 位置，提供更宽的交互区域。"""
+    HOT_ZONE_WIDTH: int = 4  # 热区宽度（像素），建议 4-6px
+
+    def __init__(self, splitter: QSplitter, handle_index: int, parent=None):
+        super().__init__(parent or splitter)
+        self._splitter = splitter
+        self._handle_index = handle_index
+        self._is_horizontal = (splitter.orientation() == Qt.Orientation.Horizontal)
+        self._dragging = False
+        self._start_pos = None
+        self._start_sizes = []
+        self._start_global = None
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        if self._is_horizontal:
+            self.setCursor(QCursor(Qt.CursorShape.SizeHorCursor))
+        else:
+            self.setCursor(QCursor(Qt.CursorShape.SizeVerCursor))
+        self._update_geometry()
+        splitter.splitterMoved.connect(self._on_splitter_moved)
+        splitter.installEventFilter(self)
+
+    def _on_splitter_moved(self, pos: int, index: int):
+        if index == self._handle_index:
+            self._update_geometry()
+
+    def eventFilter(self, watched, event):
+        if watched == self._splitter and event.type() == QEvent.Type.Resize:
+            self._update_geometry()
+        return super().eventFilter(watched, event)
+
+    def _update_geometry(self):
+        handle = self._splitter.handle(self._handle_index)
+        if not handle:
+            self.hide()
+            return
+        handle_rect = handle.geometry()
+        splitter_rect = self._splitter.rect()
+        if self._is_horizontal:
+            center_x = handle_rect.center().x()
+            half_w = self.HOT_ZONE_WIDTH // 2
+            x = max(0, center_x - half_w)
+            y = 0
+            w = self.HOT_ZONE_WIDTH
+            h = splitter_rect.height()
+            if x + w > splitter_rect.width():
+                x = splitter_rect.width() - w
+        else:
+            center_y = handle_rect.center().y()
+            half_h = self.HOT_ZONE_WIDTH // 2
+            x = 0
+            y = max(0, center_y - half_h)
+            w = splitter_rect.width()
+            h = self.HOT_ZONE_WIDTH
+            if y + h > splitter_rect.height():
+                y = splitter_rect.height() - h
+        self.setGeometry(x, y, w, h)
+        self.raise_()
+        self.show()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._dragging = True
+            self._start_global = event.globalPosition().toPoint()
+            self._start_sizes = list(self._splitter.sizes())
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if not self._dragging or self._start_global is None:
+            return
+        delta = event.globalPosition().toPoint() - self._start_global
+        delta_val = delta.x() if self._is_horizontal else delta.y()
+        if delta_val == 0:
+            return
+        new_sizes = list(self._start_sizes)
+        widget_a = self._splitter.widget(self._handle_index)
+        widget_b = self._splitter.widget(self._handle_index + 1)
+        min_a = widget_a.minimumWidth() if self._is_horizontal else widget_a.minimumHeight()
+        min_b = widget_b.minimumWidth() if self._is_horizontal else widget_b.minimumHeight()
+        new_sizes[self._handle_index] += delta_val
+        new_sizes[self._handle_index + 1] -= delta_val
+        # 边界检查
+        if new_sizes[self._handle_index] < min_a:
+            diff = min_a - new_sizes[self._handle_index]
+            new_sizes[self._handle_index] = min_a
+            new_sizes[self._handle_index + 1] -= diff
+        if new_sizes[self._handle_index + 1] < min_b:
+            diff = min_b - new_sizes[self._handle_index + 1]
+            new_sizes[self._handle_index + 1] = min_b
+            new_sizes[self._handle_index] -= diff
+        self._splitter.setSizes(new_sizes)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and self._dragging:
+            self._dragging = False
+            self._start_global = None
+            self._start_sizes = []
+            event.accept()
+
+    def enterEvent(self, event):
+        if self._is_horizontal:
+            self.setCursor(QCursor(Qt.CursorShape.SizeHorCursor))
+        else:
+            self.setCursor(QCursor(Qt.CursorShape.SizeVerCursor))
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        if not self._dragging:
+            self.unsetCursor()
+        super().leaveEvent(event)
+
+
+def install_invisible_handles(splitter: QSplitter, hot_zone_width: int = 4):
+    """为 QSplitter 的所有 handle 安装透明拖拽热区。
+
+    使用示例:
+        splitter = QSplitter(Qt.Horizontal)
+        splitter.setHandleWidth(1)  # 视觉上保持 1px
+        install_invisible_handles(splitter)  # 启用 4px 拖拽热区
+    """
+    InvisibleResizeHandle.HOT_ZONE_WIDTH = hot_zone_width
+    for i in range(splitter.count() - 1):
+        handle = InvisibleResizeHandle(splitter, i, parent=splitter)
+
+
+# ══════════════════════════════════════════════════════════════
+# EdgeResizeWidget — 透明窗口边缘 resize 手柄（startSystemResize）
+# ══════════════════════════════════════════════════════════════
+# 原理：在 centralWidget 最上层放置 8px 宽的透明 QWidget，
+#       mousePressEvent 调用 windowHandle().startSystemResize()。
+# Qt 跨平台 API，不依赖 Windows WS_THICKFRAME 样式。
+
+class EdgeResizeWidget(QWidget):
+    """透明窗口边缘 resize 手柄。通过 place() 手动定位，支持 4 边 + 4 角。"""
+    SIZE = 8  # 边缘宽度（像素）
+
+    def __init__(self, edges, cursor_shape, parent=None):
+        super().__init__(parent)
+        self._edges = edges
+        self.setCursor(QCursor(cursor_shape))
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
+        self.setMouseTracking(True)
+
+    def place(self, x, y, w, h):
+        """手动定位 + 置顶到最上层 Z 序。"""
+        self.setGeometry(x, y, w, h)
+        self.raise_()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            win = self.window()
+            if win and win.windowHandle():
+                win.windowHandle().startSystemResize(self._edges)
+
+
+# ══════════════════════════════════════════════════════════════
 # 左栏：ConversationListPanel（220px）
 # ══════════════════════════════════════════════════════════════
 
@@ -165,9 +332,11 @@ class SessionItem(QWidget):
         super().__init__(parent)
         self._index = index
         self._active = False
+        self._hover = False
         # 48px 放不下三行文字，时间会被裁掉；调整为 54px
         self.setFixedHeight(54)
         self.setCursor(Qt.PointingHandCursor)
+        self.setMouseTracking(True)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 7, 10, 5)
@@ -187,25 +356,56 @@ class SessionItem(QWidget):
 
         self._refresh_style()
         theme.changed.connect(self._refresh_style)
+        # 清除可能残留的 QSS，由 paintEvent 全权绘制
+        self.setStyleSheet("")
 
     def _refresh_style(self):
-        # SVG ui-full-dark.svg line 31-44：active 标题 #e0e0e0、预览 #a0a0b0；inactive 标题 #a0a0b0、预览 #6a6a8a
+        """应用主题颜色到子标签，不直接设 SessionItem 样式（由 paintEvent 绘制）。"""
         if self._active:
-            self.setStyleSheet(
-                f"SessionItem {{ background-color: {C['bg_card_selected']}; "
-                f"border: 0.5px solid {C['accent']}; border-radius: 6px; }}"
-            )
             self._title_lbl.setStyleSheet(f"color: {C['text_primary']}; background: transparent;")
             self._preview_lbl.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
         else:
-            self.setStyleSheet(
-                f"SessionItem {{ background-color: {C['bg_card']}; "
-                f"border: 0.5px solid {C['border']}; border-radius: 6px; }}"
-                f"SessionItem:hover {{ background-color: {C['bg_hover']}; }}"
-            )
             self._title_lbl.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
             self._preview_lbl.setStyleSheet(f"color: {C['text_muted']}; background: transparent;")
         self._time_lbl.setStyleSheet(f"color: {C['text_muted']}; background: transparent;")
+        self.update()  # 触发 paintEvent 重绘圆角背景
+
+    def paintEvent(self, event):
+        """自定义绘制：单个圆角矩形背景（含 hover）+ 选中边框，统一包围全部内容。"""
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        rect = self.rect()
+        r = 6.0  # SVG rx=6
+
+        # 背景填充（选中 > hover > 普通）
+        if self._active:
+            bg = C["bg_card_selected"]
+        elif self._hover:
+            bg = C["bg_hover"]
+        else:
+            bg = C["bg_card"]
+        p.setBrush(QColor(bg))
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(rect, r, r)
+
+        # 边框
+        border_color = C["accent"] if self._active else C["border"]
+        pen = QPen(QColor(border_color), 0.5, Qt.SolidLine)
+        p.setPen(pen)
+        p.setBrush(Qt.NoBrush)
+        p.drawRoundedRect(rect.adjusted(0.25, 0.25, -0.25, -0.25), r, r)
+
+        p.end()
+
+    def enterEvent(self, event):
+        self._hover = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hover = False
+        self.update()
+        super().leaveEvent(event)
 
     def set_active(self, active: bool):
         self._active = active
@@ -1239,9 +1439,11 @@ class ChatScene(QGraphicsScene):
 # ══════════════════════════════════════════════════════════════
 
 class HeaderBar(QWidget):
+    left_expand_toggled = Signal()
     expand_toggled = Signal()
     search_clicked = Signal()
     more_clicked = Signal()
+    double_clicked = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1254,9 +1456,15 @@ class HeaderBar(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
+        # 左侧折叠按钮（与右侧对称）
+        self._left_expand_btn = self._icon_btn("折叠左侧面板")
+        self._left_expand_btn.clicked.connect(self.left_expand_toggled.emit)
+        layout.addWidget(self._left_expand_btn)
+        layout.addSpacing(4)
+
         # 双行标题（SVG: title y=16, env y=30）
         title_block = QVBoxLayout()
-        title_block.setContentsMargins(20, 4, 0, 4)
+        title_block.setContentsMargins(6, 4, 0, 4)
         title_block.setSpacing(2)
 
         self._title_lbl = QLabel("v4 架构升级")
@@ -1326,12 +1534,18 @@ class HeaderBar(QWidget):
             <circle cx="10" cy="10" r="1.2" fill="{stroke}"/>
             <circle cx="14" cy="10" r="1.2" fill="{stroke}"/>
         </svg>'''
+        # 左侧折叠图标: 窗格框体 + 左侧纵向分割线
+        left_expand_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18">
+            <rect x="2" y="3" width="14" height="12" rx="2" fill="none" stroke="{stroke}" stroke-width="1.5"/>
+            <line x1="6" y1="5.5" x2="6" y2="12.5" stroke="{stroke}" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>'''
         # 右侧折叠图标: 窗格框体 + 纵向分割线，表达"右侧面板可折叠"
         expand_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18">
             <rect x="2" y="3" width="14" height="12" rx="2" fill="none" stroke="{stroke}" stroke-width="1.5"/>
             <line x1="12" y1="5.5" x2="12" y2="12.5" stroke="{stroke}" stroke-width="1.2" stroke-linecap="round"/>
         </svg>'''
-        for btn, svg in [(self._search_btn, search_svg),
+        for btn, svg in [(self._left_expand_btn, left_expand_svg),
+                         (self._search_btn, search_svg),
                          (self._more_btn, more_svg),
                          (self._expand_btn, expand_svg)]:
             lbl = btn.findChild(QLabel, "icon_lbl")
@@ -1341,6 +1555,26 @@ class HeaderBar(QWidget):
                 f"QPushButton {{ background-color: {C['btn_bg']}; border: none; border-radius: 4px; }}"
                 f"QPushButton:hover {{ background-color: {C['bg_hover']}; }}"
             )
+
+    # ── 窗口拖动 & 双击最大化 ──
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_pos = event.globalPosition().toPoint()
+
+    def mouseMoveEvent(self, event):
+        if hasattr(self, "_drag_pos") and self._drag_pos and event.buttons() == Qt.MouseButton.LeftButton:
+            delta = event.globalPosition().toPoint() - self._drag_pos
+            win = self.window()
+            if win:
+                win.move(win.pos() + delta)
+            self._drag_pos = event.globalPosition().toPoint()
+
+    def mouseReleaseEvent(self, event):
+        self._drag_pos = None
+
+    def mouseDoubleClickEvent(self, event):
+        self.double_clicked.emit()
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1353,6 +1587,7 @@ class InputArea(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._setup_ui()
+        self.setMinimumHeight(104)  # 8+56+6+26+8 确保输入框+标签行不被裁剪
         theme.changed.connect(self._refresh_theme)
 
     def _setup_ui(self):
@@ -1360,44 +1595,45 @@ class InputArea(QWidget):
         root.setContentsMargins(20, 8, 20, 8)
         root.setSpacing(6)
 
-        # ── 输入框（SVG: x=241 y=660 w=362 h=56 rx=8；发送按钮叠在内部右侧）──
+        # ── 输入框（响应式：QTextEdit stretch=1 随窗口宽度自适应）──
         input_container = QWidget()
         input_container.setFixedHeight(56)
-        input_container.setStyleSheet("background-color: transparent;")
-        self._text_edit = QTextEdit(input_container)
-        self._text_edit.setPlaceholderText("输入 \"/\" 快速使用技能")
-        self._text_edit.setGeometry(0, 0, 362, 56)
-        self._text_edit.setFont(font(11))
+        ic_layout = QHBoxLayout(input_container)
+        ic_layout.setContentsMargins(0, 0, 0, 0)
+        ic_layout.setSpacing(0)
 
-        # ── 发送按钮 ──
-        self._send_btn = QPushButton(input_container)
-        self._send_btn.setFixedSize(24, 24)
-        self._send_btn.move(330, 16)
-        self._send_btn.setCursor(Qt.PointingHandCursor)
-        send_lbl = QLabel(self._send_btn)
-        send_lbl.setObjectName("send_icon")
-        send_lbl.move(0, 0)
-        self._send_btn.clicked.connect(self.send_clicked.emit)
+        self._text_edit = QTextEdit()
+        self._text_edit.setPlaceholderText("输入 \"/\" 快速使用技能")
+        self._text_edit.setFont(font(11))
+        ic_layout.addWidget(self._text_edit, 1)
 
         root.addWidget(input_container)
 
-        # ── 标签行（SVG: + r=10 at x=257,y=702; 模式 w=62 x=277; 模型 w=76 x=345）──
-        tag_row = QHBoxLayout()
-        tag_row.setContentsMargins(0, 0, 0, 0)
-        tag_row.setSpacing(8)
+        # ── 底部行：标签居左 + 发送按钮居右 ──
+        bottom_row = QHBoxLayout()
+        bottom_row.setContentsMargins(0, 0, 0, 0)
+        bottom_row.setSpacing(8)
 
         self._skill_btn = QPushButton("+")
         self._skill_btn.setFixedSize(20, 20)
         self._skill_btn.setCursor(Qt.PointingHandCursor)
-        tag_row.addWidget(self._skill_btn)
+        bottom_row.addWidget(self._skill_btn)
 
         self._mode_tag = self._make_tag("模式", "ask", 62)
         self._model_tag = self._make_tag("模型", "flash", 76)
-        tag_row.addWidget(self._mode_tag)
-        tag_row.addWidget(self._model_tag)
-        tag_row.addStretch()
+        bottom_row.addWidget(self._mode_tag)
+        bottom_row.addWidget(self._model_tag)
+        bottom_row.addStretch()
 
-        root.addLayout(tag_row)
+        # 发送按钮：输入框外，右下角
+        self._send_btn = QPushButton()
+        self._send_btn.setFixedSize(24, 24)
+        self._send_btn.setCursor(Qt.PointingHandCursor)
+        self._send_btn.setToolTip("发送")
+        self._send_btn.clicked.connect(self.send_clicked.emit)
+        bottom_row.addWidget(self._send_btn)
+
+        root.addLayout(bottom_row)
         self._refresh_theme()
 
     def _refresh_theme(self):
@@ -1405,18 +1641,17 @@ class InputArea(QWidget):
         self._text_edit.setStyleSheet(
             f"QTextEdit {{ background-color: {C['bg_input']}; color: {C['text_primary']}; "
             f"border: 0.5px solid {C['border']}; border-radius: 8px; "
-            f"padding: 8px 36px 8px 14px; font-size: 11px; }}"
+            f"padding: 8px 14px 8px 14px; font-size: 11px; }}"
         )
         self._send_btn.setStyleSheet(
             f"QPushButton {{ background-color: #34d399; border-radius: 8px; border: none; }}"
             f"QPushButton:hover {{ background-color: #2ecc71; }}"
         )
-        send_lbl = self._send_btn.findChild(QLabel, "send_icon")
-        if send_lbl:
-            send_svg = '''<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-                <path d="M 12 7 L 16 15 L 13 15 L 13 19 L 11 19 L 11 15 L 8 15 Z" fill="#0f1729"/>
-            </svg>'''
-            send_lbl.setPixmap(svg_icon(send_svg, 24, 24))
+        send_svg = '''<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+            <path d="M 12 7 L 16 15 L 13 15 L 13 19 L 11 19 L 11 15 L 8 15 Z" fill="#0f1729"/>
+        </svg>'''
+        self._send_btn.setIcon(QIcon(svg_icon(send_svg, 18, 18)))
+        self._send_btn.setIconSize(QSize(18, 18))
         self._skill_btn.setStyleSheet(
             f"QPushButton {{ background-color: {C['btn_bg']}; color: {C['text_secondary']}; "
             f"border: none; border-radius: 10px; font-size: 14px; font-weight: 500; }}"
@@ -1493,7 +1728,7 @@ class _ResizeHandle(QWidget):
     def mouseMoveEvent(self, event):
         if self._dragging and self._input:
             dy = event.globalPosition().toPoint().y() - self._start_y
-            new_input_h = max(50, min(300, self._start_h - dy))
+            new_input_h = max(104, min(300, self._start_h - dy))
             self._input.setFixedHeight(new_input_h)
 
     def mouseReleaseEvent(self, event):
@@ -1939,6 +2174,7 @@ class RightPanel(QWidget):
 # ══════════════════════════════════════════════════════════════
 
 class MainWindow(QMainWindow):
+
     def __init__(self):
         super().__init__(None, Qt.FramelessWindowHint)
         self.resize(1024, 720)
@@ -1952,6 +2188,7 @@ class MainWindow(QMainWindow):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._apply_rounded_mask()
+        self._update_edge_positions()
 
     def _setup_ui(self):
         central = QWidget()
@@ -1962,6 +2199,7 @@ class MainWindow(QMainWindow):
 
         self._splitter = QSplitter(Qt.Horizontal)
         self._splitter.setHandleWidth(1)
+        install_invisible_handles(self._splitter)  # 启用 4px 透明拖拽热区
 
         # 左栏
         self._left = LeftPanel()
@@ -1969,7 +2207,9 @@ class MainWindow(QMainWindow):
 
         # 中栏
         self._center = ChatArea()
+        self._center._header.left_expand_toggled.connect(self._toggle_left_panel)
         self._center._header.expand_toggled.connect(self._toggle_right_panel)
+        self._center._header.double_clicked.connect(self._toggle_maximize)
         self._splitter.addWidget(self._center)
 
         # 右栏
@@ -1981,11 +2221,44 @@ class MainWindow(QMainWindow):
         self._splitter.setStretchFactor(0, 0)
         self._splitter.setStretchFactor(1, 1)
         self._splitter.setStretchFactor(2, 0)
+        self._splitter.splitterMoved.connect(self._on_splitter_moved)
         ml.addWidget(self._splitter)
 
         # 全局主题调色板
         theme.changed.connect(self._apply_theme_palette)
         self._apply_theme_palette()
+
+        # 8 个窗口边缘 resize 手柄（startSystemResize 方案）
+        from PySide6.QtCore import Qt as QtEdge
+        self._edge_widgets = [
+            EdgeResizeWidget(QtEdge.TopEdge | QtEdge.LeftEdge,     Qt.SizeFDiagCursor, self.centralWidget()),   # 0 TL
+            EdgeResizeWidget(QtEdge.TopEdge,                       Qt.SizeVerCursor,   self.centralWidget()),   # 1 T
+            EdgeResizeWidget(QtEdge.TopEdge | QtEdge.RightEdge,    Qt.SizeBDiagCursor, self.centralWidget()),   # 2 TR
+            EdgeResizeWidget(QtEdge.LeftEdge,                      Qt.SizeHorCursor,   self.centralWidget()),   # 3 L
+            EdgeResizeWidget(QtEdge.RightEdge,                     Qt.SizeHorCursor,   self.centralWidget()),   # 4 R
+            EdgeResizeWidget(QtEdge.BottomEdge | QtEdge.LeftEdge,  Qt.SizeBDiagCursor, self.centralWidget()),   # 5 BL
+            EdgeResizeWidget(QtEdge.BottomEdge,                    Qt.SizeVerCursor,   self.centralWidget()),   # 6 B
+            EdgeResizeWidget(QtEdge.BottomEdge | QtEdge.RightEdge, Qt.SizeFDiagCursor, self.centralWidget()),   # 7 BR
+        ]
+        self._update_edge_positions()
+
+    def _update_edge_positions(self):
+        """根据当前窗口尺寸重新定位 8 个 EdgeResizeWidget。"""
+        S = EdgeResizeWidget.SIZE
+        W, H = self.width(), self.height()
+        tl, t, tr, l, r, bl, b, br = self._edge_widgets
+        tl.place(0, 0, S, S)              # 左上角
+        t.place(S, 0, W - 2 * S, S)       # 上边
+        tr.place(W - S, 0, S, S)          # 右上角
+        l.place(0, S, S, H - 2 * S)       # 左边
+        r.place(W - S, S, S, H - 2 * S)   # 右边
+        bl.place(0, H - S, S, S)          # 左下角
+        b.place(S, H - S, W - 2 * S, S)   # 下边
+        br.place(W - S, H - S, S, S)      # 右下角
+
+    def _on_splitter_moved(self, pos: int, index: int):
+        """QSplitter 拖拽后重建聊天内容，使气泡/面板适配新宽度。"""
+        QTimer.singleShot(0, self._center._rebuild_content)
 
     def _toggle_maximize(self):
         if self.isMaximized():
@@ -2032,6 +2305,20 @@ class MainWindow(QMainWindow):
         p.setColor(QPalette.Button, qcolor(C["bg_sidebar"]))
         p.setColor(QPalette.Highlight, qcolor(C["accent"]))
         app.setPalette(p)
+
+    def _toggle_left_panel(self):
+        """切换左侧面板显示/隐藏，中间聊天区自动延伸/收缩。"""
+        if self._left.isVisible():
+            self._left.hide()
+            total = self.width()
+            rw = self._right.width() if self._right_visible else 0
+            self._splitter.setSizes([0, total - rw, rw])
+        else:
+            self._left.show()
+            rw = 400 if self._right_visible else 0
+            self._splitter.setSizes([220, self.width() - 220 - rw, rw])
+        QApplication.processEvents()
+        self._center._rebuild_content()
 
     def _toggle_right_panel(self):
         """切换右侧面板显示/隐藏，中间聊天区自动延伸/收缩。"""
