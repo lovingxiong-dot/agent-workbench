@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.0-alpha | 存档次数 | 1 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.1-alpha | 存档次数 | 2 |
 
 ## 项目概要
 AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。
@@ -99,13 +99,15 @@ v5.0.0-alpha 为 v5-dev 线路起点：从 v4-refactor 切出独立分支，将�
 │   ├── worker_manager.py   # Worker 并发管理
 │   ├── orchestrator.py     # SessionOrchestrator
 │   ├── ui_renderer.py      # UI 渲染器
-│   ├── conversation_list.py
-│   ├── input_area.py
-│   ├── right_panel.py
-│   ├── chat_scene.py
-│   ├── chat_items.py
-│   ├── icons.py
-│   ├── main_window.py      # 当前正替换为新 UI 外壳
+│   ├── main_window.py      # v5 新 UI 外壳（当前正接入后端）
+│   ├── legacy/             # v4 旧 UI 组件备份（v5-dev 线路保留，P10 后清理）
+│   │   ├── main_window_legacy.py
+│   │   ├── conversation_list.py
+│   │   ├── input_area.py
+│   │   ├── right_panel.py
+│   │   ├── chat_scene.py
+│   │   ├── chat_items.py
+│   │   └── icons.py
 │   └── tests/
 │
 ├── services/               # 服务层
@@ -133,6 +135,7 @@ v5.0.0-alpha 为 v5-dev 线路起点：从 v4-refactor 切出独立分支，将�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v5.0.1-alpha | 2026-07-05 | 备份 v4 旧 UI 组件至 `v4/legacy/`，标记 v5-dev 独立线路；原始组件保留待 P10 清理 | chore/backup | v4/legacy/*, PROJECT_BLUEPRINT.md |
 | v5.0.0-alpha | 2026-07-05 | v5-dev 线路起点：从 v4-refactor 切出独立分支；将新 UI 模板注入后端核心（ConfigService/SessionRepository/MessageBus/八引擎/WorkerManager/SessionOrchestrator/UIRenderer），保留核心基座不变 | feat/refactor | v4/main_window.py |
 
 ## 历史归档

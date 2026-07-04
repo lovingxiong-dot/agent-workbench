@@ -1,5 +1,12 @@
 # Changelog
 
+## v5.0.1-alpha (2026-07-05) — 备份 v4 旧 UI 组件并标记 v5-dev 线路
+
+### chore/backup
+- 将 v4 旧 UI 组件（`conversation_list.py`、`input_area.py`、`right_panel.py`、`chat_scene.py`、`chat_items.py`、`icons.py`、`main_window_legacy.py`）备份至 `v4/legacy/`
+- 原始组件保留在 `v4/` 根目录，待 P10 阶段确认无引用后清理
+- `PROJECT_BLUEPRINT.md` 更新目录结构与版本标记，明确 v5-dev 为独立新 UI 线路
+
 ## v5.0.0-alpha (2026-07-05) — v5-dev 线路起点：新 UI 注入后端核心
 
 ### feat/refactor
