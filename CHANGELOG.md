@@ -1,5 +1,19 @@
 # Changelog
 
+## v4.0.10-alpha (2026-07-05) — UI 模板拖拽同步：左栏方框自适应宽度 + 右栏窗口按钮固定
+
+### feat/ui
+- **左栏会话方框完全同步面板宽度**：`SessionItem`、`SessionGroup` 及会话列表容器显式 `setMinimumWidth(1)` + `Expanding`，消除 QScrollArea 内容溢出导致的右侧遮挡。
+- **右栏顶部窗口按钮固定**：`RightPanel._tab_container` 最小宽度置 1，`RightPanel` 最小宽度收紧，拖拽时仅压缩标签区，三个窗口控制按钮始终显示。
+
+### fix/ui
+- 修复 `SessionItem` 标题/预览标签因自身最小宽度过大而使卡片右侧被滚动区裁剪的问题。
+- 修复 `SessionGroup` 分组名标签因文本最小宽度导致分组宽度超出可视区的问题。
+
+### test
+- `python -m py_compile experiments/ui_template.py` 通过。
+- 自动截图验证：左栏 220px/180px、右栏 200px 状态下无遮挡，按钮固定。
+
 ## v0.6-alpha (2026-07-04) — 左侧栏交互系统：右键菜单/搜索框/文件管理器/分组加号
 
 ### feat/ui

@@ -21,10 +21,10 @@ from PySide6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsItem, QSizePolicy,
     QFrame, QScrollArea, QListWidget, QFileDialog,
 )
-from PySide6.QtCore import Qt, Signal, QRectF, QPointF, QSize, QTimer, QObject, QEvent
+from PySide6.QtCore import Qt, Signal, QRect, QRectF, QPointF, QPoint, QSize, QTimer, QObject, QEvent
 from PySide6.QtGui import (
     QPainter, QPainterPath, QPen, QBrush, QColor, QFont, QFontMetrics,
-    QPalette, QIcon, QPixmap, QLinearGradient, QCursor,
+    QPalette, QIcon, QPixmap, QLinearGradient, QCursor, QTextOption,
 )
 import PySide6.QtWidgets as QtW  # for qApp access
 
@@ -455,8 +455,10 @@ class SessionItem(QWidget):
         self._index = index
         self._active = False
         self._hover = False
-        # 48px 放不下三行文字，时间会被裁掉；调整为 58px（12bold + 9 + 8 + spacing + margins）
-        self.setFixedHeight(58)
+        self.setMinimumHeight(58)  # 高度随内容自适应，最低 58px
+        self.setMinimumWidth(1)
+        self.setMaximumWidth(16777215)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.setCursor(Qt.PointingHandCursor)
         self.setMouseTracking(True)
         self.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -466,14 +468,20 @@ class SessionItem(QWidget):
         layout.setContentsMargins(10, 6, 10, 4)
         layout.setSpacing(5)
 
-        self._title_lbl = QLabel(title[:24])
+        self._title_lbl = QLabel(title)
         self._title_lbl.setFont(font(12, bold=True))
         self._title_lbl.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        self._title_lbl.setWordWrap(True)
+        self._title_lbl.setMinimumWidth(1)
+        self._title_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         layout.addWidget(self._title_lbl)
 
-        self._preview_lbl = QLabel(preview[:40])
+        self._preview_lbl = QLabel(preview)
         self._preview_lbl.setFont(font(9))
         self._preview_lbl.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        self._preview_lbl.setWordWrap(True)
+        self._preview_lbl.setMinimumWidth(1)
+        self._preview_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         layout.addWidget(self._preview_lbl)
 
         self._refresh_style()
@@ -590,6 +598,7 @@ class SessionGroup(QWidget):
         theme.changed.connect(self._refresh_style)
 
     def _setup_ui(self):
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 6)
         layout.setSpacing(4)
@@ -928,7 +937,7 @@ class LeftPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedWidth(220)
+        # 宽度由外部 QSplitter 控制（MainWindow 中设置 min/max）
         self._current_tab = "会话"
         self._groups: list[SessionGroup] = []
         self._all_items: list[SessionItem] = []
@@ -989,7 +998,7 @@ class LeftPanel(QWidget):
         self._new_btn = self._make_new_btn()
         self._more_btn = self._make_small_btn("...", 28, 22, C["text_muted"], 11)
         stl.addWidget(self._search_btn)
-        stl.addWidget(self._new_btn)
+        stl.addWidget(self._new_btn, 1)  # 新会话按钮自适应剩余宽度
         stl.addWidget(self._more_btn)
 
         # 搜索框（初始隐藏，点击🔍后展开占满 new_btn + more_btn 宽度）
@@ -1031,6 +1040,8 @@ class LeftPanel(QWidget):
         self._sess_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         sess_widget = QWidget()
+        sess_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        sess_widget.setMinimumWidth(1)
         self._sess_layout = QVBoxLayout(sess_widget)
         self._sess_layout.setContentsMargins(0, 0, 0, 0)
         self._sess_layout.setSpacing(6)
@@ -1202,9 +1213,10 @@ class LeftPanel(QWidget):
         return btn
 
     def _make_new_btn(self) -> QPushButton:
-        """新会话按钮（SVG ui-full-dark.svg line 20-21）：bg_primary + accent 边框，124×22。"""
+        """新会话按钮：bg_primary + accent 边框，宽度自适应左侧栏。"""
         btn = QPushButton("+ 新会话")
-        btn.setFixedSize(124, 22)
+        btn.setMinimumWidth(80)
+        btn.setFixedHeight(22)
         btn.setCursor(Qt.PointingHandCursor)
         btn.setStyleSheet(
             f"QPushButton {{ background-color: {C['bg_primary']}; color: {C['text_secondary']}; "
@@ -1332,16 +1344,21 @@ class ChatItem(QGraphicsItem):
 
 class UserBubble(ChatItem):
     """SVG: x=240 y=56 w=148 h=26 rx=8 fill=#007acc, text x=365 text-anchor=end"""
+    PAD_X = 12.0
+    PAD_Y = 8.0
+    RIGHT_PAD = 14.0
+
     def __init__(self, text: str, parent=None):
         super().__init__(parent)
         self._text = text
-        fm = QFontMetrics(font(11))
-        tw = fm.horizontalAdvance(text)
-        bw = max(60.0, min(float(ChatScene.CONTENT_W), tw + 24.0))
-        bh = 26.0
-        bx = ChatScene.CHAT_W - 14 - bw  # RIGHT_PAD=14
+        fnt = font(11)
+        max_text_w = max(40.0, ChatScene.CONTENT_W - 2 * self.PAD_X)
+        tw, th = _wrap_text_size(text, fnt, max_text_w)
+        bw = max(60.0, min(float(ChatScene.CONTENT_W), tw + 2 * self.PAD_X))
+        bh = th + 2 * self.PAD_Y
+        bx = ChatScene.CHAT_W - self.RIGHT_PAD - bw
         self._brect = QRectF(bx, 0, bw, bh)
-        self._trect = QRectF(bx + 12, 0, bw - 24, bh)
+        self._trect = QRectF(bx + self.PAD_X, self.PAD_Y, bw - 2 * self.PAD_X, th)
         self._h = bh + 8
         self.setCacheMode(QGraphicsItem.DeviceCoordinateCache)
 
@@ -1352,7 +1369,10 @@ class UserBubble(ChatItem):
         painter.fillPath(path, qcolor(C["accent"]))
         painter.setFont(font(11))
         painter.setPen(qcolor(C["text_inverse"]))
-        painter.drawText(self._trect, Qt.AlignRight | Qt.AlignVCenter, self._text)
+        to = QTextOption()
+        to.setWrapMode(QTextOption.WordWrap)
+        to.setAlignment(Qt.AlignRight)
+        painter.drawText(self._trect, self._text, to)
 
 
 class FoldBlock(ChatItem):
@@ -1496,24 +1516,29 @@ class ToolEntry(ChatItem):
 
 
 class PhasePanel(ChatItem):
-    """阶段面板：rx=8卡片 + 4px accent bar + header + body。"""
+    """阶段面板：rx=8卡片 + 4px accent bar + header + body（body 自动垂直堆叠）。"""
     HEADER_H = 24.0
     RX = 8.0
+    BODY_TOP = 8.0
     # 颜色键（避免类定义时捕获固定颜色）
     PHASE_COLORS = {
         "analyze": "accent_blue", "execute": "yellow",
         "archive": "green", "verify": "purple",
     }
 
-    def __init__(self, title: str, accent_key: str, body_items: list = None, body_h: float = 0, parent=None):
+    def __init__(self, title: str, accent_key: str, body_items: list = None, parent=None):
         super().__init__(parent)
         self._title = title
         self._accent_key = accent_key
-        self._body_h = body_h
-        self._h = self.HEADER_H + body_h + 16
-        if body_items:
-            for item in body_items:
-                item.setParentItem(self)
+        self._body_items = body_items or []
+        # 自动布局 body items 并计算总高度
+        y = self.HEADER_H + self.BODY_TOP
+        for item in self._body_items:
+            item.setParentItem(self)
+            item.setPos(ChatScene.LEFT_MARGIN, y)
+            y += item.height() + 6
+        self._body_h = max(0.0, y - self.HEADER_H - self.BODY_TOP)
+        self._h = self.HEADER_H + self._body_h + 16
 
     def paint(self, painter, option, widget=None):
         painter.setRenderHint(QPainter.Antialiasing)
@@ -1548,83 +1573,115 @@ class PhasePanel(ChatItem):
 
 
 class BulletItem(ChatItem):
-    """● + 文本"""
+    """● + 文本（自动换行）"""
+    INDENT = 23.0
+    TOP = 14.0
+
     def __init__(self, text: str, color_key: str = "green", parent=None):
         super().__init__(parent)
         self._text = text
         self._color_key = color_key
-        self._h = 20
+        fnt = font(10)
+        max_w = max(40.0, ChatScene.CONTENT_W - self.INDENT - 10)
+        _, th = _wrap_text_size(text, fnt, max_w)
+        self._h = max(20.0, th + 10)
+        self._text_rect = QRectF(ChatScene.LEFT_MARGIN + self.INDENT, 4, max_w, th)
 
     def paint(self, painter, option, widget=None):
         painter.setRenderHint(QPainter.Antialiasing)
         color = qcolor(C[self._color_key])
         painter.setPen(Qt.NoPen)
         painter.setBrush(color)
-        painter.drawEllipse(QPointF(ChatScene.LEFT_MARGIN + 13, 14), 3, 3)
+        painter.drawEllipse(QPointF(ChatScene.LEFT_MARGIN + 13, self.TOP), 3, 3)
         painter.setFont(font(10))
         painter.setPen(color)
-        painter.drawText(QPointF(ChatScene.LEFT_MARGIN + 23, 17), self._text)
+        to = QTextOption()
+        to.setWrapMode(QTextOption.WordWrap)
+        painter.drawText(self._text_rect, self._text, to)
 
 
 class StepItem(ChatItem):
-    """执行步骤：✓/⟳/○ + 名称 + 详情"""
+    """执行步骤：✓/⟳/○ + 名称 + 详情（自动换行）"""
     ICONS = {"done": ("✓", "green"), "running": ("⟳", "yellow"),
              "pending": ("○", "text_muted"), "fail": ("✗", "#f14c4c")}
+    ICON_X = 14.0
+    TEXT_X = 29.0
 
     def __init__(self, status: str, name: str, detail: str = "", parent=None):
         super().__init__(parent)
         self._icon, self._ic_key = self.ICONS.get(status, ("○", "text_muted"))
         self._name = name
         self._detail = detail
-        self._h = 20
+        name_fnt = font(10)
+        detail_fnt = font(9)
+        max_w = max(40.0, ChatScene.CONTENT_W - self.TEXT_X - 10)
+        _, name_h = _wrap_text_size(name, name_fnt, max_w)
+        self._name_rect = QRectF(ChatScene.LEFT_MARGIN + self.TEXT_X, 4, max_w, name_h)
+        if detail:
+            _, detail_h = _wrap_text_size(detail, detail_fnt, max_w)
+            self._detail_rect = QRectF(ChatScene.LEFT_MARGIN + self.TEXT_X, 6 + name_h, max_w, detail_h)
+            self._h = max(20.0, 6 + name_h + detail_h + 6)
+        else:
+            self._detail_rect = None
+            self._h = max(20.0, name_h + 10)
 
     def paint(self, painter, option, widget=None):
         painter.setRenderHint(QPainter.Antialiasing)
-        y = 4
         # 图标颜色运行时解析
         ic = C.get(self._ic_key, C["text_muted"]) if self._ic_key.startswith("#") is False else self._ic_key
         painter.setFont(mono_font(10))
         painter.setPen(qcolor(ic))
-        painter.drawText(QPointF(ChatScene.LEFT_MARGIN + 14, y + 12), self._icon)
+        painter.drawText(QPointF(ChatScene.LEFT_MARGIN + self.ICON_X, 16), self._icon)
         painter.setFont(font(10))
         painter.setPen(qcolor(C["text_primary"]))
-        painter.drawText(QPointF(ChatScene.LEFT_MARGIN + 29, y + 12), self._name)
-        if self._detail:
+        to = QTextOption()
+        to.setWrapMode(QTextOption.WordWrap)
+        painter.drawText(self._name_rect, self._name, to)
+        if self._detail_rect:
             painter.setFont(font(9))
             painter.setPen(qcolor(C["text_muted"]))
-            fm = QFontMetrics(font(10))
-            painter.drawText(QPointF(ChatScene.LEFT_MARGIN + 29 + fm.horizontalAdvance(self._name) + 8, y + 12), self._detail)
+            painter.drawText(self._detail_rect, self._detail, to)
 
 
 class TextItem(ChatItem):
-    """纯文本行。"""
+    """纯文本块（自动换行）。"""
+    TEXT_X = 14.0
+
     def __init__(self, text: str, color_key: str = "green", parent=None):
         super().__init__(parent)
         self._text = text
         self._color_key = color_key
-        self._h = 22
+        fnt = font(10)
+        max_w = max(40.0, ChatScene.CONTENT_W - self.TEXT_X - 10)
+        _, th = _wrap_text_size(text, fnt, max_w)
+        self._h = max(22.0, th + 10)
+        self._text_rect = QRectF(ChatScene.LEFT_MARGIN + self.TEXT_X, 4, max_w, th)
 
     def paint(self, painter, option, widget=None):
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setFont(font(10))
         painter.setPen(qcolor(C[self._color_key]))
-        painter.drawText(QPointF(ChatScene.LEFT_MARGIN + 14, 15), self._text)
+        to = QTextOption()
+        to.setWrapMode(QTextOption.WordWrap)
+        painter.drawText(self._text_rect, self._text, to)
 
 
 class SystemCard(ChatItem):
-    """居中系统卡片。"""
+    """居中系统卡片（支持自动换行）。"""
+    PAD_X = 14.0
+    PAD_Y = 10.0
+
     def __init__(self, text: str, parent=None):
         super().__init__(parent)
         self._text = text
-        fm = QFontMetrics(font(11))
-        lines = text.split("\n")
-        lh = fm.height() + 2
-        max_w = max(fm.horizontalAdvance(l) for l in lines)
-        cw = min(ChatScene.CONTENT_W, max_w + 28 + 4)
-        ch = len(lines) * lh + 20
+        fnt = font(11)
+        max_text_w = max(40.0, ChatScene.CONTENT_W - 2 * self.PAD_X)
+        tw, th = _wrap_text_size(text, fnt, max_text_w)
+        cw = min(ChatScene.CONTENT_W, tw + 2 * self.PAD_X)
+        ch = th + 2 * self.PAD_Y
         self._crect = QRectF((ChatScene.CHAT_W - cw) / 2, 4, cw, ch)
-        self._lines = lines
-        self._lh = lh
+        self._text_rect = QRectF(self._crect.left() + self.PAD_X, self._crect.top() + self.PAD_Y,
+                                 cw - 2 * self.PAD_X, th)
         self._h = ch + 8
 
     def paint(self, painter, option, widget=None):
@@ -1636,15 +1693,25 @@ class SystemCard(ChatItem):
         painter.drawPath(cp)
         painter.setFont(font(11))
         painter.setPen(qcolor(C["text_primary"]))
-        y = self._crect.top() + 10
-        for line in self._lines:
-            painter.drawText(QPointF(self._crect.left() + 14, y + self._lh - 3), line)
-            y += self._lh
+        to = QTextOption()
+        to.setWrapMode(QTextOption.WordWrap)
+        to.setAlignment(Qt.AlignCenter)
+        painter.drawText(self._text_rect, self._text, to)
 
 
 # ══════════════════════════════════════════════════════════════
 # 聊天场景
 # ══════════════════════════════════════════════════════════════
+
+def _wrap_text_size(text: str, fnt: QFont, max_w: float, line_spacing: int = 2) -> tuple[float, float]:
+    """计算文本在指定最大宽度下自动换行后的包围盒尺寸。"""
+    fm = QFontMetrics(fnt)
+    rect = fm.boundingRect(QRect(0, 0, max(1, int(max_w)), 1000000), Qt.TextWordWrap, text)
+    # boundingRect 返回的是 tight rect，实际行高用 fm.height()
+    lines = max(1, int(rect.height() / fm.height() + 0.5))
+    h = lines * fm.height() + (lines - 1) * line_spacing
+    return rect.width(), h
+
 
 class ChatScene(QGraphicsScene):
     CHAT_W = 402
@@ -1683,6 +1750,90 @@ class ChatScene(QGraphicsScene):
         self.setBackgroundBrush(QBrush(qcolor(C["bg_primary"])))
         for item in self._items:
             item.update()
+
+
+# ══════════════════════════════════════════════════════════════
+# MoreDropdown — "..." 按钮下拉面板（进度 + 文件）
+# ══════════════════════════════════════════════════════════════
+class MoreDropdown(QWidget):
+    WIDTH = 260
+    CORNER = 8
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setFixedWidth(self.WIDTH)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(6)
+
+        # 进度区
+        prog_hdr = QLabel("📊 进度")
+        prog_hdr.setFont(font(11, bold=True))
+        prog_hdr.setStyleSheet(f"color: {C['text_primary']}; background: transparent;")
+        layout.addWidget(prog_hdr)
+
+        # 步骤列表
+        for s, t in [("✓", "v4 架构升级 已完成"), ("✓", "代码片段咨询 已完成"), ("○", "量化策略回测 进行中")]:
+            row = QHBoxLayout()
+            row.setSpacing(6)
+            icon = QLabel(s)
+            icon.setFont(font(9))
+            icon.setStyleSheet(f"color: {C['accent']}; background: transparent;")
+            lbl = QLabel(t)
+            lbl.setFont(font(9))
+            lbl.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
+            row.addWidget(icon)
+            row.addWidget(lbl, 1)
+            layout.addLayout(row)
+
+        # 分隔线
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setFixedHeight(1)
+        sep.setStyleSheet(f"color: {C['border']};")
+        layout.addWidget(sep)
+
+        # 文件区
+        file_hdr = QLabel("📁 文件 (5)")
+        file_hdr.setFont(font(11, bold=True))
+        file_hdr.setStyleSheet(f"color: {C['text_primary']}; background: transparent;")
+        layout.addWidget(file_hdr)
+
+        for f in ["📄 main.py", "📄 requirements.txt", "📄 CHANGELOG.md", "📁 agent_engine/", "📁 experiments/"]:
+            lbl = QLabel(f)
+            lbl.setFont(font(10))
+            lbl.setCursor(Qt.PointingHandCursor)
+            lbl.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
+            layout.addWidget(lbl)
+
+        self.setFixedHeight(258)
+        self.hide()
+
+    def position_under(self, btn: QWidget):
+        """将下拉面板定位到给定按钮正下方、右对齐（在父控件内）。"""
+        parent = self.parentWidget()
+        if not parent:
+            return
+        # 按钮在父控件中的位置
+        btn_pos = btn.mapTo(parent, QPoint(0, btn.height()))
+        x = btn_pos.x() - self.WIDTH + btn.width()
+        y = btn_pos.y()
+        self.move(max(0, x), y)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setBrush(QColor(0, 0, 0, 40))
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), self.CORNER, self.CORNER)
+        p.setBrush(QColor(C["bg_card"]))
+        p.drawRoundedRect(self.rect().adjusted(2, 2, -2, -2), self.CORNER - 1, self.CORNER - 1)
+        p.setPen(QPen(QColor(C["border"]), 0.5))
+        p.setBrush(Qt.NoBrush)
+        p.drawRoundedRect(QRectF(1.5, 1.5, self.width() - 3, self.height() - 3), self.CORNER, self.CORNER)
+        p.end()
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1733,14 +1884,36 @@ class HeaderBar(QWidget):
         layout.addWidget(self._vsep)
         layout.addSpacing(6)
 
-        # 右上角三键容器：spacing=2 紧凑排列
+        # 搜索输入栏（初始隐藏，点击🔍展开，位于分隔线与按钮区之间）
+        self._search_input = QLineEdit()
+        self._search_input.setFixedHeight(24)
+        self._search_input.setPlaceholderText("搜索会话内容...")
+        self._search_input.hide()
+        self._search_input.setStyleSheet(
+            f"QLineEdit {{ background-color: {C['bg_card']}; color: {C['text_primary']}; "
+            f"border: 0.5px solid {C['accent']}; border-radius: 6px; padding: 2px 8px; font-size: 11px; }}"
+        )
+        layout.addWidget(self._search_input, 1)
+
+        self._search_close = QPushButton("✕")
+        self._search_close.setFixedSize(20, 22)
+        self._search_close.setCursor(Qt.PointingHandCursor)
+        self._search_close.hide()
+        self._search_close.setStyleSheet(
+            f"QPushButton {{ background-color: transparent; color: {C['text_muted']}; "
+            f"border: none; font-size: 10px; }}"
+            f"QPushButton:hover {{ color: {C['text_primary']}; }}"
+        )
+        layout.addWidget(self._search_close)
+
         self._btn_block = QWidget()
         btn_hl = QHBoxLayout(self._btn_block)
         btn_hl.setContentsMargins(0, 0, 0, 0)
-        btn_hl.setSpacing(2)
+        btn_hl.setSpacing(8)  # 拉开按钮间隔
 
         self._search_btn = self._icon_btn("搜索")
         self._search_btn.clicked.connect(self.search_clicked.emit)
+        self._search_close.clicked.connect(lambda: self.search_clicked.emit())
         self._more_btn = self._icon_btn("更多操作")
         self._more_btn.clicked.connect(self.more_clicked.emit)
         self._expand_btn = self._icon_btn("折叠右侧面板")
@@ -1750,17 +1923,18 @@ class HeaderBar(QWidget):
         btn_hl.addWidget(self._more_btn)
         btn_hl.addWidget(self._expand_btn)
         layout.addWidget(self._btn_block)
+
         layout.addSpacing(12)
         self._refresh_theme()
 
     def _icon_btn(self, tooltip: str) -> QPushButton:
-        """18×22 方形图标按钮：SVG fill=#2a2a4a rx=4。"""
+        """18×22 图标按钮：透明背景，仅保留图标；hover 微亮。"""
         btn = QPushButton()
         btn.setFixedSize(18, 22)
         btn.setToolTip(tooltip)
         btn.setCursor(Qt.PointingHandCursor)
         btn.setStyleSheet(
-            f"QPushButton {{ background-color: {C['btn_bg']}; border: none; border-radius: 4px; }}"
+            f"QPushButton {{ background-color: transparent; border: none; border-radius: 4px; }}"
             f"QPushButton:hover {{ background-color: {C['bg_hover']}; }}"
         )
         lbl = QLabel(btn)
@@ -1773,6 +1947,12 @@ class HeaderBar(QWidget):
         self._title_lbl.setStyleSheet(f"color: {C['text_primary']}; background: transparent;")
         self._env_lbl.setStyleSheet(f"color: {C['text_muted']}; background: transparent;")
         self._vsep.setStyleSheet(f"background-color: {C['border']};")
+
+        # 搜索框 & 文件面板主题
+        self._search_input.setStyleSheet(
+            f"QLineEdit {{ background-color: {C['bg_card']}; color: {C['text_primary']}; "
+            f"border: 0.5px solid {C['accent']}; border-radius: 6px; padding: 2px 8px; font-size: 11px; }}"
+        )
 
         stroke = C['text_secondary'] if theme.name == "dark" else C['text_label']
         # Apple 风格搜索图标: 偏心圆 + 粗短手柄
@@ -1803,7 +1983,7 @@ class HeaderBar(QWidget):
             if lbl:
                 lbl.setPixmap(svg_icon(svg, 18, 22))
             btn.setStyleSheet(
-                f"QPushButton {{ background-color: {C['btn_bg']}; border: none; border-radius: 4px; }}"
+                f"QPushButton {{ background-color: transparent; border: none; border-radius: 4px; }}"
                 f"QPushButton:hover {{ background-color: {C['bg_hover']}; }}"
             )
 
@@ -2009,6 +2189,8 @@ class ChatArea(QWidget):
 
         # 标题栏
         self._header = HeaderBar()
+        self._header.search_clicked.connect(self._toggle_search)
+        self._header.more_clicked.connect(self._toggle_file_panel)
         layout.addWidget(self._header)
 
         # 标题栏下分隔线（SVG: y=40）
@@ -2045,6 +2227,10 @@ class ChatArea(QWidget):
         self._resize_handle.bind(self._view, self._input, self._debounced_rebuild)
         self.setStyleSheet(f"background-color: {C['bg_primary']};")
 
+        # "..." 下拉面板（内嵌子控件，跟随主窗口，非独立顶层窗口）
+        self._more_dropdown = MoreDropdown(self)
+        self._more_dropdown.raise_()
+
     def _refresh_theme(self):
         self.setStyleSheet(f"background-color: {C['bg_primary']};")
         self._sep1.setStyleSheet(f"background-color: {C['border']};")
@@ -2060,6 +2246,9 @@ class ChatArea(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        # 下拉面板随窗口 resize 重新定位
+        if hasattr(self, '_more_dropdown') and self._more_dropdown.isVisible():
+            self._more_dropdown.position_under(self._header._more_btn)
         if self._initialized:
             new_w = self._view.viewport().width() if self._view.viewport() else self.width()
             if abs(new_w - ChatScene.CHAT_W) > 4:
@@ -2081,6 +2270,27 @@ class ChatArea(QWidget):
         self._scene.clear_items()
         self._populate_demo()
         self._scene.refresh()
+
+    def _toggle_search(self):
+        """切换搜索框显隐"""
+        if self._header._search_input.isHidden():
+            self._header._search_input.show()
+            self._header._search_close.show()
+            self._header._search_input.setFocus()
+        else:
+            self._header._search_input.hide()
+            self._header._search_close.hide()
+            self._header._search_input.clear()
+
+    def _toggle_file_panel(self):
+        """点击 ... 切换下拉面板显隐（内嵌子控件，跟随主窗口）。"""
+        dd = self._more_dropdown
+        if dd.isHidden():
+            dd.position_under(self._header._more_btn)
+            dd.show()
+            dd.raise_()
+        else:
+            dd.hide()
 
     def _populate_demo(self):
         """填充 Demo 聊天内容（精确对应 ui-chat-area.svg）。"""
@@ -2111,23 +2321,17 @@ class ChatArea(QWidget):
         # 📋 分析结果面板
         b1 = BulletItem("项目采用 v4 单轨事件总线架构")
         b2 = BulletItem("193/193 全量测试通过")
-        b1.setPos(0, PhasePanel.HEADER_H + 6)
-        b2.setPos(0, PhasePanel.HEADER_H + 26)
-        scene.add_chat_item(PhasePanel("📋 分析结果", "accent_blue", [b1, b2], 48))
+        scene.add_chat_item(PhasePanel("📋 分析结果", "accent_blue", [b1, b2]))
 
         # 📝 执行计划面板
         s1 = StepItem("done", "修改 v4/events.py", "新增 model 字段")
         s2 = StepItem("running", "修改 v4/main_window.py", "模型下拉框 + 持久化")
         s3 = StepItem("pending", "运行全量测试", "pytest tests/ -v")
-        s1.setPos(0, PhasePanel.HEADER_H + 6)
-        s2.setPos(0, PhasePanel.HEADER_H + 26)
-        s3.setPos(0, PhasePanel.HEADER_H + 46)
-        scene.add_chat_item(PhasePanel("📝 执行计划", "yellow", [s1, s2, s3], 68))
+        scene.add_chat_item(PhasePanel("📝 执行计划", "yellow", [s1, s2, s3]))
 
         # ✅ 完成报告面板
         t1 = TextItem("v4.0.5-alpha 存档完成")
-        t1.setPos(0, PhasePanel.HEADER_H + 6)
-        scene.add_chat_item(PhasePanel("✅ 完成报告", "green", [t1], 30))
+        scene.add_chat_item(PhasePanel("✅ 完成报告", "green", [t1]))
 
         # 滚动到底部
         QTimer.singleShot(100, lambda: self._view.verticalScrollBar().setValue(
@@ -2150,7 +2354,9 @@ class TabButton(QWidget):
         self._text = text
         self._active = active
         self._closable = closable
-        self.setFixedSize(width, 24)
+        self.setMinimumWidth(30)  # 可被压缩，仅保留关闭/文本最小空间
+        self.setMaximumHeight(24)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setCursor(Qt.PointingHandCursor)
         self._setup_ui()
         theme.changed.connect(self._refresh_style)
@@ -2160,18 +2366,27 @@ class TabButton(QWidget):
         self._lbl.setFont(font(10))
         self._lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._lbl.setStyleSheet("background: transparent;")
-        self._lbl.setGeometry(10, 0, self.width() - 28, 24)
 
         if self._closable:
             self._close = QPushButton("✕", self)
             self._close.setFixedSize(10, 10)
             self._close.setFont(font(9))
             self._close.setCursor(Qt.PointingHandCursor)
-            self._close.setGeometry(self.width() - 17, 7, 10, 10)
             self._close.clicked.connect(self.close_clicked.emit)
         else:
             self._close = None
+        self._update_child_geometry()
         self._refresh_style()
+
+    def _update_child_geometry(self):
+        w = self.width()
+        self._lbl.setGeometry(10, 0, max(10, w - 28), 24)
+        if self._close:
+            self._close.setGeometry(max(4, w - 17), 7, 10, 10)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._update_child_geometry()
 
     def _refresh_style(self):
         is_dark = theme.name == "dark"
@@ -2201,9 +2416,10 @@ class TabButton(QWidget):
 class RightPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedWidth(400)
+        # 宽度由外部 QSplitter 控制（MainWindow 中设置 min）
         self._active_tab = 0
         self._setup_ui()
+        self.setMinimumWidth(120)
         theme.changed.connect(self._refresh_theme)
 
     def _setup_ui(self):
@@ -2215,8 +2431,16 @@ class RightPanel(QWidget):
         self._tab_bar = QWidget()
         self._tab_bar.setFixedHeight(28)
         tb_layout = QHBoxLayout(self._tab_bar)
-        tb_layout.setContentsMargins(8, 2, 8, 2)
-        tb_layout.setSpacing(2)
+        tb_layout.setContentsMargins(8, 2, 0, 2)
+        tb_layout.setSpacing(0)
+
+        # 标签 + 搜索区域（可随右侧栏宽度压缩/拉伸）
+        self._tab_container = QWidget()
+        self._tab_container.setMinimumWidth(1)
+        self._tab_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        tc_layout = QHBoxLayout(self._tab_container)
+        tc_layout.setContentsMargins(0, 0, 0, 0)
+        tc_layout.setSpacing(2)
 
         # SVG: add btn circle r=7 (d=14) fill=#2a2a4a / #e9ecef
         self._add_btn = QPushButton("+")
@@ -2227,17 +2451,16 @@ class RightPanel(QWidget):
             f"border-radius: 7px; font-size: 10px; font-weight: 500; border: none; }}"
             f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
         )
-        tb_layout.addWidget(self._add_btn)
+        tc_layout.addWidget(self._add_btn)
 
-        # 标签按钮（SVG ui-full-dark.svg line 198-214）
-        # 宽度：v4 架构 86 / 终端 74 / 文件编辑器 100 / 浏览器 按内容；第一个不可关闭
+        # 标签按钮（宽度可随容器伸缩）
         tab_defs = [("v4 架构", 86, False), ("终端", 74, True), ("文件编辑器", 100, True), ("浏览器", 74, True)]
         self._tab_btns: list[TabButton] = []
         for i, (name, width, closable) in enumerate(tab_defs):
             btn = TabButton(name, width, active=(i == 0), closable=closable)
             btn.clicked.connect(lambda idx=i: self._switch_tab(idx))
             btn.close_clicked.connect(lambda idx=i: self._on_close_tab(idx))
-            tb_layout.addWidget(btn)
+            tc_layout.addWidget(btn, 1)  # 允许拉伸/压缩
             self._tab_btns.append(btn)
 
         # SVG: 搜索按钮 x=930 y=6 w=16 h=16 rx=3 fill=#2a2a4a / #e9ecef
@@ -2249,16 +2472,18 @@ class RightPanel(QWidget):
             f"border: none; border-radius: 3px; font-size: 9px; }}"
             f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
         )
-        tb_layout.addSpacing(4)
-        tb_layout.addWidget(self._search_btn)
+        tc_layout.addSpacing(4)
+        tc_layout.addWidget(self._search_btn)
 
-        tb_layout.addStretch()
+        tb_layout.addWidget(self._tab_container, 1)
 
-        # 窗口控制按钮容器（由 MainWindow 注入回调）
+        # 窗口控制按钮容器（固定在最右侧，不被拖拽收窄/隐藏）
         self._win_btns = QWidget()
+        self._win_btns.setFixedWidth(92)  # 3×28 + 2×2 + 左右留白
         win_hl = QHBoxLayout(self._win_btns)
         win_hl.setContentsMargins(0, 0, 8, 0)
         win_hl.setSpacing(2)
+        win_hl.addStretch()
         self._win_hl = win_hl
         tb_layout.addWidget(self._win_btns)
 
@@ -2452,12 +2677,15 @@ class MainWindow(QMainWindow):
         self._splitter.setHandleWidth(1)
         install_invisible_handles(self._splitter)  # 启用 4px 透明拖拽热区
 
-        # 左栏
+        # 左栏：最小 180，最大固定为当前默认值 220
         self._left = LeftPanel()
+        self._left.setMinimumWidth(180)
+        self._left.setMaximumWidth(220)
         self._splitter.addWidget(self._left)
 
-        # 中栏
+        # 中栏：最小宽度保证内容可读
         self._center = ChatArea()
+        self._center.setMinimumWidth(280)
         self._center._header.left_expand_toggled.connect(self._toggle_left_panel)
         self._center._header.expand_toggled.connect(self._toggle_right_panel)
         self._center._header.double_clicked.connect(self._toggle_maximize)
@@ -2465,6 +2693,7 @@ class MainWindow(QMainWindow):
 
         # 右栏
         self._right = RightPanel()
+        self._right.setMinimumWidth(200)
         self._right.set_window_buttons(self.showMinimized, self._toggle_maximize, self.close)
         self._splitter.addWidget(self._right)
 
