@@ -1,5 +1,16 @@
 # Changelog
 
+## v5.0.0-alpha (2026-07-05) — v5-dev 线路起点：新 UI 注入后端核心
+
+### feat/refactor
+- 从 `v4-refactor` 切出独立 `v5-dev` 线路，与 v3/v4 并行开发
+- 将新三栏 UI 模板迁移至 `v4/main_window.py`，注入后端核心组件：`ConfigService`、`SessionRepository`、`MessageBus`、八引擎、`WorkerManager`、`SessionOrchestrator`、`UIRenderer`
+- 保留核心基座不变：引擎层、v4 事件总线、异步 Worker 调度、会话编排
+- 窗口基础参数调整：默认 1400×900、最小 1200、标题从配置动态读取
+
+### test
+- `python -m py_compile v4/main_window.py` 通过
+
 ## v4.0.8-alpha (2026-07-01) — 最终发布版三栏 UI 全量重制
 
 ### feat/ui
