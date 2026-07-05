@@ -1,5 +1,19 @@
 # Changelog
 
+## v5.0.13-alpha (2026-07-06) — 修复打包后浏览器标签不可用
+
+### fix
+- **修复 exe 内浏览器初始化失败**：在 [AgentWorkbench.spec](file:///f:/Agent/agent_workbench/AgentWorkbench.spec) 中显式打包 `PySide6/QtWebEngineProcess.exe`、`PySide6/resources/` 与 `PySide6/translations/qtwebengine_locales`，并恢复 `PySide6.QtWebChannel`、`PySide6.QtWebSockets`、`PySide6.QtSql` 依赖（之前被 excludes 误排除）。
+
+### build
+- **PyInstaller 重新打包**：`dist/AgentWorkbench/AgentWorkbench.exe` 已验证浏览器可正常加载 Bing 页面，架构 / 终端 / 文件编辑器 / 浏览器四个标签均非空。
+
+### docs
+- 更新 README / PROJECT_BLUEPRINT / CHANGELOG 至 `v5.0.13-alpha`，记录打包修复与右栏功能验证结果。
+
+### test
+- 全量 225 项测试通过，零回归。
+
 ## v5.0.12-alpha (2026-07-06) — UI 完全移植工程最终完整性检查与存档
 
 ### docs

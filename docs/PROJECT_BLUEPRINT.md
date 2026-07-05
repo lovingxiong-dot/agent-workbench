@@ -1,10 +1,10 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.12-alpha | 存档次数 | 12 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.13-alpha | 存档次数 | 13 |
 
 ## 项目概要
-AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v5.0.12-alpha 完成 UI 完全移植工程最终完整性检查与存档：复核 P10 旧 UI 清理与 PyInstaller 打包验证（exe 独立启动存活 10 秒无崩溃），完成 P11 `v4-refactor` 旧 UI 线路最终归档并推送 `v4.0.11-alpha` 归档标签，真实 GUI 验证三栏完整显示、无旧 UI 残留，全量测试 225/225 通过；v5.0.11-alpha 完成 P9 全量冒烟与集成测试验证及 UI 硬编码清理：清理 'v4 架构升级' 等旧 UI 硬编码文本，实现聊天区标题动态化；v5.0.9-alpha 完成新 UI 完全移植与旧 UI 清理；v5.0.8-alpha 完成 GUI 冒烟修复；v5.0.7-alpha 完成右栏真实功能回填；v5.0.6-alpha 完成持久化校验整改；v5.0.5-alpha 完成会话数据持久化与列表同步；v5.0.4-alpha 完成关键用户动作对接；v5.0.3-alpha 完成模块化骨架拆分；v5.0.2-alpha 完成 UIRenderer 与新 UI 桥接；v5.0.1-alpha 备份旧 UI 组件至 `v4/legacy/` 并标记 v5-dev 线路；v5.0.0-alpha 为 v5-dev 线路起点与新 UI 后端核心注入。v4.x 为旧 UI 完整版线路，已归档至 `v4-refactor` / `ui-template` 分支，不再维护。
+AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v5.0.13-alpha 修复打包后浏览器标签不可用的问题：在 AgentWorkbench.spec 中显式打包 QtWebEngineProcess.exe、resources、qtwebengine_locales，并恢复 WebChannel/WebSockets/Sql 依赖，exe 内浏览器可正常加载 Bing 页面；v5.0.12-alpha 完成 UI 完全移植工程最终完整性检查与存档：复核 P10 旧 UI 清理与 PyInstaller 打包验证，完成 P11 `v4-refactor` 旧 UI 线路最终归档并推送 `v4.0.11-alpha` 归档标签，真实 GUI 验证三栏完整显示、无旧 UI 残留，全量测试 225/225 通过；v5.0.11-alpha 完成 P9 全量冒烟与集成测试验证及 UI 硬编码清理：清理 'v4 架构升级' 等旧 UI 硬编码文本，实现聊天区标题动态化；v5.0.9-alpha 完成新 UI 完全移植与旧 UI 清理；v5.0.8-alpha 完成 GUI 冒烟修复；v5.0.7-alpha 完成右栏真实功能回填；v5.0.6-alpha 完成持久化校验整改；v5.0.5-alpha 完成会话数据持久化与列表同步；v5.0.4-alpha 完成关键用户动作对接；v5.0.3-alpha 完成模块化骨架拆分；v5.0.2-alpha 完成 UIRenderer 与新 UI 桥接；v5.0.1-alpha 备份旧 UI 组件至 `v4/legacy/` 并标记 v5-dev 线路；v5.0.0-alpha 为 v5-dev 线路起点与新 UI 后端核心注入。v4.x 为旧 UI 完整版线路，已归档至 `v4-refactor` / `ui-template` 分支，不再维护。
 
 ## 技术栈
 | 类别 | 技术 | 版本 | 用途 |
@@ -199,11 +199,12 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
-| v5.0.12-alpha | 2026-07-06 | UI完全移植工程最终完整性检查与存档：复核P10旧UI清理与PyInstaller打包验证，完成P11 v4-refactor旧UI线路最终归档并推送v4.0.11-alpha标签，真实GUI验证三栏完整显示，225/225测试通过 | docs/archive/test | docs/README.md, docs/PROJECT_BLUEPRINT.md, docs/CHANGELOG.md |
+| v5.0.13-alpha | 2026-07-06 | 修复打包后浏览器标签不可用：AgentWorkbench.spec 显式打包 QtWebEngineProcess.exe/resources/qtwebengine_locales，恢复 WebChannel/WebSockets/Sql 依赖；exe 内浏览器可正常加载页面，225/225测试通过 | fix/build | AgentWorkbench.spec, docs/README.md, docs/PROJECT_BLUEPRINT.md, docs/CHANGELOG.md |
 
 ## 历史归档
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v5.0.12-alpha | 2026-07-06 | UI完全移植工程最终完整性检查与存档：复核P10旧UI清理与PyInstaller打包验证，完成P11 v4-refactor旧UI线路最终归档并推送v4.0.11-alpha标签，真实GUI验证三栏完整显示，225/225测试通过 | docs/archive/test | docs/README.md, docs/PROJECT_BLUEPRINT.md, docs/CHANGELOG.md |
 | v5.0.11-alpha | 2026-07-06 | P9全量冒烟与集成测试验证及UI硬编码清理：真实GUI启动验证三栏完整显示，清理'v4 架构升级'等旧UI硬编码，实现聊天区标题动态化，225/225测试通过 | fix/test/ui | v4/widgets/chat_area.py, v4/widgets/right_panel.py, v4/widgets/left_panel.py, v4/main_window.py, tests/test_v4_gui_smoke.py |
 | v5.0.10-alpha | 2026-07-06 | v5项目文档同步：README/PROJECT_BLUEPRINT/CHANGELOG全面更新为v5新UI完整版线路，反映v5.0.0~v5.0.9全部阶段成果，目录结构同步v4/widgets/与v4/legacy/，测试数更新为225 | docs | docs/README.md, docs/PROJECT_BLUEPRINT.md, docs/CHANGELOG.md |
 | v5.0.9-alpha | 2026-07-06 | P10清理旧UI与打包验证：删除v4根目录重复旧UI文件（已备份至v4/legacy/），迁移旧测试导入，更新AgentWorkbench.spec hiddenimports为v4.widgets.*，PyInstaller打包成功并验证exe独立启动 | chore/build/test | AgentWorkbench.spec, v4/legacy/*, tests/test_v4_input_area.py, tests/test_v4_right_panel.py |

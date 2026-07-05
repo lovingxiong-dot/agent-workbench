@@ -1,5 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for AI Agent Workbench v3.11"""
+"""PyInstaller spec for AI Agent Workbench v5"""
+import os
+import PySide6
+
+pyside6_dir = os.path.dirname(PySide6.__file__)
+
+# Qt WebEngine 在打包时需要额外资源与辅助进程，否则 exe 内浏览器不可用
+webengine_datas = [
+    (os.path.join(pyside6_dir, 'QtWebEngineProcess.exe'), 'PySide6'),
+    (os.path.join(pyside6_dir, 'resources'), 'PySide6/resources'),
+    (os.path.join(pyside6_dir, 'translations', 'qtwebengine_locales'), 'PySide6/translations/qtwebengine_locales'),
+]
 
 a = Analysis(
     ['main.py'],
@@ -11,7 +22,7 @@ a = Analysis(
         ('resources/themes/dark_github.qss', 'resources/themes'),
         ('resources/themes/trae_dark.qss', 'resources/themes'),
         (r'venv\Lib\site-packages\certifi\cacert.pem', 'certifi'),
-    ],
+    ] + webengine_datas,
     hiddenimports=[
         # Core infrastructure
         'yaml',
@@ -44,6 +55,9 @@ a = Analysis(
         'v4.widgets.dropdown_selector',
         'PySide6.QtWebEngineWidgets',
         'PySide6.QtWebEngineCore',
+        'PySide6.QtWebChannel',
+        'PySide6.QtWebSockets',
+        'PySide6.QtSql',
         # v4 agent_engine engines
         'agent_engine',
         'agent_engine.llm_registry',
@@ -110,8 +124,7 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=['scripts/runtime_hook.py'],
     excludes=[
-        'PySide6.QtWebSockets', 'PySide6.QtWebChannel',
-        'PySide6.QtSql', 'PySide6.QtQml', 'PySide6.QtQuick',
+        'PySide6.QtQml', 'PySide6.QtQuick',
         'PySide6.QtMultimedia', 'PySide6.QtMultimediaWidgets',
         'PySide6.QtBluetooth', 'PySide6.QtNfc',
         'PySide6.QtSensors', 'PySide6.QtSerialPort',
