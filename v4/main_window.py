@@ -78,8 +78,17 @@ class MainWindow(QMainWindow):
 
         self._draft_session_type = "chat"
         self._draft_project_path = ""
-        self._current_model_name = self._config.get("app.last_model", "tool-agent")
+
+        # 校验持久化的模式/模型是否仍在当前配置中
+        config = self._config.config if self._config else {}
+        valid_modes = list(config.get("manual_modes", {}).keys()) or ["ask", "plan", "craft"]
+        valid_models = list(config.get("llm_providers", {}).keys()) or ["tool-agent"]
         self._current_mode = self._config.get("app.last_mode", "ask")
+        if self._current_mode not in valid_modes:
+            self._current_mode = valid_modes[0] if valid_modes else "ask"
+        self._current_model_name = self._config.get("app.last_model", "tool-agent")
+        if self._current_model_name not in valid_models:
+            self._current_model_name = valid_models[0] if valid_models else "tool-agent"
 
         self._connect_signals()
         self._init_default_session()
@@ -366,11 +375,33 @@ class MainWindow(QMainWindow):
         dialog.exec()
 
     def _on_settings_applied(self):
-        self._theme_name = self._config.get("app.theme", theme.name)
-        if self._theme_name in _THEMES:
-            theme.set_theme(self._theme_name)
-        self._current_mode = self._config.get("app.last_mode", self._current_mode)
-        self._current_model_name = self._config.get("app.last_model", self._current_model_name)
+        """设置对话框保存后：校验并应用主题/模式/模型，回退无效值。"""
+        # 主题：无效则保持当前主题
+        new_theme = self._config.get("app.theme", self._theme_name)
+        if new_theme not in _THEMES:
+            new_theme = self._theme_name
+        else:
+            self._theme_name = new_theme
+        theme.set_theme(new_theme)
+
+        # 模式：必须在 manual_modes 中存在
+        config = self._config.config if self._config else {}
+        valid_modes = list(config.get("manual_modes", {}).keys()) or ["ask", "plan", "craft"]
+        new_mode = self._config.get("app.last_mode", self._current_mode)
+        if new_mode not in valid_modes:
+            new_mode = self._current_mode
+        self._current_mode = new_mode
+        self._config.set("app.last_mode", new_mode)
+
+        # 模型：必须在 llm_providers 中存在
+        valid_models = list(config.get("llm_providers", {}).keys()) or ["tool-agent"]
+        new_model = self._config.get("app.last_model", self._current_model_name)
+        if new_model not in valid_models:
+            new_model = self._current_model_name
+        self._current_model_name = new_model
+        self._config.set("app.last_model", new_model)
+        self._config.save()
+
         self._center._input.set_mode(self._current_mode)
         self._center._input.set_model(self._current_model_name)
         self._left._theme_btn.setText("☀️" if theme.name == "light" else "🌙")

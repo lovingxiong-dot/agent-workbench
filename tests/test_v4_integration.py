@@ -586,3 +586,165 @@ class TestV4Integration:
             cfg = ConfigService(config_path="config/config.yaml")
             cfg.set("app.last_session_id", original_last_sid)
             cfg.save()
+
+    # ------------------------------------------------------------------
+    # 15. 设置对话框持久化
+    # ------------------------------------------------------------------
+    def test_settings_dialog_persists_theme_mode_model(self):
+        """设置对话框保存后，配置与 UI 同步更新。"""
+        from v4.widgets.settings_dialog import SettingsDialog
+        cfg = ConfigService(config_path="config/config.yaml")
+        original_theme = cfg.get("app.theme", "dark")
+        original_mode = cfg.get("app.last_mode", "ask")
+        original_model = cfg.get("app.last_model", "tool-agent")
+        try:
+            window = self._create_window(auto_complete=False)
+            self._process_events()
+
+            dialog = SettingsDialog(window._config, window)
+            # 模拟真实使用路径：settings_applied 信号连接到主窗口回调
+            dialog.settings_applied.connect(window._on_settings_applied)
+            new_theme = "light" if original_theme == "dark" else "dark"
+            new_mode = "plan" if original_mode != "plan" else "craft"
+            dialog._theme_box.setCurrentText(new_theme)
+            dialog._mode_box.setCurrentText(new_mode)
+            dialog._model_box.setCurrentText("tool-agent")
+            dialog._on_save()
+            self._process_events()
+
+            assert window._config.get("app.theme") == new_theme
+            assert window._config.get("app.last_mode") == new_mode
+            assert window._config.get("app.last_model") == "tool-agent"
+            assert window._center._input._mode_tag._value_label.text() == new_mode
+            assert window._center._input._model_tag._value_label.text() == "tool-agent"
+            expected_btn = "☀️" if new_theme == "light" else "🌙"
+            assert window._left._theme_btn.text() == expected_btn, "主题切换后左栏主题按钮应同步"
+
+            window.close()
+            window.deleteLater()
+            self._process_events()
+        finally:
+            cfg.set("app.theme", original_theme)
+            cfg.set("app.last_mode", original_mode)
+            cfg.set("app.last_model", original_model)
+            cfg.save()
+
+    # ------------------------------------------------------------------
+    # 16. 无效模式/模型启动回退
+    # ------------------------------------------------------------------
+    def test_invalid_last_mode_model_falls_back_on_startup(self):
+        """配置中持久化的模式/模型无效时，启动应回退到有效值。"""
+        cfg = ConfigService(config_path="config/config.yaml")
+        original_mode = cfg.get("app.last_mode", "ask")
+        original_model = cfg.get("app.last_model", "tool-agent")
+        try:
+            cfg.set("app.last_mode", "nonexistent_mode")
+            cfg.set("app.last_model", "nonexistent_model")
+            cfg.save()
+
+            window = self._create_window(auto_complete=False)
+            self._process_events()
+
+            # 回退到配置中第一个有效模式/模型
+            assert window._current_mode != "nonexistent_mode"
+            assert window._current_model_name != "nonexistent_model"
+            assert window._center._input._mode_tag._value_label.text() == window._current_mode
+            assert window._center._input._model_tag._value_label.text() == window._current_model_name
+
+            window.close()
+            window.deleteLater()
+            self._process_events()
+        finally:
+            cfg.set("app.last_mode", original_mode)
+            cfg.set("app.last_model", original_model)
+            cfg.save()
+
+    # ------------------------------------------------------------------
+    # 17. 模式/模型下拉选择器持久化
+    # ------------------------------------------------------------------
+    def test_mode_selector_persists_config_and_ui(self):
+        """点击模式标签并选择新模式后，配置与输入标签同步更新。"""
+        cfg = ConfigService(config_path="config/config.yaml")
+        original_mode = cfg.get("app.last_mode", "ask")
+        try:
+            window = self._create_window(auto_complete=False)
+            self._process_events()
+
+            # 直接模拟下拉选择器选中 craft
+            window._mode_selector.item_selected.emit("craft")
+            self._process_events()
+
+            assert window._config.get("app.last_mode") == "craft"
+            assert window._current_mode == "craft"
+            assert window._center._input._mode_tag._value_label.text() == "craft"
+
+            window.close()
+            window.deleteLater()
+            self._process_events()
+        finally:
+            cfg.set("app.last_mode", original_mode)
+            cfg.save()
+
+    def test_model_selector_persists_config_and_ui(self):
+        """点击模型标签并选择新模型后，配置与输入标签同步更新。"""
+        cfg = ConfigService(config_path="config/config.yaml")
+        original_model = cfg.get("app.last_model", "tool-agent")
+        try:
+            window = self._create_window(auto_complete=False)
+            self._process_events()
+
+            # 直接模拟下拉选择器选中 deepseek
+            window._model_selector.item_selected.emit("deepseek")
+            self._process_events()
+
+            assert window._config.get("app.last_model") == "deepseek"
+            assert window._current_model_name == "deepseek"
+            assert window._center._input._model_tag._value_label.text() == "deepseek"
+
+            window.close()
+            window.deleteLater()
+            self._process_events()
+        finally:
+            cfg.set("app.last_model", original_model)
+            cfg.save()
+
+    # ------------------------------------------------------------------
+    # 18. 设置对话框对无效配置回退
+    # ------------------------------------------------------------------
+    def test_settings_dialog_fallback_for_invalid_config_values(self):
+        """外部污染导致配置值无效时，_on_settings_applied 应回退并保持当前值。"""
+        cfg = ConfigService(config_path="config/config.yaml")
+        original_theme = cfg.get("app.theme", "dark")
+        original_mode = cfg.get("app.last_mode", "ask")
+        original_model = cfg.get("app.last_model", "tool-agent")
+        try:
+            window = self._create_window(auto_complete=False)
+            self._process_events()
+
+            current_mode = window._current_mode
+            current_model = window._current_model_name
+            current_theme = window._theme_name
+
+            # 模拟外部污染
+            cfg.set("app.theme", "invalid_theme")
+            cfg.set("app.last_mode", "invalid_mode")
+            cfg.set("app.last_model", "invalid_model")
+            cfg.save()
+
+            window._on_settings_applied()
+            self._process_events()
+
+            assert window._config.get("app.theme") == current_theme
+            assert window._config.get("app.last_mode") == current_mode
+            assert window._config.get("app.last_model") == current_model
+            assert window._center._input._mode_tag._value_label.text() == current_mode
+            assert window._center._input._model_tag._value_label.text() == current_model
+
+            window.close()
+            window.deleteLater()
+            self._process_events()
+        finally:
+            cfg.set("app.theme", original_theme)
+            cfg.set("app.last_mode", original_mode)
+            cfg.set("app.last_model", original_model)
+            cfg.save()

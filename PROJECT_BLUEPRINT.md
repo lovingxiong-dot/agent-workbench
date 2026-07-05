@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.5-alpha | 存档次数 | 6 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.6-alpha | 存档次数 | 7 |
 
 ## 项目概要
 AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。
@@ -146,6 +146,8 @@ v5.0.0-alpha 为 v5-dev 线路起点：从 v4-refactor 切出独立分支，将�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v5.0.6-alpha | 2026-07-06 | P5/P6 完全整改：SettingsDialog 配置与 UI 同步修复，MainWindow 启动与设置应用时校验主题/模式/模型有效性并回退无效值，修复 GUI 冒烟测试状态隔离，补充旧 UI 主题兼容键，全量 212 个测试通过 | fix/robustness/test | v4/main_window.py, v4/widgets/base.py, tests/test_v4_integration.py, tests/test_v4_gui_smoke.py |
+| v5.0.5-alpha | 2026-07-06 | P5 会话数据持久化与列表同步：启动恢复 `app.last_session_id`、会话切换/创建/删除时同步持久化、无效会话清理、左栏空状态显示 | feat/session-sync | v4/main_window.py, v4/widgets/left_panel.py, v4/repository.py, v4/models.py, tests/test_v4_integration.py |
 | v5.0.3-alpha | 2026-07-06 | 按审查报告执行模块化骨架拆分：将 `v4/main_window.py` 拆分为 `v4/widgets/` 7 个模块，主窗口降至 357 行；修复 `_session_idx_map` 致命 Bug，统一使用 `LeftPanel._idx_to_sid` | refactor/modular | v4/main_window.py, v4/widgets/* |
 | v5.0.2-alpha | 2026-07-06 | 完成 P3 UIRenderer 与新 UI 桥接：ChatArea 真实消息渲染/流式/确认条/阶段状态，LeftPanel 会话列表按项目分组刷新与 badge 更新，SessionGroup 右键动作信号修复 | feat/bridge/ui | v4/main_window.py, tests/test_v4_gui_smoke.py |
 | v5.0.1-alpha | 2026-07-05 | 备份 v4 旧 UI 组件至 `v4/legacy/`，标记 v5-dev 独立线路；原始组件保留待 P10 清理 | chore/backup | v4/legacy/*, PROJECT_BLUEPRINT.md |

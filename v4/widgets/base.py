@@ -41,6 +41,12 @@ _THEMES = {
         "bg_hover":          "#2a2a4a",
         "bg_selected":       "#0f3460",
         "window_shadow":     "#000000",
+        # 兼容旧 UI 组件（v4/input_area.py、v4/right_panel.py）的测试
+        "send_btn":          "#007acc",
+        "send_btn_hover":    "#569cd6",
+        "stop_btn":          "#dc3545",
+        "stop_btn_hover":    "#ff4d5e",
+        "tag_text":          "#a0a0b0",
     },
     "light": {
         "bg_primary":        "#f8f9fa",
@@ -72,6 +78,12 @@ _THEMES = {
         "bg_hover":          "#e9ecef",
         "bg_selected":       "#e7f1ff",
         "window_shadow":     "#adb5bd",
+        # 兼容旧 UI 组件（v4/input_area.py、v4/right_panel.py）的测试
+        "send_btn":          "#007acc",
+        "send_btn_hover":    "#005fa3",
+        "stop_btn":          "#dc3545",
+        "stop_btn_hover":    "#bb2d3b",
+        "tag_text":          "#495057",
     },
 }
 

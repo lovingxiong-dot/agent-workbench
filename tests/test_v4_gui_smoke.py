@@ -22,15 +22,29 @@ class TestV5GUISmoke:
         cls.app = app
 
     def test_window_starts_without_crash(self):
-        window = MainWindow()
-        self.app.processEvents()
-        assert window is not None
-        assert window._orchestrator is not None
-        # 启动时进入草稿窗口，不自动创建会话
-        assert window._orchestrator.current_session_id is None
-        window.close()
-        window.deleteLater()
-        self.app.processEvents()
+        from services.config_service import ConfigService
+        cfg = ConfigService(config_path="config/config.yaml")
+        original_last_sid = cfg.get("app.last_session_id", "")
+        db_path = "storage/conversations_v4.db"
+        try:
+            # 隔离外部状态：清空持久化会话 ID 与数据库，确保进入草稿窗口
+            cfg.set("app.last_session_id", "")
+            cfg.save()
+            if os.path.exists(db_path):
+                os.remove(db_path)
+
+            window = MainWindow()
+            self.app.processEvents()
+            assert window is not None
+            assert window._orchestrator is not None
+            # 启动时进入草稿窗口，不自动创建会话
+            assert window._orchestrator.current_session_id is None
+            window.close()
+            window.deleteLater()
+            self.app.processEvents()
+        finally:
+            cfg.set("app.last_session_id", original_last_sid)
+            cfg.save()
 
     def test_three_column_layout_initial_state(self):
         """验证三栏布局初始尺寸与右栏标签页数量。"""

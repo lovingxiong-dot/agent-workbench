@@ -1,5 +1,22 @@
 # Changelog
 
+## v5.0.6-alpha (2026-07-06) — P5/P6 完全整改：设置持久化校验与测试补齐
+
+### fix/robustness
+- `MainWindow` 启动时校验 `app.last_mode` / `app.last_model` 是否仍在当前配置中，无效则回退到第一个有效值
+- `MainWindow._on_settings_applied` 对设置对话框保存的主题/模式/模型进行有效性校验，无效值回退并保持当前值，避免外部污染导致配置损坏
+
+### fix/test
+- 修复 `test_settings_dialog_persists_theme_mode_model`：将 `SettingsDialog.settings_applied` 信号正确连接到 `MainWindow._on_settings_applied`，真实模拟使用路径
+- 修复 `test_window_starts_without_crash`：隔离 `app.last_session_id` 与数据库状态，确保冒烟测试验证草稿窗口启动
+
+### fix/compatibility
+- `v4/widgets/base.py` 的主题字典补充旧 UI 组件依赖的 `send_btn`、`send_btn_hover`、`stop_btn`、`stop_btn_hover`、`tag_text` 键，恢复 `test_v4_input_area.py` 与 `test_v4_right_panel.py` 测试
+
+### test
+- `tests/test_v4_integration.py` 新增 4 个 P6 边缘测试：无效模式/模型启动回退、模式选择器持久化、模型选择器持久化、设置对话框对无效配置回退
+- 全量测试：`pytest tests/` 212/212 通过
+
 ## v5.0.5-alpha (2026-07-06) — P5 会话数据持久化与列表同步
 
 ### feat/p5-session-sync
