@@ -1,10 +1,13 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v4.0.9-alpha | 存档次数 | 36 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v4.0.11-alpha | 存档次数 | 37 |
+
+## 归档声明
+> **本 `v4-refactor` 分支为旧 UI 线路的最终归档版本，不再接受新功能开发。** 新 UI 完全移植工程已在 `v5-dev` 分支完成，所有后续迭代请在 `v5-dev`（标签 `v5.0.11-alpha` 及以后）上进行。
 
 ## 项目概要
-AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v4.0.8-alpha 完成最终发布版三栏 UI 全量重制：左栏「功能/会话」Tab + 分组折叠会话列表，中栏卡片化消息流 + 新输入区（圆形发送按钮 / 技能按钮 / mode/model 标签），右栏集成 v4 架构 / 终端 / 文件编辑器 / 浏览器；v4.0.7-alpha 完成标题栏三键（搜索/更多/展开）+ execute 阶段步骤条自动解析，三键图标采用 SVG path 矢量渲染并接入搜索高亮/更多菜单/全局快捷键；v4.0.6-alpha 补齐 v4.0.5-alpha 的两处路径遗漏：`AgentWorkbench.spec` 的 `datas` 加入 `assets/app.ico` 以支持打包后读取图标资源；`services/project_service.py` 改用 `_get_app_root()` 定位 `storage/activities.json`，避免 exe 在 CWD 创建 storage。v4.0.5-alpha 完成工程目录标准化改造；v4.0.4-alpha 在 v4 单轨架构基础上实现对话 UI 三层折叠结构；v4.0.3-alpha 已完成 PhaseEngine 接入、PyInstaller 打包适配与零引用旧代码清理。
+AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v4.0.11-alpha 为旧 UI 线路最终归档：补充归档声明并冻结文档；v4.0.8-alpha 完成最终发布版三栏 UI 全量重制：左栏「功能/会话」Tab + 分组折叠会话列表，中栏卡片化消息流 + 新输入区（圆形发送按钮 / 技能按钮 / mode/model 标签），右栏集成 v4 架构 / 终端 / 文件编辑器 / 浏览器；v4.0.7-alpha 完成标题栏三键（搜索/更多/展开）+ execute 阶段步骤条自动解析，三键图标采用 SVG path 矢量渲染并接入搜索高亮/更多菜单/全局快捷键；v4.0.6-alpha 补齐 v4.0.5-alpha 的两处路径遗漏：`AgentWorkbench.spec` 的 `datas` 加入 `assets/app.ico` 以支持打包后读取图标资源；`services/project_service.py` 改用 `_get_app_root()` 定位 `storage/activities.json`，避免 exe 在 CWD 创建 storage。v4.0.5-alpha 完成工程目录标准化改造；v4.0.4-alpha 在 v4 单轨架构基础上实现对话 UI 三层折叠结构；v4.0.3-alpha 已完成 PhaseEngine 接入、PyInstaller 打包适配与零引用旧代码清理。
 
 ## 技术栈
 | 类别 | 技术 | 版本 | 用途 |
@@ -174,6 +177,7 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v4.0.11-alpha | 2026-07-06 | v4-refactor旧UI线路最终归档：补充归档声明，冻结文档，指向v5-dev为新UI开发主线，204/204测试通过 | docs/archive | docs/PROJECT_BLUEPRINT.md, docs/README.md, docs/CHANGELOG.md |
 | v4.0.8-alpha | 2026-07-01 | v4全量UI三位一体对齐SVG设计稿：HeaderToolbar按钮18×22/icon14, InputArea标签式mode/model, RightPanel可关闭标签+搜索角标, Phase面板4px色条+fold-block边框, 左栏Tab等宽, 死代码清理 | feat/refactor/test | v4/main_window.py, v4/input_area.py, v4/right_panel.py, v4/icons.py, v4/conversation_list.py, tests/test_v4_input_area.py |
 
 ## 历史归档

@@ -1,5 +1,7 @@
 # AI Agent Workbench
 
+> **归档说明：本 `v4-refactor` 分支是旧 UI 线路的最终归档版本，已冻结。** 新 UI 完全移植请在 `v5-dev` 分支进行（最新标签 `v5.0.11-alpha`）。
+
 > 基于 PySide6 的桌面端 AI 助手，v4 单轨架构 + Phase-Driven Workflow Engine，
 > 三种手动模式（Ask / Plan / Craft），多会话运行时隔离，支持 LLM 推理、系统命令、文件操作、网页抓取、终端解释器及量化工具。
 

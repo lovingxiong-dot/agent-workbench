@@ -1,5 +1,14 @@
 # Changelog
 
+## v4.0.11-alpha (2026-07-06) — v4-refactor 旧 UI 线路最终归档
+
+### archive
+- **冻结 v4-refactor 旧 UI 线路**：在 `docs/README.md`、`docs/PROJECT_BLUEPRINT.md`、本文档顶部添加归档声明，明确本分支不再接受新功能开发。
+- **指向新 UI 主线**：所有后续 UI 改造与功能迭代已迁移至 `v5-dev` 分支（标签 `v5.0.11-alpha` 及以后）。
+
+### test
+- 全量 204 项测试通过，零回归。
+
 ## v4.0.8-alpha (2026-07-01) — v4全量UI三位一体对齐SVG设计稿
 
 ### feat
