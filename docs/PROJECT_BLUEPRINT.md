@@ -1,10 +1,10 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v4.0.9-alpha | 存档次数 | 36 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.10-alpha | 存档次数 | 10 |
 
 ## 项目概要
-AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v4.0.8-alpha 完成最终发布版三栏 UI 全量重制：左栏「功能/会话」Tab + 分组折叠会话列表，中栏卡片化消息流 + 新输入区（圆形发送按钮 / 技能按钮 / mode/model 标签），右栏集成 v4 架构 / 终端 / 文件编辑器 / 浏览器；v4.0.7-alpha 完成标题栏三键（搜索/更多/展开）+ execute 阶段步骤条自动解析，三键图标采用 SVG path 矢量渲染并接入搜索高亮/更多菜单/全局快捷键；v4.0.6-alpha 补齐 v4.0.5-alpha 的两处路径遗漏：`AgentWorkbench.spec` 的 `datas` 加入 `assets/app.ico` 以支持打包后读取图标资源；`services/project_service.py` 改用 `_get_app_root()` 定位 `storage/activities.json`，避免 exe 在 CWD 创建 storage。v4.0.5-alpha 完成工程目录标准化改造；v4.0.4-alpha 在 v4 单轨架构基础上实现对话 UI 三层折叠结构；v4.0.3-alpha 已完成 PhaseEngine 接入、PyInstaller 打包适配与零引用旧代码清理。
+AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v5.0.9-alpha 完成新 UI 完全移植与旧 UI 清理：基于 `v4/widgets/` 的模块化三栏主窗口（左栏功能/会话、中栏聊天区、右栏终端/文件/浏览器），完整保留 v4 单轨后端骨架功能，实现 UI 与业务逻辑全量对接，PyInstaller 打包验证通过；v5.0.8-alpha 完成 GUI 冒烟修复（`ChatArea` QPen 导入缺失）；v5.0.7-alpha 完成右栏真实功能回填（`TerminalWidget`、`FileReaderWidget`、`BrowserWidget`）；v5.0.6-alpha 完成持久化校验整改；v5.0.5-alpha 完成会话数据持久化与列表同步；v5.0.4-alpha 完成关键用户动作对接；v5.0.3-alpha 完成模块化骨架拆分；v5.0.2-alpha 完成 UIRenderer 与新 UI 桥接；v5.0.1-alpha 备份旧 UI 组件至 `v4/legacy/` 并标记 v5-dev 线路；v5.0.0-alpha 为 v5-dev 线路起点与新 UI 后端核心注入。v4.x 为旧 UI 完整版线路，已归档至 `v4-refactor` / `ui-template` 分支，不再维护。
 
 ## 技术栈
 | 类别 | 技术 | 版本 | 用途 |
@@ -86,7 +86,7 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │   ├── __init__.py
 │   ├── event_bus.py        # 基于 Qt Signal 的事件总线
 │   └── events.py           # 强类型跨组件事件定义
-├── v4/                     # v4 单轨事件总线架构
+├── v4/                     # v5 新 UI 核心（基于 v4 单轨后端骨架）
 │   ├── __init__.py
 │   ├── models.py           # 不可变数据模型
 │   ├── event_bus.py        # v4 MessageBus
@@ -97,8 +97,30 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │   ├── worker_manager.py   # 系统级 Worker 并发管理
 │   ├── orchestrator.py     # SessionOrchestrator 统一协调器
 │   ├── ui_renderer.py      # UI 渲染器
-│   ├── conversation_list.py # 会话列表控件
-│   ├── main_window.py      # v4 薄主窗口
+│   ├── main_window.py      # v5 新 UI 主窗口（薄编排层）
+│   ├── widgets/            # v5 新 UI 控件库
+│   │   ├── __init__.py
+│   │   ├── base.py         # 主题、字体、通用辅助函数
+│   │   ├── window_frame.py # AppleMenu / EdgeResizeWidget
+│   │   ├── left_panel.py   # 左栏：功能/会话 Tab、搜索、会话列表
+│   │   ├── chat_items.py   # 聊天项卡片（8 个子类）
+│   │   ├── chat_scene.py   # QGraphicsScene 消息场景
+│   │   ├── chat_area.py    # 中栏聊天区 + 输入区
+│   │   ├── right_panel.py  # 右栏：终端 / 文件编辑器 / 浏览器
+│   │   ├── terminal_widget.py     # 终端面板
+│   │   ├── file_reader_widget.py  # 文件编辑器面板
+│   │   ├── browser_widget.py      # 浏览器面板
+│   │   ├── dropdown_selector.py   # 通用内嵌下拉选择器
+│   │   └── settings_dialog.py     # 设置对话框
+│   ├── legacy/             # 旧 UI 组件备份（已停止维护）
+│   │   ├── __init__.py
+│   │   ├── chat_items.py
+│   │   ├── chat_scene.py
+│   │   ├── conversation_list.py
+│   │   ├── icons.py
+│   │   ├── input_area.py
+│   │   ├── right_panel.py
+│   │   └── main_window_legacy.py
 │   └── tests/              # v4 内部单元测试
 │       └── test_orchestrator.py
 ├── services/               # 服务层（v3 兼容，v4 核心逻辑已迁移至 v4/）
@@ -134,14 +156,17 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │       ├── dark_github.qss # GitHub Dark 主题
 │       └── trae_dark.qss   # Trae Dark 主题
 │
-├── tests/                  # 测试分组（193 个单元 / 集成 / UI 测试）
+├── tests/                  # 测试分组（225 个单元 / 集成 / UI 测试）
 │   ├── __init__.py
 │   ├── integration/
 │   │   ├── __init__.py
 │   │   └── integration_test_deepseek_metrics.py
 │   ├── test_v4_basics.py              # v4 数据模型 / 事件总线 / 仓库基础测试
-│   ├── test_v4_gui_smoke.py           # v4 GUI 冒烟测试（主题切换、输入框、新任务按钮）
-│   ├── test_v4_integration.py         # v4 MainWindow / Orchestrator / Worker 集成测试
+│   ├── test_v4_gui_smoke.py           # v5 新 UI GUI 冒烟测试
+│   ├── test_v4_integration.py         # v5 MainWindow / Orchestrator / Worker 集成测试
+│   ├── test_v4_widgets_right_panel.py # v5 右栏功能回填测试
+│   ├── test_v4_input_area.py          # v5 输入区组件测试
+│   ├── test_v4_right_panel.py         # v5 旧右面板备份测试
 │   ├── test_agent_worker.py
 │   ├── test_agent_session_integration.py
 │   ├── test_agent_session_room.py
@@ -174,11 +199,21 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
-| v4.0.8-alpha | 2026-07-01 | v4全量UI三位一体对齐SVG设计稿：HeaderToolbar按钮18×22/icon14, InputArea标签式mode/model, RightPanel可关闭标签+搜索角标, Phase面板4px色条+fold-block边框, 左栏Tab等宽, 死代码清理 | feat/refactor/test | v4/main_window.py, v4/input_area.py, v4/right_panel.py, v4/icons.py, v4/conversation_list.py, tests/test_v4_input_area.py |
+| v5.0.10-alpha | 2026-07-06 | v5项目文档同步：README/PROJECT_BLUEPRINT/CHANGELOG全面更新为v5新UI完整版线路，反映v5.0.0~v5.0.9全部阶段成果，目录结构同步v4/widgets/与v4/legacy/，测试数更新为225 | docs | docs/README.md, docs/PROJECT_BLUEPRINT.md, docs/CHANGELOG.md |
 
 ## 历史归档
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v5.0.9-alpha | 2026-07-06 | P10清理旧UI与打包验证：删除v4根目录重复旧UI文件（已备份至v4/legacy/），迁移旧测试导入，更新AgentWorkbench.spec hiddenimports为v4.widgets.*，PyInstaller打包成功并验证exe独立启动 | chore/build/test | AgentWorkbench.spec, v4/legacy/*, tests/test_v4_input_area.py, tests/test_v4_right_panel.py |
+| v5.0.8-alpha | 2026-07-06 | P8完整功能回填GUI冒烟修复：修复ChatArea中QPen导入缺失导致的paintEvent崩溃，验证三栏加载/会话创建/UI事件分发正常 | fix/ui/test | v4/widgets/chat_area.py |
+| v5.0.7-alpha | 2026-07-06 | P7右栏真实功能回填：实现TerminalWidget/FileReaderWidget/BrowserWidget并集成到RightPanel；最近文件列表及点击打开；同步会话项目路径到终端工作目录 | feat/ui/test | v4/widgets/right_panel.py, v4/widgets/terminal_widget.py, v4/widgets/file_reader_widget.py, v4/widgets/browser_widget.py, workers/terminal_worker.py, tests/test_v4_widgets_right_panel.py |
+| v5.0.6-alpha | 2026-07-06 | P5/P6持久化校验与测试整改：增强app.last_mode/last_model启动与设置应用校验，补充主题键backward compatibility，新增边界测试 | fix/test | v4/main_window.py, v4/widgets/base.py, tests/test_v4_integration.py |
+| v5.0.5-alpha | 2026-07-06 | P5会话数据持久化与列表同步：实现last_session_id持久化与启动恢复、会话切换/创建/删除配置同步、无效会话清理、左栏空状态显示 | feat/test | v4/main_window.py, v4/widgets/left_panel.py, v4/repository.py |
+| v5.0.4-alpha | 2026-07-06 | P4关键用户动作对接：停止/确认/分析按钮、导出会话、设置对话框、搜索过滤、模式模型下拉选择器 | feat/ui | v4/main_window.py, v4/widgets/chat_area.py, v4/widgets/left_panel.py, v4/widgets/dropdown_selector.py, v4/widgets/settings_dialog.py |
+| v5.0.3-alpha | 2026-07-06 | 模块化骨架拆分与致命Bug修复：将v4/main_window.py拆分为v4/widgets/9个模块，修复_session_idx_map为空问题 | refactor/fix | v4/widgets/*, v4/main_window.py |
+| v5.0.2-alpha | 2026-07-06 | P3 UIRenderer与新UI桥接完成：ChatArea真实消息渲染/流式输出/确认条/阶段状态，LeftPanel会话列表刷新与badge更新 | feat/ui | v4/widgets/chat_area.py, v4/widgets/left_panel.py, v4/ui_renderer.py |
+| v5.0.1-alpha | 2026-07-06 | 备份v4旧UI组件至v4/legacy/并标记v5-dev线路 | chore/docs | v4/legacy/*, docs/README.md, docs/PROJECT_BLUEPRINT.md, docs/CHANGELOG.md |
+| v5.0.0-alpha | 2026-07-06 | v5-dev线路起点与新UI后端核心注入 | feat/ui | v4/main_window.py, v4/widgets/* |
 | v4.0.7-alpha | 2026-07-01 | 标题栏三键（搜索/更多/展开）+ execute步骤条自动解析；三键图标改为SVG path并接入搜索高亮/更多菜单/全局快捷键；docs/ui/归档6 SVG+2 spec | feat/docs/fix | v4/main_window.py, v4/ui_renderer.py, AgentWorkbench.spec, docs/ui/* |
 | v4.0.6-alpha | 2026-07-01 | 补齐目录标准化遗漏：`AgentWorkbench.spec` datas加入`assets/app.ico`；`services/project_service.py`改用`_get_app_root()`定位`storage/activities.json`，避免exe在CWD创建storage | fix/build | AgentWorkbench.spec, services/project_service.py |
 | v4.0.5-alpha | 2026-06-30 | 工程目录标准化改造：根目录文件按职责分组为config/、assets/、scripts/、docs/，源码目录统一标注为src/分组；同步修正PyInstaller datas、runtime_hook、图标路径、config_service/LLMRegistry路径解析及所有代码中的配置路径引用；README/ARCHITECTURE/PROJECT_BLUEPRINT/getting-started同步更新 | refactor/docs/build | AgentWorkbench.spec, scripts/rebuild.ps1, services/config_service.py, agent_engine/llm_registry.py, v4/main_window.py, v4/worker.py, v4/repository.py, services/activity_service.py, services/session_service.py, docs/README.md, docs/ARCHITECTURE.md, docs/PROJECT_BLUEPRINT.md, docs/getting-started.md |

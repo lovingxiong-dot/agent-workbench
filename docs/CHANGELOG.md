@@ -1,5 +1,121 @@
 # Changelog
 
+## v5.0.10-alpha (2026-07-06) — v5 项目文档同步
+
+### docs
+- **README 升级为 v5 线路**：项目描述改为 v5 新 UI 完整版，测试数更新为 225，文件地图补充 `v4/widgets/` 与 `v4/legacy/`，当前状态更新为 v5.0.9-alpha / v5-dev。
+- **PROJECT_BLUEPRINT 升级为 v5**：版本号 `v5.0.10-alpha`，存档次数 10，项目概要重写为 v5 新 UI 完全移植历程，目录结构同步 `v4/widgets/` 控件库与 `v4/legacy/` 旧 UI 备份，最近变更与历史归档补充 v5.0.0~v5.0.9 全部阶段。
+- **CHANGELOG 补充 v5 历史**：在顶部记录 v5.0.10-alpha，并补录 v5.0.0~v5.0.9 各阶段变更。
+
+## v5.0.9-alpha (2026-07-06) — P10 清理旧UI与打包验证
+
+### chore
+- 删除 `v4/` 根目录下重复的旧 UI 文件（`chat_items.py`、`chat_scene.py`、`conversation_list.py`、`icons.py`、`input_area.py`、`right_panel.py`），完整备份保留在 `v4/legacy/`。
+- 旧测试迁移导入：`tests/test_v4_input_area.py`、`tests/test_v4_right_panel.py` 改为从 `v4.legacy.*` 导入。
+- 修复 `v4/legacy/right_panel.py` 内部导入路径。
+
+### build
+- 更新 `AgentWorkbench.spec` 的 `hiddenimports`：移除已删除旧模块，补全 `v4.widgets.*` 新模块。
+
+### test
+- PyInstaller 打包成功，输出 `dist/AgentWorkbench/AgentWorkbench.exe`。
+- 独立启动 exe 验证三栏加载、会话创建、UI 事件分发正常。
+- 全量测试 225/225 通过。
+
+## v5.0.8-alpha (2026-07-06) — P8 完整功能回填与GUI冒烟修复
+
+### fix/ui
+- 修复 `v4/widgets/chat_area.py` 中 `QPen` 导入缺失导致的 `paintEvent` 崩溃。
+- 验证三栏布局加载、会话创建、UI 事件分发正常。
+
+### test
+- 全量测试 225/225 通过。
+
+## v5.0.7-alpha (2026-07-06) — P7 右栏真实功能回填
+
+### feat/ui
+- 新增 `v4/widgets/terminal_widget.py`：终端命令输入、执行、输出显示、停止/清空。
+- 新增 `v4/widgets/file_reader_widget.py`：文件读取/编辑、保存、大文件截断、多编码解码。
+- 新增 `v4/widgets/browser_widget.py`：嵌入式浏览器（QWebEngineView）、地址栏、前进/后退/刷新/主页。
+- `v4/widgets/right_panel.py` 集成上述三组件，实现最近文件列表及点击打开。
+
+### fix
+- `workers/terminal_worker.py` 添加 `creationflags=subprocess.CREATE_NO_WINDOW`，修复 Windows 下命令窗口闪现。
+
+### test
+- 新增 `tests/test_v4_widgets_right_panel.py` 覆盖 TerminalWidget / FileReaderWidget / BrowserWidget / RightPanel，共 13 个用例。
+- 全量测试 225/225 通过。
+
+## v5.0.6-alpha (2026-07-06) — P5/P6 持久化校验与测试整改
+
+### fix
+- `v4/main_window.py` 启动时校验 `app.last_mode` / `app.last_model`，无效值回退到首个有效值。
+- `_on_settings_applied` 校验 theme / mode / model，防止外部配置污染。
+- `v4/widgets/base.py` 补充主题键 `send_btn`、`send_btn_hover`、`stop_btn`、`stop_btn_hover`、`tag_text`，兼容旧 UI 组件测试。
+
+### test
+- 修复 `test_settings_dialog_persists_theme_mode_model` 与 `test_window_starts_without_crash`。
+- 新增 4 个边界测试覆盖无效 mode/model 回退与配置持久化。
+- 全量测试 212/212 通过。
+
+## v5.0.5-alpha (2026-07-06) — P5 会话数据持久化与列表同步
+
+### feat
+- 实现 `app.last_session_id` 持久化与启动恢复。
+- 会话切换 / 创建 / 删除时同步更新配置。
+- 无效会话清理与左栏空状态显示。
+- `SessionMetadata` 新增 `last_preview` 字段，`repository.list_sessions` 子查询最后消息，确保预览文本正确。
+
+### test
+- 新增会话持久化相关集成测试。
+- 全量测试通过。
+
+## v5.0.4-alpha (2026-07-06) — P4 关键用户动作对接
+
+### feat/ui
+- 停止按钮 → `UserStopEvent`。
+- 确认按钮 → `UserConfirmEvent`。
+- 分析项目按钮 → `UIAnalyzeProjectEvent`。
+- 导出会话、打开设置对话框。
+- HeaderBar 搜索过滤：`search_text_changed` 连接到 `_left.filter_sessions`。
+- 模式 / 模型下拉选择器 `DropdownSelector`，配置持久化。
+
+### fix
+- 修复会话列表预览显示问题：优先使用 `last_preview` 字段。
+- 修复置顶会话标题未显示 "📌" 标记。
+
+## v5.0.3-alpha (2026-07-06) — 模块化骨架拆分与致命Bug修复
+
+### refactor
+- 将 `v4/main_window.py` 拆分为 `v4/widgets/` 下的 9 个模块（base / window_frame / left_panel / chat_items / chat_scene / chat_area / right_panel / dropdown_selector / settings_dialog），主窗口降至 357 行。
+
+### fix
+- 修复 `_session_idx_map` 永远为空导致会话选择/操作失效的问题，统一使用 `LeftPanel._idx_to_sid`。
+- 修复 `TabButton` 缺少 `text()` 方法。
+- 修复 `LeftPanel.refresh` 覆盖预览文本等问题。
+
+## v5.0.2-alpha (2026-07-06) — P3 UIRenderer与新UI桥接完成
+
+### feat/ui
+- `ChatArea` 实现真实消息渲染、流式输出、确认条和阶段状态。
+- `LeftPanel` 实现会话列表按项目分组刷新与 badge 更新。
+- `UIRenderer` 与新 UI 控件桥接完成。
+
+### fix
+- 修复 `SessionGroup` 右键动作信号。
+
+## v5.0.1-alpha (2026-07-06) — 备份v4旧UI组件并标记v5-dev线路
+
+### chore
+- 将 `conversation_list.py`、`input_area.py`、`right_panel.py`、`chat_items.py`、`chat_scene.py`、`icons.py`、`main_window_legacy.py` 移至 `v4/legacy/`。
+- 更新文档标记 v5-dev 线路。
+
+## v5.0.0-alpha (2026-07-06) — v5-dev线路起点与新UI后端核心注入
+
+### feat/ui
+- `v5-dev` 分支起点。
+- 新 UI 后端核心注入：`v4/main_window.py` 接入新 UI 壳层，保留 v4 单轨后端骨架。
+
 ## v4.0.8-alpha (2026-07-01) — v4全量UI三位一体对齐SVG设计稿
 
 ### feat

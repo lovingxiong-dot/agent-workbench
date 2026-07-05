@@ -1,6 +1,6 @@
 # AI Agent Workbench
 
-> 基于 PySide6 的桌面端 AI 助手，v4 单轨架构 + Phase-Driven Workflow Engine，
+> 基于 PySide6 的桌面端 AI 助手，v5 新 UI 完整版 + Phase-Driven Workflow Engine，
 > 三种手动模式（Ask / Plan / Craft），多会话运行时隔离，支持 LLM 推理、系统命令、文件操作、网页抓取、终端解释器及量化工具。
 
 ## 技术栈
@@ -45,7 +45,7 @@ venv\Scripts\Activate.ps1
 python -m pytest tests/ -v
 ```
 
-全部 **193 个单元 / 集成 / UI 测试** 通过。
+全部 **225 个单元 / 集成 / UI 测试** 通过。
 
 ---
 
@@ -68,12 +68,14 @@ python -m pytest tests/ -v
 | `config/config.yaml` | 全局配置（打包后可写副本位于 exe 同级 `config/`） | ★★★★★ |
 | `AgentWorkbench.spec` | PyInstaller 打包配置 | ★★★★ |
 | `core/event_bus.py` / `core/events.py` | 事件总线（MessageBus）+ 强类型事件 | ★★★★★ |
-| `v4/` | v4 单轨架构：主窗口 / Worker / Orchestrator / UI 渲染 | ★★★★★ |
+| `v4/` | v5 新 UI 核心：基于 `v4/widgets/` 的模块化主窗口 / Worker / Orchestrator / UI 渲染 | ★★★★★ |
+| `v4/widgets/` | 新 UI 控件库：左栏 / 聊天区 / 输入区 / 右栏 / 设置对话框等 | ★★★★★ |
+| `v4/legacy/` | 旧 UI 组件备份（已停止维护） | ★ |
 | `services/` | 配置服务 / 持久化 / 活动记录 / 主题 / 解释器 | ★★★★ |
 | `agent_engine/` | 编排器 / Phase 管理 / 记忆管理 / 八引擎（engines/） | ★★★★ |
 | `workers/` | 后台线程：Agent 推理 / 终端捕获 / 验证 | ★★★★ |
 | `tools/` | 工具层：系统命令 / 量化分析 / Web / MT5 / 屏幕 | ★★★ |
-| `tests/` | 193 个单元 / 集成 / UI 测试 | ★★★ |
+| `tests/` | 225 个单元 / 集成 / UI 测试 | ★★★ |
 | `resources/themes/` | QSS 主题（GitHub Dark / Trae Dark） | ★★ |
 | `assets/app.ico` | 应用图标 | ★★ |
 | `scripts/start.bat` | 一键启动脚本 | ★★ |
@@ -90,11 +92,11 @@ python -m pytest tests/ -v
 
 | 指标 | 详情 |
 |---|---|
-| 版本 | v4.0.4-alpha |
-| 测试 | 193/193 通过 |
-| 架构 | v4 单轨：SessionOrchestrator + SessionRuntime + V4Worker + PhaseEngine + 八引擎 |
+| 版本 | v5.0.9-alpha |
+| 测试 | 225/225 通过 |
+| 架构 | v5 新 UI 完整版：模块化 `v4/widgets/` + SessionOrchestrator + SessionRuntime + V4Worker + PhaseEngine + 八引擎 |
 | 打包 | PyInstaller 单目录 ≈ 17.9 MB |
-| 分支 | v4-refactor |
+| 分支 | v5-dev |
 
 ---
 
