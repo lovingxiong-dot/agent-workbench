@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from v4.right_panel import TerminalWidget, FileReaderWidget, RightPanelWidget
+from v4.legacy.right_panel import TerminalWidget, FileReaderWidget, RightPanelWidget
 from v4.widgets.base import _THEMES
 
 

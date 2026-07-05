@@ -1,5 +1,20 @@
 # Changelog
 
+## v5.0.9-alpha (2026-07-06) — P10 清理旧 UI 与打包验证
+
+### chore/p10-cleanup
+- 删除 `v4/` 根目录下重复的旧 UI 文件：`chat_items.py`、`chat_scene.py`、`conversation_list.py`、`icons.py`、`input_area.py`、`right_panel.py`（完整备份保留在 `v4/legacy/`）
+- 旧测试迁移导入：`tests/test_v4_input_area.py`、`tests/test_v4_right_panel.py` 改为从 `v4.legacy.*` 导入，确保历史测试继续可用
+- 修复 `v4/legacy/right_panel.py` 内部导入：`from v4.icons import svg_icon` → `from .icons import svg_icon`
+
+### build/p10-packaging
+- 更新 `AgentWorkbench.spec` 的 `hiddenimports`：移除已删除的旧模块，补全 `v4.widgets.*` 新模块（base/window_frame/left_panel/chat_items/chat_scene/chat_area/right_panel/terminal_widget/file_reader_widget/browser_widget/settings_dialog/dropdown_selector）
+- PyInstaller 打包成功，输出 `dist/AgentWorkbench/AgentWorkbench.exe`
+- 独立启动打包后的 exe，验证三栏加载、会话创建、ui 事件分发正常
+
+### test
+- 全量测试：`pytest tests/` 225/225 通过
+
 ## v5.0.8-alpha (2026-07-06) — P8 完整功能回填：真实 GUI 冒烟修复
 
 ### fix/p8-gui

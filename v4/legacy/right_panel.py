@@ -26,7 +26,7 @@ try:
 except Exception:
     _WEBENGINE_AVAILABLE = False
 
-from v4.icons import svg_icon
+from .icons import svg_icon
 from workers.terminal_worker import TerminalWorker
 from ui.widgets.explorer import ProjectExplorer
 

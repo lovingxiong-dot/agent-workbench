@@ -17,7 +17,7 @@ from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import QApplication
 from PySide6.QtTest import QTest
 
-from v4.input_area import InputAreaWidget
+from v4.legacy.input_area import InputAreaWidget
 from v4.widgets.base import _THEMES
 
 
