@@ -1,5 +1,24 @@
 # Changelog
 
+## v5.0.12-alpha (2026-07-06) — UI 完全移植工程最终完整性检查与存档
+
+### docs
+- **PROJECT_BLUEPRINT 升级至 v5.0.12-alpha**：存档次数 12，项目概要补充 P10 复核、P11 `v4-refactor` 最终归档与真实 GUI 验证结论，最近变更记录本阶段。
+- **README 当前状态更新**：版本 `v5.0.12-alpha`，补充 exe 独立启动验证与 `v4-refactor` 归档信息。
+- **CHANGELOG 顶部记录本阶段**：归档 P10 复核与 P11 旧线路归档结果。
+
+### chore
+- **P10 复核**：确认 `v4/legacy/` 旧 UI 备份完整，`v4/` 根目录无重复旧 UI 文件；`AgentWorkbench.spec` hiddenimports 已包含全部 `v4.widgets.*`；PyInstaller 重新打包成功。
+
+### build
+- **exe 独立启动冒烟**：`dist/AgentWorkbench/AgentWorkbench.exe` 启动后存活 10 秒无异常退出。
+
+### archive
+- **`v4-refactor` 旧线路最终归档**：在 `v4-refactor` 分支更新 README / PROJECT_BLUEPRINT / CHANGELOG 归档声明，冻结文档；推送标签 `v4.0.11-alpha`。
+
+### test
+- 全量 225 项测试通过，零回归。
+
 ## v5.0.10-alpha (2026-07-06) — v5 项目文档同步
 
 ### docs

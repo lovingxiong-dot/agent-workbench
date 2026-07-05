@@ -92,11 +92,12 @@ python -m pytest tests/ -v
 
 | 指标 | 详情 |
 |---|---|
-| 版本 | v5.0.9-alpha |
+| 版本 | v5.0.12-alpha |
 | 测试 | 225/225 通过 |
 | 架构 | v5 新 UI 完整版：模块化 `v4/widgets/` + SessionOrchestrator + SessionRuntime + V4Worker + PhaseEngine + 八引擎 |
-| 打包 | PyInstaller 单目录 ≈ 17.9 MB |
+| 打包 | PyInstaller 单目录 ≈ 17.9 MB，exe 独立启动验证通过 |
 | 分支 | v5-dev |
+| 旧线路归档 | `v4-refactor` 已冻结，标签 `v4.0.11-alpha` |
 
 ---
 
