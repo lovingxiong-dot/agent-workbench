@@ -1,0 +1,109 @@
+"""v5 轻量化主窗口：仅 UI 组装 + 单层信号转发。"""
+from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QSplitter
+from PySide6.QtCore import Qt
+
+from v5.widgets import LeftPanel, ChatArea, RightPanel
+from v5.widgets.base import theme, InvisibleResizeHandle
+from v5.controller.work_controller import WorkController
+
+
+class MainWindow(QMainWindow):
+    def __init__(self, controller: WorkController, parent=None):
+        super().__init__(parent, Qt.FramelessWindowHint)
+        self._ctrl = controller
+        self.setMinimumSize(1200, 800)
+        self.resize(1400, 900)
+        self._drag_pos = None
+
+        self._build_ui()
+        self._apply_theme()
+        self._bind_controller()
+        theme.changed.connect(self._apply_theme)
+
+    def _build_ui(self):
+        central = QWidget()
+        self.setCentralWidget(central)
+        root = QHBoxLayout(central)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        self._splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._splitter.setHandleWidth(1)
+        self._splitter.setChildrenCollapsible(False)
+
+        self._left = LeftPanel()
+        self._center = ChatArea()
+        self._right = RightPanel()
+
+        self._splitter.addWidget(self._left)
+        self._splitter.addWidget(self._center)
+        self._splitter.addWidget(self._right)
+        self._splitter.setSizes([220, 760, 400])
+
+        self._handle0 = InvisibleResizeHandle(self._splitter, 0)
+        self._handle1 = InvisibleResizeHandle(self._splitter, 1)
+
+        root.addWidget(self._splitter)
+
+    def _apply_theme(self):
+        from v5.widgets.base import C
+        self.setStyleSheet(f"background-color: {C['bg_primary']}; border: none;")
+
+    def _bind_controller(self):
+        """单层信号转发：UI -> Controller 方法，Controller -> UI 方法。"""
+        # UI -> Controller
+        self._left.sign_new_chat.connect(self._ctrl.handle_create_chat)
+        self._left.sign_select_session.connect(self._ctrl.handle_switch_session)
+        self._left.sign_session_action.connect(self._ctrl.handle_session_action)
+        self._left.sign_search_input.connect(self._ctrl.handle_search_input)
+        self._left.sign_switch_theme.connect(self._ctrl.handle_switch_theme)
+
+        self._center.sign_send_msg.connect(self._ctrl.handle_send_message)
+        self._center.sign_stop_msg.connect(self._ctrl.handle_stop_message)
+        self._center.sign_mode_changed.connect(self._ctrl.handle_mode_changed)
+        self._center.sign_model_changed.connect(self._ctrl.handle_model_changed)
+        self._center.sign_export_requested.connect(self._ctrl.handle_export_requested)
+        self._center.sign_settings_requested.connect(self._ctrl.handle_settings_requested)
+        self._center.sign_toggle_left.connect(self.toggle_left_panel)
+        self._center.sign_toggle_right.connect(self.toggle_right_panel)
+
+        self._right.sign_open_file.connect(self._ctrl.handle_open_file)
+        self._right.sign_load_url.connect(self._ctrl.handle_load_url)
+        self._right.sign_terminal_command.connect(self._ctrl.handle_terminal_command)
+
+        # Controller -> UI
+        self._ctrl.sign_update_sessions.connect(self._left.refresh_sessions)
+        self._ctrl.sign_set_active_session.connect(self._left.set_active_session)
+        self._ctrl.sign_set_title.connect(self._center.set_title)
+        self._ctrl.sign_chat_user.connect(self._center.append_user_message)
+        self._ctrl.sign_chat_ai.connect(self._center.append_ai_message)
+        self._ctrl.sign_stream_chunk.connect(self._center.append_stream_chunk)
+        self._ctrl.sign_stream_end.connect(self._center.on_stream_end)
+        self._ctrl.sign_set_streaming.connect(self._center.set_streaming)
+        self._ctrl.sign_open_file_right.connect(self._right.open_file)
+        self._ctrl.sign_update_terminal.connect(self._right.append_terminal)
+        self._ctrl.sign_switch_tab.connect(self._right.switch_tab)
+
+    def toggle_left_panel(self):
+        if self._left.isVisible():
+            self._left.hide()
+            self._splitter.setSizes([0, self.width() - self._right.width(), self._right.width()])
+        else:
+            self._left.show()
+            self._splitter.setSizes([220, self.width() - 620, 400])
+
+    def toggle_right_panel(self):
+        self._right.setVisible(not self._right.isVisible())
+        if not self._right.isVisible():
+            self._splitter.setSizes([self._left.width(), self.width() - self._left.width(), 0])
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_pos = event.globalPosition().toPoint()
+
+    def mouseMoveEvent(self, event):
+        if self._drag_pos and event.buttons() == Qt.MouseButton.LeftButton:
+            self.move(self.pos() + event.globalPosition().toPoint() - self._drag_pos)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_pos = None
