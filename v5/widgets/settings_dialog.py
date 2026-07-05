@@ -1,9 +1,9 @@
-"""v4 设置对话框 — 编辑 app.theme / last_mode / last_model。"""
+"""V5 设置对话框 — 编辑 app.theme / last_mode / last_model。"""
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QPushButton,
 )
 from PySide6.QtCore import Qt, Signal
-from .base import theme, _THEMES, C, font
+from .base import theme, V5_THEMES, C, font
 
 
 class SettingsDialog(QDialog):
@@ -29,7 +29,7 @@ class SettingsDialog(QDialog):
         theme_row = QHBoxLayout()
         theme_row.addWidget(self._label("主题"))
         self._theme_box = QComboBox()
-        self._theme_box.addItems(list(_THEMES.keys()))
+        self._theme_box.addItems(list(V5_THEMES.keys()))
         theme_row.addWidget(self._theme_box, 1)
         layout.addLayout(theme_row)
 

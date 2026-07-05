@@ -1,4 +1,4 @@
-"""v4 嵌入式浏览器组件 — 基于 QWebEngineView。"""
+"""V5 嵌入式浏览器组件 — 基于 QWebEngineView。"""
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel,
 )

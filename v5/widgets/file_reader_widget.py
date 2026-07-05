@@ -1,4 +1,4 @@
-"""v4 文件读取/编辑器组件。"""
+"""V5 文件读取/编辑器组件。"""
 import os
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPlainTextEdit, QLabel, QPushButton, QFileDialog,

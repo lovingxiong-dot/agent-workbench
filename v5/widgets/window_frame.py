@@ -1,8 +1,8 @@
-"""v4 窗口框架与菜单组件。"""
+"""V5 窗口框架与菜单组件。"""
 from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout
 from PySide6.QtCore import Qt, Signal, QPoint, QTimer, QEvent
 from PySide6.QtGui import QPainter, QBrush, QColor, QPen, QCursor
-from .base import theme, _THEMES, C, font, qcolor, svg_icon
+from .base import theme, V5_THEMES, C, font, qcolor, svg_icon
 import PySide6.QtWidgets as QtW
 
 # ══════════════════════════════════════════════════════════════

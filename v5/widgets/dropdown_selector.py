@@ -1,4 +1,4 @@
-"""v4 通用内嵌下拉选择器。"""
+"""V5 通用内嵌下拉选择器。"""
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt, Signal, QPoint
 from PySide6.QtGui import QPainter, QColor, QPen

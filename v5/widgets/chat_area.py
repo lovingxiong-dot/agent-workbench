@@ -1,11 +1,11 @@
-"""v4 聊天区域组件。"""
+"""V5 聊天区域组件。"""
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
     QTextEdit, QGraphicsView, QFrame, QSizePolicy, QApplication,
 )
 from PySide6.QtCore import Qt, Signal, QTimer, QPoint, QSize, QEvent
 from PySide6.QtGui import QPainter, QPen, QColor, QIcon, QPixmap
-from .base import theme, _THEMES, C, font, qcolor, svg_icon
+from .base import theme, V5_THEMES, C, font, qcolor, svg_icon
 from .chat_scene import ChatScene
 from .chat_items import (
     ChatItem, UserBubble, FoldBlock, ToolEntry, PhasePanel,
@@ -53,17 +53,15 @@ class MoreDropdown(QWidget):
         layout.addWidget(sep)
 
         # 文件区
-        file_hdr = QLabel("📁 文件 (5)")
+        file_hdr = QLabel("📁 文件")
         file_hdr.setFont(font(11, bold=True))
         file_hdr.setStyleSheet(f"color: {C['text_primary']}; background: transparent;")
         layout.addWidget(file_hdr)
 
-        for f in ["📄 main.py", "📄 requirements.txt", "📄 CHANGELOG.md", "📁 agent_engine/", "📁 experiments/"]:
-            lbl = QLabel(f)
-            lbl.setFont(font(10))
-            lbl.setCursor(Qt.PointingHandCursor)
-            lbl.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
-            layout.addWidget(lbl)
+        empty_file_lbl = QLabel("暂无文件")
+        empty_file_lbl.setFont(font(9))
+        empty_file_lbl.setStyleSheet(f"color: {C['text_muted']}; background: transparent;")
+        layout.addWidget(empty_file_lbl)
 
         # 分隔线
         sep2 = QFrame()
@@ -519,8 +517,6 @@ class ChatArea(QWidget):
         self._rebuild_timer.timeout.connect(self._debounced_rebuild)
         self._setup_ui()
         self._chat_history = []
-        self._demo_mode = True
-        self._populate_demo()
         self._initialized = True
         theme.changed.connect(self._refresh_theme)
 
@@ -635,18 +631,12 @@ class ChatArea(QWidget):
 
     def clear_chat(self):
         """清除聊天区消息历史并重绘。"""
-        self._demo_mode = False
         self._chat_history.clear()
         self._render()
 
     def _render(self):
-        """根据 _chat_history 渲染聊天区；Demo 模式且无消息时保留初始化示例。"""
+        """根据 _chat_history 渲染聊天区。"""
         self._scene.clear_items()
-        if not self._chat_history and self._demo_mode:
-            self._populate_demo()
-            self._scene.refresh()
-            self._scroll_to_bottom()
-            return
         for entry in self._chat_history:
             role = entry.get("role")
             if role == "user":
@@ -844,48 +834,5 @@ class ChatArea(QWidget):
         else:
             dd.hide()
 
-    def _populate_demo(self):
-        """填充 Demo 聊天内容（精确对应 ui-chat-area.svg）。"""
-        scene = self._scene
 
-        # 用户气泡
-        scene.add_chat_item(UserBubble("帮我分析当前项目"))
-
-        # 思考过程折叠（收起）
-        scene.add_chat_item(FoldBlock("思考过程", "[5/7 已完成]"))
-
-        # 工具执行折叠（展开）
-        tools = FoldBlock("工具执行", "[3 工具 · 共 2.1s]")
-        entry1 = ToolEntry("run_command", "0.8s")
-        entry2 = ToolEntry("grep_refs", "0.3s")
-        entry3 = ToolEntry("pytest", "1.0s")
-        # 定位子项
-        entry1.setPos(0, tools.HEADER_H + 2)
-        entry2.setPos(0, tools.HEADER_H + 18)
-        entry3.setPos(0, tools.HEADER_H + 34)
-        tools.set_body([entry1, entry2, entry3], 50)
-        tools.toggle()  # 展开
-        scene.add_chat_item(tools)
-
-        # 内部命令输出折叠（收起）
-        scene.add_chat_item(FoldBlock("内部命令输出", "[212 行]"))
-
-        # 📋 分析结果面板
-        b1 = BulletItem("项目采用 v4 单轨事件总线架构")
-        b2 = BulletItem("193/193 全量测试通过")
-        scene.add_chat_item(PhasePanel("📋 分析结果", "accent_blue", [b1, b2]))
-
-        # 📝 执行计划面板
-        s1 = StepItem("done", "修改 v4/events.py", "新增 model 字段")
-        s2 = StepItem("running", "修改 v4/main_window.py", "模型下拉框 + 持久化")
-        s3 = StepItem("pending", "运行全量测试", "pytest tests/ -v")
-        scene.add_chat_item(PhasePanel("📝 执行计划", "yellow", [s1, s2, s3]))
-
-        # ✅ 完成报告面板
-        t1 = TextItem("v4.0.5-alpha 存档完成")
-        scene.add_chat_item(PhasePanel("✅ 完成报告", "green", [t1]))
-
-        # 滚动到底部
-        QTimer.singleShot(100, lambda: self._view.verticalScrollBar().setValue(
-            self._view.verticalScrollBar().maximum()))
 

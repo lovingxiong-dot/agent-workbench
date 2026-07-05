@@ -1,4 +1,4 @@
-"""v4 终端组件 — 基于 TerminalWorker 的命令终端。"""
+"""V5 终端组件 — 基于 TerminalWorker 的命令终端。"""
 import os
 from typing import Optional
 from PySide6.QtWidgets import (

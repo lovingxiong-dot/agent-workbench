@@ -1,4 +1,4 @@
-"""v4 聊天场景。"""
+"""V5 聊天场景。"""
 from __future__ import annotations
 from PySide6.QtWidgets import QGraphicsScene
 from PySide6.QtCore import Qt, QRectF

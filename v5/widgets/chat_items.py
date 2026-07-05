@@ -1,4 +1,4 @@
-"""v4 聊天区图形元素。"""
+"""V5 聊天区图形元素。"""
 import html
 import re
 from PySide6.QtWidgets import QGraphicsItem
@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt, QRect, QRectF, QPointF
 from PySide6.QtGui import (
     QPainter, QPainterPath, QColor, QFont, QFontMetrics, QPen, QTextOption,
 )
-from .base import theme, _THEMES, C, font, mono_font, qcolor
+from .base import theme, V5_THEMES, C, font, mono_font, qcolor
 from .chat_scene import ChatScene
 
 # ══════════════════════════════════════════════════════════════

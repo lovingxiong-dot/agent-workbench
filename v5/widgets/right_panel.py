@@ -1,4 +1,4 @@
-"""v4 右侧面板组件。"""
+"""V5 右侧面板组件。"""
 import os
 from datetime import datetime, timedelta
 from PySide6.QtWidgets import (
@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPainter, QColor, QPixmap
-from .base import theme, _THEMES, C, font, svg_icon
+from .base import theme, V5_THEMES, C, font, svg_icon
 from .terminal_widget import TerminalWidget
 from .file_reader_widget import FileReaderWidget
 from .browser_widget import BrowserWidget
@@ -261,8 +261,8 @@ class RightPanel(QWidget):
             # 默认展示项目根目录下可访问的核心文件
             root = os.getcwd()
             candidates = [
-                "v4/main_window.py",
-                "v4/widgets/right_panel.py",
+                "v5/main_window.py",
+                "v5/widgets/right_panel.py",
                 "config/config.yaml",
             ]
             for rel in candidates:
@@ -334,7 +334,7 @@ class RightPanel(QWidget):
             btn.set_active(i == idx)
 
     def _on_close_tab(self, idx: int):
-        # Demo 关闭逻辑：关闭非首个标签后切回第一个
+        # 关闭非首个标签后切回第一个
         if idx > 0 and idx < len(self._tab_btns):
             self._tab_btns[idx].setVisible(False)
             self._switch_tab(0)

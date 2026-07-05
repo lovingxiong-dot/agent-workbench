@@ -1,4 +1,4 @@
-"""v4 左侧面板组件。"""
+"""V5 左侧面板组件。"""
 import os
 from typing import Any
 from PySide6.QtWidgets import (
@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, QRectF
 from PySide6.QtGui import QPainter, QColor, QFont, QPen
-from .base import theme, _THEMES, C, font
+from .base import theme, V5_THEMES, C, font
 from .window_frame import AppleMenu
 
 # ══════════════════════════════════════════════════════════════
@@ -650,7 +650,7 @@ class LeftPanel(QWidget):
         path_row.addWidget(self._file_path_lbl, 1)
         fpl.addLayout(path_row)
         self._file_list = QListWidget()
-        self._file_list.addItems(["📁 agent_engine", "📁 core", "📁 services", "📁 ui", "📁 v4", "📁 experiments"])
+        self._file_list.addItems(["📁 agent_engine", "📁 core", "📁 services", "📁 v5", "📁 experiments"])
         self._file_list.addItems(["📄 main.py", "📄 requirements.txt", "📄 README.md", "📄 CHANGELOG.md"])
         self._file_list.setStyleSheet(
             f"QListWidget {{ background: transparent; border: none; color: {C['text_primary']}; font-size: 11px; }}"
@@ -680,7 +680,7 @@ class LeftPanel(QWidget):
         bottom_row.addStretch()
         layout.addLayout(bottom_row)
 
-        # Demo 数据不再自动填充；真实会话通过 MainWindow 调用 refresh_sessions 注入
+        # 真实会话通过 MainWindow 调用 refresh_sessions 注入
         # self._populate_sessions()
 
         self._refresh_theme()
@@ -868,39 +868,6 @@ class LeftPanel(QWidget):
         else:
             self._file_mode = True
             self._stack.setCurrentIndex(2)
-
-    def _populate_sessions(self):
-        """填充 Demo 分组会话数据（对应 SVG 设计稿）。"""
-        g1 = SessionGroup("agent_workbench", 3)
-        sessions_g1 = [
-            ("v4 架构升级", "✓ 三个文件已修改并测试通过", "20:15"),
-            ("量化策略回测", "△ 等待确认执行计划", "18:42"),
-            ("API 接口设计", "等待第一条消息...", "15:30"),
-        ]
-        for i, (title, preview, t) in enumerate(sessions_g1):
-            item = SessionItem(i, title, preview, t)
-            g1.add_session(item)
-            self._all_items.append(item)
-
-        g2 = SessionGroup("全局会话", 5)
-        sessions_g2 = [
-            ("通用问答", "如何配置 Python 环境？", "14:20"),
-            ("代码片段咨询", "Python 装饰器用法", "13:08"),
-            ("翻译任务", "将 README 翻译为英文", "10:45"),
-        ]
-        for i, (title, preview, t) in enumerate(sessions_g2, start=3):
-            item = SessionItem(i, title, preview, t)
-            g2.add_session(item)
-            self._all_items.append(item)
-
-        self._groups = [g1, g2]
-        for g in reversed(self._groups):
-            self._sess_layout.insertWidget(self._sess_layout.count() - 1, g)
-        for g in self._groups:
-            g.session_clicked.connect(self._on_session_clicked)
-            g.new_session_requested.connect(self.new_session_requested.emit)
-            g.session_action_requested.connect(self.session_action_requested.emit)
-        self._select_session(0)
 
     def _on_session_clicked(self, idx: int):
         self._select_session(idx)
