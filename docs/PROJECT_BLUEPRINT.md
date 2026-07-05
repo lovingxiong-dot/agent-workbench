@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v4.0.9-alpha | 存档次数 | 36 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v4.0.11-alpha | 存档次数 | 38 |
 
 ## 项目概要
 AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v4.0.8-alpha 完成最终发布版三栏 UI 全量重制：左栏「功能/会话」Tab + 分组折叠会话列表，中栏卡片化消息流 + 新输入区（圆形发送按钮 / 技能按钮 / mode/model 标签），右栏集成 v4 架构 / 终端 / 文件编辑器 / 浏览器；v4.0.7-alpha 完成标题栏三键（搜索/更多/展开）+ execute 阶段步骤条自动解析，三键图标采用 SVG path 矢量渲染并接入搜索高亮/更多菜单/全局快捷键；v4.0.6-alpha 补齐 v4.0.5-alpha 的两处路径遗漏：`AgentWorkbench.spec` 的 `datas` 加入 `assets/app.ico` 以支持打包后读取图标资源；`services/project_service.py` 改用 `_get_app_root()` 定位 `storage/activities.json`，避免 exe 在 CWD 创建 storage。v4.0.5-alpha 完成工程目录标准化改造；v4.0.4-alpha 在 v4 单轨架构基础上实现对话 UI 三层折叠结构；v4.0.3-alpha 已完成 PhaseEngine 接入、PyInstaller 打包适配与零引用旧代码清理。
@@ -174,11 +174,12 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
-| v4.0.8-alpha | 2026-07-01 | v4全量UI三位一体对齐SVG设计稿：HeaderToolbar按钮18×22/icon14, InputArea标签式mode/model, RightPanel可关闭标签+搜索角标, Phase面板4px色条+fold-block边框, 左栏Tab等宽, 死代码清理 | feat/refactor/test | v4/main_window.py, v4/input_area.py, v4/right_panel.py, v4/icons.py, v4/conversation_list.py, tests/test_v4_input_area.py |
+| v4.0.11-alpha | 2026-07-06 | v4-refactor分支文档版本对齐：修正与已存在tag的v4.0.10-alpha冲突，升级版本号并归档v4.0.10-alpha变更记录 | docs | docs/PROJECT_BLUEPRINT.md, docs/CHANGELOG.md |
 
 ## 历史归档
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v4.0.10-alpha | 2026-07-06 | 六步法全量UI逐像素SVG对齐修正：拆分chat_items/chat_scene独立模块，main_window/input_area/right_panel/conversation_list/ui_renderer对齐SVG设计稿，删除docs/ui/归档SVG/spec，test_v4_gui_smoke与test_v4_integration适配 | fix/refactor/test | v4/main_window.py, v4/input_area.py, v4/right_panel.py, v4/conversation_list.py, v4/chat_items.py, v4/chat_scene.py, v4/ui_renderer.py, tests/test_v4_gui_smoke.py, tests/test_v4_integration.py, docs/ui/* |
 | v4.0.7-alpha | 2026-07-01 | 标题栏三键（搜索/更多/展开）+ execute步骤条自动解析；三键图标改为SVG path并接入搜索高亮/更多菜单/全局快捷键；docs/ui/归档6 SVG+2 spec | feat/docs/fix | v4/main_window.py, v4/ui_renderer.py, AgentWorkbench.spec, docs/ui/* |
 | v4.0.6-alpha | 2026-07-01 | 补齐目录标准化遗漏：`AgentWorkbench.spec` datas加入`assets/app.ico`；`services/project_service.py`改用`_get_app_root()`定位`storage/activities.json`，避免exe在CWD创建storage | fix/build | AgentWorkbench.spec, services/project_service.py |
 | v4.0.5-alpha | 2026-06-30 | 工程目录标准化改造：根目录文件按职责分组为config/、assets/、scripts/、docs/，源码目录统一标注为src/分组；同步修正PyInstaller datas、runtime_hook、图标路径、config_service/LLMRegistry路径解析及所有代码中的配置路径引用；README/ARCHITECTURE/PROJECT_BLUEPRINT/getting-started同步更新 | refactor/docs/build | AgentWorkbench.spec, scripts/rebuild.ps1, services/config_service.py, agent_engine/llm_registry.py, v4/main_window.py, v4/worker.py, v4/repository.py, services/activity_service.py, services/session_service.py, docs/README.md, docs/ARCHITECTURE.md, docs/PROJECT_BLUEPRINT.md, docs/getting-started.md |

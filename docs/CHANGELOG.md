@@ -1,5 +1,11 @@
 # Changelog
 
+## v4.0.11-alpha (2026-07-06) — v4-refactor 文档版本对齐
+
+### docs
+- **版本号冲突修正**：`ui-template` 分支已占用 `v4.0.10-alpha` tag，`v4-refactor` 分支当前存档升级为 `v4.0.11-alpha`。
+- **归档 v4.0.10-alpha 变更记录**：将六步法全量UI逐像素SVG对齐修正记录移入历史归档。
+
 ## v4.0.8-alpha (2026-07-01) — v4全量UI三位一体对齐SVG设计稿
 
 ### feat
