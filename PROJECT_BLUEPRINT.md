@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.2-alpha | 存档次数 | 3 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.3-alpha | 存档次数 | 4 |
 
 ## 项目概要
 AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。
@@ -99,7 +99,16 @@ v5.0.0-alpha 为 v5-dev 线路起点：从 v4-refactor 切出独立分支，将�
 │   ├── worker_manager.py   # Worker 并发管理
 │   ├── orchestrator.py     # SessionOrchestrator
 │   ├── ui_renderer.py      # UI 渲染器
-│   ├── main_window.py      # v5 新 UI 外壳（当前正接入后端）
+│   ├── main_window.py      # v5 新 UI 外壳（门面：仅组合子系统 + 信号桥接）
+│   ├── widgets/            # v5 UI 组件库（从 main_window.py 拆分）
+│   │   ├── __init__.py
+│   │   ├── base.py         # 主题、字体、辅助函数
+│   │   ├── window_frame.py # AppleMenu、EdgeResizeWidget
+│   │   ├── left_panel.py   # LeftPanel、SessionItem/Group、FunctionPage
+│   │   ├── chat_items.py   # ChatItem 及 8 个子类
+│   │   ├── chat_scene.py   # ChatScene
+│   │   ├── chat_area.py    # ChatArea、HeaderBar、InputArea、MoreDropdown
+│   │   └── right_panel.py  # RightPanel、TabButton
 │   ├── legacy/             # v4 旧 UI 组件备份（v5-dev 线路保留，P10 后清理）
 │   │   ├── main_window_legacy.py
 │   │   ├── conversation_list.py
@@ -135,6 +144,7 @@ v5.0.0-alpha 为 v5-dev 线路起点：从 v4-refactor 切出独立分支，将�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v5.0.3-alpha | 2026-07-06 | 按审查报告执行模块化骨架拆分：将 `v4/main_window.py` 拆分为 `v4/widgets/` 7 个模块，主窗口降至 357 行；修复 `_session_idx_map` 致命 Bug，统一使用 `LeftPanel._idx_to_sid` | refactor/modular | v4/main_window.py, v4/widgets/* |
 | v5.0.2-alpha | 2026-07-06 | 完成 P3 UIRenderer 与新 UI 桥接：ChatArea 真实消息渲染/流式/确认条/阶段状态，LeftPanel 会话列表按项目分组刷新与 badge 更新，SessionGroup 右键动作信号修复 | feat/bridge/ui | v4/main_window.py, tests/test_v4_gui_smoke.py |
 | v5.0.1-alpha | 2026-07-05 | 备份 v4 旧 UI 组件至 `v4/legacy/`，标记 v5-dev 独立线路；原始组件保留待 P10 清理 | chore/backup | v4/legacy/*, PROJECT_BLUEPRINT.md |
 

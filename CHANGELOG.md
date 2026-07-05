@@ -1,5 +1,27 @@
 # Changelog
 
+## v5.0.3-alpha (2026-07-06) — 模块化骨架拆分与致命 Bug 修复
+
+### refactor/modular
+- 按审查报告将 `v4/main_window.py` 拆分为标准 PySide6 模块结构 `v4/widgets/`
+  - `base.py`：主题、字体、通用辅助函数
+  - `window_frame.py`：AppleMenu、EdgeResizeWidget
+  - `left_panel.py`：LeftPanel、SessionItem/Group、FunctionPage
+  - `chat_items.py`：ChatItem 及 8 个子类
+  - `chat_scene.py`：ChatScene
+  - `chat_area.py`：ChatArea、HeaderBar、InputArea、MoreDropdown
+  - `right_panel.py`：RightPanel、TabButton
+- `v4/main_window.py` 重构为仅含 `MainWindow` 的门面文件（357 行）
+- `v4/main_window.py` 应用名称从 "Agent Workbench UI Template" 修正为 "Agent Workbench"
+
+### fix/ui
+- 修复审查报告中的致命 Bug：`_on_session_selected` / `_on_session_action` 改用 `self._left._idx_to_sid.get(idx)`，会话选择/删除/重命名/置顶恢复正常
+
+### test
+- `python -m py_compile v4/widgets/*.py` 全部通过
+- `python -m py_compile v4/main_window.py` 通过
+- `pytest tests/test_v4_gui_smoke.py -v` 4/4 全绿
+
 ## v5.0.2-alpha (2026-07-06) — P3 UIRenderer 与新 UI 控件桥接完成
 
 ### feat/bridge/ui
