@@ -621,6 +621,14 @@ class LeftPanel(QWidget):
         self._sess_layout = QVBoxLayout(sess_widget)
         self._sess_layout.setContentsMargins(0, 0, 0, 0)
         self._sess_layout.setSpacing(6)
+
+        self._empty_lbl = QLabel("暂无会话")
+        self._empty_lbl.setAlignment(Qt.AlignCenter)
+        self._empty_lbl.setFont(font(11))
+        self._empty_lbl.setStyleSheet(f"color: {C['text_muted']}; background: transparent;")
+        self._empty_lbl.hide()
+        self._sess_layout.addWidget(self._empty_lbl)
+
         self._sess_layout.addStretch()
         self._sess_scroll.setWidget(sess_widget)
         self._stack.addWidget(self._sess_scroll)
@@ -926,9 +934,10 @@ class LeftPanel(QWidget):
         self._all_items.clear()
         self._idx_to_sid.clear()
         self._sid_to_idx.clear()
+        self._empty_lbl.hide()
 
         if not sessions:
-            self._populate_sessions()
+            self._empty_lbl.show()
             return
 
         # 按 project_path 分组

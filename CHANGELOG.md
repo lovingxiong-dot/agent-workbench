@@ -1,5 +1,17 @@
 # Changelog
 
+## v5.0.5-alpha (2026-07-06) — P5 会话数据持久化与列表同步
+
+### feat/p5-session-sync
+- 启动恢复：`MainWindow` 启动时读取 `app.last_session_id`，自动恢复到上次会话并加载消息
+- 会话 ID 持久化：订阅 `ui.set_active_session` / `ui.clear_chat`，在切换/创建/删除会话时同步保存 `app.last_session_id`
+- 无效会话清理：若持久化的会话已不存在，启动时自动清空 `app.last_session_id` 并进入草稿窗口
+- 左栏空状态：`LeftPanel` 在真实无会话时显示“暂无会话”，不再回退到 Demo 数据
+
+### test
+- `pytest tests/test_v4_integration.py -v` 12/12 全绿（新增重启恢复、无效会话清理用例）
+- `pytest tests/test_v4_gui_smoke.py -v` 6/6 全绿
+
 ## v5.0.4-alpha (2026-07-06) — P4 关键用户动作与列表预览修复
 
 ### feat/p4-actions

@@ -17,6 +17,7 @@ from .events import (
     UserSendEvent, UserStopEvent, UserConfirmEvent,
     SessionSwitchEvent, SessionDeleteEvent, SessionPinEvent,
     SessionCreateEvent, SessionRenameEvent,
+    UIUpdateSessionListEvent,
 )
 from .widgets import (
     ThemeManager, theme, _THEMES, C, qcolor, install_invisible_handles,
@@ -247,14 +248,63 @@ class MainWindow(QMainWindow):
         self._center.export_requested.connect(self._on_export_session)
         self._center.settings_requested.connect(self._on_open_settings)
 
+        self._bus.subscribe_name("ui", "set_active_session", self._on_ui_set_active_session)
+        self._bus.subscribe_name("ui", "clear_chat", self._on_ui_clear_chat)
+
     def _init_default_session(self):
         self._draft_session_type = "chat"
         self._draft_project_path = ""
         self._center._input.set_mode(self._current_mode)
         self._center._input.set_model(self._current_model_name)
         self._left._theme_btn.setText("☀️" if theme.name == "light" else "🌙")
-        if hasattr(self._orchestrator, "clear_current"):
-            self._orchestrator.clear_current()
+        # 延迟到事件循环启动后再恢复/清空，确保 QueuedConnection 事件能被处理
+        QTimer.singleShot(0, self._restore_or_clear_session)
+
+    def _restore_or_clear_session(self):
+        if not self._restore_last_session():
+            # 无有效 last_session_id：刷新列表为空状态，再进入草稿窗口
+            self._bus.emit(UIUpdateSessionListEvent(sessions=self._repo.list_sessions()))
+            if hasattr(self._orchestrator, "clear_current"):
+                self._orchestrator.clear_current()
+
+    def _restore_last_session(self) -> bool:
+        """启动时恢复上次会话；若已不存在则清理配置。"""
+        last_sid = self._config.get("app.last_session_id", "")
+        if not last_sid:
+            return False
+        session = self._repo.get_session(last_sid)
+        if not session:
+            self._config.set("app.last_session_id", "")
+            self._config.save()
+            return False
+
+        self._orchestrator._require_runtime(last_sid)
+        self._orchestrator._switch_session(last_sid)
+
+        st = getattr(session.session_type, "value", session.session_type)
+        self._draft_session_type = st or "chat"
+        self._draft_project_path = session.project_path or ""
+        self._center.set_analyze_button_visible(st == "work")
+        self._set_last_session_id(last_sid)
+        return True
+
+    def _set_last_session_id(self, sid: str):
+        """持久化当前会话 ID；空字符串表示草稿窗口。"""
+        current = self._config.get("app.last_session_id", "")
+        if current == sid:
+            return
+        self._config.set("app.last_session_id", sid)
+        self._config.save()
+
+    def _on_ui_set_active_session(self, event):
+        """会话切换/创建后同步持久化当前会话 ID。"""
+        sid = getattr(event, "active_session_id", event.session_id) or ""
+        self._set_last_session_id(sid)
+
+    def _on_ui_clear_chat(self, event):
+        """草稿窗口时清除持久化的会话 ID。"""
+        if not self._orchestrator.current_session_id:
+            self._set_last_session_id("")
 
     def _current_session_id(self) -> str:
         return self._orchestrator.current_session_id or ""

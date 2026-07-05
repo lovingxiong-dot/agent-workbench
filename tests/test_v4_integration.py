@@ -32,6 +32,7 @@ from PySide6.QtWidgets import QApplication
 
 from v4.main_window import MainWindow
 from v4.worker_manager import WorkerManager
+from services.config_service import ConfigService
 from v4.events import (
     SessionCreateEvent,
     SessionSwitchEvent,
@@ -514,38 +515,74 @@ class TestV4Integration:
     # 14. 重启恢复
     # ------------------------------------------------------------------
     def test_restart_recovery(self):
-        window = self._create_window()
+        original_last_sid = ConfigService(config_path="config/config.yaml").get("app.last_session_id", "")
+        try:
+            window = self._create_window()
 
-        # 发送首条消息创建会话，等待 AI 回复写入
-        sid = self._send_first_message(window, "持久化消息")
-        self._process_events(300)
+            # 发送首条消息创建会话，等待 AI 回复写入
+            sid = self._send_first_message(window, "持久化消息")
+            self._process_events(300)
 
-        sessions_before = window._repo.list_sessions()
-        messages_before = window._repo.get_messages(sid)
-        assert len(messages_before) >= 1
+            sessions_before = window._repo.list_sessions()
+            messages_before = window._repo.get_messages(sid)
+            assert len(messages_before) >= 1
+            assert window._config.get("app.last_session_id") == sid, "当前会话 ID 应被持久化"
 
-        window.close()
-        window.deleteLater()
-        self._process_events()
+            window.close()
+            window.deleteLater()
+            self._process_events()
 
-        # 重新打开 MainWindow，使用同一个 DB 文件
-        window2 = MainWindow()
-        window2._stub_wm = StubWorkerManager(window2._bus)
-        self._process_events()
+            # 重新打开 MainWindow，应自动恢复到上次会话
+            window2 = self._create_window(auto_complete=False)
+            self._process_events(200)
 
-        sessions_after = window2._repo.list_sessions()
-        assert len(sessions_after) == len(sessions_before), "重启后会话数量应一致"
-        assert sid in [s.session_id for s in sessions_after], "重启后原会话应存在"
+            assert window2._orchestrator.current_session_id == sid, "启动后应自动恢复上次会话"
+            assert window2._config.get("app.last_session_id") == sid
+            assert "持久化消息" in window2._center.to_plain_text(), "聊天区应加载上次会话消息"
 
-        # 切换回原会话并验证消息恢复
-        window2._bus.emit(SessionSwitchEvent(new_session_id=sid))
-        self._process_events()
+            sessions_after = window2._repo.list_sessions()
+            assert len(sessions_after) == len(sessions_before), "重启后会话数量应一致"
+            assert sid in [s.session_id for s in sessions_after], "重启后原会话应存在"
 
-        messages_after = window2._repo.get_messages(sid)
-        assert len(messages_after) == len(messages_before), "重启后消息数量应一致"
-        assert any("持久化消息" in m.content for m in messages_after)
-        assert "持久化消息" in window2._center.to_plain_text()
+            # 验证左侧高亮
+            active_items = [it for it in window2._left._all_items if it._active]
+            assert len(active_items) == 1, "应只有一个高亮项"
+            assert window2._left._idx_to_sid.get(active_items[0]._index) == sid, "高亮项应对应恢复会话"
 
-        window2.close()
-        window2.deleteLater()
-        self._process_events()
+            window2.close()
+            window2.deleteLater()
+            self._process_events()
+        finally:
+            cfg = ConfigService(config_path="config/config.yaml")
+            cfg.set("app.last_session_id", original_last_sid)
+            cfg.save()
+
+    def test_session_restore_clears_missing_session(self):
+        """若上次持久化的会话已被删除，启动时应清理配置并进入草稿窗口。"""
+        original_last_sid = ConfigService(config_path="config/config.yaml").get("app.last_session_id", "")
+        try:
+            window = self._create_window()
+            sid = self._send_first_message(window, "将被删除")
+            self._process_events(300)
+            assert window._config.get("app.last_session_id") == sid
+
+            # 模拟外部删除会话
+            window._repo.delete_session(sid)
+            window.close()
+            window.deleteLater()
+            self._process_events()
+
+            window2 = self._create_window(auto_complete=False)
+            self._process_events(200)
+
+            assert window2._orchestrator.current_session_id is None, "会话不存在时应保持草稿窗口"
+            assert window2._config.get("app.last_session_id") == "", "无效 last_session_id 应被清除"
+            assert not window2._left._empty_lbl.isHidden(), "无会话时应显示空状态"
+
+            window2.close()
+            window2.deleteLater()
+            self._process_events()
+        finally:
+            cfg = ConfigService(config_path="config/config.yaml")
+            cfg.set("app.last_session_id", original_last_sid)
+            cfg.save()
