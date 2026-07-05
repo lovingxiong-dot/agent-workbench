@@ -146,22 +146,24 @@ class SessionRepository:
             return self._row_to_metadata(row)
 
     def list_sessions(self, project_path: Optional[str] = None) -> List[SessionMetadata]:
-        """列出会话，按置顶 + 更新时间排序
-        
-        排序规则：
-        1. pinned=1 的在前
-        2. 同 pinned 的按 updated_at DESC
-        """
+        """列出会话，按置顶 + 更新时间排序；同时携带最后一条消息摘要。"""
         with self._connect() as conn:
+            base_sql = """
+                SELECT s.*,
+                       (SELECT content FROM messages
+                        WHERE messages.session_id = s.session_id
+                        ORDER BY created_at DESC LIMIT 1) AS last_preview
+                FROM sessions s
+                {where}
+                ORDER BY s.pinned DESC, s.updated_at DESC
+            """
             if project_path is not None:
                 rows = conn.execute(
-                    "SELECT * FROM sessions WHERE project_path = ? ORDER BY pinned DESC, updated_at DESC",
+                    base_sql.format(where="WHERE s.project_path = ?"),
                     (project_path,)
                 ).fetchall()
             else:
-                rows = conn.execute(
-                    "SELECT * FROM sessions ORDER BY pinned DESC, updated_at DESC"
-                ).fetchall()
+                rows = conn.execute(base_sql.format(where="")).fetchall()
             return [self._row_to_metadata(r) for r in rows]
 
     def update_session(self, session_id: str, update_timestamp: bool = True, **kwargs) -> bool:
@@ -312,6 +314,7 @@ class SessionRepository:
             model=row["model"],
             project_path=row["project_path"] or "",
             pinned=bool(row["pinned"]),
+            last_preview=(row["last_preview"] or "") if "last_preview" in row.keys() else "",
             created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else datetime.now(),
             updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else datetime.now(),
         )

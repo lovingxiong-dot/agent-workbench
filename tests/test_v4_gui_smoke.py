@@ -77,6 +77,52 @@ class TestV5GUISmoke:
         window.deleteLater()
         self.app.processEvents()
 
+    def test_mode_selector_changes_mode_and_persists(self):
+        """点击模式标签弹出下拉，选择后更新当前模式并持久化。"""
+        from services.config_service import ConfigService
+        original_mode = ConfigService(config_path="config/config.yaml").get("app.last_mode", "ask")
+
+        window = MainWindow()
+        self.app.processEvents()
+
+        try:
+            # 模拟选择 plan
+            window._on_mode_selected("plan")
+            self.app.processEvents()
+
+            assert window._current_mode == "plan"
+            assert window._center._input._mode_tag._value_label.text() == "plan"
+            assert window._config.get("app.last_mode") == "plan"
+        finally:
+            window._config.set("app.last_mode", original_mode)
+            window._config.save()
+            window.close()
+            window.deleteLater()
+            self.app.processEvents()
+
+    def test_model_selector_changes_model_and_persists(self):
+        """点击模型标签弹出下拉，选择后更新当前模型并持久化。"""
+        from services.config_service import ConfigService
+        original_model = ConfigService(config_path="config/config.yaml").get("app.last_model", "tool-agent")
+
+        window = MainWindow()
+        self.app.processEvents()
+
+        try:
+            # 模拟选择 deepseek
+            window._on_model_selected("deepseek")
+            self.app.processEvents()
+
+            assert window._current_model_name == "deepseek"
+            assert window._center._input._model_tag._value_label.text() == "deepseek"
+            assert window._config.get("app.last_model") == "deepseek"
+        finally:
+            window._config.set("app.last_model", original_model)
+            window._config.save()
+            window.close()
+            window.deleteLater()
+            self.app.processEvents()
+
     def test_theme_toggle_button_switches_and_persists(self):
         """点击主题按钮可在 dark/light 间切换，并持久化到 config.yaml。"""
         from services.config_service import ConfigService

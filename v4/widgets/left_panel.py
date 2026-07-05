@@ -908,7 +908,17 @@ class LeftPanel(QWidget):
     # ══════════════════════════════════════════════════════════════
 
     def refresh(self, sessions):
-        """根据后端 SessionMetadata 列表重建会话分组。"""
+        """根据后端 SessionMetadata 列表重建会话分组，保留已有 preview 避免 badge 被覆盖。"""
+        # 重建前保存当前 preview 与激活状态
+        old_previews: dict[str, str] = {}
+        old_active: str = ""
+        for item in self._all_items:
+            sid = self._idx_to_sid.get(item._index)
+            if sid:
+                old_previews[sid] = item._preview_lbl.text()
+                if item._active:
+                    old_active = sid
+
         # 清理旧分组
         for g in self._groups:
             g.deleteLater()
@@ -935,7 +945,14 @@ class LeftPanel(QWidget):
             group = SessionGroup(group_name, len(items))
             for idx, sess in items:
                 title = getattr(sess, "title", "未命名")
-                preview = getattr(sess, "mode", "") or "等待第一条消息..."
+                pinned = getattr(sess, "pinned", False)
+                if pinned:
+                    title = f"📌 {title}"
+                sid = self._idx_to_sid[idx]
+                # 列表预览以最后消息摘要为权威来源；仅当无消息时保留旧临时状态
+                preview = getattr(sess, "last_preview", "")
+                if not preview:
+                    preview = old_previews.get(sid) or getattr(sess, "mode", "") or "等待第一条消息..."
                 updated = getattr(sess, "updated_at", None)
                 try:
                     time_str = updated.strftime("%H:%M") if updated else ""
@@ -950,7 +967,8 @@ class LeftPanel(QWidget):
             group.new_session_requested.connect(self.new_session_requested.emit)
             group.session_action_requested.connect(self.session_action_requested.emit)
 
-        self._select_session(0)
+        active_idx = self._sid_to_idx.get(old_active, 0)
+        self._select_session(active_idx)
 
     def set_active_session(self, active_session_id: str):
         """根据 session_id 高亮对应会话项。"""
@@ -967,4 +985,19 @@ class LeftPanel(QWidget):
             if item._index == idx:
                 item._preview_lbl.setText(phase or "")
                 break
+
+    def filter_sessions(self, text: str):
+        """按文本过滤会话列表，匹配标题与预览内容；空文本恢复全部显示。"""
+        needle = text.strip().lower()
+        for group in self._groups:
+            visible_count = 0
+            for item in group._items:
+                title = item._title_lbl.text().lower()
+                preview = item._preview_lbl.text().lower()
+                matched = (needle in title) or (needle in preview)
+                item.setVisible(matched)
+                if matched:
+                    visible_count += 1
+            group.setVisible(visible_count > 0 or not needle)
+            group._cnt_lbl.setText(str(visible_count if needle else len(group._items)))
 

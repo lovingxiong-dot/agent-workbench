@@ -20,7 +20,8 @@ from .events import (
 )
 from .widgets import (
     ThemeManager, theme, _THEMES, C, qcolor, install_invisible_handles,
-    EdgeResizeWidget, LeftPanel, ChatArea, RightPanel,
+    EdgeResizeWidget, LeftPanel, ChatArea, RightPanel, SettingsDialog,
+    DropdownSelector,
 )
 
 
@@ -58,6 +59,12 @@ class MainWindow(QMainWindow):
         )
 
         self._setup_ui()
+
+        config = self._config.config if self._config else {}
+        mode_items = list(config.get("manual_modes", {}).keys()) or ["ask", "plan", "craft"]
+        model_items = list(config.get("llm_providers", {}).keys()) or ["tool-agent", "deepseek", "deepseek-pro"]
+        self._mode_selector = DropdownSelector(mode_items, self._center)
+        self._model_selector = DropdownSelector(model_items, self._center)
 
         self._ui_renderer = UIRenderer(
             message_bus=self._bus,
@@ -218,8 +225,11 @@ class MainWindow(QMainWindow):
 
     def _connect_signals(self):
         self._center._input.send_clicked.connect(self._on_send)
+        self._center._input.stop_clicked.connect(self._on_stop_generation)
         self._center._input.mode_clicked.connect(self._on_mode_tag_clicked)
         self._center._input.model_clicked.connect(self._on_model_tag_clicked)
+        self._mode_selector.item_selected.connect(self._on_mode_selected)
+        self._model_selector.item_selected.connect(self._on_model_selected)
 
         self._left.new_session_requested.connect(self._on_new_session)
         self._left.session_action_requested.connect(self._on_session_action)
@@ -230,6 +240,12 @@ class MainWindow(QMainWindow):
         self._center._header.left_expand_toggled.connect(self._toggle_left_panel)
         self._center._header.expand_toggled.connect(self._toggle_right_panel)
         self._center._header.double_clicked.connect(self._toggle_maximize)
+        self._center._header.search_text_changed.connect(self._on_search_text_changed)
+
+        self._center.confirmation_clicked.connect(self._on_user_confirm)
+        self._center.analyze_project_clicked.connect(self._on_analyze_project)
+        self._center.export_requested.connect(self._on_export_session)
+        self._center.settings_requested.connect(self._on_open_settings)
 
     def _init_default_session(self):
         self._draft_session_type = "chat"
@@ -257,10 +273,63 @@ class MainWindow(QMainWindow):
         ))
         self._center._input._text_edit.clear()
 
+    def _on_stop_generation(self):
+        self._bus.emit(UserStopEvent(session_id=self._current_session_id()))
+
+    def _on_user_confirm(self, confirmed: bool):
+        self._bus.emit(UserConfirmEvent(
+            session_id=self._current_session_id(),
+            confirmed=confirmed,
+        ))
+
+    def _on_analyze_project(self):
+        self._bus.emit(UserSendEvent(
+            session_id=self._current_session_id(),
+            user_text="帮我分析当前项目",
+            mode=self._current_mode,
+            session_type=self._draft_session_type,
+            project_path=self._draft_project_path,
+            model=self._current_model_name,
+        ))
+
+    def _on_export_session(self):
+        sid = self._current_session_id()
+        if not sid:
+            return
+        messages = self._repo.get_messages(sid)
+        lines = []
+        for m in messages:
+            role_label = {"user": "我", "ai": "AI", "system": "系统"}.get(m.role, m.role)
+            lines.append(f"[{role_label}] {m.content}")
+        text = "\n\n".join(lines)
+        path, _ = QFileDialog.getSaveFileName(self, "导出会话", f"session_{sid[-8:]}.txt", "Text Files (*.txt)")
+        if path:
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(text)
+            except Exception as e:
+                print(f"导出会话失败: {e}", flush=True)
+
+    def _on_open_settings(self):
+        dialog = SettingsDialog(self._config, self)
+        dialog.settings_applied.connect(self._on_settings_applied)
+        dialog.exec()
+
+    def _on_settings_applied(self):
+        self._theme_name = self._config.get("app.theme", theme.name)
+        if self._theme_name in _THEMES:
+            theme.set_theme(self._theme_name)
+        self._current_mode = self._config.get("app.last_mode", self._current_mode)
+        self._current_model_name = self._config.get("app.last_model", self._current_model_name)
+        self._center._input.set_mode(self._current_mode)
+        self._center._input.set_model(self._current_model_name)
+        self._left._theme_btn.setText("☀️" if theme.name == "light" else "🌙")
+
     def _on_new_session(self, session_type="chat"):
         self._draft_session_type = session_type
         if session_type == "work":
             self._draft_project_path = ""
+        self._center.set_analyze_button_visible(session_type == "work")
         self._bus.emit(SessionCreateEvent(
             title="新对话",
             session_type=session_type,
@@ -273,6 +342,9 @@ class MainWindow(QMainWindow):
         sid = self._left._idx_to_sid.get(idx)
         if sid:
             self._bus.emit(SessionSwitchEvent(new_session_id=sid))
+            meta = self._repo.get_session(sid)
+            is_work = meta is not None and getattr(meta.session_type, "value", meta.session_type) == "work"
+            self._center.set_analyze_button_visible(is_work)
 
     def _on_session_action(self, action, idx):
         sid = self._left._idx_to_sid.get(idx)
@@ -307,13 +379,37 @@ class MainWindow(QMainWindow):
                 self._bus.emit(SessionPinEvent(session_id=sid, pinned=not meta.pinned))
 
     def _on_search_text_changed(self, text):
-        pass
+        self._left.filter_sessions(text)
 
     def _on_mode_tag_clicked(self):
-        pass
+        if self._mode_selector.isVisible():
+            self._mode_selector.hide()
+            return
+        self._model_selector.hide()
+        self._mode_selector.position_under(self._center._input._mode_tag)
+        self._mode_selector.show()
+        self._mode_selector.raise_()
 
     def _on_model_tag_clicked(self):
-        pass
+        if self._model_selector.isVisible():
+            self._model_selector.hide()
+            return
+        self._mode_selector.hide()
+        self._model_selector.position_under(self._center._input._model_tag)
+        self._model_selector.show()
+        self._model_selector.raise_()
+
+    def _on_mode_selected(self, mode: str):
+        self._current_mode = mode
+        self._center._input.set_mode(mode)
+        self._config.set("app.last_mode", mode)
+        self._config.save()
+
+    def _on_model_selected(self, model: str):
+        self._current_model_name = model
+        self._center._input.set_model(model)
+        self._config.set("app.last_model", model)
+        self._config.save()
 
     def _on_theme_changed(self, theme_name):
         self._config.set("app.theme", theme_name)

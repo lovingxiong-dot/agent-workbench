@@ -1,5 +1,26 @@
 # Changelog
 
+## v5.0.4-alpha (2026-07-06) — P4 关键用户动作与列表预览修复
+
+### feat/p4-actions
+- 停止生成：`ChatArea` 新增 `stop_clicked` 信号，`MainWindow` 转发 `UserStopEvent`
+- 任务确认：`ChatArea` 确认条 `confirmation_clicked(bool)` 转发 `UserConfirmEvent`
+- 分析项目：`ChatArea` 新增 `analyze_project_clicked` 信号，Work 会话可触发“帮我分析当前项目”
+- 导出会话：`ChatArea` More 下拉新增“导出会话”，支持选择路径并导出当前会话全部消息
+- 打开设置：`ChatArea` More 下拉新增“设置”，弹出 `SettingsDialog` 并持久化主题/模式/模型
+- 搜索过滤：`HeaderBar` 新增 `search_text_changed(str)`，`MainWindow` 连接到 `LeftPanel.filter_sessions`
+- 模式/模型下拉：新增通用 `DropdownSelector` 组件，`MainWindow` 初始化并连接业务回调，配置持久化到 `config.yaml`
+
+### fix/ui
+- 修复会话列表 preview 被 badge（completed/analyzing 等阶段文本）覆盖的问题
+  - `SessionMetadata` 新增 `last_preview` 字段
+  - `SessionRepository.list_sessions` 通过子查询携带最后一条消息摘要
+  - `LeftPanel.refresh` 优先使用 `last_preview` 作为列表预览，无消息时回退到旧临时状态或模式
+
+### test
+- `pytest tests/test_v4_integration.py -v` 11/11 全绿
+- `pytest tests/test_v4_gui_smoke.py -v` 6/6 全绿
+
 ## v5.0.3-alpha (2026-07-06) — 模块化骨架拆分与致命 Bug 修复
 
 ### refactor/modular

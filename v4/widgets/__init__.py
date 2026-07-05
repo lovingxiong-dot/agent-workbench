@@ -9,3 +9,5 @@ from .chat_items import (
 from .chat_scene import ChatScene
 from .chat_area import ChatArea, HeaderBar, MoreDropdown, InputArea
 from .right_panel import RightPanel, TabButton
+from .settings_dialog import SettingsDialog
+from .dropdown_selector import DropdownSelector

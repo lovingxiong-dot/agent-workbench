@@ -18,7 +18,7 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtTest import QTest
 
 from v4.input_area import InputAreaWidget
-from v4.main_window import THEMES
+from v4.widgets.base import _THEMES
 
 
 @pytest.fixture(scope="session")
@@ -33,7 +33,7 @@ class TestV4InputArea:
     @pytest.fixture(autouse=True)
     def setup(self, qt_app):
         self.app = qt_app
-        self.theme = THEMES["dark"]
+        self.theme = _THEMES["dark"]
         self.widget = InputAreaWidget(self.theme)
         self.widget.show()
         yield

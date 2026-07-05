@@ -148,8 +148,8 @@ class TestV4Integration:
         若窗口挂载了 auto_complete 的 StubWorkerManager，会额外等待 AI 消息
         写入 DB，避免 QueuedConnection 异步导致后续断言读到旧预览。
         """
-        window.chat_area.input_field.setPlainText(text)
-        window.chat_area.input_area.send_btn.click()
+        window._center._input._text_edit.setPlainText(text)
+        window._center._input._send_btn.click()
         self._process_events()
         sid = window._orchestrator.current_session_id
         assert sid is not None, "发送首条消息后应创建会话"
@@ -166,21 +166,24 @@ class TestV4Integration:
     # ── 列表遍历辅助（适配分组折叠新 UI）─────────────────────────────
 
     def _list_groups(self, window):
-        """返回左栏所有 SessionGroupWidget。"""
-        return list(window.conversation_list._iter_groups())
+        """返回左栏所有 SessionGroup。"""
+        return list(window._left._groups)
 
     def _list_all_items(self, window):
-        """返回 [(session_id, SessionItemWidget)] 平铺列表（按 UI 顺序）。"""
+        """返回 [(session_id, SessionItem)] 平铺列表（按 UI 顺序）。"""
         result = []
+        idx_to_sid = window._left._idx_to_sid
         for group in self._list_groups(window):
-            for sid, item in group._items.items():
-                result.append((sid, item))
+            for item in group._items:
+                sid = idx_to_sid.get(item._index)
+                if sid:
+                    result.append((sid, item))
         return result
 
     def _current_list_item(self, window):
-        """返回当前激活的 SessionItemWidget（未找到返回 None）。"""
+        """返回当前激活的 SessionItem（未找到返回 None）。"""
         for sid, item in self._list_all_items(window):
-            if item.property("active") or item.styleSheet().find("border-left") != -1:
+            if item._active:
                 return item
         # 备选：找当前会话对应的项
         current_sid = window._orchestrator.current_session_id
@@ -197,12 +200,12 @@ class TestV4Integration:
         window = self._create_window()
         assert len(window._repo.list_sessions()) == 0, "启动时列表应为空"
 
-        # 点击新对话按钮不创建会话
-        window.conversation_list.new_task_btn.click()
+        # 新 UI：点击新对话按钮直接创建 chat 会话
+        window._left._new_btn.click()
         self._process_events()
-        assert len(window._repo.list_sessions()) == 0, "空点击不应新增会话"
+        assert len(window._repo.list_sessions()) == 1, "点击新对话应创建 1 个会话"
 
-        # 发送首条消息后才创建会话并出现在列表
+        # 发送首条消息后创建/更新会话并出现在列表
         sid = self._send_first_message(window, "你好，v4")
         sessions = window._repo.list_sessions()
         assert len(sessions) == 1, (
@@ -211,7 +214,7 @@ class TestV4Integration:
 
         item = self._current_list_item(window)
         assert item is not None, "应存在当前会话对应的列表项"
-        assert "新对话" in item.title_label.text(), "Chat 会话默认标题应为'新对话'"
+        assert "新对话" in item._title_lbl.text(), "Chat 会话默认标题应为'新对话'"
 
         messages = window._repo.get_messages(sid)
         user_messages = [m for m in messages if m.role == "user"]
@@ -219,8 +222,8 @@ class TestV4Integration:
         assert user_messages[0].role == "user"
         assert user_messages[0].content == "你好，v4"
 
-        html = window.chat_area.toHtml()
-        assert "你好，v4" in html, "ChatView 应显示用户消息"
+        text = window._center.to_plain_text()
+        assert "你好，v4" in text, "聊天区应显示用户消息"
 
         window.close()
         window.deleteLater()
@@ -233,15 +236,9 @@ class TestV4Integration:
         window = self._create_window()
         test_path = r"C:\v4_test_project"
 
-        # monkeypatch 项目路径获取逻辑
-        window._get_project_path = lambda: test_path
-        window.conversation_list.new_task_btn.click()
-        self._process_events()
-
-        # 点击 work 按钮后仍处于草稿状态，未创建会话
-        assert window._orchestrator.current_session_id is None
-
-        # 发送首条消息后创建 work 会话
+        # 发送首条消息时绑定项目路径，创建 work 会话
+        window._draft_project_path = test_path
+        window._draft_session_type = "work"
         sid = self._send_first_message(window, "分析项目")
         session = window._repo.get_session(sid)
         assert session is not None
@@ -250,8 +247,8 @@ class TestV4Integration:
 
         item = self._current_list_item(window)
         assert item is not None
-        assert "新对话" in item.title_label.text(), "列表项应显示会话标题"
-        assert "AI 回复：" in item.preview_label.text(), "列表项应显示最后消息预览"
+        assert "新对话" in item._title_lbl.text(), "列表项应显示会话标题"
+        assert "AI 回复：" in item._preview_lbl.text(), "列表项应显示最后消息预览"
 
         # 环境持久化
         env = window._repo.get_environment(sid)
@@ -272,8 +269,8 @@ class TestV4Integration:
     def test_send_message_persists_and_renders(self):
         window = self._create_window()
 
-        window.chat_area.input_field.setPlainText("测试消息")
-        window.chat_area.input_area.send_btn.click()
+        window._center._input._text_edit.setPlainText("测试消息")
+        window._center._input._send_btn.click()
         self._process_events()
 
         sid = window._orchestrator.current_session_id
@@ -283,8 +280,8 @@ class TestV4Integration:
         assert len(user_messages) == 1
         assert user_messages[0].content == "测试消息"
 
-        assert window.chat_area.input_field.toPlainText().strip() == "", "发送后输入框应清空"
-        assert "测试消息" in window.chat_area.toHtml()
+        assert window._center._input._text_edit.toPlainText().strip() == "", "发送后输入框应清空"
+        assert "测试消息" in window._center.to_plain_text()
 
         window.close()
         window.deleteLater()
@@ -299,8 +296,8 @@ class TestV4Integration:
         # 创建会话 A 并发送消息
         sid_a = self._send_first_message(window, "消息 A")
 
-        # 点击新对话进入草稿状态，再发送消息创建会话 B
-        window.conversation_list.new_task_btn.click()
+        # 点击新对话创建会话 B，再发送消息
+        window._left._new_btn.click()
         self._process_events()
         sid_b = self._send_first_message(window, "消息 B")
 
@@ -311,14 +308,14 @@ class TestV4Integration:
         self._process_events()
 
         assert window._orchestrator.current_session_id == sid_a
-        html = window.chat_area.toHtml()
-        assert "消息 A" in html, "切换回 A 应加载 A 的消息"
-        assert "消息 B" not in html, "切换回 A 不应显示 B 的消息"
+        text = window._center.to_plain_text()
+        assert "消息 A" in text, "切换回 A 应加载 A 的消息"
+        assert "消息 B" not in text, "切换回 A 不应显示 B 的消息"
 
         # 列表当前选中项应同步
         current_item = self._current_list_item(window)
         assert current_item is not None
-        assert current_item._session_id == sid_a
+        assert window._left._idx_to_sid.get(current_item._index) == sid_a
 
         window.close()
         window.deleteLater()
@@ -334,8 +331,8 @@ class TestV4Integration:
         sid = self._send_first_message(window, "任务 1")
 
         # 再发送一条，占满两个槽位
-        window.chat_area.input_field.setPlainText("任务 2")
-        window.chat_area.input_area.send_btn.click()
+        window._center._input._text_edit.setPlainText("任务 2")
+        window._center._input._send_btn.click()
         self._process_events()
 
         rt = window._orchestrator.get_runtime(sid)
@@ -352,11 +349,11 @@ class TestV4Integration:
         assert len(messages) == 3, "即使第 3 条被拒绝，用户消息仍应写入 DB"
 
         # UI 显示队列已满提示
-        html = window.chat_area.toHtml()
-        assert "队列已满" in html, "应提示用户队列已满"
+        text = window._center.to_plain_text()
+        assert "队列已满" in text, "应提示用户队列已满"
 
         # 发送按钮被禁用
-        assert not window.chat_area.input_area.send_btn.isEnabled(), "队列满时发送按钮应禁用"
+        assert not window._center._input._send_btn.isEnabled(), "队列满时发送按钮应禁用"
 
         window.close()
         window.deleteLater()
@@ -371,8 +368,8 @@ class TestV4Integration:
         # 发送首条消息创建会话
         sid = self._send_first_message(window, "任务 A")
 
-        window.chat_area.input_field.setPlainText("任务 B")
-        window.chat_area.input_area.send_btn.click()
+        window._center._input._text_edit.setPlainText("任务 B")
+        window._center._input._send_btn.click()
         self._process_events(300)
 
         rt = window._orchestrator.get_runtime(sid)
@@ -400,7 +397,7 @@ class TestV4Integration:
         rt = window._orchestrator.get_runtime(sid)
         assert rt.queue.has_streaming, "应存在正在运行的任务"
 
-        window.chat_area.input_area.stop_btn.click()
+        window._center._input._stop_btn.click()
         self._process_events()
 
         assert rt.queue.is_empty, "停止后队列应为空"
@@ -420,7 +417,7 @@ class TestV4Integration:
         # 创建两个会话
         sid_a = self._send_first_message(window, "会话 A")
 
-        window.conversation_list.new_task_btn.click()
+        window._left._new_btn.click()
         self._process_events()
         sid_b = self._send_first_message(window, "会话 B")
 
@@ -431,7 +428,7 @@ class TestV4Integration:
         all_items = self._list_all_items(window)
         first_sid = all_items[0][0]
         assert first_sid == sid_a, "置顶会话应固定在最上方"
-        assert "📌" in all_items[0][1].title_label.text(), "置顶项应显示置顶标记"
+        assert "📌" in all_items[0][1]._title_lbl.text(), "置顶项应显示置顶标记"
 
         # 取消置顶后，sid_b 应回到顶部（按 updated_at 排序）
         window._bus.emit(SessionPinEvent(session_id=sid_a, pinned=False))
@@ -453,7 +450,7 @@ class TestV4Integration:
         # 创建两个 Chat 会话
         sid_a = self._send_first_message(window, "会话 A")
 
-        window.conversation_list.new_task_btn.click()
+        window._left._new_btn.click()
         self._process_events()
         sid_b = self._send_first_message(window, "会话 B")
 
@@ -465,7 +462,7 @@ class TestV4Integration:
         self._process_events()
 
         items = self._list_all_items(window)
-        title_items = [item for _, item in items if same_title in item.title_label.text()]
+        title_items = [item for _, item in items if same_title in item._title_lbl.text()]
         assert len(title_items) >= 2, "应存在至少两个同标题会话"
 
         sids = [sid for sid, _ in items]
@@ -492,7 +489,7 @@ class TestV4Integration:
             sid = self._send_first_message(window, f"并发任务 {i}")
             sids.append(sid)
             if i < 5:
-                window.conversation_list.new_task_btn.click()
+                window._left._new_btn.click()
                 self._process_events()
 
         assert len(set(sids)) == 6, "应存在 6 个不同会话"
@@ -501,8 +498,8 @@ class TestV4Integration:
         for sid in sids:
             window._bus.emit(SessionSwitchEvent(new_session_id=sid))
             self._process_events()
-            window.chat_area.input_field.setPlainText("并发任务")
-            window.chat_area.input_area.send_btn.click()
+            window._center._input._text_edit.setPlainText("并发任务")
+            window._center._input._send_btn.click()
             self._process_events()
 
         stub = window._stub_wm
@@ -547,7 +544,7 @@ class TestV4Integration:
         messages_after = window2._repo.get_messages(sid)
         assert len(messages_after) == len(messages_before), "重启后消息数量应一致"
         assert any("持久化消息" in m.content for m in messages_after)
-        assert "持久化消息" in window2.chat_area.toHtml()
+        assert "持久化消息" in window2._center.to_plain_text()
 
         window2.close()
         window2.deleteLater()

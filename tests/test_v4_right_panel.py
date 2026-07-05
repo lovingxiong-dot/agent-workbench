@@ -15,7 +15,7 @@ import pytest
 from PySide6.QtWidgets import QApplication
 
 from v4.right_panel import TerminalWidget, FileReaderWidget, RightPanelWidget
-from v4.main_window import THEMES
+from v4.widgets.base import _THEMES
 
 
 @pytest.fixture(scope="session")
@@ -30,7 +30,7 @@ class TestV4RightPanel:
     @pytest.fixture(autouse=True)
     def setup(self, qt_app):
         self.app = qt_app
-        self.theme = THEMES["dark"]
+        self.theme = _THEMES["dark"]
         yield
 
     def test_terminal_widget_append_and_clear(self):

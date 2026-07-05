@@ -32,6 +32,7 @@ class SessionMetadata:
     model: str
     project_path: str = ""      # Chat 为空，Work 为项目目录
     pinned: bool = False          # 置顶标记
+    last_preview: str = ""       # 最后一条消息摘要（列表预览）
     updated_at: datetime = field(default_factory=datetime.now)
     created_at: datetime = field(default_factory=datetime.now)
 

@@ -18,6 +18,8 @@ from .chat_items import (
 class MoreDropdown(QWidget):
     WIDTH = 260
     CORNER = 8
+    export_requested = Signal()
+    settings_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -68,7 +70,30 @@ class MoreDropdown(QWidget):
             lbl.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
             layout.addWidget(lbl)
 
-        self.setFixedHeight(258)
+        # 分隔线
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.HLine)
+        sep2.setFixedHeight(1)
+        sep2.setStyleSheet(f"color: {C['border']};")
+        layout.addWidget(sep2)
+
+        # 导出会话入口
+        export_lbl = QLabel("⬇ 导出会话")
+        export_lbl.setFont(font(10))
+        export_lbl.setCursor(Qt.PointingHandCursor)
+        export_lbl.setStyleSheet(f"color: {C['accent']}; background: transparent;")
+        export_lbl.mousePressEvent = lambda e: self.export_requested.emit()
+        layout.addWidget(export_lbl)
+
+        # 设置入口
+        settings_lbl = QLabel("⚙ 设置")
+        settings_lbl.setFont(font(10))
+        settings_lbl.setCursor(Qt.PointingHandCursor)
+        settings_lbl.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
+        settings_lbl.mousePressEvent = lambda e: self.settings_requested.emit()
+        layout.addWidget(settings_lbl)
+
+        self.setFixedHeight(306)
         self.hide()
 
     def position_under(self, btn: QWidget):
@@ -104,6 +129,7 @@ class HeaderBar(QWidget):
     left_expand_toggled = Signal()
     expand_toggled = Signal()
     search_clicked = Signal()
+    search_text_changed = Signal(str)
     more_clicked = Signal()
     double_clicked = Signal()
 
@@ -154,6 +180,7 @@ class HeaderBar(QWidget):
         self._search_input.setFixedHeight(24)
         self._search_input.setPlaceholderText("搜索会话内容...")
         self._search_input.hide()
+        self._search_input.textChanged.connect(self.search_text_changed.emit)
         self._search_input.setStyleSheet(
             f"QLineEdit {{ background-color: {C['bg_card']}; color: {C['text_primary']}; "
             f"border: 0.5px solid {C['accent']}; border-radius: 6px; padding: 2px 8px; font-size: 11px; }}"
@@ -280,6 +307,7 @@ class HeaderBar(QWidget):
 
 class InputArea(QWidget):
     send_clicked = Signal()
+    stop_clicked = Signal()
     mode_clicked = Signal()
     model_clicked = Signal()
 
@@ -334,6 +362,15 @@ class InputArea(QWidget):
         self._send_btn.clicked.connect(self.send_clicked.emit)
         bottom_row.addWidget(self._send_btn)
 
+        # 停止按钮：与发送按钮同位置，streaming 状态时显示
+        self._stop_btn = QPushButton("停止")
+        self._stop_btn.setFixedSize(50, 24)
+        self._stop_btn.setCursor(Qt.PointingHandCursor)
+        self._stop_btn.setToolTip("停止生成")
+        self._stop_btn.clicked.connect(self.stop_clicked.emit)
+        self._stop_btn.hide()
+        bottom_row.addWidget(self._stop_btn)
+
         root.addLayout(bottom_row)
         self.install_enter_shortcut()
         self._refresh_theme()
@@ -348,6 +385,10 @@ class InputArea(QWidget):
         self._send_btn.setStyleSheet(
             f"QPushButton {{ background-color: #34d399; border-radius: 8px; border: none; }}"
             f"QPushButton:hover {{ background-color: #2ecc71; }}"
+        )
+        self._stop_btn.setStyleSheet(
+            f"QPushButton {{ background-color: #ef4444; color: {C['text_inverse']}; border-radius: 6px; border: none; font-size: 11px; }}"
+            f"QPushButton:hover {{ background-color: #dc2626; }}"
         )
         send_svg = '''<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
             <path d="M 12 7 L 16 15 L 13 15 L 13 19 L 11 19 L 11 15 L 8 15 Z" fill="#0f1729"/>
@@ -400,12 +441,20 @@ class InputArea(QWidget):
         if hasattr(self, "_model_tag"):
             self._model_tag._value_label.setText(model)
 
+    def set_streaming(self, active: bool):
+        """切换发送/停止按钮显隐。"""
+        self._send_btn.setVisible(not active)
+        self._stop_btn.setVisible(active)
+
     def install_enter_shortcut(self):
         self._text_edit.installEventFilter(self)
 
     def eventFilter(self, watched, event):
         if watched is self._text_edit and event.type() == QEvent.KeyPress:
             if event.key() in (Qt.Key_Return, Qt.Key_Enter) and not (event.modifiers() & Qt.ShiftModifier):
+                # streaming 中按 Enter 不触发发送
+                if self._stop_btn.isVisible():
+                    return True
                 self.send_clicked.emit()
                 return True
         return super().eventFilter(watched, event)
@@ -461,6 +510,9 @@ class _ResizeHandle(QWidget):
 
 class ChatArea(QWidget):
     confirmation_clicked = Signal(bool)
+    analyze_project_clicked = Signal()
+    export_requested = Signal()
+    settings_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -497,6 +549,13 @@ class ChatArea(QWidget):
         self._confirm_bar = self._build_confirmation_bar()
         layout.insertWidget(1, self._confirm_bar)
 
+        # 「帮我分析当前项目」按钮（work 类型会话显示）
+        self._analyze_btn = QPushButton("帮我分析当前项目")
+        self._analyze_btn.setCursor(Qt.PointingHandCursor)
+        self._analyze_btn.hide()
+        self._analyze_btn.clicked.connect(self.analyze_project_clicked.emit)
+        layout.insertWidget(3, self._analyze_btn)
+
         # QGraphicsView 聊天区
         self._view = QGraphicsView()
         self._view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -527,11 +586,18 @@ class ChatArea(QWidget):
 
         # "..." 下拉面板（内嵌子控件，跟随主窗口，非独立顶层窗口）
         self._more_dropdown = MoreDropdown(self)
+        self._more_dropdown.export_requested.connect(self.export_requested.emit)
+        self._more_dropdown.settings_requested.connect(self.settings_requested.emit)
         self._more_dropdown.raise_()
 
     def _refresh_theme(self):
         self.setStyleSheet(f"background-color: {C['bg_primary']};")
         self._sep1.setStyleSheet(f"background-color: {C['border']};")
+        self._analyze_btn.setStyleSheet(
+            f"QPushButton {{ background-color: {C['bg_input']}; color: {C['accent']}; border: 0.5px solid {C['accent']}; "
+            f"border-radius: 8px; padding: 6px 14px; font-size: 11px; font-weight: 600; margin: 6px 20px; }}"
+            f"QPushButton:hover {{ background-color: {C['bg_hover']}; }}"
+        )
         self._resize_handle._refresh_style()
         self._view.setStyleSheet(
             "QGraphicsView { border: none; background: transparent; }"
@@ -701,6 +767,11 @@ class ChatArea(QWidget):
         else:
             self._header._status_lbl.hide()
             self._header._status_lbl.clear()
+        self._input.set_streaming(active)
+
+    def set_analyze_button_visible(self, visible: bool):
+        """控制「帮我分析当前项目」按钮显隐。"""
+        self._analyze_btn.setVisible(visible)
 
     def clear_phase_ui(self):
         self._header._status_lbl.hide()
@@ -732,6 +803,19 @@ class ChatArea(QWidget):
 
     def set_current_phase(self, phase: str):
         self.set_phase_indicator(phase, 0)
+
+    def to_plain_text(self) -> str:
+        """返回聊天区所有消息文本的拼接（供测试使用）。"""
+        parts = []
+        for entry in self._chat_history:
+            role = entry.get("role")
+            if role == "user":
+                parts.append(entry.get("text", ""))
+            elif role in ("ai", "ai_stream"):
+                parts.append(entry.get("body", ""))
+            elif role == "system":
+                parts.append(entry.get("text", ""))
+        return "\n".join(parts)
 
     def _toggle_search(self):
         """切换搜索框显隐"""

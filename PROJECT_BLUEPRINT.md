@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.3-alpha | 存档次数 | 4 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.4-alpha | 存档次数 | 5 |
 
 ## 项目概要
 AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。
@@ -108,7 +108,9 @@ v5.0.0-alpha 为 v5-dev 线路起点：从 v4-refactor 切出独立分支，将�
 │   │   ├── chat_items.py   # ChatItem 及 8 个子类
 │   │   ├── chat_scene.py   # ChatScene
 │   │   ├── chat_area.py    # ChatArea、HeaderBar、InputArea、MoreDropdown
-│   │   └── right_panel.py  # RightPanel、TabButton
+│   │   ├── right_panel.py  # RightPanel、TabButton
+│   │   ├── dropdown_selector.py  # 通用内嵌下拉选择器
+│   │   └── settings_dialog.py    # 设置对话框
 │   ├── legacy/             # v4 旧 UI 组件备份（v5-dev 线路保留，P10 后清理）
 │   │   ├── main_window_legacy.py
 │   │   ├── conversation_list.py

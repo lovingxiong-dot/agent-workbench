@@ -341,8 +341,10 @@ class UIRenderer(QObject):
 
     def _handle_update_session_list(self, event):
         if self._conversation_list:
-            try: self._conversation_list.refresh(event.sessions)
-            except: pass
+            try:
+                self._conversation_list.refresh(event.sessions)
+            except Exception as e:
+                print(f"UIRenderer update_session_list error: {e}", flush=True)
 
     def _handle_update_session_badge(self, event):
         if self._conversation_list:
