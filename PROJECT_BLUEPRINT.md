@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.1-alpha | 存档次数 | 2 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.2-alpha | 存档次数 | 3 |
 
 ## 项目概要
 AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。
@@ -135,12 +135,13 @@ v5.0.0-alpha 为 v5-dev 线路起点：从 v4-refactor 切出独立分支，将�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v5.0.2-alpha | 2026-07-06 | 完成 P3 UIRenderer 与新 UI 桥接：ChatArea 真实消息渲染/流式/确认条/阶段状态，LeftPanel 会话列表按项目分组刷新与 badge 更新，SessionGroup 右键动作信号修复 | feat/bridge/ui | v4/main_window.py, tests/test_v4_gui_smoke.py |
 | v5.0.1-alpha | 2026-07-05 | 备份 v4 旧 UI 组件至 `v4/legacy/`，标记 v5-dev 独立线路；原始组件保留待 P10 清理 | chore/backup | v4/legacy/*, PROJECT_BLUEPRINT.md |
-| v5.0.0-alpha | 2026-07-05 | v5-dev 线路起点：从 v4-refactor 切出独立分支；将新 UI 模板注入后端核心（ConfigService/SessionRepository/MessageBus/八引擎/WorkerManager/SessionOrchestrator/UIRenderer），保留核心基座不变 | feat/refactor | v4/main_window.py |
 
 ## 历史归档
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v5.0.0-alpha | 2026-07-05 | v5-dev 线路起点：从 v4-refactor 切出独立分支；将新 UI 模板注入后端核心（ConfigService/SessionRepository/MessageBus/八引擎/WorkerManager/SessionOrchestrator/UIRenderer），保留核心基座不变 | feat/refactor | v4/main_window.py |
 | v4.0.8-alpha | 2026-07-01 | v4 全量 UI 三位一体对齐 SVG 设计稿 | feat/refactor/test | v4/main_window.py, v4/input_area.py, v4/right_panel.py, v4/icons.py, v4/conversation_list.py, tests/test_v4_input_area.py |
 | v4.0.7-alpha | 2026-07-01 | 标题栏三键 + execute 步骤条自动解析 | feat/docs/fix | v4/main_window.py, v4/ui_renderer.py, AgentWorkbench.spec, docs/ui/* |
 | v4.0.6-alpha | 2026-07-01 | 补齐目录标准化遗漏 | fix/build | AgentWorkbench.spec, services/project_service.py |
@@ -151,7 +152,7 @@ v5.0.0-alpha 为 v5-dev 线路起点：从 v4-refactor 切出独立分支，将�
 3. `git commit -m "..."` + `git tag vX.Y.Z`
 4. `git push origin <当前分支>` + `git push origin vX.Y.Z`（禁 `--tags`）
 
-_更新于 2026-07-05 by AI-Kimi-K2.7-Code_
+_更新于 2026-07-06 by AI-Kimi-K2.7-Code_
 
 ## Agent 交接记录
 | 时间 | 方向 | 从 | 到 | 交接点 | 备注 |

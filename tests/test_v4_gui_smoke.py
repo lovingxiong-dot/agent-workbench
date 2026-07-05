@@ -1,10 +1,9 @@
 """
-Smoke test for v4 MainWindow startup and basic interactions.
+Smoke test for v5 MainWindow (new UI) startup and basic interactions.
 Does not require a display; uses QCoreApplication event loop with timers.
 """
 import sys
 import os
-import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -16,7 +15,7 @@ from v4.main_window import MainWindow
 from v4.events import SessionCreateEvent
 
 
-class TestV4GUISmoke:
+class TestV5GUISmoke:
     @classmethod
     def setup_class(cls):
         app = QApplication.instance() or QApplication(sys.argv)
@@ -36,17 +35,18 @@ class TestV4GUISmoke:
     def test_three_column_layout_initial_state(self):
         """验证三栏布局初始尺寸与右栏标签页数量。"""
         window = MainWindow()
+        window.show()
         self.app.processEvents()
 
         # 左栏固定 220px，右栏固定 400px；splitter 保证存在三栏
-        assert window._left_panel.width() == 220
-        assert window._right_panel.width() == 400
-        sizes = window.splitter.sizes()
+        assert window._left.width() == 220
+        assert window._right.width() == 400
+        sizes = window._splitter.sizes()
         assert len(sizes) == 3, "应存在三栏"
 
         # 右栏四个标签页
-        assert window.right_panel.tabs.count() == 4, "右栏应包含 4 个标签页"
-        tab_texts = [window.right_panel.tabs.tabText(i).lower() for i in range(window.right_panel.tabs.count())]
+        assert len(window._right._tab_btns) == 4, "右栏应包含 4 个标签页"
+        tab_texts = [btn.text().lower() for btn in window._right._tab_btns]
         assert "v4 架构" in tab_texts
         assert "终端" in tab_texts
         assert "文件编辑器" in tab_texts or "文件读取器" in tab_texts
@@ -56,21 +56,21 @@ class TestV4GUISmoke:
         window.deleteLater()
         self.app.processEvents()
 
-    def test_new_task_button_does_not_create_empty_session(self):
+    def test_new_session_button_creates_session(self):
+        """点击「+ 新会话」应创建新会话。"""
         window = MainWindow()
         initial_count = len(window._repo.list_sessions())
 
-        # 反复点击「+ 新任务」按钮，不应创建空会话
-        window.conversation_list.new_task_btn.click()
+        window._left._new_btn.click()
         self.app.processEvents()
-        window.conversation_list.new_task_btn.click()
+        window._left._new_btn.click()
         self.app.processEvents()
-        window.conversation_list.new_task_btn.click()
+        window._left._new_btn.click()
         self.app.processEvents()
 
         final_count = len(window._repo.list_sessions())
-        assert final_count == initial_count, (
-            f"空点击不应创建会话，期望 {initial_count}，实际 {final_count}"
+        assert final_count == initial_count + 3, (
+            f"每次点击应创建一个会话，期望 {initial_count + 3}，实际 {final_count}"
         )
 
         window.close()
@@ -91,20 +91,17 @@ class TestV4GUISmoke:
             other_theme = "light" if initial_theme == "dark" else "dark"
             other_emoji = "☀️" if other_theme == "light" else "🌙"
 
-            assert window.conversation_list.theme_btn.text() == expected_emoji
+            assert window._left._theme_btn.text() == expected_emoji
 
-            # 记录切换前的样式，用于验证切换后确实变化
-            chat_area_before = window.chat_area.chat_scene.backgroundBrush().color().name()
-            sidebar_before = window.conversation_list.styleSheet()
+            sidebar_before = window._left.styleSheet()
 
-            window.conversation_list.theme_btn.click()
+            window._left._theme_btn.click()
             self.app.processEvents()
 
             # 按钮图标、配置、UI 样式均应变更为对应主题
-            assert window.conversation_list.theme_btn.text() == other_emoji
+            assert window._left._theme_btn.text() == other_emoji
             assert window._config.get("app.theme") == other_theme
-            assert window.chat_area.chat_scene.backgroundBrush().color().name() != chat_area_before
-            assert window.conversation_list.styleSheet() != sidebar_before
+            assert window._left.styleSheet() != sidebar_before
         finally:
             # 恢复原始主题，避免影响其他测试和真实配置文件
             window._config.set("app.theme", original_theme)

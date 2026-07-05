@@ -15,11 +15,14 @@ ui_template.py — Agent Workbench 纯 UI 模版（零业务逻辑）v0.5-alpha
 纯 UI 层，所有数据为 Demo 硬编码。
 """
 import sys
+import html
+import re
+import os
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QLineEdit, QTextEdit, QSplitter, QStackedWidget,
     QGraphicsView, QGraphicsScene, QGraphicsItem, QSizePolicy,
-    QFrame, QScrollArea, QListWidget, QFileDialog,
+    QFrame, QScrollArea, QListWidget, QFileDialog, QInputDialog, QMessageBox,
 )
 from PySide6.QtCore import Qt, Signal, QRect, QRectF, QPointF, QPoint, QSize, QTimer, QObject, QEvent
 from PySide6.QtGui import (
@@ -37,6 +40,7 @@ from services.config_service import ConfigService
 from .events import (
     UserSendEvent, UserStopEvent, UserConfirmEvent,
     SessionSwitchEvent, SessionDeleteEvent, SessionPinEvent, SessionCreateEvent,
+    SessionRenameEvent,
 )
 
 # ══════════════════════════════════════════════════════════════
@@ -460,6 +464,7 @@ class SessionItem(QWidget):
        卡片 192×48 rx=6；标题/状态/时间按 SVG 坐标 x=24 左对齐。
     """
     clicked = Signal(int)
+    action_requested = Signal(str, int)  # action, index
 
     def __init__(self, index: int, title: str, preview: str, time_str: str, parent=None):
         super().__init__(parent)
@@ -583,21 +588,14 @@ class SessionItem(QWidget):
 
     def _execute_menu_action(self, action: str):
         """菜单动作执行（菜单已关闭，主循环空闲）"""
-        if action == "project":
-            path = QFileDialog.getExistingDirectory(None, "选择项目路径")
-            if path:
-                pass  # 占位：主线接入时创建项目会话
-        elif action == "new":
-            pass
-        elif action == "rename":
-            pass
-        elif action == "delete":
-            pass
+        self.action_requested.emit(action, self._index)
 
 
 class SessionGroup(QWidget):
     """可折叠会话分组：分组头 + 右侧计数。"""
     session_clicked = Signal(int)
+    session_action_requested = Signal(str, int)
+    new_session_requested = Signal(str)
 
     def __init__(self, name: str, count: int, parent=None):
         super().__init__(parent)
@@ -643,7 +641,7 @@ class SessionGroup(QWidget):
         self._add_btn.setFont(font(11, bold=True))
         self._add_btn.setCursor(Qt.PointingHandCursor)
         self._add_btn.setStyleSheet(f"color: {C['text_muted']}; background: transparent; padding: 0px 2px;")
-        self._add_btn.mousePressEvent = lambda e: None  # 占位，主线接入时改为 emit new_session_requested
+        self._add_btn.mousePressEvent = lambda e: self.new_session_requested.emit("chat") if e.button() == Qt.LeftButton else None
         hl.addWidget(self._add_btn)
 
         self._hdr.mousePressEvent = lambda e: self._toggle() if e.button() == Qt.LeftButton else None
@@ -667,8 +665,12 @@ class SessionGroup(QWidget):
 
     def add_session(self, item: SessionItem):
         item.clicked.connect(self.session_clicked.emit)
+        item.action_requested.connect(self._on_item_action)
         self._items.append(item)
         self._items_layout.addWidget(item)
+
+    def _on_item_action(self, action: str, index: int):
+        self.session_action_requested.emit(action, index)
 
     def set_active(self, index: int):
         for it in self._items:
@@ -945,6 +947,10 @@ class FunctionPage(QWidget):
 class LeftPanel(QWidget):
     """左栏面板：Tab切换 + 分组会话列表 + 底部控制 + 主题切换。"""
     session_selected = Signal(int)
+    new_session_requested = Signal(str)         # session_type: "chat" | "work"
+    session_action_requested = Signal(str, int)  # action, index
+    search_text_changed = Signal(str)
+    theme_toggled = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -952,6 +958,8 @@ class LeftPanel(QWidget):
         self._current_tab = "会话"
         self._groups: list[SessionGroup] = []
         self._all_items: list[SessionItem] = []
+        self._idx_to_sid: dict[int, str] = {}
+        self._sid_to_idx: dict[str, int] = {}
         self._active_idx = 0
         self._file_mode = False
         self._setup_ui()
@@ -1027,6 +1035,8 @@ class LeftPanel(QWidget):
         self._search_btn.clicked.connect(self._toggle_search)
         self._search_close.clicked.connect(self._close_search)
         self._more_btn.clicked.connect(self._on_more_clicked)
+        self._new_btn.clicked.connect(lambda: self.new_session_requested.emit("chat"))
+        self._search_input.textChanged.connect(self.search_text_changed.emit)
 
         self._tool_stack.addWidget(sess_tools)
 
@@ -1191,6 +1201,7 @@ class LeftPanel(QWidget):
         new_theme = "light" if theme.name == "dark" else "dark"
         theme.set_theme(new_theme)
         self._theme_btn.setText("☀️" if new_theme == "light" else "🌙")
+        self.theme_toggled.emit(new_theme)
 
     def _make_tab_btn(self, text: str, active: bool) -> QPushButton:
         """Tab 标签：SVG 92×22 rx=6 背景框，active=accent/#fff，inactive=btn_bg/text_secondary。"""
@@ -1324,6 +1335,8 @@ class LeftPanel(QWidget):
             self._sess_layout.insertWidget(self._sess_layout.count() - 1, g)
         for g in self._groups:
             g.session_clicked.connect(self._on_session_clicked)
+            g.new_session_requested.connect(self.new_session_requested.emit)
+            g.session_action_requested.connect(self.session_action_requested.emit)
         self._select_session(0)
 
     def _on_session_clicked(self, idx: int):
@@ -1334,6 +1347,71 @@ class LeftPanel(QWidget):
         self._active_idx = idx
         for g in self._groups:
             g.set_active(idx)
+
+    # ══════════════════════════════════════════════════════════════
+    # UIRenderer 桥接 API（P3.4 已实现真实逻辑）
+    # ══════════════════════════════════════════════════════════════
+
+    def refresh(self, sessions):
+        """根据后端 SessionMetadata 列表重建会话分组。"""
+        # 清理旧分组
+        for g in self._groups:
+            g.deleteLater()
+        self._groups.clear()
+        self._all_items.clear()
+        self._idx_to_sid.clear()
+        self._sid_to_idx.clear()
+
+        if not sessions:
+            self._populate_sessions()
+            return
+
+        # 按 project_path 分组
+        grouped: dict[str, list[tuple[int, Any]]] = {}
+        for idx, sess in enumerate(sessions):
+            sid = getattr(sess, "session_id", str(sess))
+            self._idx_to_sid[idx] = sid
+            self._sid_to_idx[sid] = idx
+            path = getattr(sess, "project_path", "") or ""
+            group_name = os.path.basename(path) if path else "全局会话"
+            grouped.setdefault(group_name, []).append((idx, sess))
+
+        for group_name, items in grouped.items():
+            group = SessionGroup(group_name, len(items))
+            for idx, sess in items:
+                title = getattr(sess, "title", "未命名")
+                preview = getattr(sess, "mode", "") or "等待第一条消息..."
+                updated = getattr(sess, "updated_at", None)
+                try:
+                    time_str = updated.strftime("%H:%M") if updated else ""
+                except Exception:
+                    time_str = str(updated)
+                item = SessionItem(idx, title, preview, time_str)
+                group.add_session(item)
+                self._all_items.append(item)
+            self._groups.append(group)
+            self._sess_layout.insertWidget(self._sess_layout.count() - 1, group)
+            group.session_clicked.connect(self._on_session_clicked)
+            group.new_session_requested.connect(self.new_session_requested.emit)
+            group.session_action_requested.connect(self.session_action_requested.emit)
+
+        self._select_session(0)
+
+    def set_active_session(self, active_session_id: str):
+        """根据 session_id 高亮对应会话项。"""
+        idx = self._sid_to_idx.get(active_session_id)
+        if idx is not None:
+            self._select_session(idx)
+
+    def update_badge(self, session_id: str, phase: str):
+        """更新指定会话的状态徽章（使用 preview 文本展示阶段）。"""
+        idx = self._sid_to_idx.get(session_id)
+        if idx is None:
+            return
+        for item in self._all_items:
+            if item._index == idx:
+                item._preview_lbl.setText(phase or "")
+                break
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1714,6 +1792,14 @@ class SystemCard(ChatItem):
 # 聊天场景
 # ══════════════════════════════════════════════════════════════
 
+def _strip_html(raw: str) -> str:
+    """将 HTML 片段转为纯文本，用于 QGraphicsItem 渲染。"""
+    if not raw:
+        return ""
+    text = re.sub(r'<[^>]+>', '', raw)
+    return html.unescape(text).strip()
+
+
 def _wrap_text_size(text: str, fnt: QFont, max_w: float, line_spacing: int = 2) -> tuple[float, float]:
     """计算文本在指定最大宽度下自动换行后的包围盒尺寸。"""
     fm = QFontMetrics(fnt)
@@ -1887,6 +1973,11 @@ class HeaderBar(QWidget):
         self._env_lbl = QLabel("F:\\Agent\\agent_workbench")
         self._env_lbl.setFont(font(10))
         title_block.addWidget(self._env_lbl)
+
+        self._status_lbl = QLabel()
+        self._status_lbl.setFont(font(9))
+        self._status_lbl.hide()
+        title_block.addWidget(self._status_lbl)
         layout.addLayout(title_block, 1)
 
         # 垂直分隔线（SVG: x1=331）
@@ -1957,6 +2048,7 @@ class HeaderBar(QWidget):
         self.setStyleSheet(f"background-color: {C['bg_primary']};")
         self._title_lbl.setStyleSheet(f"color: {C['text_primary']}; background: transparent;")
         self._env_lbl.setStyleSheet(f"color: {C['text_muted']}; background: transparent;")
+        self._status_lbl.setStyleSheet(f"color: {C['accent_blue']}; background: transparent;")
         self._vsep.setStyleSheet(f"background-color: {C['border']};")
 
         # 搜索框 & 文件面板主题
@@ -2025,6 +2117,8 @@ class HeaderBar(QWidget):
 
 class InputArea(QWidget):
     send_clicked = Signal()
+    mode_clicked = Signal()
+    model_clicked = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -2063,6 +2157,8 @@ class InputArea(QWidget):
 
         self._mode_tag = self._make_tag("模式", "ask", 62)
         self._model_tag = self._make_tag("模型", "flash", 76)
+        self._mode_tag.mousePressEvent = lambda e: self.mode_clicked.emit()
+        self._model_tag.mousePressEvent = lambda e: self.model_clicked.emit()
         bottom_row.addWidget(self._mode_tag)
         bottom_row.addWidget(self._model_tag)
         bottom_row.addStretch()
@@ -2076,6 +2172,7 @@ class InputArea(QWidget):
         bottom_row.addWidget(self._send_btn)
 
         root.addLayout(bottom_row)
+        self.install_enter_shortcut()
         self._refresh_theme()
 
     def _refresh_theme(self):
@@ -2123,6 +2220,7 @@ class InputArea(QWidget):
         val.setFont(font(10))
         val.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
         hl.addWidget(val)
+        tag._value_label = val
 
         chev = QLabel("▾")
         chev.setFont(font(9))
@@ -2130,6 +2228,24 @@ class InputArea(QWidget):
         hl.addWidget(chev)
         hl.addStretch()
         return tag
+
+    def set_mode(self, mode: str):
+        if hasattr(self, "_mode_tag"):
+            self._mode_tag._value_label.setText(mode)
+
+    def set_model(self, model: str):
+        if hasattr(self, "_model_tag"):
+            self._model_tag._value_label.setText(model)
+
+    def install_enter_shortcut(self):
+        self._text_edit.installEventFilter(self)
+
+    def eventFilter(self, watched, event):
+        if watched is self._text_edit and event.type() == QEvent.KeyPress:
+            if event.key() in (Qt.Key_Return, Qt.Key_Enter) and not (event.modifiers() & Qt.ShiftModifier):
+                self.send_clicked.emit()
+                return True
+        return super().eventFilter(watched, event)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -2181,6 +2297,8 @@ class _ResizeHandle(QWidget):
 
 
 class ChatArea(QWidget):
+    confirmation_clicked = Signal(bool)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._initialized = False
@@ -2189,6 +2307,8 @@ class ChatArea(QWidget):
         self._rebuild_timer.setInterval(80)
         self._rebuild_timer.timeout.connect(self._debounced_rebuild)
         self._setup_ui()
+        self._chat_history = []
+        self._demo_mode = True
         self._populate_demo()
         self._initialized = True
         theme.changed.connect(self._refresh_theme)
@@ -2209,6 +2329,10 @@ class ChatArea(QWidget):
         self._sep1.setFixedHeight(1)
         self._sep1.setStyleSheet(f"background-color: {C['border']};")
         layout.addWidget(self._sep1)
+
+        # 任务确认条（P3.3 新增，初始隐藏）
+        self._confirm_bar = self._build_confirmation_bar()
+        layout.insertWidget(1, self._confirm_bar)
 
         # QGraphicsView 聊天区
         self._view = QGraphicsView()
@@ -2278,9 +2402,173 @@ class ChatArea(QWidget):
         """清除并重绘聊天区内容，适配新宽度。"""
         if width is not None:
             ChatScene.set_width(width)
+        self._render()
+
+    def _scroll_to_bottom(self):
+        vsb = self._view.verticalScrollBar()
+        QTimer.singleShot(0, lambda: vsb.setValue(vsb.maximum()))
+
+    def clear_chat(self):
+        """清除聊天区消息历史并重绘。"""
+        self._demo_mode = False
+        self._chat_history.clear()
+        self._render()
+
+    def _render(self):
+        """根据 _chat_history 渲染聊天区；Demo 模式且无消息时保留初始化示例。"""
         self._scene.clear_items()
-        self._populate_demo()
+        if not self._chat_history and self._demo_mode:
+            self._populate_demo()
+            self._scene.refresh()
+            self._scroll_to_bottom()
+            return
+        for entry in self._chat_history:
+            role = entry.get("role")
+            if role == "user":
+                self._scene.add_chat_item(UserBubble(entry["text"]))
+            elif role == "system":
+                self._scene.add_chat_item(SystemCard(entry["text"]))
+            elif role == "ai":
+                self._add_ai_entry(entry)
+            elif role == "tool":
+                self._add_tool_entry(entry)
         self._scene.refresh()
+        self._scroll_to_bottom()
+
+    def _add_ai_entry(self, entry: dict):
+        thinking = _strip_html(entry.get("thinking", ""))
+        if thinking:
+            fold = FoldBlock("思考过程", "")
+            txt = TextItem(thinking, color_key="text_secondary")
+            fold.set_body([txt], txt.height())
+            self._scene.add_chat_item(fold)
+        body = _strip_html(entry.get("body", ""))
+        if body:
+            self._scene.add_chat_item(TextItem(body, color_key="text_primary"))
+
+    def _add_tool_entry(self, entry: dict):
+        plain = _strip_html(entry.get("html", ""))
+        if not plain:
+            return
+        fold = FoldBlock("工具执行", "")
+        txt = TextItem(plain, color_key="text_secondary")
+        fold.set_body([txt], txt.height())
+        self._scene.add_chat_item(fold)
+
+    # ══════════════════════════════════════════════════════════════
+    # UIRenderer 桥接 API（P3.2 已实现最小真实渲染）
+    # ══════════════════════════════════════════════════════════════
+
+    @property
+    def input_field(self):
+        return self._input._text_edit
+
+    def append_user(self, text: str):
+        self._chat_history.append({"role": "user", "text": text})
+        self._render()
+
+    def append_system(self, text: str):
+        self._chat_history.append({"role": "system", "text": text})
+        self._render()
+
+    def append_ai(self, body: str, phase: str = "", thinking_fold: str = ""):
+        if self._chat_history and self._chat_history[-1].get("role") in ("ai_stream", "ai"):
+            self._chat_history[-1].update({
+                "role": "ai", "body": body, "phase": phase, "thinking": thinking_fold,
+            })
+        else:
+            self._chat_history.append({
+                "role": "ai", "body": body, "phase": phase, "thinking": thinking_fold,
+            })
+        self._render()
+
+    def append_tool_fold(self, tool_html: str):
+        self._chat_history.append({"role": "tool", "html": tool_html})
+        self._render()
+
+    def append_chunk(self, chunk: str):
+        if self._chat_history and self._chat_history[-1].get("role") in ("ai_stream", "ai"):
+            self._chat_history[-1]["body"] += chunk
+        else:
+            self._chat_history.append({"role": "ai_stream", "body": chunk, "phase": "", "thinking": ""})
+        self._render()
+
+    def finalize_stream(self):
+        if self._chat_history and self._chat_history[-1].get("role") == "ai_stream":
+            self._chat_history[-1]["role"] = "ai"
+        self._render()
+
+    def _build_confirmation_bar(self) -> QWidget:
+        """构建任务确认条（含确认/取消按钮）。"""
+        bar = QWidget()
+        bar.hide()
+        hl = QHBoxLayout(bar)
+        hl.setContentsMargins(8, 4, 8, 4)
+        hl.setSpacing(8)
+        self._confirm_lbl = QLabel("是否确认执行以下任务？")
+        self._confirm_lbl.setFont(font(10))
+        self._confirm_lbl.setStyleSheet(f"color: {C['text_primary']}; background: transparent;")
+        self._confirm_lbl.setWordWrap(True)
+        hl.addWidget(self._confirm_lbl, 1)
+
+        yes_btn = QPushButton("确认")
+        yes_btn.setCursor(Qt.PointingHandCursor)
+        yes_btn.setStyleSheet(
+            f"QPushButton {{ background-color: {C['accent']}; color: {C['text_inverse']}; "
+            f"border: none; border-radius: 4px; padding: 2px 10px; }}"
+            f"QPushButton:hover {{ background-color: {C['accent_blue']}; }}"
+        )
+        no_btn = QPushButton("取消")
+        no_btn.setCursor(Qt.PointingHandCursor)
+        no_btn.setStyleSheet(
+            f"QPushButton {{ background-color: {C['btn_bg']}; color: {C['text_primary']}; "
+            f"border: none; border-radius: 4px; padding: 2px 10px; }}"
+            f"QPushButton:hover {{ background-color: {C['btn_hover']}; }}"
+        )
+        yes_btn.clicked.connect(lambda: self.confirmation_clicked.emit(True))
+        no_btn.clicked.connect(lambda: self.confirmation_clicked.emit(False))
+        hl.addWidget(yes_btn)
+        hl.addWidget(no_btn)
+        return bar
+
+    def set_streaming(self, active: bool):
+        if active:
+            self._header._status_lbl.setText("回答中...")
+            self._header._status_lbl.show()
+        else:
+            self._header._status_lbl.hide()
+            self._header._status_lbl.clear()
+
+    def clear_phase_ui(self):
+        self._header._status_lbl.hide()
+        self._header._status_lbl.clear()
+
+    def show_confirmation(self, task_list):
+        lines = []
+        for i, t in enumerate(task_list[:5], 1):
+            desc = getattr(t, "description", str(t))
+            lines.append(f"{i}. {desc}")
+        if len(task_list) > 5:
+            lines.append(f"... 等共 {len(task_list)} 项")
+        text = "\n".join(lines) if lines else "（无具体任务）"
+        self._confirm_lbl.setText(f"是否确认执行以下任务？\n{text}")
+        self._confirm_bar.show()
+
+    def hide_confirmation(self):
+        self._confirm_bar.hide()
+
+    def set_send_enabled(self, enabled: bool):
+        self._input.setEnabled(enabled)
+
+    def set_phase_indicator(self, phase: str, task_count: int = 0):
+        if phase:
+            self._header._status_lbl.setText(f"阶段：{phase} ({task_count})")
+            self._header._status_lbl.show()
+        else:
+            self._header._status_lbl.hide()
+
+    def set_current_phase(self, phase: str):
+        self.set_phase_indicator(phase, 0)
 
     def _toggle_search(self):
         """切换搜索框显隐"""
@@ -2413,6 +2701,9 @@ class TabButton(QWidget):
                 f"QPushButton:hover {{ color: {C['text_primary']}; }}"
             )
 
+    def text(self) -> str:
+        return self._text
+
     def set_active(self, active: bool):
         self._active = active
         self._refresh_style()
@@ -2431,6 +2722,7 @@ class RightPanel(QWidget):
         self._active_tab = 0
         self._setup_ui()
         self.setMinimumWidth(120)
+        self.file_reader = self._FileReaderProxy()
         theme.changed.connect(self._refresh_theme)
 
     def _setup_ui(self):
@@ -2655,6 +2947,37 @@ class RightPanel(QWidget):
                 pass  # 图标在主题切换后颜色不变即可，此处省略重渲染
         self._switch_tab(self._active_tab)
 
+    # ══════════════════════════════════════════════════════════════
+    # UIRenderer 桥接 API（P3.1 先提供空实现，后续回填真实逻辑）
+    # ══════════════════════════════════════════════════════════════
+
+    class _FileReaderProxy:
+        """文件读取器占位代理，P7 前为空实现。"""
+        def open_file(self, path: str):
+            pass
+
+        def set_content(self, content: str):
+            pass
+
+    def open_file(self, path: str):
+        """右栏打开文件（P7 前为空实现）。"""
+        pass
+
+    def update_terminal(self, text: str):
+        """更新终端内容（P7 前为空实现）。"""
+        pass
+
+    def switch_tab(self, tab_name: str):
+        """根据标签名切换右栏标签页。"""
+        for i, btn in enumerate(self._tab_btns):
+            if btn.text() == tab_name:
+                self._switch_tab(i)
+                return
+
+    def load_url(self, url: str):
+        """在浏览器标签页加载 URL（P7 前为空实现）。"""
+        pass
+
 
 # ══════════════════════════════════════════════════════════════
 # 主窗口（QSplitter 三栏 + 独立折叠）
@@ -2666,13 +2989,13 @@ class MainWindow(QMainWindow):
         super().__init__(None, Qt.FramelessWindowHint)
         self.resize(1400, 900)
         self.setMinimumWidth(1200)
-        self.setWindowTitle("Agent Workbench")
         self._right_visible = True
         self._drag_pos = None
         self._corner_radius = 8
 
         # 1. 初始化配置与主题
         self._config = ConfigService(config_path="config/config.yaml")
+        self.setWindowTitle(self._config.get("app.version", "Agent Workbench"))
         self._theme_name = self._config.get("app.theme", theme.name)
         if self._theme_name not in _THEMES:
             self._theme_name = theme.name
@@ -2716,6 +3039,7 @@ class MainWindow(QMainWindow):
         self._draft_project_path = ""
         self._current_model_name = self._config.get("app.last_model", "tool-agent")
         self._current_mode = self._config.get("app.last_mode", "ask")
+        self._session_idx_map: dict[int, str] = {}
 
         # 8. 信号连接与默认会话
         self._connect_signals()
@@ -2874,15 +3198,110 @@ class MainWindow(QMainWindow):
         return engines
 
     def _connect_signals(self):
-        """连接新 UI 控件信号到 v4 事件槽（逐步填充）。"""
-        # P2 阶段先保持最小连接，避免引用不存在的 API
-        pass
+        """连接新 UI 控件信号到 v4 事件槽。"""
+        # 输入区
+        self._center._input.send_clicked.connect(self._on_send)
+        self._center._input.mode_clicked.connect(self._on_mode_tag_clicked)
+        self._center._input.model_clicked.connect(self._on_model_tag_clicked)
+
+        # 左栏
+        self._left.new_session_requested.connect(self._on_new_session)
+        self._left.session_action_requested.connect(self._on_session_action)
+        self._left.session_selected.connect(self._on_session_selected)
+        self._left.search_text_changed.connect(self._on_search_text_changed)
+        self._left.theme_toggled.connect(self._on_theme_changed)
 
     def _init_default_session(self):
         """启动时进入草稿窗口状态，不自动创建 DB 会话。"""
         self._draft_session_type = "chat"
         self._draft_project_path = ""
-        self._orchestrator.clear_current() if hasattr(self._orchestrator, "clear_current") else None
+        self._center._input.set_mode(self._current_mode)
+        self._center._input.set_model(self._current_model_name)
+        self._left._theme_btn.setText("☀️" if theme.name == "light" else "🌙")
+        if hasattr(self._orchestrator, "clear_current"):
+            self._orchestrator.clear_current()
+
+    def _current_session_id(self) -> str:
+        return self._orchestrator.current_session_id or ""
+
+    def _on_send(self):
+        text = self._center._input._text_edit.toPlainText().strip()
+        if not text:
+            return
+        self._bus.emit(UserSendEvent(
+            session_id=self._current_session_id(),
+            user_text=text,
+            mode=self._current_mode,
+            session_type=self._draft_session_type,
+            project_path=self._draft_project_path,
+            model=self._current_model_name,
+        ))
+        self._center._input._text_edit.clear()
+
+    def _on_new_session(self, session_type: str = "chat"):
+        self._draft_session_type = session_type
+        if session_type == "work":
+            self._draft_project_path = ""
+        self._bus.emit(SessionCreateEvent(
+            title="新对话",
+            session_type=session_type,
+            project_path=self._draft_project_path,
+            mode=self._current_mode,
+            model=self._current_model_name,
+        ))
+
+    def _on_session_selected(self, idx: int):
+        sid = self._session_idx_map.get(idx)
+        if sid:
+            self._bus.emit(SessionSwitchEvent(new_session_id=sid))
+
+    def _on_session_action(self, action: str, idx: int):
+        sid = self._session_idx_map.get(idx)
+        if not sid:
+            return
+        if action == "new":
+            self._on_new_session("chat")
+        elif action == "project":
+            path = QFileDialog.getExistingDirectory(self, "选择项目路径")
+            if path:
+                self._draft_project_path = path
+                self._bus.emit(SessionCreateEvent(
+                    title="项目会话",
+                    session_type="work",
+                    project_path=path,
+                    mode=self._current_mode,
+                    model=self._current_model_name,
+                ))
+        elif action == "rename":
+            meta = self._repo.get_session(sid)
+            old = meta.title if meta else "未命名"
+            new, ok = QInputDialog.getText(self, "重命名会话", "新名称：", text=old)
+            if ok and new.strip():
+                self._bus.emit(SessionRenameEvent(session_id=sid, new_title=new.strip()))
+        elif action == "delete":
+            ret = QMessageBox.question(self, "删除会话", "确定删除该会话？")
+            if ret == QMessageBox.Yes:
+                self._bus.emit(SessionDeleteEvent(session_id=sid))
+        elif action == "pin":
+            meta = self._repo.get_session(sid)
+            if meta:
+                self._bus.emit(SessionPinEvent(session_id=sid, pinned=not meta.pinned))
+
+    def _on_search_text_changed(self, text: str):
+        # P5 阶段实现会话列表过滤
+        pass
+
+    def _on_mode_tag_clicked(self):
+        # P6 阶段实现模式下拉选择
+        pass
+
+    def _on_model_tag_clicked(self):
+        # P6 阶段实现模型下拉选择
+        pass
+
+    def _on_theme_changed(self, theme_name: str):
+        self._config.set("app.theme", theme_name)
+        self._config.save()
 
     def _get_project_path(self) -> str:
         """获取当前项目路径（当前可返回空字符串）。"""

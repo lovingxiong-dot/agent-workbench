@@ -1,5 +1,20 @@
 # Changelog
 
+## v5.0.2-alpha (2026-07-06) — P3 UIRenderer 与新 UI 控件桥接完成
+
+### feat/bridge/ui
+- `ChatArea` 实现真实消息渲染：用户气泡、系统卡片、AI 文本块、思考折叠块、工具执行折叠块
+- `ChatArea` 支持流式输出：`append_chunk` 累积、`finalize_stream` 收尾
+- `ChatArea` 新增标题栏状态标签：显示“回答中...”与阶段/任务数
+- `ChatArea` 新增任务确认条（确认/取消按钮），发出 `confirmation_clicked(bool)` 信号
+- `LeftPanel` 实现 `refresh(sessions)`：按 `project_path` 分组重建会话列表
+- `LeftPanel` 实现 `set_active_session(session_id)` 与 `update_badge(session_id, phase)`
+- 修复 `SessionGroup` 右键动作信号转发，重命名/删除菜单可正确触发
+
+### test
+- `python -m py_compile v4/main_window.py` 通过
+- `pytest tests/test_v4_gui_smoke.py -v` 4/4 全绿
+
 ## v5.0.1-alpha (2026-07-05) — 备份 v4 旧 UI 组件并标记 v5-dev 线路
 
 ### chore/backup
