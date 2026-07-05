@@ -36,7 +36,8 @@ class TerminalWorker(QThread):
                 stderr=subprocess.STDOUT,
                 text=True,
                 encoding='utf-8',
-                errors='replace'
+                errors='replace',
+                creationflags=subprocess.CREATE_NO_WINDOW,
             )
             for line in iter(self._process.stdout.readline, ''):
                 if line:

@@ -306,14 +306,31 @@ class MainWindow(QMainWindow):
         self._config.save()
 
     def _on_ui_set_active_session(self, event):
-        """会话切换/创建后同步持久化当前会话 ID。"""
+        """会话切换/创建后同步持久化当前会话 ID，并更新右栏终端工作目录。"""
         sid = getattr(event, "active_session_id", event.session_id) or ""
         self._set_last_session_id(sid)
+        self._sync_project_root_from_session(sid)
+
+    def _sync_project_root_from_session(self, sid: str):
+        """根据会话 ID 同步项目路径到草稿状态与右栏终端。"""
+        if not sid:
+            self._draft_project_path = ""
+            self._right.set_project_root("")
+            self._center.set_analyze_button_visible(False)
+            return
+        session = self._repo.get_session(sid)
+        if session:
+            st = getattr(session.session_type, "value", session.session_type)
+            self._draft_session_type = st or "chat"
+            self._draft_project_path = session.project_path or ""
+            self._right.set_project_root(self._draft_project_path)
+            self._center.set_analyze_button_visible(st == "work")
 
     def _on_ui_clear_chat(self, event):
         """草稿窗口时清除持久化的会话 ID。"""
         if not self._orchestrator.current_session_id:
             self._set_last_session_id("")
+            self._sync_project_root_from_session("")
 
     def _current_session_id(self) -> str:
         return self._orchestrator.current_session_id or ""

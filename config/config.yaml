@@ -182,6 +182,7 @@ app:
   last_mode: plan
   last_model: deepseek-pro
   theme: light
+  last_session_id: sess_6a7bdaf4469d4d4c
 task:
   capacity:
     max_concurrent_tasks: 3

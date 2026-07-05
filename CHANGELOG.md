@@ -1,5 +1,17 @@
 # Changelog
 
+## v5.0.7-alpha (2026-07-06) — P7 右栏真实功能回填与组件测试
+
+### feat/p7-right-panel
+- `v4/widgets/right_panel.py` 集成真实功能组件：`TerminalWidget`、`FileReaderWidget`、`BrowserWidget`
+- 实现最近文件列表：添加、去重、相对时间格式化、点击打开并切换到文件编辑器
+- `MainWindow` 新增 `_sync_project_root_from_session`，在会话切换/创建/删除时同步项目路径到右栏终端工作目录
+- `workers/terminal_worker.py` 添加 `creationflags=subprocess.CREATE_NO_WINDOW`，修复 Windows 下命令窗口闪现
+
+### test
+- 新增 `tests/test_v4_widgets_right_panel.py`，覆盖 TerminalWidget / FileReaderWidget / BrowserWidget / RightPanel 共 13 个用例
+- 全量测试：`pytest tests/` 225/225 通过
+
 ## v5.0.6-alpha (2026-07-06) — P5/P6 完全整改：设置持久化校验与测试补齐
 
 ### fix/robustness

@@ -1,10 +1,15 @@
 """v4 右侧面板组件。"""
+import os
+from datetime import datetime, timedelta
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QFrame, QSizePolicy,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPainter, QColor, QPixmap
 from .base import theme, _THEMES, C, font, svg_icon
+from .terminal_widget import TerminalWidget
+from .file_reader_widget import FileReaderWidget
+from .browser_widget import BrowserWidget
 
 # ══════════════════════════════════════════════════════════════
 # 右栏（400px）
@@ -89,9 +94,9 @@ class RightPanel(QWidget):
         super().__init__(parent)
         # 宽度由外部 QSplitter 控制（MainWindow 中设置 min）
         self._active_tab = 0
+        self._recent_files: list[tuple[str, datetime]] = []
         self._setup_ui()
         self.setMinimumWidth(120)
-        self.file_reader = self._FileReaderProxy()
         theme.changed.connect(self._refresh_theme)
 
     def _setup_ui(self):
@@ -172,33 +177,34 @@ class RightPanel(QWidget):
 
         # Tab0: v4 架构（最近文件）
         self._tab0 = QWidget()
-        t0l = QVBoxLayout(self._tab0)
-        t0l.setContentsMargins(16, 8, 16, 8)
-        t0l.setSpacing(4)
+        self._tab0_layout = QVBoxLayout(self._tab0)
+        self._tab0_layout.setContentsMargins(16, 8, 16, 8)
+        self._tab0_layout.setSpacing(4)
 
-        t0l.addWidget(self._make_section_header("最近文件"))
+        self._tab0_layout.addWidget(self._make_section_header("最近文件"))
         self._file_rows: list[QWidget] = []
-        for path, t in [("v4/main_window.py", "2h 前"), ("v4/worker.py", "4h 前"),
-                         ("agent_engine/engines/prompt_engine.py", "昨天")]:
-            row = self._make_file_row(path, t)
-            t0l.addWidget(row)
-            self._file_rows.append(row)
-        t0l.addStretch()
+        self._tab0_layout.addStretch()
         self._tab0.setStyleSheet(f"background-color: {C['bg_right']};")
         self._stack.addWidget(self._tab0)
 
-        # Tab1-3: 占位
-        self._placeholders: list[QLabel] = []
-        for text in ["终端", "文件编辑器", "浏览器"]:
-            lbl = QLabel(f"{text}\n（功能待实现）")
-            lbl.setAlignment(Qt.AlignCenter)
-            lbl.setStyleSheet(f"color: {C['text_muted']}; font-size: 11px; background: transparent;")
-            self._stack.addWidget(lbl)
-            self._placeholders.append(lbl)
+        # Tab1: 终端
+        self.terminal = TerminalWidget()
+        self._stack.addWidget(self.terminal)
+
+        # Tab2: 文件编辑器
+        self.file_reader = FileReaderWidget()
+        self._stack.addWidget(self.file_reader)
+
+        # Tab3: 浏览器
+        self.browser = BrowserWidget()
+        self._stack.addWidget(self.browser)
 
         layout.addWidget(self._stack, 1)
         self._switch_tab(0)
         self.setStyleSheet(f"background-color: {C['bg_right']};")
+
+        # 初始化默认最近文件（项目根目录下部分源码）
+        self._refresh_recent_files()
 
     def _make_section_header(self, text: str) -> QLabel:
         lbl = QLabel(text)
@@ -211,11 +217,14 @@ class RightPanel(QWidget):
     def _make_file_row(self, path: str, time_str: str) -> QWidget:
         row = QWidget()
         row.setFixedHeight(24)
+        row.setCursor(Qt.PointingHandCursor)
+        row.setProperty("file_path", path)
         hl = QHBoxLayout(row)
         hl.setContentsMargins(10, 0, 10, 0)
         hl.setSpacing(8)
 
-        name_lbl = QLabel(path)
+        display = os.path.basename(path) if os.path.exists(path) else path
+        name_lbl = QLabel(display)
         name_lbl.setFont(font(11))
         name_lbl.setStyleSheet(f"color: {C['text_secondary']}; border: none; background: transparent;")
         hl.addWidget(name_lbl, 1)
@@ -232,7 +241,65 @@ class RightPanel(QWidget):
             f"border: 0.5px solid {C['border']}; border-radius: 4px; }}"
             f"QWidget:hover {{ background-color: {C['bg_hover']}; }}"
         )
+        row.mousePressEvent = lambda e, p=path: self._on_recent_file_click(p)
         return row
+
+    def _on_recent_file_click(self, path: str):
+        """点击最近文件行：在文件编辑器中打开并切换到该标签。"""
+        self.open_file(path)
+
+    def _refresh_recent_files(self):
+        """根据 self._recent_files 重建最近文件列表；空时填充项目根目录默认文件。"""
+        # 清理旧行（保留标题和 stretch）
+        for row in self._file_rows:
+            self._tab0_layout.removeWidget(row)
+            row.deleteLater()
+        self._file_rows.clear()
+
+        entries = list(self._recent_files)
+        if not entries:
+            # 默认展示项目根目录下可访问的核心文件
+            root = os.getcwd()
+            candidates = [
+                "v4/main_window.py",
+                "v4/widgets/right_panel.py",
+                "config/config.yaml",
+            ]
+            for rel in candidates:
+                full = os.path.join(root, rel)
+                if os.path.isfile(full):
+                    entries.append((full, datetime.fromtimestamp(os.path.getmtime(full))))
+
+        for path, ts in entries[:10]:
+            time_str = self._format_time_ago(ts)
+            row = self._make_file_row(path, time_str)
+            # 插入到 stretch 之前
+            self._tab0_layout.insertWidget(self._tab0_layout.count() - 1, row)
+            self._file_rows.append(row)
+
+    @staticmethod
+    def _format_time_ago(ts: datetime) -> str:
+        """将时间戳格式化为相对文本。"""
+        delta = datetime.now() - ts
+        if delta < timedelta(minutes=1):
+            return "刚刚"
+        if delta < timedelta(hours=1):
+            return f"{delta.seconds // 60} 分钟前"
+        if delta < timedelta(days=1):
+            return f"{delta.seconds // 3600} 小时前"
+        if delta < timedelta(days=7):
+            return f"{delta.days} 天前"
+        return ts.strftime("%m-%d")
+
+    def add_recent_file(self, path: str):
+        """添加一条最近文件记录并刷新列表。"""
+        if not path or not os.path.isfile(path):
+            return
+        path = os.path.abspath(path)
+        # 去重并置顶
+        self._recent_files = [(p, t) for p, t in self._recent_files if p != path]
+        self._recent_files.insert(0, (path, datetime.now()))
+        self._refresh_recent_files()
 
     def set_window_buttons(self, minimize_cb, maximize_cb, close_cb):
         """把系统最小化/最大化/关闭按钮嵌入右栏顶部状态栏最右侧，使用SVG图标。"""
@@ -279,8 +346,8 @@ class RightPanel(QWidget):
         self._tab_bar.setStyleSheet(f"background-color: {tab_bar_bg};")
         self._sep.setStyleSheet(f"background-color: {C['border']};")
         self._tab0.setStyleSheet(f"background-color: {C['bg_right']};")
-        for lbl in self._placeholders:
-            lbl.setStyleSheet(f"color: {C['text_muted']}; font-size: 11px; background: transparent;")
+        # 子控件已各自连接 theme.changed，此处仅刷新文件行样式
+        self._refresh_recent_files()
         icon_fg = C['text_secondary'] if theme.name == "dark" else C['text_label']
         self._add_btn.setStyleSheet(
             f"QPushButton {{ background-color: {C['btn_bg']}; color: {icon_fg}; "
@@ -317,24 +384,18 @@ class RightPanel(QWidget):
         self._switch_tab(self._active_tab)
 
     # ══════════════════════════════════════════════════════════════
-    # UIRenderer 桥接 API（P3.1 先提供空实现，后续回填真实逻辑）
+    # UIRenderer 桥接 API（P7 真实功能回填）
     # ══════════════════════════════════════════════════════════════
 
-    class _FileReaderProxy:
-        """文件读取器占位代理，P7 前为空实现。"""
-        def open_file(self, path: str):
-            pass
-
-        def set_content(self, content: str):
-            pass
-
     def open_file(self, path: str):
-        """右栏打开文件（P7 前为空实现）。"""
-        pass
+        """在文件编辑器中打开文件，切换到文件编辑器标签，并加入最近文件。"""
+        self.add_recent_file(path)
+        self.file_reader.open_file(path)
+        self.switch_tab("文件编辑器")
 
     def update_terminal(self, text: str):
-        """更新终端内容（P7 前为空实现）。"""
-        pass
+        """向终端追加文本。"""
+        self.terminal.append_output(text)
 
     def switch_tab(self, tab_name: str):
         """根据标签名切换右栏标签页。"""
@@ -344,5 +405,10 @@ class RightPanel(QWidget):
                 return
 
     def load_url(self, url: str):
-        """在浏览器标签页加载 URL（P7 前为空实现）。"""
-        pass
+        """在浏览器标签页加载 URL。"""
+        self.browser.load_url(url)
+        self.switch_tab("浏览器")
+
+    def set_project_root(self, root: str):
+        """设置终端工作目录。"""
+        self.terminal.set_cwd(root)
