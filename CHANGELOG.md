@@ -1,5 +1,15 @@
 # Changelog
 
+## v5.0.8-alpha (2026-07-06) — P8 完整功能回填：真实 GUI 冒烟修复
+
+### fix/p8-gui
+- 真实 GUI 冒烟测试发现 `v4/widgets/chat_area.py` 缺失 `QPen` 导入，导致 `paintEvent` 抛出 `NameError`
+- 补全 `from PySide6.QtGui import QPainter, QPen, QColor, QIcon, QPixmap`，修复绘制崩溃与连锁 `QBackingStore::endPaint()` 警告
+
+### test
+- 重新启动独立进程 GUI，验证三栏加载、会话创建、ui 事件分发正常
+- 全量测试：`pytest tests/` 225/225 通过
+
 ## v5.0.7-alpha (2026-07-06) — P7 右栏真实功能回填与组件测试
 
 ### feat/p7-right-panel

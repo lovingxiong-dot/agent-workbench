@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.7-alpha | 存档次数 | 8 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.8-alpha | 存档次数 | 9 |
 
 ## 项目概要
 AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。
@@ -146,7 +146,7 @@ v5.0.0-alpha 为 v5-dev 线路起点：从 v4-refactor 切出独立分支，将�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
-| v5.0.7-alpha | 2026-07-06 | P7 右栏真实功能回填：集成 TerminalWidget / FileReaderWidget / BrowserWidget，实现最近文件列表、点击打开、项目路径同步终端工作目录；新增 13 个右栏组件测试，全量 225/225 通过 | feat/ui/test | v4/widgets/right_panel.py, v4/widgets/terminal_widget.py, v4/widgets/file_reader_widget.py, v4/widgets/browser_widget.py, v4/main_window.py, workers/terminal_worker.py, tests/test_v4_widgets_right_panel.py |
+| v5.0.8-alpha | 2026-07-06 | P8 完整功能回填：真实 GUI 冒烟测试修复 `chat_area.py` 缺失 `QPen` 导入导致的 `paintEvent` 崩溃；验证三栏加载、会话创建、ui 事件分发正常，全量 225/225 通过 | fix/ui/test | v4/widgets/chat_area.py |
 | v5.0.5-alpha | 2026-07-06 | P5 会话数据持久化与列表同步：启动恢复 `app.last_session_id`、会话切换/创建/删除时同步持久化、无效会话清理、左栏空状态显示 | feat/session-sync | v4/main_window.py, v4/widgets/left_panel.py, v4/repository.py, v4/models.py, tests/test_v4_integration.py |
 | v5.0.3-alpha | 2026-07-06 | 按审查报告执行模块化骨架拆分：将 `v4/main_window.py` 拆分为 `v4/widgets/` 7 个模块，主窗口降至 357 行；修复 `_session_idx_map` 致命 Bug，统一使用 `LeftPanel._idx_to_sid` | refactor/modular | v4/main_window.py, v4/widgets/* |
 | v5.0.2-alpha | 2026-07-06 | 完成 P3 UIRenderer 与新 UI 桥接：ChatArea 真实消息渲染/流式/确认条/阶段状态，LeftPanel 会话列表按项目分组刷新与 badge 更新，SessionGroup 右键动作信号修复 | feat/bridge/ui | v4/main_window.py, tests/test_v4_gui_smoke.py |
@@ -155,6 +155,7 @@ v5.0.0-alpha 为 v5-dev 线路起点：从 v4-refactor 切出独立分支，将�
 ## 历史归档
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v5.0.7-alpha | 2026-07-06 | P7 右栏真实功能回填：集成 TerminalWidget / FileReaderWidget / BrowserWidget，实现最近文件列表、点击打开、项目路径同步终端工作目录；新增 13 个右栏组件测试，全量 225/225 通过 | feat/ui/test | v4/widgets/right_panel.py, v4/widgets/terminal_widget.py, v4/widgets/file_reader_widget.py, v4/widgets/browser_widget.py, v4/main_window.py, workers/terminal_worker.py, tests/test_v4_widgets_right_panel.py |
 | v5.0.6-alpha | 2026-07-06 | P5/P6 完全整改：SettingsDialog 配置与 UI 同步修复，MainWindow 启动与设置应用时校验主题/模式/模型有效性并回退无效值，修复 GUI 冒烟测试状态隔离，补充旧 UI 主题兼容键，全量 212 个测试通过 | fix/robustness/test | v4/main_window.py, v4/widgets/base.py, tests/test_v4_integration.py, tests/test_v4_gui_smoke.py |
 | v5.0.0-alpha | 2026-07-05 | v5-dev 线路起点：从 v4-refactor 切出独立分支；将新 UI 模板注入后端核心（ConfigService/SessionRepository/MessageBus/八引擎/WorkerManager/SessionOrchestrator/UIRenderer），保留核心基座不变 | feat/refactor | v4/main_window.py |
 | v4.0.8-alpha | 2026-07-01 | v4 全量 UI 三位一体对齐 SVG 设计稿 | feat/refactor/test | v4/main_window.py, v4/input_area.py, v4/right_panel.py, v4/icons.py, v4/conversation_list.py, tests/test_v4_input_area.py |

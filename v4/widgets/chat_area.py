@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (
     QTextEdit, QGraphicsView, QFrame, QSizePolicy, QApplication,
 )
 from PySide6.QtCore import Qt, Signal, QTimer, QPoint, QSize, QEvent
-from PySide6.QtGui import QPainter, QColor, QIcon, QPixmap
+from PySide6.QtGui import QPainter, QPen, QColor, QIcon, QPixmap
 from .base import theme, _THEMES, C, font, qcolor, svg_icon
 from .chat_scene import ChatScene
 from .chat_items import (
