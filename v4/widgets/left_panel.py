@@ -680,8 +680,8 @@ class LeftPanel(QWidget):
         bottom_row.addStretch()
         layout.addLayout(bottom_row)
 
-        # 填充 Demo 会话数据
-        self._populate_sessions()
+        # Demo 数据不再自动填充；真实会话通过 MainWindow 调用 refresh_sessions 注入
+        # self._populate_sessions()
 
         self._refresh_theme()
 

@@ -36,19 +36,14 @@ class MoreDropdown(QWidget):
         prog_hdr.setStyleSheet(f"color: {C['text_primary']}; background: transparent;")
         layout.addWidget(prog_hdr)
 
-        # 步骤列表
-        for s, t in [("✓", "v4 架构升级 已完成"), ("✓", "代码片段咨询 已完成"), ("○", "量化策略回测 进行中")]:
-            row = QHBoxLayout()
-            row.setSpacing(6)
-            icon = QLabel(s)
-            icon.setFont(font(9))
-            icon.setStyleSheet(f"color: {C['accent']}; background: transparent;")
-            lbl = QLabel(t)
-            lbl.setFont(font(9))
-            lbl.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
-            row.addWidget(icon)
-            row.addWidget(lbl, 1)
-            layout.addLayout(row)
+        # 步骤列表（当前无真实任务进度，显示空状态）
+        self._steps_layout = QVBoxLayout()
+        self._steps_layout.setSpacing(4)
+        empty_lbl = QLabel("暂无任务进度")
+        empty_lbl.setFont(font(9))
+        empty_lbl.setStyleSheet(f"color: {C['text_muted']}; background: transparent;")
+        self._steps_layout.addWidget(empty_lbl)
+        layout.addLayout(self._steps_layout)
 
         # 分隔线
         sep = QFrame()
@@ -155,12 +150,13 @@ class HeaderBar(QWidget):
         title_block.setContentsMargins(6, 4, 0, 4)
         title_block.setSpacing(2)
 
-        self._title_lbl = QLabel("v4 架构升级")
+        self._title_lbl = QLabel("新会话")
         self._title_lbl.setFont(font(12))
         title_block.addWidget(self._title_lbl)
 
-        self._env_lbl = QLabel("F:\\Agent\\agent_workbench")
+        self._env_lbl = QLabel("")
         self._env_lbl.setFont(font(10))
+        self._env_lbl.hide()
         title_block.addWidget(self._env_lbl)
 
         self._status_lbl = QLabel()
@@ -772,6 +768,16 @@ class ChatArea(QWidget):
     def set_analyze_button_visible(self, visible: bool):
         """控制「帮我分析当前项目」按钮显隐。"""
         self._analyze_btn.setVisible(visible)
+
+    def set_title(self, title: str, env: str = ""):
+        """设置聊天区标题与项目路径副标题。"""
+        self._header._title_lbl.setText(title)
+        if env:
+            self._header._env_lbl.setText(env)
+            self._header._env_lbl.show()
+        else:
+            self._header._env_lbl.clear()
+            self._header._env_lbl.hide()
 
     def clear_phase_ui(self):
         self._header._status_lbl.hide()

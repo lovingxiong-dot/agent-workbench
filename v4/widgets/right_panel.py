@@ -131,7 +131,7 @@ class RightPanel(QWidget):
         tc_layout.addWidget(self._add_btn)
 
         # 标签按钮（宽度可随容器伸缩）
-        tab_defs = [("v4 架构", 86, False), ("终端", 74, True), ("文件编辑器", 100, True), ("浏览器", 74, True)]
+        tab_defs = [("架构", 86, False), ("终端", 74, True), ("文件编辑器", 100, True), ("浏览器", 74, True)]
         self._tab_btns: list[TabButton] = []
         for i, (name, width, closable) in enumerate(tab_defs):
             btn = TabButton(name, width, active=(i == 0), closable=closable)
@@ -175,7 +175,7 @@ class RightPanel(QWidget):
         # ── 内容区（QStackedWidget）──
         self._stack = QStackedWidget()
 
-        # Tab0: v4 架构（最近文件）
+        # Tab0: 架构（最近文件）
         self._tab0 = QWidget()
         self._tab0_layout = QVBoxLayout(self._tab0)
         self._tab0_layout.setContentsMargins(16, 8, 16, 8)

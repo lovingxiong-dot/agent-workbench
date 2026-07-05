@@ -61,7 +61,7 @@ class TestV5GUISmoke:
         # 右栏四个标签页
         assert len(window._right._tab_btns) == 4, "右栏应包含 4 个标签页"
         tab_texts = [btn.text().lower() for btn in window._right._tab_btns]
-        assert "v4 架构" in tab_texts
+        assert "架构" in tab_texts
         assert "终端" in tab_texts
         assert "文件编辑器" in tab_texts or "文件读取器" in tab_texts
         assert "浏览器" in tab_texts

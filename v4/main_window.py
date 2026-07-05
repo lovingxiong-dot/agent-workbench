@@ -312,11 +312,12 @@ class MainWindow(QMainWindow):
         self._sync_project_root_from_session(sid)
 
     def _sync_project_root_from_session(self, sid: str):
-        """根据会话 ID 同步项目路径到草稿状态与右栏终端。"""
+        """根据会话 ID 同步项目路径到草稿状态、聊天区标题与右栏终端。"""
         if not sid:
             self._draft_project_path = ""
             self._right.set_project_root("")
             self._center.set_analyze_button_visible(False)
+            self._center.set_title("新会话")
             return
         session = self._repo.get_session(sid)
         if session:
@@ -325,6 +326,7 @@ class MainWindow(QMainWindow):
             self._draft_project_path = session.project_path or ""
             self._right.set_project_root(self._draft_project_path)
             self._center.set_analyze_button_visible(st == "work")
+            self._center.set_title(session.title or "新会话", self._draft_project_path)
 
     def _on_ui_clear_chat(self, event):
         """草稿窗口时清除持久化的会话 ID。"""
@@ -428,6 +430,7 @@ class MainWindow(QMainWindow):
         if session_type == "work":
             self._draft_project_path = ""
         self._center.set_analyze_button_visible(session_type == "work")
+        self._center.set_title("新会话")
         self._bus.emit(SessionCreateEvent(
             title="新对话",
             session_type=session_type,

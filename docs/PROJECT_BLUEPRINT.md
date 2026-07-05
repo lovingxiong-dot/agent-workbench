@@ -1,10 +1,10 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.10-alpha | 存档次数 | 10 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.11-alpha | 存档次数 | 11 |
 
 ## 项目概要
-AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v5.0.9-alpha 完成新 UI 完全移植与旧 UI 清理：基于 `v4/widgets/` 的模块化三栏主窗口（左栏功能/会话、中栏聊天区、右栏终端/文件/浏览器），完整保留 v4 单轨后端骨架功能，实现 UI 与业务逻辑全量对接，PyInstaller 打包验证通过；v5.0.8-alpha 完成 GUI 冒烟修复（`ChatArea` QPen 导入缺失）；v5.0.7-alpha 完成右栏真实功能回填（`TerminalWidget`、`FileReaderWidget`、`BrowserWidget`）；v5.0.6-alpha 完成持久化校验整改；v5.0.5-alpha 完成会话数据持久化与列表同步；v5.0.4-alpha 完成关键用户动作对接；v5.0.3-alpha 完成模块化骨架拆分；v5.0.2-alpha 完成 UIRenderer 与新 UI 桥接；v5.0.1-alpha 备份旧 UI 组件至 `v4/legacy/` 并标记 v5-dev 线路；v5.0.0-alpha 为 v5-dev 线路起点与新 UI 后端核心注入。v4.x 为旧 UI 完整版线路，已归档至 `v4-refactor` / `ui-template` 分支，不再维护。
+AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v5.0.11-alpha 完成 P9 全量冒烟与集成测试验证及 UI 硬编码清理：真实 GUI 启动验证三栏完整显示，清理 'v4 架构升级' 等旧 UI 硬编码文本，实现聊天区标题动态化，测试 225/225 通过；v5.0.9-alpha 完成新 UI 完全移植与旧 UI 清理；v5.0.8-alpha 完成 GUI 冒烟修复；v5.0.7-alpha 完成右栏真实功能回填；v5.0.6-alpha 完成持久化校验整改；v5.0.5-alpha 完成会话数据持久化与列表同步；v5.0.4-alpha 完成关键用户动作对接；v5.0.3-alpha 完成模块化骨架拆分；v5.0.2-alpha 完成 UIRenderer 与新 UI 桥接；v5.0.1-alpha 备份旧 UI 组件至 `v4/legacy/` 并标记 v5-dev 线路；v5.0.0-alpha 为 v5-dev 线路起点与新 UI 后端核心注入。v4.x 为旧 UI 完整版线路，已归档至 `v4-refactor` / `ui-template` 分支，不再维护。
 
 ## 技术栈
 | 类别 | 技术 | 版本 | 用途 |
@@ -199,11 +199,12 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
-| v5.0.10-alpha | 2026-07-06 | v5项目文档同步：README/PROJECT_BLUEPRINT/CHANGELOG全面更新为v5新UI完整版线路，反映v5.0.0~v5.0.9全部阶段成果，目录结构同步v4/widgets/与v4/legacy/，测试数更新为225 | docs | docs/README.md, docs/PROJECT_BLUEPRINT.md, docs/CHANGELOG.md |
+| v5.0.11-alpha | 2026-07-06 | P9全量冒烟与集成测试验证及UI硬编码清理：真实GUI启动验证三栏完整显示，清理'v4 架构升级'等旧UI硬编码，实现聊天区标题动态化，225/225测试通过 | fix/test/ui | v4/widgets/chat_area.py, v4/widgets/right_panel.py, v4/widgets/left_panel.py, v4/main_window.py, tests/test_v4_gui_smoke.py |
 
 ## 历史归档
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v5.0.10-alpha | 2026-07-06 | v5项目文档同步：README/PROJECT_BLUEPRINT/CHANGELOG全面更新为v5新UI完整版线路，反映v5.0.0~v5.0.9全部阶段成果，目录结构同步v4/widgets/与v4/legacy/，测试数更新为225 | docs | docs/README.md, docs/PROJECT_BLUEPRINT.md, docs/CHANGELOG.md |
 | v5.0.9-alpha | 2026-07-06 | P10清理旧UI与打包验证：删除v4根目录重复旧UI文件（已备份至v4/legacy/），迁移旧测试导入，更新AgentWorkbench.spec hiddenimports为v4.widgets.*，PyInstaller打包成功并验证exe独立启动 | chore/build/test | AgentWorkbench.spec, v4/legacy/*, tests/test_v4_input_area.py, tests/test_v4_right_panel.py |
 | v5.0.8-alpha | 2026-07-06 | P8完整功能回填GUI冒烟修复：修复ChatArea中QPen导入缺失导致的paintEvent崩溃，验证三栏加载/会话创建/UI事件分发正常 | fix/ui/test | v4/widgets/chat_area.py |
 | v5.0.7-alpha | 2026-07-06 | P7右栏真实功能回填：实现TerminalWidget/FileReaderWidget/BrowserWidget并集成到RightPanel；最近文件列表及点击打开；同步会话项目路径到终端工作目录 | feat/ui/test | v4/widgets/right_panel.py, v4/widgets/terminal_widget.py, v4/widgets/file_reader_widget.py, v4/widgets/browser_widget.py, workers/terminal_worker.py, tests/test_v4_widgets_right_panel.py |
