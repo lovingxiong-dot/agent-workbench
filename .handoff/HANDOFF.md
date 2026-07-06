@@ -1,61 +1,76 @@
 ---
-generated: 2026-07-07T13:00:00+08:00
+generated: 2026-07-07T14:45:00+08:00
 agent: Kimi-K2.7-Code
 schema_version: 3.1
 
 ## Mission
-建立 V6 Runtime Trace 基础能力，让每个 Runtime Task 留下可审计、可回放、可调试的执行历史；完成后存档、push 并交接。
+完成 V6 Step 4：建立八大 Engine Runtime 骨架（BaseEngine + LLM/Tool/Memory/Planner/Workflow/Code/Vision/Knowledge），验证 EngineManager 动态发现、统一生命周期、Runtime Trace Timeline 与 Planner 编排能力；随后从 `v5-dev` 切出干净的 `v6-dev` 主线并声明 V6 为唯一活跃开发分支。
 
 ## Progress
-- [x] 第一次存档：`RuntimeContext.new()` 自动生成 `task_id`，Service 层统一 `(ctx)` 接口，SPEC 补充 Runtime Interface Principle 与 Task 语义；标签 `v6.5.1-alpha`。
-- [x] 第二次存档：`UIController` 接入 `IRuntimeAdapter`，`AgentRuntime` 支持从 `Task.payload` 接收 `RuntimeContext`；标签 `v6.5.2-alpha`，已 push。
-- [x] 新增 `v6/runtime/trace.py`：定义 `TraceStep`、`RuntimeTrace`、`ReplayPlayer`。
-- [x] `RuntimeContext` 新增 `trace` 与 `result` 字段，`snapshot` / `restore` / `clone` / `reset` 全面支持。
-- [x] `AgentRuntime` 自动记录任务生命周期：`task_start` / `handler_dispatch` / `task_finish` / `task_error`。
-- [x] `EchoHandler` 记录 Engine 步骤：`echo_start` / `input_read` / `emit_start` / `emit_chunk` / `emit_end` / `echo_end`。
-- [x] `LocalRuntimeAdapter.submit()` 记录 Adapter 步骤。
-- [x] `ReplayPlayer` 可按 trace 中 `emit_*` 步骤重放事件。
-- [x] 新增 `tests/v6/test_v6_trace.py` 覆盖 Trace 基础操作、Context 生命周期、Runtime 自动记录、Replay 回放。
-- [x] `docs/v6/SPEC.md` 新增 8.15 Runtime Trace 原则与 8.16 RuntimeTask 四对象演进方向。
-- [x] 第三次存档并 push：标签 `v6.5.3-alpha`。
+- [x] Step 3 已归档：`v6/runtime/engine_state.py` 定义 `EngineState`；`v6/runtime/engines/protocol.py` 定义 `Engine` Protocol、`EngineDescriptor`、`EngineNotReadyError`；`EngineManager` 支持完整生命周期；标签 `v6.5.7-alpha`。
+- [x] 新增 `v6/runtime/engines/base.py`：`BaseEngine` 抽象基类，内置统一 `EngineState` 状态机与默认生命周期。
+- [x] 新增八大 Engine 空壳：
+  - `llm.py` — LLM Engine
+  - `tool.py` — Tool Engine
+  - `memory.py` — Memory Engine
+  - `planner.py` — Planner Engine（注入 `EngineManager`，编排 LLM/Tool）
+  - `workflow.py` — Workflow Engine
+  - `code.py` — Code Engine
+  - `vision.py` — Vision Engine
+  - `knowledge.py` — Knowledge Engine
+- [x] 所有 Engine 统一接口：`load()` / `initialize(ctx)` / `health_check()` / `execute(ctx)` / `shutdown()`；`execute(ctx)` 返回 `RuntimeResult(status="placeholder")`。
+- [x] 清理旧 Engine 实现（Context/Prompt/Inference/Metrics/Phase/Policy）及不兼容测试 `tests/v6/test_v6_engines.py`。
+- [x] 新增 `tests/v6/test_v6_runtime_kernel.py` 验证：EngineManager 动态发现、生命周期一致性、Trace 记录、Planner 编排 LLM/Tool。
+- [x] V6 全量测试 `pytest tests/v6/` **130/130 通过**。
+- [x] 在 `v5-dev` 提交并推送标签 `v6.5.8-alpha`。
+- [x] 从 `v6.5.8-alpha` 切出干净分支 `v6-dev` 并推送。
+- [x] 更新 `README.md` 与 `PROJECT_BLUEPRINT.md`，添加「V6 全新主线声明」，明确 `v6-dev` 为唯一活跃分支，`v5-dev` 已冻结归档。
 
 ## Blocker
 无。
 
 ## Decision Log
-1. **决策**：`RuntimeTrace` 作为 `RuntimeContext` 的字段，与 Task 同生命周期。
-   - 排除：让 `RuntimeTrace` 独立存在于 `AgentRuntime` 中——会破坏 Adapter 不保存状态、状态全在 Context 中的边界。
+1. **决策**：Step 4 只做 Engine Runtime 骨架（空壳），不接入 OpenAI / Gemini / LangChain / MCP / 向量库 / 浏览器等具体实现。
+   - 排除：直接实现八大 Engine 业务逻辑——会提前绑定外部依赖，且 Runtime Kernel 本身的发现、生命周期、Trace 链路尚未充分验证。
    - 状态：已执行。
 
-2. **决策**：Trace 只记录摘要（timestamp / phase / node / action / payload），不存储大对象或原始响应全文。
-   - 排除：在 trace 中保存完整 `ChatMessage` 列表或 LLM 原始输出——会导致 trace 膨胀、序列化成本增加。
+2. **决策**：`BaseEngine` 提供默认生命周期与 `_placeholder_result()`，子类只需设置 `name` 即可参与 Runtime 验证。
+   - 排除：每个 Engine 都手写完整状态机——重复代码多，且 Step 4 重点是验证 Runtime 骨架而非业务差异。
    - 状态：已执行。
 
-3. **决策**：`ReplayPlayer` 只重放 `emit_*` 类型的事件步骤，不重新执行业务逻辑。
-   - 排除：让 Replay 重新调用 Engine——会引入不确定性，且当前阶段不需要完整重执行。
+3. **决策**：`PlannerEngine` 通过构造函数注入 `EngineManager`，不通过 `RuntimeContext` 反向依赖 Runtime。
+   - 排除：在 `RuntimeContext` 中携带 `EngineManager` 引用——会破坏 Context 作为纯 Facts Container 的边界。
    - 状态：已执行。
 
-4. **决策**：`RuntimeContext` 同时携带 `trace`、`metrics`、`result`，向 RuntimeTask 四对象模型兼容，但当前不拆分 `RuntimeTask` 类。
-   - 排除：立即引入 `RuntimeTask` 包装类——当前只有单一入口和简单生命周期，过早抽象会增加维护成本。
+4. **决策**：从 `v5-dev` 切出 `v6-dev` 作为干净主线，并在文档中明确声明。
+   - 排除：继续在 `v5-dev` 上打 `v6.x` 标签——会造成版本号、分支名、架构文档的严重混淆。
    - 状态：已执行。
+
+5. **决策**：`health_check()` 暂时返回 `EngineState`，不升级为 `EngineHealth` 对象。
+   - 排除：Step 4 引入 `EngineHealth`——当前没有真实 API 超时 / 降级场景，升级时机不成熟。
+   - 状态：搁置，待 Step 5/6 有真实 Engine 实现后再评估。
 
 ## Key Files
-- `v6/runtime/trace.py` — `TraceStep`、`RuntimeTrace`、`ReplayPlayer` 定义。
-- `v6/runtime/context.py` — `RuntimeContext` 新增 `trace` / `result` 字段及生命周期支持。
-- `v6/runtime/runtime.py` — `AgentRuntime` 自动记录任务生命周期；`EchoHandler` 记录 Engine 步骤。
-- `v6/runtime/adapter.py` — `LocalRuntimeAdapter` 记录 submit 步骤。
-- `tests/v6/test_v6_trace.py` — Trace 与 Replay 测试。
-- `docs/v6/SPEC.md` — 8.15 Runtime Trace、8.16 RuntimeTask 四对象演进。
-- `PROJECT_BLUEPRINT.md` / `CHANGELOG.md` — 版本记录，当前 `v6.5.3-alpha`。
+- `v6/runtime/engines/base.py` — `BaseEngine` 统一生命周期与占位结果。
+- `v6/runtime/engines/{llm,tool,memory,planner,workflow,code,vision,knowledge}.py` — 八大 Engine 空壳。
+- `v6/runtime/engines/__init__.py` — 统一导出八大 Engine。
+- `v6/runtime/engine_manager.py` — Engine 注册、生命周期、执行入口与 Trace 自动记录。
+- `v6/runtime/engine_state.py` — `EngineState` 枚举（CREATED → ... → STOPPED）。
+- `v6/runtime/engines/protocol.py` — `Engine` Protocol、`EngineDescriptor`、`EngineNotReadyError`。
+- `tests/v6/test_v6_runtime_kernel.py` — Runtime Kernel 集成测试（发现 / 生命周期 / Trace / Planner 编排）。
+- `tests/v6/test_v6_engine_manager.py` — EngineManager 生命周期测试。
+- `tests/v6/test_engine_protocol.py` — Engine Protocol、Descriptor、异常测试。
+- `README.md` / `PROJECT_BLUEPRINT.md` — V6 主线声明与项目状态。
+- `docs/v6/SPEC.md` — V6 架构 SPEC（Runtime Interface Principle、Adapter Boundary 等）。
 
 ## Error Log
 No error.
 
 ## Environment Snapshot
-- branch: v5-dev
+- branch: v6-dev
 - python: Python 3.14.6
 - venv: none
-- last_commit: f31bc38 feat(v6): Runtime Trace 基础能力与 Replay 支持，RuntimeContext 携带 trace/result [test:99/99] [hint:trace,replay,runtime,context,spec] (by AI-Kimi-K2.7-Code)
+- last_commit: 2496313 docs: V6 全新主线声明，README 与 PROJECT_BLUEPRINT 同步 v6-dev 分支 [test:130/130] [hint:v6,mainline,branch,declaration] (by AI-Kimi-K2.7-Code)
 
 ## Working State
 ### Dirty Files
@@ -65,22 +80,23 @@ working tree clean
 no uncommitted changes
 
 ### Recent Conversation
-- 用户建议开始建立 Runtime Trace，记录 `Task → Phase → Engine → Service → Tool → Finish`，支持 Replay。
-- 用户展望 Runtime 核心对象最终固定为 `RuntimeTask { RuntimeContext, RuntimeTrace, RuntimeMetrics, RuntimeResult }`。
-- 完成实现后 V6 测试 99/99 通过，已 push `v6.5.3-alpha`。
+- 用户确认 Step 4 目标：实现八大 Engine Runtime 骨架而非业务逻辑，验证 EngineManager 动态发现、生命周期一致性、Trace Timeline。
+- 用户建议先存档 push，再移交；同时提出应在干净分支上开发 V6，避免在 `v5-dev` 上继续产生混淆。
+- 已完成 `v6.5.8-alpha` 提交与标签推送，随后切出 `v6-dev` 并更新文档声明 V6 为唯一活跃主线。
+- 用户进一步分析 Agent Runtime 中 Memory / Prompt 的本地私有化设计，建议 Step 5 不要立即接八大 Engine 功能，而是先做 Runtime Event Bus + Engine Capability Registry + Runtime Trace Replay。
 
 ## Next Steps (AI-Inferred)
-1. **继续实现 V6 八大引擎骨架**（Context / Prompt / Inference / Tool / Phase / Memory / Metrics / Policy），每个引擎接口统一为 `run(ctx: RuntimeContext) -> RuntimeContext`。
-2. **让各引擎在运行过程中向 `ctx.trace.add(...)` 写入自身步骤**，形成完整 Engine 级 Trace。
-3. **更新 `AgentRuntime`**，按 Phase 编排调度八大引擎协同工作，替换 `EchoHandler`。
-4. **扩展 `ReplayPlayer`**，支持重放更多节点类型（engine / service / tool）的步骤。
-5. **补充八大引擎单元测试与集成测试**。
-6. **更新 `docs/v6/SPEC.md` 与 `PROJECT_BLUEPRINT.md`**，反映八大引擎架构。
+1. **Step 5 优先建立 Runtime Event Bus**：让 Engine、Service、Adapter 之间通过事件总线异步通信，减少直接调用耦合。
+2. **Engine Capability Registry**：让 EngineManager 能按能力（capabilities）发现和调度 Engine，而非只按名称。
+3. **Runtime Trace Replay**：扩展 `ReplayPlayer`，支持按 `Task → Phase → Engine → Service → Tool` 全链路重放。
+4. **Memory / Prompt 本地私有化预留**：在 `RuntimeContext` 中预留 `agent_id` / `workspace` 等字段；MemoryEngine / PromptEngine 保持接口，底层先用 SQLite / 本地文件，未来通过 Backend 协议切换。
+5. **暂不实现八大 Engine 真实业务逻辑**：LLM/Tool/Memory 等功能开发应在 Event Bus + Capability Registry + Replay 基础稳固后再进行。
 
 ## Test Status
-- latest: [test:99/99]
+- latest: [test:130/130]
 - command: `python -m pytest tests/v6/ -q --tb=short`
 
 ## Notes
-- `EchoHandler` 仍是占位实现，后续会被真正的 `InferenceEngine` 替代；届时 Engine 级 trace 步骤会由真实引擎写入。
-- `v6.5.1-alpha`、`v6.5.2-alpha`、`v6.5.3-alpha` 均已推送至 origin；可从当前 HEAD 继续开发。
+- `v6-dev` 已推送至 origin，当前 HEAD 为 V6 唯一活跃开发起点。
+- `v5-dev` 已冻结，其最后一个相关提交为 `76c7871`（`v6.5.8-alpha` 标签）。
+- 后续所有 V6 版本号（如 `v6.5.9-alpha`、`v6.6.0-alpha`）应在 `v6-dev` 上打标签并推送。
