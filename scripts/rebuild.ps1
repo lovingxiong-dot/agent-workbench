@@ -13,7 +13,7 @@ Remove-Item -Recurse -Force -Path "$projectRoot\dist", "$projectRoot\build" -Err
 
 Write-Host "[3/5] Running PyInstaller in venv..." -ForegroundColor Cyan
 Set-Location $projectRoot
-python -m PyInstaller AgentWorkbench.spec --noconfirm
+python -m PyInstaller AgentWorkbenchV5.spec --noconfirm
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "[4/5] Build OK: $projectRoot\dist\AgentWorkbench\AgentWorkbench.exe" -ForegroundColor Green

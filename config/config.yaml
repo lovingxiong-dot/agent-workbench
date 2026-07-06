@@ -178,11 +178,11 @@ feature_flags:
   shared_orchestrator: true
   shared_output_panel: true
 app:
-  version: v3.12.0
+  version: v5.0.20-alpha
   last_mode: plan
   last_model: deepseek-pro
   theme: light
-  last_session_id: db0f5420c6a14b3aa8e0df599a0ab4e2
+  last_session_id: 97dbc6433d644f2b81b5917d799f7d48
 task:
   capacity:
     max_concurrent_tasks: 3

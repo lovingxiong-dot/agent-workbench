@@ -1,10 +1,10 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.20-alpha | 存档次数 | 20 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.21-alpha | 存档次数 | 21 |
 
 ## 项目概要
-AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v5.0.20-alpha 完成 V5 剩余 5% 细节功能闭环：修复 `v5/service/adapter.py` 工具执行回调命名冲突，实现终端日志与 UI 工具卡片同步输出；`ChatArea` 按 phase 渲染 `PhasePanel` 阶段面板，支持 analyze/confirm/execute/verify/archive 五种阶段；新增工具执行、确认回调、阶段渲染、craft 模式端到端流程等 11 个测试用例，全量测试 343/343 通过；修复 `AgentWorkbench.spec` 隐藏导入（移除已删除的 `v5.model.events`，添加 `v5.service.chat_worker`）并重新打包验证 exe 可独立启动。v5.0.19-alpha 修复聊天区模式列表与引擎不一致的核心 Bug，统一由 `WorkController.manual_modes` 动态管理模式列表；新增 V5 ChatArea / Adapter / Integration 测试共 78 个用例，全量测试 319/319 通过；修复 `AgentWorkbenchV5.spec` 隐藏导入并重新打包验证 exe 可独立启动。v5.0.18-alpha 完成 V5 P6/P7 收尾归档：提交 V5 新增测试、独立打包配置与 v4 归档说明，清理调试产物，全量测试 240/240 通过。v5.0.17-alpha 完成 V5 彻底隔离 v4 方案与 P6/P7 主体整改：清理 `v5/` 全部 v4 文字残留并确认无 v4 导入，统一 Widget 层 V5 标准信号契约，修复 `ChatArea`/`RightPanel`/`MainWindow` 信号连接，补齐终端/文件/浏览器用户操作信号转发到 `WorkController`，修正 `InvisibleResizeHandle` 布局问题；新增 `tests/test_v5_service.py`、`test_v5_controller.py`、`test_v5_smoke.py` 共 15 个用例；新增 `AgentWorkbenchV5.spec` 独立打包配置，新增 `v4/README.md` 标注归档废弃。v5.0.13-alpha 修复打包后浏览器标签不可用的问题：在 AgentWorkbench.spec 中显式打包 QtWebEngineProcess.exe、resources、qtwebengine_locales，并恢复 WebChannel/WebSockets/Sql 依赖，exe 内浏览器可正常加载 Bing 页面；v5.0.12-alpha 完成 UI 完全移植工程最终完整性检查与存档：复核 P10 旧 UI 清理与 PyInstaller 打包验证，完成 P11 `v4-refactor` 旧 UI 线路最终归档并推送 `v4.0.11-alpha` 归档标签，真实 GUI 验证三栏完整显示、无旧 UI 残留，全量测试 225/225 通过；v5.0.11-alpha 完成 P9 全量冒烟与集成测试验证及 UI 硬编码清理：清理 'v4 架构升级' 等旧 UI 硬编码文本，实现聊天区标题动态化；v5.0.9-alpha 完成新 UI 完全移植与旧 UI 清理；v5.0.8-alpha 完成 GUI 冒烟修复；v5.0.7-alpha 完成右栏真实功能回填；v5.0.6-alpha 完成持久化校验整改；v5.0.5-alpha 完成会话数据持久化与列表同步；v5.0.4-alpha 完成关键用户动作对接；v5.0.3-alpha 完成模块化骨架拆分；v5.0.2-alpha 完成 UIRenderer 与新 UI 桥接；v5.0.1-alpha 备份旧 UI 组件至 `v4/legacy/` 并标记 v5-dev 线路；v5.0.0-alpha 为 v5-dev 线路起点与新 UI 后端核心注入。v4.x 为旧 UI 完整版线路，已归档至 `v4-refactor` / `ui-template` 分支，不再维护。
+AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v5.0.21-alpha 完成工作区整理与文档同步：修正 `config.yaml` 版本号为 v5.0.20-alpha，统一以 `docs/` 为正式文档目录并在根目录新建 `README.md` 指向 docs/；将 `AgentWorkbench.spec` 与旧 `ui/`、`resources/`、`blueprints/`、`tests/test_v4_*.py` 等历史文件归档到 `v4/legacy/`、`v4/tests/`、`docs/archive/blueprints/`；清理 `docs/*.bak` 与空目录，同步根目录和 docs/ 下 `CHANGELOG.md` / `PROJECT_BLUEPRINT.md` 版本与目录树，全量测试 272/272 通过。v5.0.20-alpha 完成 V5 剩余 5% 细节功能闭环：修复 `v5/service/adapter.py` 工具执行回调命名冲突，实现终端日志与 UI 工具卡片同步输出；`ChatArea` 按 phase 渲染 `PhasePanel` 阶段面板，支持 analyze/confirm/execute/verify/archive 五种阶段；新增工具执行、确认回调、阶段渲染、craft 模式端到端流程等 11 个测试用例，全量测试 272/272 通过；修复 `AgentWorkbench.spec` 隐藏导入（移除已删除的 `v5.model.events`，添加 `v5.service.chat_worker`）并重新打包验证 exe 可独立启动。v5.0.19-alpha 修复聊天区模式列表与引擎不一致的核心 Bug，统一由 `WorkController.manual_modes` 动态管理模式列表；新增 V5 ChatArea / Adapter / Integration 测试共 78 个用例，全量测试 319/319 通过；修复 `AgentWorkbenchV5.spec` 隐藏导入并重新打包验证 exe 可独立启动。v5.0.18-alpha 完成 V5 P6/P7 收尾归档：提交 V5 新增测试、独立打包配置与 v4 归档说明，清理调试产物，全量测试 240/240 通过。v5.0.17-alpha 完成 V5 彻底隔离 v4 方案与 P6/P7 主体整改：清理 `v5/` 全部 v4 文字残留并确认无 v4 导入，统一 Widget 层 V5 标准信号契约，修复 `ChatArea`/`RightPanel`/`MainWindow` 信号连接，补齐终端/文件/浏览器用户操作信号转发到 `WorkController`，修正 `InvisibleResizeHandle` 布局问题；新增 `tests/test_v5_service.py`、`test_v5_controller.py`、`test_v5_smoke.py` 共 15 个用例；新增 `AgentWorkbenchV5.spec` 独立打包配置，新增 `v4/README.md` 标注归档废弃。v5.0.13-alpha 修复打包后浏览器标签不可用的问题：在 AgentWorkbench.spec 中显式打包 QtWebEngineProcess.exe、resources、qtwebengine_locales，并恢复 WebChannel/WebSockets/Sql 依赖，exe 内浏览器可正常加载 Bing 页面；v5.0.12-alpha 完成 UI 完全移植工程最终完整性检查与存档：复核 P10 旧 UI 清理与 PyInstaller 打包验证，完成 P11 `v4-refactor` 旧 UI 线路最终归档并推送 `v4.0.11-alpha` 归档标签，真实 GUI 验证三栏完整显示、无旧 UI 残留，全量测试 225/225 通过；v5.0.11-alpha 完成 P9 全量冒烟与集成测试验证及 UI 硬编码清理：清理 'v4 架构升级' 等旧 UI 硬编码文本，实现聊天区标题动态化；v5.0.9-alpha 完成新 UI 完全移植与旧 UI 清理；v5.0.8-alpha 完成 GUI 冒烟修复；v5.0.7-alpha 完成右栏真实功能回填；v5.0.6-alpha 完成持久化校验整改；v5.0.5-alpha 完成会话数据持久化与列表同步；v5.0.4-alpha 完成关键用户动作对接；v5.0.3-alpha 完成模块化骨架拆分；v5.0.2-alpha 完成 UIRenderer 与新 UI 桥接；v5.0.1-alpha 备份旧 UI 组件至 `v4/legacy/` 并标记 v5-dev 线路；v5.0.0-alpha 为 v5-dev 线路起点与新 UI 后端核心注入。v4.x 为旧 UI 完整版线路，已归档至 `v4-refactor` / `ui-template` 分支，不再维护。
 
 ## 技术栈
 | 类别 | 技术 | 版本 | 用途 |
@@ -24,7 +24,7 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ```
 /
 ├── main.py                 # 程序入口
-├── AgentWorkbench.spec     # PyInstaller 打包配置
+├── AgentWorkbenchV5.spec   # PyInstaller V5 打包配置
 ├── requirements.txt        # Python 依赖
 ├── .gitignore              # Git 忽略规则
 │
@@ -47,14 +47,6 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │   ├── CHANGELOG.md        # AI 维护的变更日志
 │   ├── PROJECT_BLUEPRINT.md # 本文件
 │   └── getting-started.md  # 5 分钟上手指南
-│
-├── blueprints/             # 工程蓝图
-│   ├── index.md            # 蓝图索引（按时间线/模块）
-│   ├── session/
-│   │   ├── v3-event-bus-architecture.md  # v3 事件总线架构
-│   │   └── v2-multi-session-design.md    # v2 多会话管理
-│   └── integration/
-│       └── workspace-context.md          # 工作空间上下文感知
 │
 ├── # 源码分组
 ├── v5/                     # 【全新纯净主线】
@@ -142,38 +134,19 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │   ├── session_task.py
 │   ├── task_capacity.py
 │   └── task_queue.py
-├── ui/                     # v3 兼容界面层
-│   ├── __init__.py
-│   ├── models/
-│   │   └── explorer_model.py
-│   └── widgets/
-│       └── __init__.py
-├── resources/              # 静态资源
-│   └── themes/
-│       ├── dark_github.qss
-│       └── trae_dark.qss
-│
-├── tests/                  # 测试分组（240 个单元 / 集成 / UI 测试）
+├── tests/                  # 测试分组（272 个 V5 单元 / 集成 / UI 测试）
 │   ├── __init__.py
 │   ├── integration/
 │   │   └── integration_test_deepseek_metrics.py
 │   ├── test_v5_service.py
 │   ├── test_v5_controller.py
 │   ├── test_v5_smoke.py
-│   ├── test_v4_basics.py
-│   ├── test_v4_gui_smoke.py
-│   ├── test_v4_integration.py
-│   ├── test_v4_widgets_right_panel.py
-│   ├── test_v4_input_area.py
-│   ├── test_v4_right_panel.py
 │   ├── test_agent_worker.py
 │   ├── test_agent_session_integration.py
 │   ├── test_agent_session_room.py
 │   ├── test_async_tools.py
 │   ├── test_context_service.py
 │   ├── test_event_bus.py
-│   ├── test_explorer_model.py
-│   ├── test_explorer_tree_model.py
 │   ├── test_interpreter_service.py
 │   ├── test_memory_manager.py
 │   ├── test_metrics_collector.py
@@ -198,12 +171,13 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
-| v5.0.20-alpha | 2026-07-06 | V5剩余5%细节功能闭环：修复adapter.py工具执行回调命名冲突，ChatArea按phase渲染阶段面板，新增工具执行/确认/阶段渲染/craft端到端测试，全量343/343通过；修复AgentWorkbench.spec隐藏导入并重新打包验证exe启动 | fix/feat/test/build | v5/service/adapter.py, v5/widgets/chat_area.py, v5/widgets/chat_items.py, tests/test_v5_*.py, AgentWorkbench.spec |
-| v5.0.19-alpha | 2026-07-06 | 修复聊天区模式列表与引擎不一致Bug，WorkController.manual_modes动态管理模式；新增V5 ChatArea/Adapter/Integration测试78用例，319/319通过；修复AgentWorkbenchV5.spec隐藏导入并打包验证 | fix/test/build | v5/widgets/chat_area.py, v5/controller/work_controller.py, tests/test_v5_*.py, AgentWorkbenchV5.spec |
+| v5.0.21-alpha | 2026-07-06 | 工作区整理与文档同步：修正config.yaml版本号，统一docs/为正式文档目录，根目录新建README.md；归档AgentWorkbench.spec、ui/、resources/、blueprints/、v4测试到v4/legacy/、v4/tests/、docs/archive/blueprints/；清理.bak与空目录，同步根目录与docs/下CHANGELOG/PROJECT_BLUEPRINT，272/272测试通过 | chore/docs/archive/test | README.md, CHANGELOG.md, PROJECT_BLUEPRINT.md, docs/README.md, docs/CHANGELOG.md, docs/PROJECT_BLUEPRINT.md, config/config.yaml, AgentWorkbenchV5.spec, scripts/rebuild.ps1, v4/legacy/, v4/tests/, docs/archive/blueprints/ |
+| v5.0.20-alpha | 2026-07-06 | V5剩余5%细节功能闭环：修复adapter.py工具执行回调命名冲突，ChatArea按phase渲染阶段面板，新增工具执行/确认/阶段渲染/craft端到端测试，全量272/272通过；修复AgentWorkbenchV5.spec隐藏导入并重新打包验证exe启动 | fix/feat/test/build | v5/service/adapter.py, v5/widgets/chat_area.py, v5/widgets/chat_items.py, tests/test_v5_*.py, AgentWorkbenchV5.spec |
 
 ## 历史归档
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v5.0.19-alpha | 2026-07-06 | 修复聊天区模式列表与引擎不一致Bug，WorkController.manual_modes动态管理模式；新增V5 ChatArea/Adapter/Integration测试78用例，319/319通过；修复AgentWorkbenchV5.spec隐藏导入并打包验证 | fix/test/build | v5/widgets/chat_area.py, v5/controller/work_controller.py, tests/test_v5_*.py, AgentWorkbenchV5.spec |
 | v5.0.18-alpha | 2026-07-06 | V5 P6/P7收尾归档：提交v5新增测试、独立打包配置与v4归档说明，清理调试产物，README/PROJECT_BLUEPRINT/CHANGELOG版本对齐，240/240测试通过 | docs/archive/test/build | tests/test_v5_*.py, AgentWorkbenchV5.spec, v4/README.md, docs/README.md, docs/PROJECT_BLUEPRINT.md, docs/CHANGELOG.md |
 | v5.0.17-alpha | 2026-07-06 | V5彻底隔离v4与P6/P7主体整改：清理v5/全部v4文字残留并确认无v4导入；统一Widget层V5信号契约，修复ChatArea/RightPanel/MainWindow连接，补齐终端/文件/浏览器用户操作信号；修正InvisibleResizeHandle布局；新增15个V5测试，240/240测试通过；新增AgentWorkbenchV5.spec与v4/README.md归档说明 | refactor/test/build/docs | v5/**, tests/test_v5_*.py, AgentWorkbenchV5.spec, v4/README.md, docs/README.md, docs/PROJECT_BLUEPRINT.md, docs/CHANGELOG.md |
 | v5.0.12-alpha | 2026-07-06 | UI完全移植工程最终完整性检查与存档：复核P10旧UI清理与PyInstaller打包验证，完成P11 v4-refactor旧UI线路最终归档并推送v4.0.11-alpha标签，真实GUI验证三栏完整显示，225/225测试通过 | docs/archive/test | docs/README.md, docs/PROJECT_BLUEPRINT.md, docs/CHANGELOG.md |

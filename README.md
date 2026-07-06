@@ -105,11 +105,11 @@ python -m pytest tests/ -v
 
 | 想了解... | 看这里 |
 |---|---|
-| 系统架构 | [ARCHITECTURE.md](./ARCHITECTURE.md) |
-| 设计决策历史 | [archive/blueprints/index.md](./archive/blueprints/index.md) |
-| 开发上手 | [getting-started.md](./getting-started.md) |
-| 完整目录结构 | [PROJECT_BLUEPRINT.md](./PROJECT_BLUEPRINT.md) |
-| 版本变更 | [CHANGELOG.md](./CHANGELOG.md) |
+| 系统架构 | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) |
+| 设计决策历史 | [docs/archive/blueprints/index.md](./docs/archive/blueprints/index.md) |
+| 开发上手 | [docs/getting-started.md](./docs/getting-started.md) |
+| 完整目录结构 | [docs/PROJECT_BLUEPRINT.md](./docs/PROJECT_BLUEPRINT.md) |
+| 版本变更 | [docs/CHANGELOG.md](./docs/CHANGELOG.md) |
 
 ---
 

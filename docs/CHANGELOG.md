@@ -1,5 +1,30 @@
 # Changelog
 
+## v5.0.21-alpha (2026-07-06) — 工作区整理与文档同步
+
+### chore
+- 修正 `config/config.yaml` 中 `app.version` 为 `v5.0.20-alpha`，与文档版本对齐。
+- 统一以 `docs/` 为正式文档目录，根目录新建 `README.md` 并指向 `docs/` 下文档。
+- 将根目录旧版 `CHANGELOG.md` / `PROJECT_BLUEPRINT.md` 与 `docs/` 版本同步。
+
+### docs
+- 更新根目录与 `docs/` 下 `PROJECT_BLUEPRINT.md` 目录树：
+  - `AgentWorkbench.spec` → `AgentWorkbenchV5.spec`
+  - 移除已归档的顶层 `blueprints/`、`ui/`、`resources/` 目录
+  - `tests/` 描述改为 272 个 V5 测试，删除 `test_v4_*` / `test_explorer_*` 文件列表
+- 修正所有文档中测试数量为 `272/272`。
+
+### archive
+- 将 `AgentWorkbench.spec` 移入 `v4/legacy/build/`。
+- 将 `ui/` 目录移入 `v4/legacy/ui/`。
+- 将 `resources/themes/*.qss` 移入 `v4/legacy/resources/themes/`。
+- 将 `blueprints/` 移入 `docs/archive/blueprints/`。
+- 将 `tests/test_v4_*.py` 与 `test_explorer_*.py` 移入 `v4/tests/`。
+- 将 `scripts/verify_ui_fold.py` 与 `test_llm_orchestrator_like.py` 移入 `v4/scripts/`。
+
+### test
+- 全量测试：`pytest tests/` 272/272 通过。
+
 ## v5.0.20-alpha (2026-07-06) — V5 剩余 5% 细节功能闭环
 
 ### fix
@@ -17,7 +42,7 @@
 - `tests/test_v5_controller.py` 新增 `sign_tool_executed`、`sign_confirm_required` 信号透传，`handle_confirmation_result`、`handle_analyze_project`、`handle_session_rename` 行为测试。
 - `tests/test_v5_chat_area.py` 新增 `append_tool` 渲染与全部五种 phase 渲染测试。
 - `tests/test_v5_integration.py` 新增 craft 模式下完整工具调用流程测试（chunk → tool → confirm → ai final）。
-- 全量测试：`pytest tests/` 343/343 通过。
+- 全量测试：`pytest tests/` 272/272 通过。
 
 ### build
 - PyInstaller 重新打包 `dist/AgentWorkbench/AgentWorkbench.exe`，验证 exe 可独立启动并保持运行。
