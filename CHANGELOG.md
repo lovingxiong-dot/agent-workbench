@@ -1,5 +1,20 @@
 # Changelog
 
+## v6.0.0-alpha (2026-07-07) — V6 项目启动与架构规格
+
+### feat
+- 判定 V5 失败并完整归档冻结，启动 V6 从零重写。
+- 建立 V6 独立目录 `v6/`，包含 `ui/`、`runtime/`、`runtime/engines/`、`services/`、`main_window.py`、`ui_controller.py`、`layout_manager.py`、`session_manager.py`、`config_manager.py`。
+- 编写 V6 架构文档 `docs/v6/PROJECT_BLUEPRINT_v6.md`、接口契约 `docs/v6/SPEC.md`、路线图 `docs/v6/ROADMAP.md`、变更日志 `docs/v6/CHANGELOG_v6.md`。
+- 明确分层架构：MainWindow → UIController → Manager → AgentRuntime → Engines。
+- 建立专业 Agent 协作流程：UI Agent / Runtime Agent / Review Agent，每阶段必须 Review + Smoke + Git 存档。
+
+### chore
+- 清理 V5 失败尝试残留未跟踪文件：`v5/widgets/apple_menu.py`、`function_page.py`、`header_bar.py`、`input_area.py`、`session_group.py`、`session_item.py`。
+
+### test
+- 新增 `tests/v6/test_v6_smoke.py`，V6 模块 import smoke 测试 5/5 通过。
+
 ## v5.0.23-alpha (2026-07-06) — v4 归档打包入口与 v5 并行构建
 
 ### fix

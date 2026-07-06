@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.23-alpha | 存档次数 | 23 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v6.0.0-alpha | 存档次数 | 24 |
 
 ## 项目概要
 AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v5.0.23-alpha 修复 `v5/service/chat_worker.py` 中 `AgentWorker.TOOL_DEFINITIONS` 属性错误，为 v4 归档区创建独立打包入口 `v4/v4_main.py` + `v4/AgentWorkbenchV4.spec` + `v4/scripts/rebuild_v4.ps1`，实现 v5 与 v4 并行打包并分别生成桌面快捷方式「AI Agent Workbench V5」和「AI Agent Workbench V4」；验证 `dist/AgentWorkbench/` 与 `dist/AgentWorkbenchV4/` 均可独立启动。v5.0.22-alpha 补充 `.gitignore`，将 `.reference/`、`.scripts/`、`review/` 等本地参考/调试/归档目录排除在版本控制外，保持 `git status` 干净。v5.0.21-alpha 完成工作区整理与文档同步：修正 `config.yaml` 版本号为 v5.0.20-alpha，统一以 `docs/` 为正式文档目录并在根目录新建 `README.md` 指向 docs/；将 `AgentWorkbench.spec` 与旧 `ui/`、`resources/`、`blueprints/`、`tests/test_v4_*.py` 等历史文件归档到 `v4/legacy/`、`v4/tests/`、`docs/archive/blueprints/`；清理 `docs/*.bak` 与空目录，同步根目录和 docs/ 下 `CHANGELOG.md` / `PROJECT_BLUEPRINT.md` 版本与目录树，全量测试 272/272 通过。v5.0.20-alpha 完成 V5 剩余 5% 细节功能闭环：修复 `v5/service/adapter.py` 工具执行回调命名冲突，实现终端日志与 UI 工具卡片同步输出；`ChatArea` 按 phase 渲染 `PhasePanel` 阶段面板，支持 analyze/confirm/execute/verify/archive 五种阶段；新增工具执行、确认回调、阶段渲染、craft 模式端到端流程等 11 个测试用例，全量测试 272/272 通过；修复 `AgentWorkbench.spec` 隐藏导入（移除已删除的 `v5.model.events`，添加 `v5.service.chat_worker`）并重新打包验证 exe 可独立启动。v5.0.19-alpha 修复聊天区模式列表与引擎不一致的核心 Bug，统一由 `WorkController.manual_modes` 动态管理模式列表；新增 V5 ChatArea / Adapter / Integration 测试共 78 个用例，全量测试 319/319 通过；修复 `AgentWorkbenchV5.spec` 隐藏导入并重新打包验证 exe 可独立启动。v5.0.18-alpha 完成 V5 P6/P7 收尾归档：提交 V5 新增测试、独立打包配置与 v4 归档说明，清理调试产物，全量测试 240/240 通过。v5.0.17-alpha 完成 V5 彻底隔离 v4 方案与 P6/P7 主体整改：清理 `v5/` 全部 v4 文字残留并确认无 v4 导入，统一 Widget 层 V5 标准信号契约，修复 `ChatArea`/`RightPanel`/`MainWindow` 信号连接，补齐终端/文件/浏览器用户操作信号转发到 `WorkController`，修正 `InvisibleResizeHandle` 布局问题；新增 `tests/test_v5_service.py`、`test_v5_controller.py`、`test_v5_smoke.py` 共 15 个用例；新增 `AgentWorkbenchV5.spec` 独立打包配置，新增 `v4/README.md` 标注归档废弃。v5.0.13-alpha 修复打包后浏览器标签不可用的问题：在 AgentWorkbench.spec 中显式打包 QtWebEngineProcess.exe、resources、qtwebengine_locales，并恢复 WebChannel/WebSockets/Sql 依赖，exe 内浏览器可正常加载 Bing 页面；v5.0.12-alpha 完成 UI 完全移植工程最终完整性检查与存档：复核 P10 旧 UI 清理与 PyInstaller 打包验证，完成 P11 `v4-refactor` 旧 UI 线路最终归档并推送 `v4.0.11-alpha` 归档标签，真实 GUI 验证三栏完整显示、无旧 UI 残留，全量测试 225/225 通过；v5.0.11-alpha 完成 P9 全量冒烟与集成测试验证及 UI 硬编码清理：清理 'v4 架构升级' 等旧 UI 硬编码文本，实现聊天区标题动态化；v5.0.9-alpha 完成新 UI 完全移植与旧 UI 清理；v5.0.8-alpha 完成 GUI 冒烟修复；v5.0.7-alpha 完成右栏真实功能回填；v5.0.6-alpha 完成持久化校验整改；v5.0.5-alpha 完成会话数据持久化与列表同步；v5.0.4-alpha 完成关键用户动作对接；v5.0.3-alpha 完成模块化骨架拆分；v5.0.2-alpha 完成 UIRenderer 与新 UI 桥接；v5.0.1-alpha 备份旧 UI 组件至 `v4/legacy/` 并标记 v5-dev 线路；v5.0.0-alpha 为 v5-dev 线路起点与新 UI 后端核心注入。v4.x 为旧 UI 完整版线路，已归档至 `v4-refactor` / `ui-template` 分支，不再维护。
@@ -49,7 +49,47 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │   └── getting-started.md  # 5 分钟上手指南
 │
 ├── # 源码分组
-├── v5/                     # 【全新纯净主线】
+├── v6/                     # 【全新纯净主线】V6 从零重写
+│   ├── __init__.py
+│   ├── main_window.py      # 纯 UI 壳（仅创建 Widget + 转发事件 + 窗口行为）
+│   ├── ui_controller.py    # UI 与业务唯一桥梁
+│   ├── layout_manager.py   # 三栏布局/拖拽/折叠
+│   ├── session_manager.py  # 会话 CRUD
+│   ├── config_manager.py   # 配置管理
+│   ├── runtime/            # AgentRuntime
+│   │   ├── runtime.py
+│   │   ├── context.py
+│   │   ├── event_bus.py
+│   │   ├── scheduler.py
+│   │   ├── task.py
+│   │   └── engines/        # Phase/Inference/Tool/Policy/Memory/Metrics
+│   ├── ui/                 # 纯 UI 组件层
+│   │   ├── base.py
+│   │   ├── window_frame.py
+│   │   ├── left_panel.py
+│   │   ├── chat_area.py
+│   │   ├── right_panel.py
+│   │   ├── header_bar.py
+│   │   ├── input_area.py
+│   │   ├── chat_items.py
+│   │   ├── chat_scene.py
+│   │   ├── session_item.py
+│   │   ├── session_group.py
+│   │   ├── function_page.py
+│   │   ├── tab_button.py
+│   │   ├── recent_files.py
+│   │   ├── more_dropdown.py
+│   │   ├── terminal_widget.py
+│   │   ├── file_reader_widget.py
+│   │   ├── browser_widget.py
+│   │   ├── apple_menu.py
+│   │   └── settings_dialog.py
+│   └── services/           # 业务服务
+│       ├── config_service.py
+│       ├── session_service.py
+│       └── chat_service.py
+│
+├── v5/                     # 【只读归档区】V5 已冻结，不再维护
 │   ├── __init__.py
 │   ├── main.py             # V5 启动/引导、依赖组装
 │   ├── main_window.py      # 轻量化顶层窗口（仅 UI 组装 + 单层信号转发）
