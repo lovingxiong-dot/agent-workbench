@@ -20,6 +20,9 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from v6.runtime.enums import RuntimeState
+from v6.runtime.metrics import RuntimeMetrics
+from v6.runtime.result import RuntimeResult
 from v6.runtime.trace import RuntimeTrace
 from v6.runtime.types import ChatMessage
 
@@ -47,18 +50,21 @@ class RuntimeContext:
     project_path: str = ""
     memory: Dict[str, Any] = field(default_factory=dict)
 
-    # 消息、工具、指标、结果
+    # 消息、工具
     messages: List[ChatMessage] = field(default_factory=list)
     tool_calls: List[Dict[str, Any]] = field(default_factory=list)
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    result: Dict[str, Any] = field(default_factory=dict)
+
+    # 统计信息（Statistics）与最终输出（Output）
+    # 当前挂载在 Context 上，未来可平滑迁移到 RuntimeTask.metrics / RuntimeTask.result。
+    metrics: RuntimeMetrics = field(default_factory=RuntimeMetrics)
+    result: RuntimeResult = field(default_factory=RuntimeResult)
 
     # 执行历史（History），供调试、回放、审计
     trace: RuntimeTrace = field(default_factory=RuntimeTrace)
 
     # 通用元数据容器，Engine 可读写自己负责的字段
     metadata: Dict[str, Any] = field(default_factory=dict)
-    status: str = "pending"
+    status: RuntimeState = RuntimeState.CREATED
     created_at: float = field(default_factory=time.time)
 
     def __post_init__(self) -> None:
@@ -90,10 +96,13 @@ class RuntimeContext:
         with self._lock:
             self.messages.append(ChatMessage(role=role, content=content))
 
-    def set_status(self, status: str) -> None:
-        """线程安全地更新任务状态。"""
+    def set_status(self, status: RuntimeState | str) -> None:
+        """线程安全地更新任务状态；接受枚举或字符串以保持兼容性。"""
         with self._lock:
-            self.status = status
+            if isinstance(status, RuntimeState):
+                self.status = status
+            else:
+                self.status = RuntimeState(status)
 
     def snapshot(self) -> Dict[str, Any]:
         """返回当前状态的深拷贝快照（用于 Checkpoint / Replay / Rollback）。"""
@@ -116,10 +125,10 @@ class RuntimeContext:
             self.project_path = snapshot.get("project_path", "")
             self.memory = copy.deepcopy(snapshot.get("memory", {}))
             self.tool_calls = copy.deepcopy(snapshot.get("tool_calls", []))
-            self.metrics = copy.deepcopy(snapshot.get("metrics", {}))
-            self.result = copy.deepcopy(snapshot.get("result", {}))
+            self.metrics = self._restore_metrics(snapshot.get("metrics"))
+            self.result = self._restore_result(snapshot.get("result"))
             self.metadata = copy.deepcopy(snapshot.get("metadata", {}))
-            self.status = snapshot.get("status", "pending")
+            self.status = self._restore_state(snapshot.get("status", RuntimeState.CREATED))
             self.created_at = snapshot.get("created_at", time.time())
             # trace 恢复：若快照含 steps 则重建 RuntimeTrace，否则保留当前实例
             raw_trace = snapshot.get("trace")
@@ -149,11 +158,11 @@ class RuntimeContext:
             self.memory.clear()
             self.messages.clear()
             self.tool_calls.clear()
-            self.metrics.clear()
-            self.result.clear()
+            self.metrics.reset()
+            self.result.reset()
             self.trace.clear()
             self.metadata.clear()
-            self.status = "pending"
+            self.status = RuntimeState.CREATED
 
     def clone(self) -> "RuntimeContext":
         """深拷贝自身，生成独立副本。"""
@@ -171,8 +180,8 @@ class RuntimeContext:
                 memory=copy.deepcopy(self.memory),
                 messages=copy.deepcopy(self.messages),
                 tool_calls=copy.deepcopy(self.tool_calls),
-                metrics=copy.deepcopy(self.metrics),
-                result=copy.deepcopy(self.result),
+                metrics=RuntimeMetrics(**self.metrics.snapshot()),
+                result=RuntimeResult(**self.result.snapshot()),
                 metadata=copy.deepcopy(self.metadata),
                 status=self.status,
                 created_at=self.created_at,
@@ -196,6 +205,30 @@ class RuntimeContext:
     # 内部辅助
     # ─────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _restore_metrics(raw: Any) -> RuntimeMetrics:
+        if isinstance(raw, RuntimeMetrics):
+            return raw
+        if isinstance(raw, dict):
+            return RuntimeMetrics(**raw)
+        return RuntimeMetrics()
+
+    @staticmethod
+    def _restore_result(raw: Any) -> RuntimeResult:
+        if isinstance(raw, RuntimeResult):
+            return raw
+        if isinstance(raw, dict):
+            return RuntimeResult(**raw)
+        return RuntimeResult()
+
+    @staticmethod
+    def _restore_state(raw: Any) -> RuntimeState:
+        if isinstance(raw, RuntimeState):
+            return raw
+        if isinstance(raw, str):
+            return RuntimeState(raw)
+        return RuntimeState.CREATED
+
     def _make_snapshot(self) -> Dict[str, Any]:
         return {
             "task_id": self.task_id,
@@ -210,10 +243,10 @@ class RuntimeContext:
             "memory": copy.deepcopy(self.memory),
             "messages": [copy.deepcopy(m.__dict__) for m in self.messages],
             "tool_calls": copy.deepcopy(self.tool_calls),
-            "metrics": copy.deepcopy(self.metrics),
-            "result": copy.deepcopy(self.result),
+            "metrics": self.metrics.snapshot(),
+            "result": self.result.snapshot(),
             "trace": self.trace.snapshot(),
             "metadata": copy.deepcopy(self.metadata),
-            "status": self.status,
+            "status": self.status.value if isinstance(self.status, RuntimeState) else self.status,
             "created_at": self.created_at,
         }

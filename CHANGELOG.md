@@ -1,5 +1,31 @@
 # Changelog
 
+## v6.5.4-alpha (2026-07-07) — Runtime Kernel 预备层：Metrics / Result / State / EngineManager
+
+### feat
+- 新增 `v6/runtime/metrics.py`：定义 `RuntimeMetrics` 统一统计接口，覆盖 `tokens`/`latency_ms`/`tool_time_ms`/`memory_hits`/`cache_hits`/`cost`/`retry`/`queue_time_ms`/`custom`。
+- 新增 `v6/runtime/result.py`：定义 `RuntimeResult` 统一输出协议，覆盖 `answer`/`tool_result`/`files`/`images`/`artifacts`/`error`/`status`/`extra`。
+- 新增 `v6/runtime/engine_manager.py`：统一管理 Engine 注册、获取、注销，避免 Runtime 直接 `new Engine`，为动态替换与测试预留扩展点。
+
+### refactor
+- `RuntimeContext.metrics` 从裸 `dict` 升级为 `RuntimeMetrics`。
+- `RuntimeContext.result` 从裸 `dict` 升级为 `RuntimeResult`。
+- `RuntimeContext.status` 从字符串升级为 `RuntimeState` 枚举，序列化时自动转换字符串。
+- `RuntimeContext.snapshot()` / `restore()` / `clone()` / `reset()` 全面兼容 `RuntimeMetrics` / `RuntimeResult` / `RuntimeState`。
+- `AgentRuntime` 统一使用 `RuntimeState.RUNNING` / `COMPLETED` / `FAILED` 枚举设置任务状态。
+- `v6/runtime/trace.py` 补回 `Enum` 导入，`TraceStep.__post_init__` 可正确转换枚举为字符串。
+
+### test
+- 新增 `tests/v6/test_v6_engine_manager.py`，覆盖 `register` / `get` / `has` / `names` / `unregister` / `clear` / `run` / 覆盖注册。
+- 更新 `tests/v6/test_v6_trace.py`，改用 `TraceEvent` / `RuntimeState` 枚举进行断言。
+- V6 全量测试 `pytest tests/v6/` 106/106 通过。
+
+### docs
+- `docs/v6/SPEC.md` 将 8.16 节 RuntimeTask 四对象模型升级为五对象模型，新增 `RuntimeState` 生命周期对象。
+- 新增 8.17 节：RuntimeMetrics 统一统计接口设计原则。
+- 新增 8.18 节：RuntimeResult 统一输出协议设计原则。
+- 新增 8.19 节：RuntimeState 生命周期枚举设计原则。
+
 ## v6.5.3-alpha (2026-07-07) — Runtime Trace 基础能力与 Replay 支持
 
 ### feat

@@ -19,6 +19,7 @@ from abc import ABC, abstractmethod
 from typing import Callable
 
 from v6.runtime.context import RuntimeContext
+from v6.runtime.enums import TraceEvent
 from v6.runtime.event_bus import RuntimeEvent
 from v6.runtime.runtime import AgentRuntime
 from v6.runtime.task import Task
@@ -68,7 +69,7 @@ class LocalRuntimeAdapter(IRuntimeAdapter):
         """提交 RuntimeContext 到本地 Runtime 执行。"""
         ctx.trace.add(
             node="adapter",
-            action="submit",
+            action=TraceEvent.ADAPTER_SUBMIT,
             phase=ctx.phase,
             payload={"task_id": ctx.task_id, "session_id": ctx.session_id},
         )

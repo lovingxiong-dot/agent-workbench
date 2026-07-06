@@ -6,6 +6,7 @@ import time
 
 from v6.runtime.adapter import LocalRuntimeAdapter
 from v6.runtime.context import RuntimeContext
+from v6.runtime.enums import RuntimeState, TraceEvent
 from v6.runtime.event_bus import EventBus
 from v6.runtime.runtime import AgentRuntime
 from v6.runtime.trace import ReplayPlayer, RuntimeTrace
@@ -13,34 +14,34 @@ from v6.runtime.trace import ReplayPlayer, RuntimeTrace
 
 def test_trace_records_steps():
     trace = RuntimeTrace()
-    trace.add(node="adapter", action="submit", phase="inference", payload={"x": 1})
-    trace.add(node="engine", action="echo_start", phase="inference")
+    trace.add(node="adapter", action=TraceEvent.ADAPTER_SUBMIT, phase="inference", payload={"x": 1})
+    trace.add(node="engine", action=TraceEvent.ENGINE_START, phase="inference")
 
     steps = trace.steps()
     assert len(steps) == 2
     assert steps[0].node == "adapter"
-    assert steps[0].action == "submit"
+    assert steps[0].action == TraceEvent.ADAPTER_SUBMIT.value
     assert steps[0].payload == {"x": 1}
     assert steps[1].node == "engine"
 
 
 def test_trace_filter():
     trace = RuntimeTrace()
-    trace.add(node="runtime", action="task_start")
-    trace.add(node="engine", action="echo_start")
-    trace.add(node="runtime", action="task_finish")
+    trace.add(node="runtime", action=TraceEvent.TASK_START)
+    trace.add(node="engine", action=TraceEvent.ENGINE_START)
+    trace.add(node="runtime", action=TraceEvent.TASK_FINISH)
 
     runtime_steps = trace.filter(node="runtime")
     assert len(runtime_steps) == 2
     assert all(s.node == "runtime" for s in runtime_steps)
 
-    start_steps = trace.filter(action="task_start")
+    start_steps = trace.filter(action=TraceEvent.TASK_START.value)
     assert len(start_steps) == 1
 
 
 def test_trace_snapshot_and_restore():
     trace = RuntimeTrace()
-    trace.add(node="engine", action="emit_chunk", payload={"text": "hi"})
+    trace.add(node="engine", action=TraceEvent.EMIT_CHUNK, payload={"text": "hi"})
     snap = trace.snapshot()
     assert len(snap["steps"]) == 1
     assert snap["steps"][0]["payload"]["text"] == "hi"
@@ -49,7 +50,7 @@ def test_trace_snapshot_and_restore():
 def test_context_carries_trace():
     ctx = RuntimeContext.new()
     assert isinstance(ctx.trace, RuntimeTrace)
-    ctx.trace.add(node="test", action="verify")
+    ctx.trace.add(node="test", action=TraceEvent.ENGINE_START)
     snapshot = ctx.snapshot()
     assert "trace" in snapshot
     assert len(snapshot["trace"]["steps"]) == 1
@@ -57,18 +58,18 @@ def test_context_carries_trace():
 
 def test_context_clone_copies_trace():
     ctx = RuntimeContext.new()
-    ctx.trace.add(node="a", action="b")
+    ctx.trace.add(node="a", action=TraceEvent.TASK_START)
     cloned = ctx.clone()
     assert cloned.trace is not ctx.trace
     assert len(cloned.trace.steps()) == 1
-    cloned.trace.add(node="c", action="d")
+    cloned.trace.add(node="c", action=TraceEvent.TASK_FINISH)
     assert len(ctx.trace.steps()) == 1
     assert len(cloned.trace.steps()) == 2
 
 
 def test_context_restore_rebuilds_trace():
     ctx = RuntimeContext.new()
-    ctx.trace.add(node="a", action="b", payload={"k": "v"})
+    ctx.trace.add(node="a", action=TraceEvent.ENGINE_START, payload={"k": "v"})
     snap = ctx.snapshot()
 
     restored = RuntimeContext.new()
@@ -99,11 +100,11 @@ def test_runtime_records_trace():
         assert "adapter" in nodes
         assert "runtime" in nodes
         assert "engine" in nodes
-        assert any(s.node == "runtime" and s.action == "task_start" for s in steps)
-        assert any(s.node == "runtime" and s.action == "task_finish" for s in steps)
-        assert any(s.node == "engine" and s.action == "echo_start" for s in steps)
-        assert any(s.node == "engine" and s.action == "echo_end" for s in steps)
-        assert ctx.status == "completed"
+        assert any(s.node == "runtime" and s.action == TraceEvent.TASK_START.value for s in steps)
+        assert any(s.node == "runtime" and s.action == TraceEvent.TASK_FINISH.value for s in steps)
+        assert any(s.node == "engine" and s.action == TraceEvent.ENGINE_START.value for s in steps)
+        assert any(s.node == "engine" and s.action == TraceEvent.ENGINE_END.value for s in steps)
+        assert ctx.status == RuntimeState.COMPLETED
     finally:
         runtime.stop()
 

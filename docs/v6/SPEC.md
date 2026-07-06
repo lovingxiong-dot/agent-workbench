@@ -618,8 +618,8 @@ Replay：
 - `RuntimeTrace` 只记录摘要（small facts），不应存储大对象、原始响应全文或敏感数据。
 - `trace` 与 `metrics`、`result`、`messages` 一样，是 `RuntimeContext` 的组成部分，不得作为 Runtime 的顶层公共接口。
 
-### 8.16 长期演进：RuntimeTask 四对象模型
-**展望：Runtime 的核心对象最终可收敛为四个。**
+### 8.16 长期演进：RuntimeTask 五对象模型
+**展望：Runtime 的核心对象最终可收敛为五个。**
 
 ```
 RuntimeTask
@@ -630,7 +630,9 @@ RuntimeTask
     │
     ├── RuntimeMetrics   — 性能统计（Performance）
     │
-    └── RuntimeResult    — 最终输出（Output）
+    ├── RuntimeResult    — 最终输出（Output）
+    │
+    └── RuntimeState     — 生命周期（Lifecycle）
 ```
 
 职责边界：
@@ -638,9 +640,85 @@ RuntimeTask
 - `RuntimeTrace`：记录整个执行过程，供调试、回放、可视化、审计。
 - `RuntimeMetrics`：统计耗时、Token、工具调用次数等量化指标。
 - `RuntimeResult`：最终对外输出，供 UI、Gateway、API 返回。
+- `RuntimeState`：管理任务生命周期（Created / Queued / Running / Completed / Failed 等）。
 
 当前阶段：
-- `RuntimeContext` 已携带 `trace`、`metrics`、`result` 字段，向四对象模型兼容。
+- `RuntimeContext` 已携带 `trace`、`metrics`、`result` 字段，向五对象模型兼容。
+- `status` 字段已统一使用 `RuntimeState` 枚举，避免字符串漂移。
 - `RuntimeContext.new()` 作为 Task 创建入口，后续可演进为 `RuntimeTask.create()` 或 `Runtime.start_task(...)`。
 - 当前不强制拆分 `RuntimeTask` 类，避免过度设计；当多 Agent 协作、Gateway、可视化调试需求明确时，再正式提取 `RuntimeTask`。
+
+### 8.17 RuntimeMetrics：统一统计接口
+**原则：RuntimeMetrics 保存 Statistics，不属于 Facts，也不属于 Output。**
+
+覆盖字段（预定义）：
+| 字段 | 含义 |
+|---|---|
+| `tokens` | LLM Token 消耗 |
+| `latency_ms` | 推理 / 执行耗时 |
+| `tool_time_ms` | 工具执行耗时 |
+| `memory_hits` | 记忆命中次数 |
+| `cache_hits` | 缓存命中次数 |
+| `cost` | 估算成本 |
+| `retry` | 重试次数 |
+| `queue_time_ms` | 队列等待耗时 |
+| `custom` | 扩展指标容器 |
+
+使用方式：
+- Engine 通过 `ctx.metrics.record(tokens=..., latency_ms=...)` 覆盖写入。
+- Engine 通过 `ctx.metrics.accumulate(tokens=..., retry=1)` 累加数值。
+- `ctx.metrics.snapshot()` 返回深拷贝，供上报 / Checkpoint / Replay 使用。
+
+当前挂载：
+- `RuntimeContext.metrics: RuntimeMetrics`。
+- 未来迁移到 `RuntimeTask.metrics` 时，只需移动字段，接口保持不变。
+
+### 8.18 RuntimeResult：统一输出协议
+**原则：RuntimeResult 保存 Output，不属于 Facts。**
+
+覆盖字段：
+| 字段 | 含义 |
+|---|---|
+| `answer` | 文本回答 |
+| `tool_result` | 工具返回结果 |
+| `files` | 文件产物路径列表 |
+| `images` | 图片产物路径列表 |
+| `artifacts` | 结构化产物列表 |
+| `error` | 错误信息 |
+| `status` | 最终状态 |
+| `extra` | 扩展输出容器 |
+
+使用方式：
+- Engine 通过 `ctx.result.set_answer(...)`、`add_file(...)`、`set_error(...)` 写入。
+- Gateway / UI 最终统一读取 `RuntimeResult` 作为任务输出。
+- `ctx.result.snapshot()` 返回深拷贝，供序列化 / 返回使用。
+
+当前挂载：
+- `RuntimeContext.result: RuntimeResult`。
+- 未来迁移到 `RuntimeTask.result` 时，只需移动字段，接口保持不变。
+
+### 8.19 RuntimeState：生命周期枚举
+**原则：任务生命周期状态必须使用 `RuntimeState` 枚举管理，禁止字符串硬编码。**
+
+枚举值：
+```
+CREATED    → 已创建
+QUEUED     → 已入队
+RUNNING    → 执行中
+WAITING    → 等待中
+PAUSED     → 已暂停
+CANCELLED  → 已取消
+COMPLETED  → 已完成
+FAILED     → 已失败
+```
+
+使用方式：
+- `RuntimeContext.status: RuntimeState`。
+- `AgentRuntime` 通过 `ctx.set_status(RuntimeState.RUNNING)` 直接设置枚举。
+- 序列化时存储字符串（`.value`），恢复时重新转换为枚举。
+
+收益：
+- 消除 `"running"` / `"Running"` / `"RUNNING"` 等字符串漂移。
+- `RuntimeScheduler` 可统一读取 `RuntimeState` 做生命周期管理。
+- 为后续 `task.state` 预留语义，迁移成本低。
 

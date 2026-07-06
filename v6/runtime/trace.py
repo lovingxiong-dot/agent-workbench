@@ -15,8 +15,10 @@ import copy
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from enum import Enum
+from typing import Any, Dict, List, Optional, Union
 
+from v6.runtime.enums import TraceEvent
 from v6.runtime.event_bus import EventBus
 
 
@@ -29,6 +31,15 @@ class TraceStep:
     node: str
     action: str
     payload: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """统一把枚举转成字符串存储，保持序列化一致性。"""
+        if isinstance(self.phase, Enum):
+            self.phase = self.phase.value
+        if isinstance(self.node, Enum):
+            self.node = self.node.value
+        if isinstance(self.action, Enum):
+            self.action = self.action.value
 
 
 class RuntimeTrace:
@@ -43,9 +54,9 @@ class RuntimeTrace:
 
     def add(
         self,
-        node: str,
-        action: str,
-        phase: str = "",
+        node: Union[str, Enum],
+        action: Union[str, TraceEvent],
+        phase: Union[str, Enum] = "",
         payload: Optional[Dict[str, Any]] = None,
     ) -> None:
         """追加一条执行步骤。

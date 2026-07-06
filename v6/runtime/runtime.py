@@ -14,6 +14,8 @@ from __future__ import annotations
 from typing import Callable
 
 from v6.runtime.context import RuntimeContext
+from v6.runtime.engine_manager import EngineManager
+from v6.runtime.enums import RuntimePhase, RuntimeState, TraceEvent
 from v6.runtime.event_bus import EventBus, RuntimeEvent
 from v6.runtime.scheduler import Scheduler
 from v6.runtime.task import Task
@@ -29,9 +31,11 @@ class AgentRuntime:
         self,
         event_bus: EventBus | None = None,
         scheduler: Scheduler | None = None,
+        engine_manager: EngineManager | None = None,
     ) -> None:
         self._event_bus = event_bus or EventBus()
         self._scheduler = scheduler or Scheduler(executor=self._execute)
+        self._engine_manager = engine_manager or EngineManager()
         self._handlers: dict[str, Handler] = {}
         self._contexts: dict[str, RuntimeContext] = {}
         self._running = False
@@ -43,6 +47,10 @@ class AgentRuntime:
     @property
     def scheduler(self) -> Scheduler:
         return self._scheduler
+
+    @property
+    def engine_manager(self) -> EngineManager:
+        return self._engine_manager
 
     @property
     def running(self) -> bool:
@@ -94,10 +102,10 @@ class AgentRuntime:
                 session_id=task.session_id,
             )
         self._contexts[task.task_id] = ctx
-        ctx.set_status("running")
+        ctx.set_status(RuntimeState.RUNNING)
         ctx.trace.add(
             node="runtime",
-            action="task_start",
+            action=TraceEvent.TASK_START,
             phase=ctx.phase,
             payload={"task_type": task.type, "session_id": task.session_id},
         )
@@ -109,11 +117,11 @@ class AgentRuntime:
                 else:
                     ctx.trace.add(
                         node="runtime",
-                        action="handler_missing",
+                        action=TraceEvent.HANDLER_MISSING,
                         phase=ctx.phase,
                         payload={"task_type": task.type},
                     )
-                    ctx.set_status("failed")
+                    ctx.set_status(RuntimeState.FAILED)
                     self._event_bus.emit(
                         "error",
                         {"message": f"No handler registered for task type: {task.type}"},
@@ -122,26 +130,26 @@ class AgentRuntime:
                     return
             ctx.trace.add(
                 node="runtime",
-                action="handler_dispatch",
+                action=TraceEvent.HANDLER_DISPATCH,
                 phase=ctx.phase,
                 payload={"handler": task.type},
             )
             handler(task, ctx, self._event_bus)
             ctx.trace.add(
                 node="runtime",
-                action="task_finish",
+                action=TraceEvent.TASK_FINISH,
                 phase=ctx.phase,
                 payload={"messages_count": len(ctx.messages)},
             )
-            ctx.set_status("completed")
+            ctx.set_status(RuntimeState.COMPLETED)
         except Exception as exc:  # pragma: no cover - defensive
             ctx.trace.add(
                 node="runtime",
-                action="task_error",
+                action=TraceEvent.TASK_ERROR,
                 phase=ctx.phase,
                 payload={"error": str(exc)},
             )
-            ctx.set_status("failed")
+            ctx.set_status(RuntimeState.FAILED)
             self._event_bus.emit(
                 "error",
                 {"message": str(exc)},
@@ -153,22 +161,28 @@ class AgentRuntime:
     @staticmethod
     def _echo_handler(task: Task, ctx: RuntimeContext, bus: EventBus) -> None:
         """最小回声处理器：替换上一阶段的 EchoRuntime。"""
-        ctx.phase = "inference"
-        ctx.trace.add(node="engine", action="echo_start", phase=ctx.phase)
-        if ctx.messages:
-            text = ctx.messages[-1].content
-        else:
-            text = getattr(task, "text", task.payload.get("text", ""))
+        ctx.phase = RuntimePhase.INFERENCE.value
         ctx.trace.add(
             node="engine",
-            action="input_read",
+            action=TraceEvent.ENGINE_START,
             phase=ctx.phase,
-            payload={"source": "ctx.messages" if ctx.messages else "task.text", "length": len(text)},
+        )
+        if ctx.messages:
+            text = ctx.messages[-1].content
+            source = "ctx.messages"
+        else:
+            text = getattr(task, "text", task.payload.get("text", ""))
+            source = "task.text"
+        ctx.trace.add(
+            node="engine",
+            action=TraceEvent.ENGINE_INPUT_READ,
+            phase=ctx.phase,
+            payload={"source": source, "length": len(text)},
         )
         bus.emit("user_message", {"text": text}, task.task_id)
         ctx.trace.add(
             node="engine",
-            action="emit_start",
+            action=TraceEvent.EMIT_START,
             phase=ctx.phase,
             payload={"data": {"phase": ""}},
         )
@@ -176,14 +190,14 @@ class AgentRuntime:
         response = f"收到：{text.replace(chr(10), ' ')}"
         ctx.trace.add(
             node="engine",
-            action="emit_chunk",
+            action=TraceEvent.EMIT_CHUNK,
             phase=ctx.phase,
             payload={"data": {"text": response, "phase": ""}},
         )
         bus.emit("ai_chunk", {"text": response, "phase": ""}, task.task_id)
         ctx.trace.add(
             node="engine",
-            action="emit_end",
+            action=TraceEvent.EMIT_END,
             phase=ctx.phase,
             payload={"data": {}},
         )
@@ -191,7 +205,7 @@ class AgentRuntime:
         ctx.add_message("ai", response)
         ctx.trace.add(
             node="engine",
-            action="echo_end",
+            action=TraceEvent.ENGINE_END,
             phase=ctx.phase,
             payload={"response_length": len(response)},
         )
