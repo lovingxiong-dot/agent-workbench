@@ -10,7 +10,8 @@ import glob
 import os
 from typing import Any, Dict, List, Optional
 
-from v6.runtime.engines.interfaces import ChatMessage, IMemoryEngine
+from v6.runtime.engines.interfaces import IMemoryEngine
+from v6.runtime.types import ChatMessage
 
 
 class MemoryEngine(IMemoryEngine):

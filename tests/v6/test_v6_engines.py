@@ -15,7 +15,6 @@ import pytest
 
 from v6.runtime.context import RuntimeContext
 from v6.runtime.engines import (
-    ChatMessage,
     CompressionStrategy,
     ContextEngine,
     InferenceEngine,
@@ -27,6 +26,7 @@ from v6.runtime.engines import (
     ToolEngine,
 )
 from v6.runtime.engines.interfaces import Engine
+from v6.runtime.types import ChatMessage
 
 
 @pytest.fixture
@@ -206,9 +206,9 @@ def test_engine_run_returns_same_context(ctx):
     assert result is ctx
 
 
-def test_chat_message_to_langchain_requires_langchain():
-    """ChatMessage.to_langchain 按需导入 langchain_core；若无依赖则跳过。"""
-    pytest.importorskip("langchain_core")
+def test_chat_message_is_plain_dataclass():
+    """ChatMessage 是纯净数据类，不携带 V4 兼容方法（如 to_langchain）。"""
     msg = ChatMessage(role="system", content="hello")
-    lc = msg.to_langchain()
-    assert lc.content == "hello"
+    assert msg.role == "system"
+    assert msg.content == "hello"
+    assert not hasattr(msg, "to_langchain")

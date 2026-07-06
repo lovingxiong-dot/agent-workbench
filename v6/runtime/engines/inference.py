@@ -11,12 +11,8 @@ import asyncio
 import time
 from typing import List, Optional
 
-from v6.runtime.engines.interfaces import (
-    ChatMessage,
-    IInferenceEngine,
-    InferenceMetrics,
-    TokenUsage,
-)
+from v6.runtime.engines.interfaces import IInferenceEngine
+from v6.runtime.types import ChatMessage, InferenceMetrics, TokenUsage
 
 
 _DEFAULT_RETRY_COUNT = 2

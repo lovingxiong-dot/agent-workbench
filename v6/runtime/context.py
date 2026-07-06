@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from v6.runtime.engines.interfaces import ChatMessage
+from v6.runtime.types import ChatMessage
 
 
 @dataclass

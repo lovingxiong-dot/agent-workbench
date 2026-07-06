@@ -232,3 +232,86 @@ V6.5+ ctx
 - 新增字段（GroupUser、Gateway、AgentBus、多 Agent 协同）无需修改 Engine 接口。
 - `async def run(ctx: RuntimeContext)` 保持稳定，架构可长期演进。
 - Engine 只依赖自己读取/写入的字段，天然解耦。
+
+### 8.8 依赖方向固定原则
+**原则：依赖方向永远是 `RuntimeContext` 包含 `ChatMessage`、`MemoryState`、`MetricsState`、`ToolCall`、`SessionInfo` 等，而不是这些对象反过来决定 `RuntimeContext` 的形态。**
+
+正确依赖图：
+```
+v6/runtime/types.py
+    │
+    ├── ChatMessage
+    ├── ToolCall / ToolResult
+    ├── TokenUsage / InferenceMetrics
+    └── CompressionStrategy / CompressionResult
+    │
+v6/runtime/context.py ── imports from types.py
+    │
+    RuntimeContext
+        ├── messages: List[ChatMessage]
+        ├── tool_calls: List[ToolCall]
+        ├── metrics: Dict[str, Any]
+        └── metadata: Dict[str, Any]
+    │
+v6/runtime/engines/interfaces.py ── imports from types.py
+    │
+    Engine.run(ctx: RuntimeContext)
+```
+
+禁止：
+- `context.py` 从 `interfaces.py` 导入 `ChatMessage`。
+- `ChatMessage` 携带 `to_langchain()` 等 V4 兼容方法，反向污染 V6 类型层。
+- Engine 接口围绕 `ChatMessage` 设计（如 `run(messages)`）。
+
+要求：
+- `v6/runtime/types.py` 是类型层最底部模块，不依赖 Engine、RuntimeContext 或业务代码。
+- `RuntimeContext` 从 `types.py` 导入所需类型；`interfaces.py` 也从 `types.py` 导入。
+- V6 的设计目标不是迁移 V4，而是建立新的 Runtime 模型；兼容 V4 只能作为迁移策略，不能成为 V6 架构约束。
+
+### 8.7 全层统一 RuntimeContext 接口铁律
+**原则：Engine、Service、Controller、Gateway 的公共接口统一使用 `RuntimeContext`。任何公共接口不得以 `Message`、`dict`、`Session`、`ToolCall` 等对象作为顶层参数，它们只能作为 `RuntimeContext` 的组成部分。**
+
+数据流：
+```
+UI
+    │
+    ▼
+Runtime
+    │
+    ▼
+RuntimeContext
+    │
+  ┌──┴──────────────────────────┐
+  │ InferenceEngine              │
+  │ PromptEngine                 │
+  │ ContextEngine                │
+  │ MemoryEngine                 │
+  │ PolicyEngine                 │
+  │ ToolEngine                   │
+  │ MetricsEngine                │
+  │ PhaseEngine                  │
+  └──────────────┬──────────────┘
+                 │
+                 ▼
+          RuntimeContext（更新）
+                 │
+                 ▼
+           Gateway / UI
+```
+
+禁止示例：
+- `service.save_messages(session_id, messages)` — 应改为 `service.save(ctx)`
+- `controller.on_send(text)` — 应改为 `controller.handle(ctx)` 或在内部构造 `ctx`
+- `gateway.route(message)` — 应改为 `gateway.route(ctx)`
+- `engine.run(messages)` / `engine.run(session)` / `engine.run(dict)` — 已禁止
+
+允许示例：
+- `engine.run(ctx: RuntimeContext) -> RuntimeContext`
+- `service.run(ctx: RuntimeContext) -> RuntimeContext`
+- `controller.dispatch(ctx: RuntimeContext) -> RuntimeContext`
+- `gateway.forward(ctx: RuntimeContext) -> RuntimeContext`
+
+收益：
+- `RuntimeContext` 成为 V6 唯一数据载体，跨层传递零碎片化对象。
+- 支持多 LLM、多 Agent、Group 用户、Gateway 路由、会话记忆、协同与争论等高级能力时，只需扩展 `RuntimeContext`，不动公共接口。
+- 各层只读写自己职责字段，天然解耦。

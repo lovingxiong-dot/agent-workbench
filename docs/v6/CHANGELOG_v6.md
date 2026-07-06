@@ -1,7 +1,10 @@
 # V6 变更日志
 
 ## v6.5.0-alpha (2026-07-07) — 八大引擎实现与 RuntimeContext 重构
-- 重构 `v6/runtime/engines/interfaces.py`：新增 `ChatMessage` 共享类型、`Engine` 统一基类，八大引擎统一接口 `async def run(ctx: RuntimeContext) -> RuntimeContext`。
+- 新增 `v6/runtime/types.py` 作为 Runtime 类型层最底部模块，统一放置 `ChatMessage`、`ToolCall`、`ToolResult`、`TokenUsage`、`InferenceMetrics`、`CompressionStrategy`、`CompressionResult`。
+- 固定依赖方向：`RuntimeContext` 与 `interfaces.py` 均从 `types.py` 导入共享类型，`RuntimeContext` 不再依赖 `interfaces.py`。
+- 移除 `ChatMessage.to_langchain()` 等 V4 兼容方法，明确 V6 建立新 Runtime 模型而非迁移 V4。
+- 重构 `v6/runtime/engines/interfaces.py`：新增 `ChatMessage`、 共享类型、`Engine` 统一基类，八大引擎统一接口 `async def run(ctx: RuntimeContext) -> RuntimeContext`。
 - 重构 `v6/runtime/context.py`：`messages` 改为 `ChatMessage` 列表，新增可演进字段（phase / mode / model / provider / project_path / memory / tool_calls / metrics / metadata）。
 - 实现八大引擎：
   - `ContextEngine`：上下文组装、压缩、token 估算。

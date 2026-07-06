@@ -10,11 +10,11 @@ from __future__ import annotations
 import re
 from typing import List
 
-from v6.runtime.engines.interfaces import (
+from v6.runtime.engines.interfaces import IContextEngine
+from v6.runtime.types import (
     ChatMessage,
     CompressionResult,
     CompressionStrategy,
-    IContextEngine,
 )
 
 

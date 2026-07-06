@@ -11,7 +11,8 @@ import inspect
 import time
 from typing import Any, Callable, Dict, List, Optional
 
-from v6.runtime.engines.interfaces import IToolEngine, ToolResult
+from v6.runtime.engines.interfaces import IToolEngine
+from v6.runtime.types import ToolResult
 
 
 _DEFAULT_PHASE_ALLOWLISTS: Dict[str, Optional[set]] = {
