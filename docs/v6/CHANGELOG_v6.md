@@ -1,5 +1,15 @@
 # V6 变更日志
 
+## v6.3.0-alpha (2026-07-07) — ConfigManager + SessionManager + Services
+- 实现 `v6/config_manager.py`：YAML 配置持久化、点分路径 get/set、changed 信号、默认配置（app.version / last_mode / last_model / theme.name 等）。
+- 实现 `v6/session_manager.py`：SQLite 会话持久化（`storage/sessions.db`）、CRUD、active 管理、按时间分组（今天/昨天/最近7天/更早）、置顶。
+- 实现 `v6/services/config_service.py`、`session_service.py`、`chat_service.py`，对 Manager 进行业务层封装，保持 UI 零业务逻辑。
+- 重写 `v6/ui_controller.py`：移除 `DEMO_SESSIONS`，注入 ConfigService / SessionService / ChatService，`startup()` 加载真实配置与会话。
+- 新增 `tests/v6/test_v6_config_manager.py`、`test_v6_session_manager.py`、`test_v6_services.py`；更新 `test_v6_ui_contract.py` 以适配真实服务。
+- 引入 `v6/_paths.py` 与 `V6_DATA_DIR` 环境变量支持，确保测试数据隔离。
+- Review Agent 复核后修复：移除 `LeftPanel.DEMO_SESSIONS`，避免启动前闪现假数据；为 `SessionManager` 增加 `db_path` 属性，消除 `ChatService` 直接访问私有字段 `_db` 的封装破坏。
+- 阶段 3 全部 43 个测试通过；Review Agent 复核通过。
+
 ## v6.1.0-alpha (2026-07-07) — 纯 UI 层完成与契约测试
 - 完成 V6 纯 UI 层全部组件实现（`v6/ui/` 23 个模块 + `v6/main_window.py` + `v6/layout_manager.py` + `v6/ui_controller.py`）。
 - 严格遵循 `docs/v6/SPEC.md` 信号契约：UI 组件仅发射信号，不直接调用业务方法。

@@ -30,28 +30,13 @@ class LeftPanel(QWidget):
     skill_clicked = Signal(str)
     automation_toggled = Signal(str, bool)
 
-    DEMO_SESSIONS = [
-        ("today", "今天", [
-            {"sid": "s1", "title": "V6 架构讨论", "preview": "讨论 UI 分层与信号契约", "time": "10:23"},
-            {"sid": "s2", "title": "base.py 实现", "preview": "主题系统与基础工具", "time": "09:15"},
-        ]),
-        ("yesterday", "昨天", [
-            {"sid": "s3", "title": "窗口无边框方案", "preview": "FramelessWindowHelper 与边缘拖拽", "time": "昨天"},
-            {"sid": "s4", "title": "AppleMenu 设计", "preview": "圆角阴影弹出菜单", "time": "昨天"},
-        ]),
-        ("last7", "最近 7 天", [
-            {"sid": "s5", "title": "pytest smoke 测试", "preview": "验证所有模块可导入", "time": "周一"},
-            {"sid": "s6", "title": "主题切换动画", "preview": "深浅色主题即时切换", "time": "周日"},
-        ]),
-    ]
-
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setMinimumWidth(220)
         self.setMaximumWidth(380)
         self._groups: list[SessionGroup] = []
         self._build()
-        self.update_sessions(self.DEMO_SESSIONS)
+        self.update_sessions([])
         self._style()
         theme.changed.connect(self._style)
 

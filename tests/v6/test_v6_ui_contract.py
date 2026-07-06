@@ -5,16 +5,6 @@ import pytest
 from PySide6.QtCore import Qt
 
 
-@pytest.fixture(scope="session")
-def qapp():
-    from PySide6.QtWidgets import QApplication
-
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(["test"])
-    yield app
-
-
 @pytest.fixture(autouse=True)
 def reset_theme():
     from v6.ui.base import theme
@@ -137,33 +127,41 @@ def test_right_panel_signals(qapp):
 
 
 # ── UIController ──
-def test_uicontroller_signals():
+def test_uicontroller_signals(qapp, tmp_path):
+    from v6.services.session_service import SessionService
     from v6.ui_controller import UIController
 
-    ctrl = UIController()
+    svc = SessionService(data_dir=tmp_path)
+    sid = svc.create("contract")
+    svc.set_active(sid)
+    ctrl = UIController(session_service=svc)
     received = []
     ctrl.sign_update_sessions.connect(lambda s: received.append(("sessions", len(s))))
-    ctrl.sign_set_active_session.connect(lambda sid: received.append(("active", sid)))
+    ctrl.sign_set_active_session.connect(lambda s: received.append(("active", s)))
     ctrl.sign_set_title.connect(lambda t, s: received.append(("title", t)))
     ctrl.startup()
     assert any(item[0] == "sessions" for item in received)
-    assert any(item == ("active", "s1") for item in received)
+    assert any(item == ("active", sid) for item in received)
 
 
-def test_uicontroller_session_flow():
+def test_uicontroller_session_flow(qapp, tmp_path):
+    from v6.services.session_service import SessionService
     from v6.ui_controller import UIController
 
-    ctrl = UIController()
+    svc = SessionService(data_dir=tmp_path)
+    sid = svc.create("flow")
+    svc.set_active(sid)
+    ctrl = UIController(session_service=svc)
     active = []
-    ctrl.sign_set_active_session.connect(lambda sid: active.append(sid))
-    ctrl.on_session_selected("s2")
-    assert active == ["s2"]
+    ctrl.sign_set_active_session.connect(lambda s: active.append(s))
+    ctrl.on_session_selected(sid)
+    assert active == [sid]
 
 
-def test_uicontroller_send_msg(qapp):
+def test_uicontroller_send_msg(qapp, tmp_path):
     from v6.ui_controller import UIController
 
-    ctrl = UIController()
+    ctrl = UIController(data_dir=str(tmp_path))
     user_msgs = []
     ctrl.sign_chat_user.connect(user_msgs.append)
     ctrl.on_send_msg("hi")

@@ -1,15 +1,28 @@
-"""v6/ui_controller.py — UI 与业务唯一桥梁（当前为纯信号桥接 + Demo 状态）。
-设计来源：docs/v6/SPEC.md 第 3 节。"""
+"""v6/ui_controller.py — UI 与业务唯一桥梁。
+
+职责：
+- 接收 MainWindow 的 UI 事件，转发为 UI 更新信号
+- 维护当前会话/模式/模型等 UI 状态
+- 通过 Service 层读写配置、会话、消息历史
+- 不保留任何业务计算逻辑
+
+设计来源：docs/v6/SPEC.md 第 3 节。
+"""
 from __future__ import annotations
+
+import os
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from v6.runtime.stub_runtime import EchoRuntime
+from v6.services.chat_service import ChatService
+from v6.services.config_service import ConfigService
+from v6.services.session_service import SessionService
 from v6.ui.base import theme
 
 
 class UIController(QObject):
-    """接收 MainWindow 的 UI 事件，转发为 UI 更新信号；维护当前会话/模式/模型状态。"""
+    """接收 UI 事件，调用 Service 层，将结果转发为 UI 更新信号。"""
 
     # → MainWindow → LeftPanel
     sign_update_sessions = Signal(list)
@@ -32,79 +45,101 @@ class UIController(QObject):
     sign_update_terminal = Signal(str)
     sign_switch_tab = Signal(str)
 
-    DEMO_SESSIONS = [
-        ("today", "今天", [
-            {"sid": "s1", "title": "V6 架构讨论", "preview": "讨论 UI 分层与信号契约", "time": "10:23"},
-            {"sid": "s2", "title": "base.py 实现", "preview": "主题系统与基础工具", "time": "09:15"},
-        ]),
-        ("yesterday", "昨天", [
-            {"sid": "s3", "title": "窗口无边框方案", "preview": "FramelessWindowHelper 与边缘拖拽", "time": "昨天"},
-            {"sid": "s4", "title": "AppleMenu 设计", "preview": "圆角阴影弹出菜单", "time": "昨天"},
-        ]),
-        ("last7", "最近 7 天", [
-            {"sid": "s5", "title": "pytest smoke 测试", "preview": "验证所有模块可导入", "time": "周一"},
-            {"sid": "s6", "title": "主题切换动画", "preview": "深浅色主题即时切换", "time": "周日"},
-        ]),
-    ]
-
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        parent: QObject | None = None,
+        config_service: ConfigService | None = None,
+        session_service: SessionService | None = None,
+        chat_service: ChatService | None = None,
+        data_dir: str | os.PathLike | None = None,
+    ) -> None:
         super().__init__(parent)
-        self._sessions = [list(g) for g in self.DEMO_SESSIONS]
-        self._active_sid = "s1"
-        self._mode = "Agent"
-        self._model = "gpt-4o"
+        self._config = config_service or ConfigService(data_dir=data_dir)
+        self._session = session_service or SessionService(data_dir=data_dir)
+        self._chat = chat_service or ChatService(
+            session_manager=self._session.manager, data_dir=data_dir
+        )
+        self._active_sid: str | None = None
+        self._mode = self._config.last_mode()
+        self._model = self._config.last_model()
+        self._project_path = os.getcwd()
+        self._streaming = False
         self._runtime = EchoRuntime()
 
     def startup(self) -> None:
-        self.sign_update_sessions.emit(self._sessions)
-        self.sign_set_active_session.emit(self._active_sid)
-        self.sign_set_title.emit("项目分析助手", "f:\\Agent\\agent_workbench")
+        """应用启动：加载主题、会话列表与激活状态。"""
+        theme_name = self._config.theme()
+        theme.set_theme(theme_name)
+        self.sign_theme_changed.emit(theme_name)
+
+        groups = self._session.load_groups()
+        self.sign_update_sessions.emit(groups)
+
+        active = self._session.get_active()
+        if active is None and groups:
+            active = groups[0][2][0]["sid"]
+            self._session.set_active(active)
+        self._active_sid = active
+
+        if active:
+            self.sign_set_active_session.emit(active)
+            self._load_session_view(active)
+        else:
+            self.sign_set_title.emit("项目分析助手", self._project_path)
+
         self.sign_show_analyze_button.emit(True)
 
-    def _find_session(self, sid: str) -> dict | None:
-        for _, _, items in self._sessions:
-            for s in items:
-                if s["sid"] == sid:
-                    return s
-        return None
+    def _load_session_view(self, sid: str) -> None:
+        """加载指定会话的标题与历史消息到 UI。"""
+        session = self._session.manager.get(sid)
+        title = session["title"] if session else "新会话"
+        self.sign_set_title.emit(title, self._project_path)
+        for msg in self._chat.load_history(sid):
+            if msg["role"] == "user":
+                self.sign_chat_user.emit(msg["content"])
+            elif msg["role"] == "ai":
+                self.sign_chat_ai.emit(msg["content"], "")
+
+    def _reload_sessions(self) -> None:
+        """重新加载会话列表并同步激活状态信号。"""
+        self.sign_update_sessions.emit(self._session.load_groups())
+        active = self._session.get_active()
+        if active and active != self._active_sid:
+            self._active_sid = active
+            self.sign_set_active_session.emit(active)
 
     def on_session_selected(self, sid: str) -> None:
         self._active_sid = sid
+        self._session.set_active(sid)
         self.sign_set_active_session.emit(sid)
-        s = self._find_session(sid)
-        if s:
-            self.sign_set_title.emit(s["title"], "f:\\Agent\\agent_workbench")
+        self._load_session_view(sid)
 
     def on_new_session(self) -> None:
-        import uuid
-
-        sid = f"s{uuid.uuid4().hex[:6]}"
-        self._sessions[0][2].insert(0, {"sid": sid, "title": "新会话", "preview": "", "time": "刚刚"})
+        sid = self._session.create("新会话")
         self._active_sid = sid
-        self.sign_update_sessions.emit(self._sessions)
+        self.sign_update_sessions.emit(self._session.load_groups())
         self.sign_set_active_session.emit(sid)
-        self.sign_set_title.emit("新会话", "f:\\Agent\\agent_workbench")
+        self.sign_set_title.emit("新会话", self._project_path)
 
     def on_session_action(self, action: str, sid: str) -> None:
         if action == "delete":
-            for group in self._sessions:
-                group[2][:] = [s for s in group[2] if s["sid"] != sid]
+            self._session.delete(sid)
+            if self._active_sid == sid:
+                self._active_sid = self._session.get_active()
         elif action == "pin":
-            s = self._find_session(sid)
-            if s:
-                s["title"] = "📌 " + s["title"].lstrip("📌 ")
-        self.sign_update_sessions.emit(self._sessions)
+            self._session.pin(sid)
+        elif action == "rename":
+            self._session.rename(sid, "重命名会话")
+        self._reload_sessions()
+        if self._active_sid:
+            self.sign_set_active_session.emit(self._active_sid)
 
     def on_search_text_changed(self, text: str) -> None:
-        text = text.lower()
-        filtered = []
-        for gid, title, items in self._sessions:
-            kept = [s for s in items if text in s["title"].lower() or text in s["preview"].lower()]
-            if kept:
-                filtered.append((gid, title, kept))
-        self.sign_update_sessions.emit(filtered if text else self._sessions)
+        groups = self._session.search(text) if text.strip() else self._session.load_groups()
+        self.sign_update_sessions.emit(groups)
 
     def on_theme_toggled(self, name: str) -> None:
+        self._config.set_theme(name)
         theme.set_theme(name)
         self.sign_theme_changed.emit(name)
 
@@ -112,25 +147,44 @@ class UIController(QObject):
         self.sign_open_file.emit(path)
 
     def on_send_msg(self, text: str) -> None:
+        if not self._active_sid:
+            self.on_new_session()
+        sid = self._active_sid
+        if sid is None:
+            return
+        self._chat.append_message(sid, "user", text)
         self.sign_chat_user.emit(text)
         self.sign_set_streaming.emit(True)
+        self._streaming = True
+        ai_parts: list[str] = []
 
         def _on_event(event: str, payload: dict) -> None:
+            if not self._streaming:
+                return
             if event == "ai_chunk":
+                ai_parts.append(payload["text"])
                 self.sign_chat_ai.emit(payload["text"], "")
             elif event == "ai_end":
+                full = "".join(ai_parts)
+                if full:
+                    self._chat.append_message(sid, "ai", full)
                 self.sign_stream_end.emit()
+                self.sign_set_streaming.emit(False)
+                self._streaming = False
 
         QTimer.singleShot(50, lambda: self._runtime.send_chat(text, _on_event))
 
     def on_stop_msg(self) -> None:
+        self._streaming = False
         self.sign_set_streaming.emit(False)
 
     def on_mode_changed(self, mode: str) -> None:
         self._mode = mode
+        self._config.set_last_mode(mode)
 
     def on_model_changed(self, model: str) -> None:
         self._model = model
+        self._config.set_last_model(model)
 
     def on_export_requested(self) -> None:
         pass
