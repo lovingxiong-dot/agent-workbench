@@ -1,9 +1,13 @@
 """v5 轻量化主窗口：仅 UI 组装 + 单层信号转发。"""
-from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QSplitter
+from PySide6.QtWidgets import (
+    QMainWindow, QWidget, QHBoxLayout, QSplitter, QFileDialog,
+)
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeySequence, QShortcut
 
 from v5.widgets import LeftPanel, ChatArea, RightPanel
 from v5.widgets.base import theme, InvisibleResizeHandle
+from v5.widgets.settings_dialog import SettingsDialog
 from v5.controller.work_controller import WorkController
 
 
@@ -34,6 +38,7 @@ class MainWindow(QMainWindow):
 
         self._left = LeftPanel()
         self._center = ChatArea()
+        self._center.set_modes(self._ctrl.manual_modes)
         self._right = RightPanel()
 
         self._splitter.addWidget(self._left)
@@ -63,10 +68,9 @@ class MainWindow(QMainWindow):
         self._center.sign_stop_msg.connect(self._ctrl.handle_stop_message)
         self._center.sign_mode_changed.connect(self._ctrl.handle_mode_changed)
         self._center.sign_model_changed.connect(self._ctrl.handle_model_changed)
-        self._center.sign_export_requested.connect(self._ctrl.handle_export_requested)
-        self._center.sign_settings_requested.connect(self._ctrl.handle_settings_requested)
-        self._center.sign_toggle_left.connect(self.toggle_left_panel)
-        self._center.sign_toggle_right.connect(self.toggle_right_panel)
+        self._center.sign_export_requested.connect(self._on_export_requested)
+        self._center.sign_settings_requested.connect(self._on_settings_requested)
+        self._center.sign_toggle_right.connect(self.toggle_panels)
 
         self._right.sign_open_file.connect(self._ctrl.handle_open_file)
         self._right.sign_load_url.connect(self._ctrl.handle_load_url)
@@ -85,18 +89,60 @@ class MainWindow(QMainWindow):
         self._ctrl.sign_update_terminal.connect(self._right.update_terminal)
         self._ctrl.sign_switch_tab.connect(self._right.switch_tab)
 
-    def toggle_left_panel(self):
-        if self._left.isVisible():
+        # 全局快捷键
+        QShortcut(QKeySequence("Ctrl+F"), self, activated=self._center._toggle_search)
+        QShortcut(QKeySequence("Ctrl+B"), self, activated=self.toggle_panels)
+        QShortcut(QKeySequence("Esc"), self, activated=self._on_escape_pressed)
+
+    def toggle_panels(self):
+        """同时切换左右面板可见性，中间栏自适应。"""
+        if self._left.isVisible() or self._right.isVisible():
             self._left.hide()
-            self._splitter.setSizes([0, self.width() - self._right.width(), self._right.width()])
+            self._right.hide()
+            self._splitter.setSizes([0, self.width(), 0])
+            self._center._header.set_expanded_state(False)
         else:
             self._left.show()
+            self._right.show()
             self._splitter.setSizes([220, self.width() - 620, 400])
+            self._center._header.set_expanded_state(True)
 
-    def toggle_right_panel(self):
-        self._right.setVisible(not self._right.isVisible())
-        if not self._right.isVisible():
-            self._splitter.setSizes([self._left.width(), self.width() - self._left.width(), 0])
+    def _on_escape_pressed(self):
+        if self._center._search_bar.isVisible():
+            self._center._toggle_search()
+        if self._center._more_dropdown.isVisible():
+            self._center._more_dropdown.hide()
+
+    def _on_export_requested(self):
+        path, selected_filter = QFileDialog.getSaveFileName(
+            self,
+            "导出会话",
+            "",
+            "Markdown (*.md);;JSON (*.json)",
+        )
+        if not path:
+            return
+        fmt = "json" if selected_filter and "JSON" in selected_filter else "markdown"
+        if fmt == "markdown" and not path.lower().endswith(".md"):
+            path += ".md"
+        elif fmt == "json" and not path.lower().endswith(".json"):
+            path += ".json"
+        self._ctrl.export_session(path, fmt)
+
+    def _on_settings_requested(self):
+        dlg = SettingsDialog(self._ctrl._config, modes=self._ctrl.manual_modes, parent=self)
+
+        def _apply():
+            self._ctrl.apply_settings(
+                dlg._theme_box.currentText(),
+                dlg._mode_box.currentText(),
+                dlg._model_box.currentText(),
+            )
+            self._center.set_mode(self._ctrl._current_mode)
+            self._center.set_model(self._ctrl._current_model)
+
+        dlg.settings_applied.connect(_apply)
+        dlg.exec()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:

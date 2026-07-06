@@ -46,6 +46,12 @@ V5_THEMES = {
         "stop_btn":          "#E5484D",
         "stop_btn_hover":    "#FF6B6B",
         "tag_text":          "#B0B8D4",
+        "header_btn_bg":     "#2a2a4a",
+        "header_btn_hover":  "#3a3a5a",
+        "header_btn_active": "#0f3460",
+        "header_icon":       "#a0a0b0",
+        "search_bar_bg":     "#16213e",
+        "search_bar_border": "#2a2a4a",
     },
     "light": {
         "bg_primary":        "#F6F8FF",
@@ -82,6 +88,12 @@ V5_THEMES = {
         "stop_btn":          "#E5484D",
         "stop_btn_hover":    "#C23A3E",
         "tag_text":          "#4A5378",
+        "header_btn_bg":     "#e9ecef",
+        "header_btn_hover":  "#dee2e6",
+        "header_btn_active": "#ced4da",
+        "header_icon":       "#6c757d",
+        "search_bar_bg":     "#ffffff",
+        "search_bar_border": "#dee2e6",
     },
 }
 

@@ -18,9 +18,14 @@ class ChatItem(QGraphicsItem):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._h = 0.0
+        self._highlight = False
 
     def height(self) -> float:
         return self._h
+
+    def set_highlight(self, active: bool):
+        self._highlight = active
+        self.update()
 
     def boundingRect(self) -> QRectF:
         return QRectF(0, 0, ChatScene.CHAT_W, self._h)
@@ -48,6 +53,8 @@ class UserBubble(ChatItem):
 
     def paint(self, painter, option, widget=None):
         painter.setRenderHint(QPainter.Antialiasing)
+        if self._highlight:
+            painter.fillRect(self.boundingRect(), QColor("#F4D03F33"))
         path = QPainterPath()
         path.addRoundedRect(self._brect, 8, 8)
         painter.fillPath(path, qcolor(C["accent"]))
@@ -97,6 +104,8 @@ class FoldBlock(ChatItem):
 
     def paint(self, painter, option, widget=None):
         painter.setRenderHint(QPainter.Antialiasing)
+        if self._highlight:
+            painter.fillRect(self.boundingRect(), QColor("#F4D03F33"))
         y0 = 0.0
 
         if self._expanded:
@@ -343,6 +352,8 @@ class TextItem(ChatItem):
 
     def paint(self, painter, option, widget=None):
         painter.setRenderHint(QPainter.Antialiasing)
+        if self._highlight:
+            painter.fillRect(self.boundingRect(), QColor("#F4D03F33"))
         painter.setFont(font(10))
         painter.setPen(qcolor(C[self._color_key]))
         to = QTextOption()
@@ -370,6 +381,8 @@ class SystemCard(ChatItem):
 
     def paint(self, painter, option, widget=None):
         painter.setRenderHint(QPainter.Antialiasing)
+        if self._highlight:
+            painter.fillRect(self.boundingRect(), QColor("#F4D03F33"))
         cp = QPainterPath()
         cp.addRoundedRect(self._crect, 8, 8)
         painter.fillPath(cp, qcolor(C["bg_card"]))

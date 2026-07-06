@@ -45,7 +45,7 @@ venv\Scripts\Activate.ps1
 python -m pytest tests/ -v
 ```
 
-全部 **240 个单元 / 集成 / UI 测试** 通过。
+全部 **319 个单元 / 集成 / UI 测试** 通过。
 
 ---
 

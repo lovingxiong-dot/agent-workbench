@@ -1,5 +1,26 @@
 # Changelog
 
+## v5.0.19-alpha (2026-07-06) — V5 模式列表统一与全量测试补齐
+
+### fix
+- 修复 `v5/widgets/chat_area.py` 硬编码模式列表 `["ask", "plan", "build", "review"]` 与引擎 `PHASE_FLOW` 不一致的 Bug。
+- 新增 `WorkController.manual_modes` 属性，从 `config.yaml` 的 `manual_modes` 键动态读取引擎支持的模式，默认回退 `["ask", "plan", "craft"]`。
+- `ChatArea` / `SettingsDialog` 改为从 Controller 注入模式列表，避免 UI 层与引擎不一致。
+
+### refactor
+- 将 `v5/service/adapter.py` 中的 `_ChatWorker` 拆分为独立模块 `v5/service/chat_worker.py`，保持对外接口不变。
+- 删除未使用的 `v5/model/events.py`。
+
+### test
+- 新增 `tests/test_v5_chat_area.py`（55 用例），覆盖 HeaderBar / SearchBar / MoreDropdown / InputArea / ChatArea UI 组件。
+- 新增 `tests/test_v5_adapter.py`（16 用例），覆盖 V5Adapter 回调注册、会话操作转发、消息总线事件处理。
+- 新增 `tests/test_v5_integration.py`（7 用例），端到端验证 Controller + ChatService + SessionService + Adapter 链路。
+- 全量测试：`pytest tests/` 319/319 通过。
+
+### build
+- 修复 `AgentWorkbenchV5.spec` 隐藏导入错误：移除不存在的 `v5.model.events`，添加 `v5.service.chat_worker`。
+- PyInstaller 重新打包 `dist/AgentWorkbench/AgentWorkbench.exe`，验证 exe 可独立启动并创建主窗口。
+
 ## v5.0.9-alpha (2026-07-06) — P10 清理旧 UI 与打包验证
 
 ### chore/p10-cleanup

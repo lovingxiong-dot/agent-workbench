@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
     QTextEdit, QGraphicsView, QFrame, QSizePolicy, QApplication,
 )
-from PySide6.QtCore import Qt, Signal, QTimer, QPoint, QSize, QEvent
+from PySide6.QtCore import Qt, Signal, QTimer, QPoint, QSize, QEvent, QRectF
 from PySide6.QtGui import QPainter, QPen, QColor, QIcon, QPixmap
 from .base import theme, V5_THEMES, C, font, qcolor, svg_icon
 from .chat_scene import ChatScene
@@ -87,7 +87,22 @@ class MoreDropdown(QWidget):
         layout.addWidget(settings_lbl)
 
         self.setFixedHeight(306)
+        self.setFocusPolicy(Qt.StrongFocus)
         self.hide()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.setFocus()
+
+    def focusOutEvent(self, event):
+        self.hide()
+        super().focusOutEvent(event)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.hide()
+        else:
+            super().keyPressEvent(event)
 
     def position_under(self, btn: QWidget):
         """将下拉面板定位到给定按钮正下方、右对齐（在父控件内）。"""
@@ -119,15 +134,14 @@ class MoreDropdown(QWidget):
 # ══════════════════════════════════════════════════════════════
 
 class HeaderBar(QWidget):
-    left_expand_toggled = Signal()
     expand_toggled = Signal()
     search_clicked = Signal()
-    search_text_changed = Signal(str)
     more_clicked = Signal()
     double_clicked = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._expanded = True
         self._setup_ui()
         theme.changed.connect(self._refresh_theme)
 
@@ -137,15 +151,9 @@ class HeaderBar(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # 左侧折叠按钮（与右侧对称）
-        self._left_expand_btn = self._icon_btn("折叠左侧面板")
-        self._left_expand_btn.clicked.connect(self.left_expand_toggled.emit)
-        layout.addWidget(self._left_expand_btn)
-        layout.addSpacing(4)
-
         # 双行标题（SVG: title y=16, env y=30）
         title_block = QVBoxLayout()
-        title_block.setContentsMargins(6, 4, 0, 4)
+        title_block.setContentsMargins(12, 4, 0, 4)
         title_block.setSpacing(2)
 
         self._title_lbl = QLabel("新会话")
@@ -163,46 +171,22 @@ class HeaderBar(QWidget):
         title_block.addWidget(self._status_lbl)
         layout.addLayout(title_block, 1)
 
-        # 垂直分隔线（SVG: x1=331）
+        # 垂直分隔线（SVG: x1=553, h=24）
         self._vsep = QLabel()
         self._vsep.setFixedSize(1, 24)
         layout.addWidget(self._vsep)
         layout.addSpacing(6)
 
-        # 搜索输入栏（初始隐藏，点击🔍展开，位于分隔线与按钮区之间）
-        self._search_input = QLineEdit()
-        self._search_input.setFixedHeight(24)
-        self._search_input.setPlaceholderText("搜索会话内容...")
-        self._search_input.hide()
-        self._search_input.textChanged.connect(self.search_text_changed.emit)
-        self._search_input.setStyleSheet(
-            f"QLineEdit {{ background-color: {C['bg_card']}; color: {C['text_primary']}; "
-            f"border: 0.5px solid {C['accent']}; border-radius: 6px; padding: 2px 8px; font-size: 11px; }}"
-        )
-        layout.addWidget(self._search_input, 1)
-
-        self._search_close = QPushButton("✕")
-        self._search_close.setFixedSize(20, 22)
-        self._search_close.setCursor(Qt.PointingHandCursor)
-        self._search_close.hide()
-        self._search_close.setStyleSheet(
-            f"QPushButton {{ background-color: transparent; color: {C['text_muted']}; "
-            f"border: none; font-size: 10px; }}"
-            f"QPushButton:hover {{ color: {C['text_primary']}; }}"
-        )
-        layout.addWidget(self._search_close)
-
         self._btn_block = QWidget()
         btn_hl = QHBoxLayout(self._btn_block)
         btn_hl.setContentsMargins(0, 0, 0, 0)
-        btn_hl.setSpacing(8)  # 拉开按钮间隔
+        btn_hl.setSpacing(4)
 
-        self._search_btn = self._icon_btn("搜索")
+        self._search_btn = self._icon_btn("搜索 (Ctrl+F)")
         self._search_btn.clicked.connect(self.search_clicked.emit)
-        self._search_close.clicked.connect(lambda: self.search_clicked.emit())
         self._more_btn = self._icon_btn("更多操作")
         self._more_btn.clicked.connect(self.more_clicked.emit)
-        self._expand_btn = self._icon_btn("折叠右侧面板")
+        self._expand_btn = self._icon_btn("展开/收起面板 (Ctrl+B)")
         self._expand_btn.clicked.connect(self.expand_toggled.emit)
 
         btn_hl.addWidget(self._search_btn)
@@ -214,19 +198,25 @@ class HeaderBar(QWidget):
         self._refresh_theme()
 
     def _icon_btn(self, tooltip: str) -> QPushButton:
-        """18×22 图标按钮：透明背景，仅保留图标；hover 微亮。"""
+        """18×22 图标按钮：规范背景三态 + 圆角 4px。"""
         btn = QPushButton()
         btn.setFixedSize(18, 22)
         btn.setToolTip(tooltip)
         btn.setCursor(Qt.PointingHandCursor)
         btn.setStyleSheet(
-            f"QPushButton {{ background-color: transparent; border: none; border-radius: 4px; }}"
-            f"QPushButton:hover {{ background-color: {C['bg_hover']}; }}"
+            f"QPushButton {{ background-color: {C['header_btn_bg']}; border: none; border-radius: 4px; }}"
+            f"QPushButton:hover {{ background-color: {C['header_btn_hover']}; }}"
+            f"QPushButton:pressed {{ background-color: {C['header_btn_active']}; }}"
         )
         lbl = QLabel(btn)
         lbl.setObjectName("icon_lbl")
-        lbl.move(0, 1)
+        lbl.setAlignment(Qt.AlignCenter)
+        lbl.setGeometry(0, 0, 18, 22)
         return btn
+
+    def set_expanded_state(self, expanded: bool):
+        self._expanded = expanded
+        self._refresh_theme()
 
     def _refresh_theme(self):
         self.setStyleSheet(f"background-color: {C['bg_primary']};")
@@ -235,44 +225,29 @@ class HeaderBar(QWidget):
         self._status_lbl.setStyleSheet(f"color: {C['accent_blue']}; background: transparent;")
         self._vsep.setStyleSheet(f"background-color: {C['border']};")
 
-        # 搜索框 & 文件面板主题
-        self._search_input.setStyleSheet(
-            f"QLineEdit {{ background-color: {C['bg_card']}; color: {C['text_primary']}; "
-            f"border: 0.5px solid {C['accent']}; border-radius: 6px; padding: 2px 8px; font-size: 11px; }}"
-        )
-
-        stroke = C['text_secondary'] if theme.name == "dark" else C['text_label']
-        # Apple 风格搜索图标: 偏心圆 + 粗短手柄
-        search_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18">
-            <circle cx="8" cy="7.5" r="4.5" fill="none" stroke="{stroke}" stroke-width="1.4"/>
-            <line x1="11.2" y1="10.7" x2="15.5" y2="15" stroke="{stroke}" stroke-width="1.8" stroke-linecap="round"/>
+        stroke = C['header_icon']
+        search_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="18" height="22" viewBox="0 0 18 22">
+            <path d="M 5 6 a 3.5 3.5 0 1 0 0 7 a 3.5 3.5 0 1 0 0 -7 M 8 13 L 11 16" fill="none" stroke="{stroke}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>'''
-        more_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
-            <circle cx="6" cy="10" r="1.2" fill="{stroke}"/>
-            <circle cx="10" cy="10" r="1.2" fill="{stroke}"/>
-            <circle cx="14" cy="10" r="1.2" fill="{stroke}"/>
+        more_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="18" height="22" viewBox="0 0 18 22">
+            <circle cx="5" cy="7" r="1.2" fill="{stroke}"/>
+            <circle cx="9" cy="7" r="1.2" fill="{stroke}"/>
+            <circle cx="13" cy="7" r="1.2" fill="{stroke}"/>
         </svg>'''
-        # 左侧折叠图标: 窗格框体 + 左侧纵向分割线
-        left_expand_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18">
-            <rect x="2" y="3" width="14" height="12" rx="2" fill="none" stroke="{stroke}" stroke-width="1.5"/>
-            <line x1="6" y1="5.5" x2="6" y2="12.5" stroke="{stroke}" stroke-width="1.2" stroke-linecap="round"/>
-        </svg>'''
-        # 右侧折叠图标: 窗格框体 + 纵向分割线，表达"右侧面板可折叠"
-        expand_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18">
-            <rect x="2" y="3" width="14" height="12" rx="2" fill="none" stroke="{stroke}" stroke-width="1.5"/>
-            <line x1="12" y1="5.5" x2="12" y2="12.5" stroke="{stroke}" stroke-width="1.2" stroke-linecap="round"/>
-        </svg>'''
-        for btn, svg in [(self._left_expand_btn, left_expand_svg),
-                         (self._search_btn, search_svg),
+        if self._expanded:
+            expand_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="18" height="22" viewBox="0 0 18 22">
+                <path d="M 6 4 L 11 4 L 11 9 M 6 10 L 11 10 L 11 5" fill="none" stroke="{stroke}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>'''
+        else:
+            expand_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="18" height="22" viewBox="0 0 18 22">
+                <path d="M 8 4 L 3 4 L 3 9 M 8 10 L 3 10 L 3 5" fill="none" stroke="{stroke}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>'''
+        for btn, svg in [(self._search_btn, search_svg),
                          (self._more_btn, more_svg),
                          (self._expand_btn, expand_svg)]:
             lbl = btn.findChild(QLabel, "icon_lbl")
             if lbl:
                 lbl.setPixmap(svg_icon(svg, 18, 22))
-            btn.setStyleSheet(
-                f"QPushButton {{ background-color: transparent; border: none; border-radius: 4px; }}"
-                f"QPushButton:hover {{ background-color: {C['bg_hover']}; }}"
-            )
 
     # ── 窗口拖动 & 双击最大化 ──
 
@@ -293,6 +268,92 @@ class HeaderBar(QWidget):
 
     def mouseDoubleClickEvent(self, event):
         self.double_clicked.emit()
+
+
+# ══════════════════════════════════════════════════════════════
+# 搜索条（浮动在标题栏下方）
+# ══════════════════════════════════════════════════════════════
+
+class SearchBar(QWidget):
+    search_text_changed = Signal(str)
+    next_match = Signal()
+    prev_match = Signal()
+    closed = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setFixedHeight(28)
+        self._setup_ui()
+        theme.changed.connect(self._refresh_theme)
+
+    def _setup_ui(self):
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 0, 8, 0)
+        layout.setSpacing(4)
+
+        self._input = QLineEdit()
+        self._input.setPlaceholderText("搜索会话内容...")
+        self._input.textChanged.connect(self.search_text_changed.emit)
+        layout.addWidget(self._input, 1)
+
+        self._prev_btn = self._small_btn("↑")
+        self._next_btn = self._small_btn("↓")
+        self._close_btn = self._small_btn("✕")
+        self._prev_btn.clicked.connect(self.prev_match.emit)
+        self._next_btn.clicked.connect(self.next_match.emit)
+        self._close_btn.clicked.connect(self.closed.emit)
+        layout.addWidget(self._prev_btn)
+        layout.addWidget(self._next_btn)
+        layout.addWidget(self._close_btn)
+
+        self._refresh_theme()
+
+    def _small_btn(self, text: str) -> QPushButton:
+        btn = QPushButton(text)
+        btn.setFixedSize(18, 18)
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setStyleSheet(
+            f"QPushButton {{ background-color: transparent; color: {C['text_secondary']}; "
+            f"border: none; border-radius: 4px; font-size: 10px; }}"
+            f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
+        )
+        return btn
+
+    def _refresh_theme(self):
+        self.setStyleSheet(
+            f"QWidget {{ background-color: {C['search_bar_bg']}; "
+            f"border: 1px solid {C['search_bar_border']}; border-radius: 6px; }}"
+            f"QLineEdit {{ background: transparent; color: {C['text_primary']}; "
+            f"border: none; font-size: 12px; }}"
+            f"QLineEdit::placeholder {{ color: {C['text_muted']}; }}"
+        )
+        for btn in (self._prev_btn, self._next_btn, self._close_btn):
+            btn.setStyleSheet(
+                f"QPushButton {{ background-color: transparent; color: {C['text_secondary']}; "
+                f"border: none; border-radius: 4px; font-size: 10px; }}"
+                f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
+            )
+
+    def setFocus(self):
+        self._input.setFocus()
+
+    def text(self) -> str:
+        return self._input.text()
+
+    def clear(self):
+        self._input.clear()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.closed.emit()
+        elif event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            if event.modifiers() & Qt.ShiftModifier:
+                self.prev_match.emit()
+            else:
+                self.next_match.emit()
+        else:
+            super().keyPressEvent(event)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -523,8 +584,12 @@ class ChatArea(QWidget):
         self._rebuild_timer.timeout.connect(self._debounced_rebuild)
         self._current_mode = "ask"
         self._current_model = "tool-agent"
+        self._modes = ["ask", "plan", "craft"]
         self._setup_ui()
         self._chat_history = []
+        self._search_keyword = ""
+        self._search_matches = []
+        self._search_current = -1
         self._initialized = True
         theme.changed.connect(self._refresh_theme)
 
@@ -537,7 +602,6 @@ class ChatArea(QWidget):
         self._header = HeaderBar()
         self._header.search_clicked.connect(self._toggle_search)
         self._header.more_clicked.connect(self._toggle_file_panel)
-        self._header.left_expand_toggled.connect(self.sign_toggle_left.emit)
         self._header.expand_toggled.connect(self.sign_toggle_right.emit)
         layout.addWidget(self._header)
 
@@ -586,6 +650,14 @@ class ChatArea(QWidget):
         self._resize_handle.bind(self._view, self._input, self._debounced_rebuild)
         self.setStyleSheet(f"background-color: {C['bg_primary']};")
 
+        # 浮动搜索条（标题栏下方，子控件覆盖）
+        self._search_bar = SearchBar(self)
+        self._search_bar.hide()
+        self._search_bar.search_text_changed.connect(self._on_search_text_changed)
+        self._search_bar.next_match.connect(self._on_search_next)
+        self._search_bar.prev_match.connect(self._on_search_prev)
+        self._search_bar.closed.connect(self._hide_search)
+
         # "..." 下拉面板（内嵌子控件，跟随主窗口，非独立顶层窗口）
         self._more_dropdown = MoreDropdown(self)
         self._more_dropdown.export_requested.connect(self.sign_export_requested.emit)
@@ -601,18 +673,25 @@ class ChatArea(QWidget):
         self._input.model_clicked.connect(self._on_model_clicked)
 
     def _on_send_clicked(self):
-        text = self._input.input_field.toPlainText().strip()
+        text = self.input_field.toPlainText().strip()
         if not text:
             return
-        self._input.input_field.clear()
+        self.input_field.clear()
         self.sign_send_msg.emit(text)
 
     def _on_mode_clicked(self):
-        modes = ["ask", "plan", "build", "review"]
-        idx = modes.index(self._current_mode) if self._current_mode in modes else 0
-        self._current_mode = modes[(idx + 1) % len(modes)]
+        idx = self._modes.index(self._current_mode) if self._current_mode in self._modes else 0
+        self._current_mode = self._modes[(idx + 1) % len(self._modes)]
         self._input.set_mode(self._current_mode)
         self.sign_mode_changed.emit(self._current_mode)
+
+    def set_modes(self, modes: list[str]):
+        """由 MainWindow 传入引擎实际支持的模式列表。"""
+        if modes:
+            self._modes = list(modes)
+            if self._current_mode not in self._modes:
+                self._current_mode = self._modes[0]
+                self._input.set_mode(self._current_mode)
 
     def _on_model_clicked(self):
         models = ["tool-agent", "flash", "deepseek-pro"]
@@ -649,9 +728,11 @@ class ChatArea(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        # 下拉面板随窗口 resize 重新定位
+        # 下拉面板/搜索条随窗口 resize 重新定位
         if hasattr(self, '_more_dropdown') and self._more_dropdown.isVisible():
             self._more_dropdown.position_under(self._header._more_btn)
+        if hasattr(self, '_search_bar') and self._search_bar.isVisible():
+            self._search_bar.setGeometry(8, 42, self.width() - 16, 28)
         if self._initialized:
             new_w = self._view.viewport().width() if self._view.viewport() else self.width()
             if abs(new_w - ChatScene.CHAT_W) > 4:
@@ -684,37 +765,45 @@ class ChatArea(QWidget):
     def _render(self):
         """根据 _chat_history 渲染聊天区。"""
         self._scene.clear_items()
-        for entry in self._chat_history:
+        for idx, entry in enumerate(self._chat_history):
             role = entry.get("role")
             if role == "user":
-                self._scene.add_chat_item(UserBubble(entry["text"]))
+                item = UserBubble(entry["text"])
+                item._history_index = idx
+                self._scene.add_chat_item(item)
             elif role == "system":
-                self._scene.add_chat_item(SystemCard(entry["text"]))
+                item = SystemCard(entry["text"])
+                item._history_index = idx
+                self._scene.add_chat_item(item)
             elif role == "ai":
-                self._add_ai_entry(entry)
+                self._add_ai_entry(entry, idx)
             elif role == "tool":
-                self._add_tool_entry(entry)
+                self._add_tool_entry(entry, idx)
         self._scene.refresh()
         self._scroll_to_bottom()
 
-    def _add_ai_entry(self, entry: dict):
+    def _add_ai_entry(self, entry: dict, idx: int):
         thinking = _strip_html(entry.get("thinking", ""))
         if thinking:
             fold = FoldBlock("思考过程", "")
             txt = TextItem(thinking, color_key="text_secondary")
             fold.set_body([txt], txt.height())
+            fold._history_index = idx
             self._scene.add_chat_item(fold)
         body = _strip_html(entry.get("body", ""))
         if body:
-            self._scene.add_chat_item(TextItem(body, color_key="text_primary"))
+            item = TextItem(body, color_key="text_primary")
+            item._history_index = idx
+            self._scene.add_chat_item(item)
 
-    def _add_tool_entry(self, entry: dict):
+    def _add_tool_entry(self, entry: dict, idx: int):
         plain = _strip_html(entry.get("html", ""))
         if not plain:
             return
         fold = FoldBlock("工具执行", "")
         txt = TextItem(plain, color_key="text_secondary")
         fold.set_body([txt], txt.height())
+        fold._history_index = idx
         self._scene.add_chat_item(fold)
 
     # ══════════════════════════════════════════════════════════════
@@ -861,15 +950,70 @@ class ChatArea(QWidget):
         return "\n".join(parts)
 
     def _toggle_search(self):
-        """切换搜索框显隐"""
-        if self._header._search_input.isHidden():
-            self._header._search_input.show()
-            self._header._search_close.show()
-            self._header._search_input.setFocus()
+        """切换浮动搜索条显隐。"""
+        if self._search_bar.isHidden():
+            self._search_bar.setGeometry(8, 42, self.width() - 16, 28)
+            self._search_bar.show()
+            self._search_bar.raise_()
+            self._search_bar.setFocus()
         else:
-            self._header._search_input.hide()
-            self._header._search_close.hide()
-            self._header._search_input.clear()
+            self._hide_search()
+
+    def _hide_search(self):
+        self._search_bar.hide()
+        self._search_bar.clear()
+        self._on_search_text_changed("")
+
+    def _on_search_text_changed(self, text: str):
+        keyword = text.strip().lower()
+        self._search_keyword = keyword
+        self._search_matches = []
+        matched_indices = set()
+        for idx, entry in enumerate(self._chat_history):
+            content = ""
+            role = entry.get("role")
+            if role == "user":
+                content = entry.get("text", "")
+            elif role in ("ai", "ai_stream"):
+                content = entry.get("body", "")
+            elif role == "system":
+                content = entry.get("text", "")
+            elif role == "tool":
+                content = entry.get("html", "")
+            if keyword and keyword in content.lower():
+                matched_indices.add(idx)
+                self._search_matches.append(idx)
+        for item in self._scene._items:
+            if hasattr(item, "set_highlight"):
+                item.set_highlight(getattr(item, "_history_index", -1) in matched_indices)
+        self._scene.refresh()
+        if self._search_matches:
+            self._search_current = 0
+            self._scroll_to_item(self._search_matches[0])
+
+    def _on_search_next(self):
+        if not self._search_matches:
+            return
+        self._search_current = (self._search_current + 1) % len(self._search_matches)
+        self._scroll_to_item(self._search_matches[self._search_current])
+
+    def _on_search_prev(self):
+        if not self._search_matches:
+            return
+        self._search_current = (self._search_current - 1) % len(self._search_matches)
+        self._scroll_to_item(self._search_matches[self._search_current])
+
+    def _scroll_to_item(self, idx: int):
+        target = None
+        for item in self._scene._items:
+            if getattr(item, "_history_index", -1) == idx:
+                target = item
+                break
+        if target is None:
+            return
+        y = int(target.y())
+        vsb = self._view.verticalScrollBar()
+        vsb.setValue(y)
 
     def _toggle_file_panel(self):
         """点击 ... 切换下拉面板显隐（内嵌子控件，跟随主窗口）。"""

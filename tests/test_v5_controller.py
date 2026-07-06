@@ -102,3 +102,12 @@ class TestV5Controller:
             assert ctrl._config.get("app.theme") == target
         finally:
             ctrl.handle_switch_theme(original)
+
+    def test_manual_modes_match_engine(self, tmp_path):
+        ctrl = self._make_controller(tmp_path)
+        modes = ctrl.manual_modes
+        assert isinstance(modes, list)
+        assert "craft" in modes
+        assert "build" not in modes
+        assert "review" not in modes
+        assert set(modes) == {"ask", "plan", "craft"}

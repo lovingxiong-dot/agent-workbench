@@ -1,4 +1,7 @@
 """v5 唯一业务中枢。"""
+import json
+from datetime import datetime, timezone
+
 from PySide6.QtCore import QObject, Signal
 
 from v5.service.config_service import ConfigService
@@ -138,13 +141,60 @@ class WorkController(QObject):
         self._config.set("app.last_model", model)
         self._config.save()
 
-    def handle_export_requested(self):
-        # TODO: export current session to file
-        pass
+    def export_session(self, path: str, format: str = "markdown") -> bool:
+        """导出当前会话到 path。format 支持 'markdown' / 'json'。"""
+        sid = self._active_session_id
+        if not sid:
+            return False
+        session = self._session_service.get_session(sid)
+        if not session:
+            return False
+        messages = self._session_service.list_messages(sid)
+        try:
+            fmt = format.lower()
+            if fmt == "json":
+                data = {
+                    "session_id": sid,
+                    "title": session.title,
+                    "exported_at": datetime.now(timezone.utc).isoformat(),
+                    "messages": messages,
+                }
+                text = json.dumps(data, ensure_ascii=False, indent=2)
+            else:
+                lines = [f"# {session.title}"]
+                for m in messages:
+                    if isinstance(m, dict):
+                        role = m.get("role", "unknown")
+                        content = m.get("content", "")
+                    else:
+                        role = getattr(m, "role", "unknown")
+                        content = getattr(m, "content", "")
+                    lines.append(f"**{role}**：{content}")
+                text = "\n\n".join(lines)
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)
+            return True
+        except Exception:
+            return False
 
-    def handle_settings_requested(self):
-        # TODO: open settings dialog
-        pass
+    @property
+    def manual_modes(self) -> list[str]:
+        """返回引擎实际支持的模式列表，供 UI 层统一使用。"""
+        raw = self._config.raw_config
+        modes = raw.get("manual_modes", {})
+        if isinstance(modes, dict) and modes:
+            return list(modes.keys())
+        return ["ask", "plan", "craft"]
+
+    def apply_settings(self, theme_name: str, mode: str, model: str):
+        """设置对话框保存后调用：应用并持久化配置。"""
+        theme.set_theme(theme_name)
+        self._current_mode = mode
+        self._current_model = model
+        self._config.set("app.theme", theme_name)
+        self._config.set("app.last_mode", mode)
+        self._config.set("app.last_model", model)
+        self._config.save()
 
     def handle_open_file(self, path: str):
         self.sign_open_file_right.emit(path)

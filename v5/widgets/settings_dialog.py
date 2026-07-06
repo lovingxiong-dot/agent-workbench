@@ -10,9 +10,10 @@ class SettingsDialog(QDialog):
     """轻量设置对话框：主题、默认模式、默认模型。"""
     settings_applied = Signal()
 
-    def __init__(self, config, parent=None):
+    def __init__(self, config, modes: list[str] = None, parent=None):
         super().__init__(parent, Qt.WindowType.Dialog)
         self._config = config
+        self._modes = modes or ["ask", "plan", "craft"]
         self.setWindowTitle("设置")
         self.setFixedWidth(320)
         self._setup_ui()
@@ -37,7 +38,7 @@ class SettingsDialog(QDialog):
         mode_row = QHBoxLayout()
         mode_row.addWidget(self._label("默认模式"))
         self._mode_box = QComboBox()
-        self._mode_box.addItems(["ask", "plan", "craft"])
+        self._mode_box.addItems(self._modes)
         mode_row.addWidget(self._mode_box, 1)
         layout.addLayout(mode_row)
 
