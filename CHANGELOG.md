@@ -1,5 +1,27 @@
 # Changelog
 
+## v6.5.5-alpha (2026-07-07) — V6.5 Runtime Foundation Layer：状态机固化
+
+### feat
+- 明确 V6.5 阶段定位为 **Runtime Foundation Layer**，V7 为 Runtime Kernel，V8 为 Distributed Agent Runtime。
+- 新增 `v6/runtime/state_machine.py`：定义 `RuntimeStateMachine`，固化 `RuntimeState` 生命周期迁移规则。
+- 支持状态：`CREATED` / `QUEUED` / `RUNNING` / `WAITING` / `PAUSED` / `CANCELLED` / `COMPLETED` / `FAILED`。
+- 支持重试语义：`FAILED -> QUEUED`。
+- 终态无出边：`COMPLETED`、`CANCELLED`。
+- 非法迁移抛出 `RuntimeStateTransitionError`。
+
+### test
+- 新增 `tests/v6/test_runtime_state_machine.py`，覆盖 10 个迁移场景：
+  - `CREATED -> QUEUED / CANCELLED` 合法，`CREATED -> RUNNING / COMPLETED` 非法。
+  - `QUEUED -> RUNNING` 合法。
+  - `RUNNING -> WAITING / PAUSED / CANCELLED / COMPLETED / FAILED` 全部合法。
+  - `WAITING -> RUNNING / CANCELLED / FAILED` 合法。
+  - `PAUSED -> RUNNING / CANCELLED` 合法。
+  - `FAILED -> QUEUED` 重试合法。
+  - 终态无出边。
+  - 非法迁移报错且错误信息含状态名。
+- V6 全量测试 `pytest tests/v6/` 116/116 通过。
+
 ## v6.5.4-alpha (2026-07-07) — Runtime Kernel 预备层：Metrics / Result / State / EngineManager
 
 ### feat
