@@ -1,5 +1,10 @@
 # Changelog
 
+## v5.0.22-alpha (2026-07-06) — 补充 Git 忽略规则
+
+### chore
+- 更新 `.gitignore`，排除 `.reference/`、`.scripts/`、`review/` 等本地参考仓库、调试脚本和归档目录，保持 `git status` 干净。
+
 ## v5.0.21-alpha (2026-07-06) — 工作区整理与文档同步
 
 ### chore
