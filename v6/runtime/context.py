@@ -54,6 +54,9 @@ class RuntimeContext:
     messages: List[ChatMessage] = field(default_factory=list)
     tool_calls: List[Dict[str, Any]] = field(default_factory=list)
 
+    # Engine 执行请求载荷。EngineManager 在调度时写入，Engine.execute(ctx) 从 ctx.request 读取。
+    request: Any = None
+
     # 统计信息（Statistics）与最终输出（Output）
     # 当前挂载在 Context 上，未来可平滑迁移到 RuntimeTask.metrics / RuntimeTask.result。
     metrics: RuntimeMetrics = field(default_factory=RuntimeMetrics)
@@ -125,6 +128,7 @@ class RuntimeContext:
             self.project_path = snapshot.get("project_path", "")
             self.memory = copy.deepcopy(snapshot.get("memory", {}))
             self.tool_calls = copy.deepcopy(snapshot.get("tool_calls", []))
+            self.request = copy.deepcopy(snapshot.get("request"))
             self.metrics = self._restore_metrics(snapshot.get("metrics"))
             self.result = self._restore_result(snapshot.get("result"))
             self.metadata = copy.deepcopy(snapshot.get("metadata", {}))
@@ -158,6 +162,7 @@ class RuntimeContext:
             self.memory.clear()
             self.messages.clear()
             self.tool_calls.clear()
+            self.request = None
             self.metrics.reset()
             self.result.reset()
             self.trace.clear()
@@ -180,6 +185,7 @@ class RuntimeContext:
                 memory=copy.deepcopy(self.memory),
                 messages=copy.deepcopy(self.messages),
                 tool_calls=copy.deepcopy(self.tool_calls),
+                request=copy.deepcopy(self.request),
                 metrics=RuntimeMetrics(**self.metrics.snapshot()),
                 result=RuntimeResult(**self.result.snapshot()),
                 metadata=copy.deepcopy(self.metadata),
@@ -243,6 +249,7 @@ class RuntimeContext:
             "memory": copy.deepcopy(self.memory),
             "messages": [copy.deepcopy(m.__dict__) for m in self.messages],
             "tool_calls": copy.deepcopy(self.tool_calls),
+            "request": copy.deepcopy(self.request),
             "metrics": self.metrics.snapshot(),
             "result": self.result.snapshot(),
             "trace": self.trace.snapshot(),

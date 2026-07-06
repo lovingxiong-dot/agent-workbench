@@ -1,5 +1,34 @@
 # Changelog
 
+## v6.5.7-alpha (2026-07-07) — Step 3：Engine Protocol 与 EngineManager 生命周期
+
+### feat
+- 新增 `v6/runtime/engine_state.py`：定义 `EngineState` 枚举，与 `RuntimeState` 分离。
+  - 生命周期链：`CREATED -> LOADING -> LOADED -> INITIALIZING -> READY -> RUNNING -> STOPPING -> STOPPED`
+  - 异常状态：`DEGRADED`、`ERROR`
+- 新增 `v6/runtime/engines/protocol.py`：
+  - `Engine` Protocol：`load()` / `initialize(ctx)` / `health_check()` / `execute(ctx)` / `shutdown()`
+  - `EngineDescriptor`：name / version / capabilities / dependencies / state / instance / metadata
+  - `EngineNotReadyError`：execute 阶段状态校验异常
+- `RuntimeContext` 新增 `request` 字段：作为 Engine 执行请求载荷容器，`EngineManager.execute()` 调用前由调用方写入 `ctx.request`，Engine 从 `ctx.request` 读取。
+- 重构 `v6/runtime/engine_manager.py`：
+  - `register(engine)` 注册 Engine 实例，自动创建 `EngineDescriptor` 与状态。
+  - 支持完整生命周期：`load()` / `initialize(ctx)` / `health_check()` / `execute(name, ctx)` / `shutdown()`。
+  - 支持批量操作：`initialize_all(ctx)` / `health_check_all()` / `shutdown_all()`。
+  - `execute()` 入口自动调用 `RuntimeTrace.timed_step()` 记录 Engine Timeline。
+  - 生命周期异常时自动迁移到 `ERROR` 状态。
+
+### refactor
+- Engine 公共接口统一为单 `RuntimeContext` 入口：
+  - 禁止 `Engine.execute(request, ctx)` 双参数设计。
+  - 所有 Engine 通过 `ctx.request` / `ctx.metrics` / `ctx.trace` / `ctx.result` 协作。
+
+### test
+- 新增/更新 Engine 测试共 26 个：
+  - `tests/v6/test_engine_protocol.py`：Protocol、Descriptor、Error 共 6 个测试。
+  - `tests/v6/test_v6_engine_manager.py`：注册、生命周期、健康检查、执行、Trace 记录、失败转 ERROR 共 20 个测试。
+- V6 全量测试 `pytest tests/v6/` **144/144 通过**。
+
 ## v6.5.6-alpha (2026-07-07) — Step 2：RuntimeTrace + Metrics 联动
 
 ### feat
