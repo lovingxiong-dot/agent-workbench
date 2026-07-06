@@ -1,17 +1,19 @@
 # V6 项目蓝图
 
 ## 元信息
-| 项目名称 | AI Agent 工作台 V6 | 当前版本 | v6.3.0-alpha | 状态 | 阶段 3 已验收（Review + Smoke 通过） |
+| 项目名称 | AI Agent 工作台 V6 | 当前版本 | v6.4.0-alpha | 状态 | 阶段 4 已验收（Review + Smoke 通过） |
 | --- | --- | --- | --- | --- | --- |
 
-## 最近变更（v6.3.0-alpha，2026-07-07）
-- 实现 `v6/config_manager.py`：YAML 配置持久化、点分路径 get/set、changed 信号、默认配置。
-- 实现 `v6/session_manager.py`：SQLite 会话持久化、CRUD、active 管理、时间分组、置顶。
-- 实现 `v6/services/config_service.py`、`session_service.py`、`chat_service.py`，提供业务层封装。
-- 重写 `v6/ui_controller.py`：移除 `DEMO_SESSIONS`，注入 Service，启动时加载真实配置与会话。
-- 新增 `tests/v6/test_v6_config_manager.py`、`test_v6_session_manager.py`、`test_v6_services.py`；更新 `test_v6_ui_contract.py`。
-- 引入 `v6/_paths.py` 与 `V6_DATA_DIR` 环境变量支持，确保测试数据隔离。
-- V6 阶段 3 全部 43 个测试通过。
+## 最近变更（v6.4.0-alpha，2026-07-07）
+- 实现 `v6/runtime/event_bus.py`：独立后台线程 + asyncio 队列的事件总线，支持同步/异步订阅者。
+- 实现 `v6/runtime/context.py`：`RuntimeContext` 单次任务上下文，已加 `RLock` 保护。
+- 实现 `v6/runtime/scheduler.py`：任务队列、并发控制、取消、wait_all。
+- 实现 `v6/runtime/task.py`：`Task` / `ChatTask` / `AnalyzeTask`。
+- 实现 `v6/runtime/runtime.py`：`AgentRuntime` 生命周期、任务调度、错误转 `error` 事件。
+- 重写 `v6/ui_controller.py`：移除 `EchoRuntime`，创建 `ChatTask` 提交到 `AgentRuntime`，事件转 Qt 信号。
+- 新增 `tests/v6/test_v6_event_bus.py`、`test_v6_scheduler.py`、`test_v6_runtime.py`、`test_v6_integration.py`。
+- Review Agent 复核后修复：`EventBus._running` 加锁；`RuntimeContext` 加锁；增强取消任务测试。
+- V6 阶段 4 全量回归 64 个测试通过。
 
 ## 项目目标
 基于 V5 失败教训，**从零重写** V6 版本：
@@ -176,12 +178,15 @@ agent_workbench/
 - Smoke：会话创建/切换/删除/重命名/搜索可持久化；43/43 测试通过。
 - Git 存档：`v6.3.0-alpha`。
 
-### 阶段 4：AgentRuntime 骨架（v6.4.0-alpha）
-- 实现 `event_bus.py`、`context.py`、`scheduler.py`、`task.py`。
-- 实现 `runtime.py`：任务调度、生命周期、错误处理。
-- 实现 Runtime 与 UIController 的最小连接。
-- Review Agent 校验：事件流清晰、无 UI 依赖。
-- Smoke：发送消息可触发 Runtime 任务并返回事件。
+### 阶段 4：AgentRuntime 骨架（v6.4.0-alpha）✅ 已验收
+- 实现 `event_bus.py`：独立后台线程 + asyncio 队列，支持同步/异步订阅者。
+- 实现 `context.py`：`RuntimeContext` 单次任务上下文，已加 `RLock` 线程安全保护。
+- 实现 `scheduler.py`：任务队列、并发控制（默认 1）、取消、wait_all。
+- 实现 `task.py`：`Task` / `ChatTask` / `AnalyzeTask`。
+- 实现 `runtime.py`：`AgentRuntime` 生命周期、任务调度、错误转 `error` 事件、handler 注册。
+- Runtime 与 UIController 已连接：`on_send_msg` 创建 `ChatTask` 提交到 Runtime，事件转 Qt 信号。
+- Review Agent 校验：事件流清晰、Runtime 无 Qt 依赖、线程安全加固。
+- Smoke：全量回归 64 个测试通过，集成测试覆盖 happy path。
 - Git 存档：`v6.4.0-alpha`。
 
 ### 阶段 5：Engines（v6.5.0-alpha）

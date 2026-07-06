@@ -1,5 +1,16 @@
 # V6 变更日志
 
+## v6.4.0-alpha (2026-07-07) — AgentRuntime 骨架与事件总线
+- 实现 `v6/runtime/event_bus.py`：独立后台线程 + asyncio 队列的异步事件总线，支持同步/异步订阅者。
+- 实现 `v6/runtime/context.py`：`RuntimeContext` 单次任务上下文，含 `messages/tools/metadata/status`，已加 `RLock` 线程安全保护。
+- 实现 `v6/runtime/scheduler.py`：任务队列、并发控制（默认 1）、取消、wait_all。
+- 实现 `v6/runtime/task.py`：`Task` 基类 + `ChatTask` / `AnalyzeTask`。
+- 实现 `v6/runtime/runtime.py`：`AgentRuntime` 生命周期、任务调度、错误转 `error` 事件、handler 注册机制。
+- 重写 `v6/ui_controller.py`：移除 `EchoRuntime` 使用，改为创建 `ChatTask` 提交到 `AgentRuntime`，订阅事件并转换为 Qt 信号。
+- 新增 `tests/v6/test_v6_event_bus.py`、`test_v6_scheduler.py`、`test_v6_runtime.py`、`test_v6_integration.py`；更新 `test_v6_services.py`。
+- Review Agent 复核后修复：`EventBus._running` 加锁保护；`RuntimeContext` 加锁；增强 `test_runtime_cancel_task` 断言。
+- 阶段 4 全量回归 64 个测试通过；Review Agent 复核通过。
+
 ## v6.3.0-alpha (2026-07-07) — ConfigManager + SessionManager + Services
 - 实现 `v6/config_manager.py`：YAML 配置持久化、点分路径 get/set、changed 信号、默认配置（app.version / last_mode / last_model / theme.name 等）。
 - 实现 `v6/session_manager.py`：SQLite 会话持久化（`storage/sessions.db`）、CRUD、active 管理、按时间分组（今天/昨天/最近7天/更早）、置顶。

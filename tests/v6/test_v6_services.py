@@ -159,3 +159,5 @@ def test_services_integration_with_ui_controller(tmp_path, qapp):
 
     ctrl.on_send_msg("integration test")
     assert chat.load_history(ctrl._active_sid)[0]["content"] == "integration test"
+
+    ctrl.shutdown()
