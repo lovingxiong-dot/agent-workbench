@@ -18,10 +18,9 @@ import threading
 
 from PySide6.QtCore import QObject, Signal
 
+from v6.runtime.adapter import IRuntimeAdapter, LocalRuntimeAdapter
 from v6.runtime.context import RuntimeContext
 from v6.runtime.event_bus import RuntimeEvent
-from v6.runtime.runtime import AgentRuntime
-from v6.runtime.task import ChatTask
 from v6.services.chat_service import ChatService
 from v6.services.config_service import ConfigService
 from v6.services.session_service import SessionService
@@ -58,7 +57,7 @@ class UIController(QObject):
         config_service: ConfigService | None = None,
         session_service: SessionService | None = None,
         chat_service: ChatService | None = None,
-        runtime: AgentRuntime | None = None,
+        adapter: IRuntimeAdapter | None = None,
         data_dir: str | os.PathLike | None = None,
     ) -> None:
         super().__init__(parent)
@@ -70,8 +69,7 @@ class UIController(QObject):
         self._active_sid: str | None = None
         self._project_path = os.getcwd()
         self._streaming = False
-        self._runtime = runtime or AgentRuntime()
-        self._event_bus = self._runtime.event_bus
+        self._adapter = adapter or LocalRuntimeAdapter()
         self._current_task_id: str | None = None
         self._current_session_id: str | None = None
         self._ai_parts: list[str] = []
@@ -102,14 +100,14 @@ class UIController(QObject):
         return ctx
 
     def startup(self) -> None:
-        """应用启动：加载主题、会话列表与激活状态，并启动 Runtime。"""
-        self._runtime.start()
+        """应用启动：加载主题、会话列表与激活状态，并启动 Runtime Adapter。"""
+        self._adapter.start()
         if not self._event_subscribed:
-            self._event_bus.subscribe("ai_chunk", self._on_runtime_event)
-            self._event_bus.subscribe("ai_end", self._on_runtime_event)
-            self._event_bus.subscribe("tool_result", self._on_runtime_event)
-            self._event_bus.subscribe("confirm_request", self._on_runtime_event)
-            self._event_bus.subscribe("error", self._on_runtime_event)
+            self._adapter.subscribe("ai_chunk", self._on_runtime_event)
+            self._adapter.subscribe("ai_end", self._on_runtime_event)
+            self._adapter.subscribe("tool_result", self._on_runtime_event)
+            self._adapter.subscribe("confirm_request", self._on_runtime_event)
+            self._adapter.subscribe("error", self._on_runtime_event)
             self._event_subscribed = True
 
         cfg_ctx = RuntimeContext(task_id="ui-startup")
@@ -141,9 +139,9 @@ class UIController(QObject):
         self.sign_show_analyze_button.emit(True)
 
     def shutdown(self) -> None:
-        """应用关闭：停止 Runtime。"""
-        if hasattr(self, "_runtime") and self._runtime is not None:
-            self._runtime.stop()
+        """应用关闭：停止 Runtime Adapter。"""
+        if hasattr(self, "_adapter") and self._adapter is not None:
+            self._adapter.stop()
 
     def _on_runtime_event(self, event: RuntimeEvent) -> None:
         """将 Runtime 事件转换为 UI 信号。
@@ -278,7 +276,7 @@ class UIController(QObject):
         self.sign_open_file.emit(path)
 
     def on_send_msg(self, text: str) -> None:
-        """用户发送消息：保存用户消息并提交 ChatTask 到 Runtime。"""
+        """用户发送消息：保存用户消息并提交 RuntimeContext 到 Adapter。"""
         if not self._active_sid:
             self.on_new_session()
         sid = self._active_sid
@@ -291,13 +289,12 @@ class UIController(QObject):
         self.sign_chat_user.emit(text)
         self.sign_set_streaming.emit(True)
 
-        task = ChatTask(session_id=sid, text=text)
+        task_id = self._adapter.submit(ctx)
         with self._lock:
             self._streaming = True
-            self._current_task_id = task.task_id
+            self._current_task_id = task_id
             self._current_session_id = sid
             self._ai_parts = []
-        self._runtime.submit(task)
 
     def on_stop_msg(self) -> None:
         """用户停止生成：取消当前任务并复位流式状态。"""
@@ -306,7 +303,7 @@ class UIController(QObject):
             self._streaming = False
             self._ai_parts = []
         if task_id is not None:
-            self._runtime.cancel(task_id)
+            self._adapter.cancel(task_id)
         self.sign_set_streaming.emit(False)
 
     def on_mode_changed(self, mode: str) -> None:

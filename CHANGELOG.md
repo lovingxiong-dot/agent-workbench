@@ -1,5 +1,20 @@
 # Changelog
 
+## v6.5.2-alpha (2026-07-07) — UIController ↔ RuntimeAdapter Application Boundary 集成
+
+### refactor
+- `AgentRuntime._execute` 支持从 `Task.payload["ctx"]` 接收已有的 `RuntimeContext`，实现 Adapter → Runtime 的上下文透传。
+- `AgentRuntime._echo_handler` 优先从 `ctx.messages` 读取用户输入，回写 AI 回复到同一 `ctx`。
+- `UIController` 移除对 `AgentRuntime` 的直接依赖，改为依赖 `IRuntimeAdapter`。
+- `UIController.startup()` / `shutdown()` 改为启动 / 停止 `RuntimeAdapter`。
+- `UIController.on_send_msg()` 构造 `RuntimeContext` 后通过 `adapter.submit(ctx)` 提交。
+- `UIController.on_stop_msg()` 通过 `adapter.cancel(task_id)` 取消任务。
+- 事件订阅统一走 `adapter.subscribe(...)`，保持 Runtime Core 不感知调用方。
+
+### test
+- 新增 `test_adapter_submit_propagates_context`，验证 `RuntimeContext` 经 `LocalRuntimeAdapter` 透传到 `AgentRuntime` 后状态一致。
+- V6 全量测试 `pytest tests/v6/` 91/91 通过。
+
 ## v6.0.1-alpha (2026-07-07) — V6 Runtime 协议深化与 Service 层统一改造
 
 ### refactor

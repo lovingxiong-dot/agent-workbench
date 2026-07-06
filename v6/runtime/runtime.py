@@ -87,10 +87,12 @@ class AgentRuntime:
 
     def _execute(self, task: Task) -> None:
         """Scheduler 工作线程调用的执行入口。"""
-        ctx = RuntimeContext(
-            task_id=task.task_id,
-            session_id=task.session_id,
-        )
+        ctx = task.payload.get("ctx")
+        if not isinstance(ctx, RuntimeContext):
+            ctx = RuntimeContext(
+                task_id=task.task_id,
+                session_id=task.session_id,
+            )
         self._contexts[task.task_id] = ctx
         try:
             handler = self._handlers.get(task.type)
@@ -117,10 +119,13 @@ class AgentRuntime:
     @staticmethod
     def _echo_handler(task: Task, ctx: RuntimeContext, bus: EventBus) -> None:
         """最小回声处理器：替换上一阶段的 EchoRuntime。"""
-        text = getattr(task, "text", task.payload.get("text", ""))
+        if ctx.messages:
+            text = ctx.messages[-1].content
+        else:
+            text = getattr(task, "text", task.payload.get("text", ""))
         bus.emit("user_message", {"text": text}, task.task_id)
         bus.emit("ai_start", {"phase": ""}, task.task_id)
         response = f"收到：{text.replace(chr(10), ' ')}"
         bus.emit("ai_chunk", {"text": response, "phase": ""}, task.task_id)
         bus.emit("ai_end", {}, task.task_id)
-        ctx.add_message("assistant", response)
+        ctx.add_message("ai", response)
