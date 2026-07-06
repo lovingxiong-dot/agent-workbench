@@ -1,5 +1,23 @@
 # V6 变更日志
 
+## v6.5.0-alpha (2026-07-07) — 八大引擎实现与 RuntimeContext 重构
+- 重构 `v6/runtime/engines/interfaces.py`：新增 `ChatMessage` 共享类型、`Engine` 统一基类，八大引擎统一接口 `async def run(ctx: RuntimeContext) -> RuntimeContext`。
+- 重构 `v6/runtime/context.py`：`messages` 改为 `ChatMessage` 列表，新增可演进字段（phase / mode / model / provider / project_path / memory / tool_calls / metrics / metadata）。
+- 实现八大引擎：
+  - `ContextEngine`：上下文组装、压缩、token 估算。
+  - `PromptEngine`：System Prompt 构建、模板渲染、画像注入。
+  - `InferenceEngine`：LLM 调用、重试降级、指标上报。
+  - `ToolEngine`：工具注册、Phase 白名单、执行编排。
+  - `PhaseEngine`：Mode-Phase 阶段定义与流转。
+  - `MemoryEngine`：记忆存储、检索、项目记忆上下文块。
+  - `MetricsEngine`：指标采集、聚合、告警。
+  - `PolicyEngine`：配置查询、模型选择、压缩决策。
+- 更新 `v6/runtime/runtime.py`：`_echo_handler` 改用 `role="assistant"` 适配 `ChatMessage`。
+- 更新 `docs/v6/SPEC.md`：新增第 8.5/8.6 节，明确 RuntimeContext 是唯一状态对象、Engine 统一 run(ctx) 接口、RuntimeContext 可演进非固定 Schema。
+- 更新 `docs/v6/PROJECT_BLUEPRINT_v6.md`：阶段 5 状态更新为已完成，架构图补全八大引擎。
+- 新增 `tests/v6/test_v6_engines.py`：14 个用例覆盖八大引擎构造、run(ctx) 接口、核心路径、异常降级、上下文同一性。
+- Review Agent 复核通过，无阻塞项；全量回归 78 个测试通过。
+
 ## v6.4.0-alpha (2026-07-07) — AgentRuntime 骨架与事件总线
 - 实现 `v6/runtime/event_bus.py`：独立后台线程 + asyncio 队列的异步事件总线，支持同步/异步订阅者。
 - 实现 `v6/runtime/context.py`：`RuntimeContext` 单次任务上下文，含 `messages/tools/metadata/status`，已加 `RLock` 线程安全保护。

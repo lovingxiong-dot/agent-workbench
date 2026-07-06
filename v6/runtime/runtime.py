@@ -123,4 +123,4 @@ class AgentRuntime:
         response = f"收到：{text.replace(chr(10), ' ')}"
         bus.emit("ai_chunk", {"text": response, "phase": ""}, task.task_id)
         bus.emit("ai_end", {}, task.task_id)
-        ctx.add_message("ai", response)
+        ctx.add_message("assistant", response)

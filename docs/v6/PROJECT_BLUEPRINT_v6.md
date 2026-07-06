@@ -1,8 +1,13 @@
 # V6 项目蓝图
 
 ## 元信息
-| 项目名称 | AI Agent 工作台 V6 | 当前版本 | v6.4.0-alpha | 状态 | 阶段 4 已验收（Review + Smoke 通过） |
+| 项目名称 | AI Agent 工作台 V6 | 当前版本 | v6.5.0-alpha | 状态 | 阶段 5 已验收（Review + Smoke 通过） |
 | --- | --- | --- | --- | --- | --- |
+
+## 最近变更（v6.5.0-alpha，2026-07-07）
+- 修正架构图为八大引擎：新增 `ContextEngine`、`PromptEngine`，与 `InferenceEngine`、`ToolEngine`、`PhaseEngine`、`MemoryEngine`、`MetricsEngine`、`PolicyEngine` 共同构成核心引擎层。
+- 更新 `docs/v6/SPEC.md` 引擎接口契约，明确各引擎输入/输出与闭环反馈关系。
+- 在 `v6/runtime/engines/` 下补齐 `context.py`、`prompt.py` 等八大引擎实现，替代原有空文件。
 
 ## 最近变更（v6.4.0-alpha，2026-07-07）
 - 实现 `v6/runtime/event_bus.py`：独立后台线程 + asyncio 队列的事件总线，支持同步/异步订阅者。
@@ -37,12 +42,14 @@
       ├── EventBus
       └── Scheduler
       │
-      ├── PhaseEngine
-      ├── InferenceEngine
-      ├── ToolEngine
-      ├── PolicyEngine
-      ├── MemoryEngine
-      └── MetricsEngine
+      ├── ContextEngine     # 上下文组装、压缩、token 估算
+      ├── PromptEngine      # System Prompt 构建、模板渲染、画像注入
+      ├── InferenceEngine   # LLM 调用、流式输出、重试降级
+      ├── ToolEngine        # 工具注册、权限校验、执行编排
+      ├── PhaseEngine       # Mode-Phase 阶段定义与流转
+      ├── MemoryEngine      # 三层记忆管理、检索、画像
+      ├── MetricsEngine     # 指标采集、聚合、告警
+      └── PolicyEngine      # 配置决策、模型选择、压缩策略
    ```
 4. **专业 Agent 分工**：UI Agent、Runtime Agent、Review Agent 并行协作。
 5. **每步验证**：每个模块完成后必须经 Review Agent 审查 + 冒烟测试 + Git 存档（commit + tag）。
@@ -86,13 +93,16 @@ agent_workbench/
 │   │   ├── scheduler.py         # Scheduler：任务队列、并发控制
 │   │   ├── task.py              # Task / ChatTask / AnalyzeTask 基类
 │   │   └── engines/
-│   │       ├── __init__.py
-│   │       ├── phase.py         # PhaseEngine：阶段规划与推进
-│   │       ├── inference.py     # InferenceEngine：LLM 调用与流式输出
-│   │       ├── tool.py          # ToolEngine：工具注册、执行、确认
-│   │       ├── policy.py        # PolicyEngine：策略决策
-│   │       ├── memory.py        # MemoryEngine：上下文记忆管理
-│   │       └── metrics.py       # MetricsEngine：Token/耗时/性能统计
+   │   │       ├── __init__.py
+   │   │       ├── interfaces.py    # 八大引擎共享数据类型与抽象接口
+   │   │       ├── context.py       # ContextEngine：上下文组装、压缩、token 估算
+   │   │       ├── prompt.py        # PromptEngine：System Prompt 构建、模板渲染、画像注入
+   │   │       ├── inference.py     # InferenceEngine：LLM 调用与流式输出
+   │   │       ├── tool.py          # ToolEngine：工具注册、执行、确认
+   │   │       ├── phase.py         # PhaseEngine：阶段规划与推进
+   │   │       ├── memory.py        # MemoryEngine：上下文记忆管理
+   │   │       ├── metrics.py       # MetricsEngine：Token/耗时/性能统计
+   │   │       └── policy.py        # PolicyEngine：策略决策
 │   │
 │   ├── ui/                      # 纯 UI 组件，完全无业务逻辑
 │   │   ├── __init__.py
@@ -189,11 +199,13 @@ agent_workbench/
 - Smoke：全量回归 64 个测试通过，集成测试覆盖 happy path。
 - Git 存档：`v6.4.0-alpha`。
 
-### 阶段 5：Engines（v6.5.0-alpha）
-- 依次实现 PhaseEngine、InferenceEngine、ToolEngine、PolicyEngine、MemoryEngine、MetricsEngine。
-- 每个 Engine 独立测试。
-- Review Agent 校验：Engine 职责单一、接口契约一致。
-- Smoke：端到端 ChatTask 可运行（可用 mock LLM）。
+### 阶段 5：Engines（v6.5.0-alpha）✅ 已验收
+- 依次实现八大引擎：`ContextEngine`、`PromptEngine`、`InferenceEngine`、`ToolEngine`、`PhaseEngine`、`MemoryEngine`、`MetricsEngine`、`PolicyEngine`。
+- 统一接口：`async def run(ctx: RuntimeContext) -> RuntimeContext`；`RuntimeContext` 是唯一运行时状态对象，Engine 不拥有状态。
+- `v6/runtime/engines/interfaces.py` 定义 `Engine` 基类与 `ChatMessage` 共享类型；`RuntimeContext` 可演进，Engine 只访问自身职责字段。
+- 每个 Engine 独立测试，覆盖核心方法、异常路径、闭环反馈（MetricsEngine 上报）。
+- Review Agent 校验：Engine 职责单一、接口契约一致、模块不超重、无循环导入、无 V5 混入。
+- Smoke：全量回归 78 个测试通过，端到端 ChatTask 可运行。
 - Git 存档：`v6.5.0-alpha`。
 
 ### 阶段 6：业务服务迁移与集成（v6.6.0-alpha）

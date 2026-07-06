@@ -8,7 +8,7 @@
 | 2 | Layout/UIController/MainWindow | v6.2.0-alpha | 窗口/分栏/折叠正常，MainWindow 无业务逻辑 |
 | 3 | Session/Config Manager | v6.3.0-alpha | 会话持久化、配置验证通过 |
 | 4 | AgentRuntime 骨架 | v6.4.0-alpha | 任务调度、事件总线可运行 |
-| 5 | Engines | v6.5.0-alpha | 六大 Engine 独立并通过测试 |
+| 5 | Engines | v6.5.0-alpha | 八大 Engine 独立并通过测试 |
 | 6 | 业务服务与集成 | v6.6.0-alpha | 端到端 ChatTask 通过 |
 | 7 | 打包与最终存档 | v6.7.0-alpha | exe 可启动、全量测试通过 |
 

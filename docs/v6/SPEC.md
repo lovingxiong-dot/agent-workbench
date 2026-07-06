@@ -137,3 +137,98 @@ class RuntimeEvent:
 - 所有外部调用必须通过 Runtime → Engine → Service。
 - 工具执行必须经用户确认（除白名单安全工具外）。
 - 用户输入必须做长度和类型校验。
+
+## 8. 引擎接口契约
+
+### 8.1 八大引擎职责
+| 引擎 | 接口 | 核心职责 | 闭环反馈 |
+| --- | --- | --- | --- |
+| ContextEngine | `IContextEngine` | 消息组装、上下文压缩、token 估算 | `report_compression_quality` 接收质量反馈 |
+| PromptEngine | `IPromptEngine` | System Prompt 构建、模板渲染、用户画像注入 | 无（纯构建） |
+| InferenceEngine | `IInferenceEngine` | LLM 调用、流式输出、重试降级 | `report_metrics` 上报推理指标 |
+| ToolEngine | `IToolEngine` | 工具注册、Phase 白名单、执行编排 | 无（结果通过 `ToolResult` 返回） |
+| PhaseEngine | `IPhaseEngine` | Mode-Phase 定义、阶段流转、插件扩展 | 无（状态机） |
+| MemoryEngine | `IMemoryEngine` | 短期/长期/画像记忆、检索、上下文块 | 无（数据持久化由 Service 负责） |
+| MetricsEngine | `IMetricsEngine` | 指标采集、聚合、阈值告警 | 供 PolicyEngine 决策使用 |
+| PolicyEngine | `IPolicyEngine` | 配置查询、模型选择、压缩决策、热加载 | 读取 MetricsEngine 数据调整策略 |
+
+### 8.2 依赖注入关系
+```
+PolicyEngine ──┬──► ContextEngine（读取压缩阈值）
+               ├──► InferenceEngine（读取重试/降级配置）
+               ├──► ToolEngine（读取工具超时）
+               └──► MemoryEngine（读取记忆策略）
+
+MetricsEngine ──┬──► ContextEngine（上报压缩触发/压缩率）
+                ├──► InferenceEngine（上报 token/耗时/成功率）
+                └──► PolicyEngine（决策输入）
+```
+
+### 8.3 共享数据类型
+- `Message`：标准消息（role / content / tool_calls / tool_call_id），提供 `to_langchain()` 转换。
+- `TokenUsage` / `InferenceMetrics`：推理指标，用于闭环上报。
+- `ToolCall` / `ToolResult`：工具调用请求与结果。
+- `CompressionStrategy` / `CompressionResult`：上下文压缩策略与结果。
+
+### 8.4 闭环原则
+1. ContextEngine 压缩后，下游评估质量并调用 `report_compression_quality`，低质量触发 PolicyEngine 调整策略权重。
+2. InferenceEngine 每次调用结束后调用 `report_metrics`，MetricsEngine 聚合后供 PolicyEngine 做模型选择。
+3. PolicyEngine 不直接修改 MetricsEngine，只读取聚合结果进行决策。
+4. 所有引擎实现必须可 Mock：构造函数注入依赖，禁止全局单例。
+
+### 8.5 RuntimeContext 作为引擎接口顶层对象
+**原则：Engine 的公共接口统一接收 `RuntimeContext`，`ChatMessage`（或 `Message`）只是 `RuntimeContext` 的组成部分，不得成为 Engine 间通信的顶层对象。**
+
+**RuntimeContext 是运行时唯一状态对象（Single Source of Truth）。Engine 不拥有状态，RuntimeContext 才拥有状态。**
+
+数据流：
+```
+AgentRuntime
+    │
+    ▼
+RuntimeContext（任务级状态容器）
+    │
+    ├── session_id / conversation_id / task_id / group_user_id
+    ├── phase / mode / model / provider
+    ├── project_path
+    ├── memory
+    ├── messages          # ChatMessage 列表
+    ├── tool_calls
+    ├── metrics
+    └── metadata
+    │
+    ▼
+Engines（统一接收 RuntimeContext，读取输入、写回输出）
+```
+
+要求：
+1. 八大引擎统一接口：`async def run(self, ctx: RuntimeContext) -> RuntimeContext`。
+2. 禁止 `run(messages)`、`run(session)`、`run(dict)`、`run(memory)`、`run(project_path)` 等碎片化接口。
+3. 引擎之间不直接传递 `ChatMessage` 列表；所有中间状态通过 `ctx.metadata` 或 `ctx.messages` 共享。
+4. `RuntimeContext` 是线程安全的（已加 `RLock`），引擎可安全读写。
+5. 单元测试通过构造 `RuntimeContext` 并调用 `engine.run(ctx)`，验证 `ctx` 状态变化。
+
+### 8.6 RuntimeContext 是可演进对象，不是固定 Schema
+**原则：Engine 不允许假设 `RuntimeContext` 是固定字段集合，只访问自身职责需要的字段。**
+
+示例演进：
+```
+V6.0  ctx
+      ├── session_id
+      └── messages
+
+V6.5+ ctx
+      ├── group_id
+      ├── group_user_id
+      ├── agent_id
+      ├── scheduler_state
+      ├── gateway_route
+      ├── shared_memory
+      ├── private_memory
+      └── ...
+```
+
+收益：
+- 新增字段（GroupUser、Gateway、AgentBus、多 Agent 协同）无需修改 Engine 接口。
+- `async def run(ctx: RuntimeContext)` 保持稳定，架构可长期演进。
+- Engine 只依赖自己读取/写入的字段，天然解耦。
