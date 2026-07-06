@@ -505,8 +505,14 @@ class _ResizeHandle(QWidget):
 class ChatArea(QWidget):
     confirmation_clicked = Signal(bool)
     analyze_project_clicked = Signal()
-    export_requested = Signal()
-    settings_requested = Signal()
+    sign_send_msg = Signal()
+    sign_stop_msg = Signal()
+    sign_mode_changed = Signal()
+    sign_model_changed = Signal()
+    sign_export_requested = Signal()
+    sign_settings_requested = Signal()
+    sign_toggle_left = Signal()
+    sign_toggle_right = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -529,6 +535,8 @@ class ChatArea(QWidget):
         self._header = HeaderBar()
         self._header.search_clicked.connect(self._toggle_search)
         self._header.more_clicked.connect(self._toggle_file_panel)
+        self._header.left_expand_toggled.connect(self.sign_toggle_left.emit)
+        self._header.expand_toggled.connect(self.sign_toggle_right.emit)
         layout.addWidget(self._header)
 
         # 标题栏下分隔线（SVG: y=40）

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AI Agent Workbench v4 · 单轨架构入口
+AI Agent Workbench · V5 新 UI 主入口
 """
 import sys
 import os
@@ -21,13 +21,8 @@ def _diagnostic_hook(exc_type, exc_value, exc_tb):
 
 sys.excepthook = _diagnostic_hook
 
-from PySide6.QtWidgets import QApplication
-from v4.main_window import MainWindow
+from v5.main import main
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    app.setApplicationName("AI Agent Workbench")
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())
+    main()

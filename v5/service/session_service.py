@@ -35,7 +35,10 @@ class SessionService:
     """
 
     def __init__(self, db_path: Optional[str] = None, meta_path: Optional[str] = None):
-        self._svc = _RootSessionService(db_path=db_path)
+        if db_path is not None:
+            self._svc = _RootSessionService(db_path=db_path)
+        else:
+            self._svc = _RootSessionService()
         self._meta_path = meta_path or self._default_meta_path()
         self._meta: dict = self._load_meta()
 

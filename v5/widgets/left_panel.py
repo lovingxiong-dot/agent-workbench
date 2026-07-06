@@ -148,9 +148,9 @@ class SessionItem(QWidget):
 
 class SessionGroup(QWidget):
     """可折叠会话分组：分组头 + 右侧计数。"""
-    session_clicked = Signal(int)
-    session_action_requested = Signal(str, int)
-    new_session_requested = Signal(str)
+    sign_select_session = Signal(int)
+    sign_session_action = Signal(str, int)
+    sign_new_chat = Signal(str)
 
     def __init__(self, name: str, count: int, parent=None):
         super().__init__(parent)
@@ -196,7 +196,7 @@ class SessionGroup(QWidget):
         self._add_btn.setFont(font(11, bold=True))
         self._add_btn.setCursor(Qt.PointingHandCursor)
         self._add_btn.setStyleSheet(f"color: {C['text_muted']}; background: transparent; padding: 0px 2px;")
-        self._add_btn.mousePressEvent = lambda e: self.new_session_requested.emit("chat") if e.button() == Qt.LeftButton else None
+        self._add_btn.mousePressEvent = lambda e: self.sign_new_chat.emit("chat") if e.button() == Qt.LeftButton else None
         hl.addWidget(self._add_btn)
 
         self._hdr.mousePressEvent = lambda e: self._toggle() if e.button() == Qt.LeftButton else None
@@ -219,13 +219,13 @@ class SessionGroup(QWidget):
         self._add_btn.setStyleSheet(f"color: {C['text_muted']}; background: transparent; padding: 0px 2px;")
 
     def add_session(self, item: SessionItem):
-        item.clicked.connect(self.session_clicked.emit)
+        item.clicked.connect(self.sign_select_session.emit)
         item.action_requested.connect(self._on_item_action)
         self._items.append(item)
         self._items_layout.addWidget(item)
 
     def _on_item_action(self, action: str, index: int):
-        self.session_action_requested.emit(action, index)
+        self.sign_session_action.emit(action, index)
 
     def set_active(self, index: int):
         for it in self._items:
@@ -501,11 +501,11 @@ class FunctionPage(QWidget):
 
 class LeftPanel(QWidget):
     """左栏面板：Tab切换 + 分组会话列表 + 底部控制 + 主题切换。"""
-    session_selected = Signal(int)
-    new_session_requested = Signal(str)         # session_type: "chat" | "work"
-    session_action_requested = Signal(str, int)  # action, index
-    search_text_changed = Signal(str)
-    theme_toggled = Signal(str)
+    sign_select_session = Signal(int)
+    sign_new_chat = Signal(str)                  # session_type: "chat" | "work"
+    sign_session_action = Signal(str, int)       # action, index
+    sign_search_input = Signal(str)
+    sign_switch_theme = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -590,8 +590,8 @@ class LeftPanel(QWidget):
         self._search_btn.clicked.connect(self._toggle_search)
         self._search_close.clicked.connect(self._close_search)
         self._more_btn.clicked.connect(self._on_more_clicked)
-        self._new_btn.clicked.connect(lambda: self.new_session_requested.emit("chat"))
-        self._search_input.textChanged.connect(self.search_text_changed.emit)
+        self._new_btn.clicked.connect(lambda: self.sign_new_chat.emit("chat"))
+        self._search_input.textChanged.connect(self.sign_search_input.emit)
 
         self._tool_stack.addWidget(sess_tools)
 
@@ -764,7 +764,7 @@ class LeftPanel(QWidget):
         new_theme = "light" if theme.name == "dark" else "dark"
         theme.set_theme(new_theme)
         self._theme_btn.setText("☀️" if new_theme == "light" else "🌙")
-        self.theme_toggled.emit(new_theme)
+        self.sign_switch_theme.emit(new_theme)
 
     def _make_tab_btn(self, text: str, active: bool) -> QPushButton:
         """Tab 标签：SVG 92×22 rx=6 背景框，active=accent/#fff，inactive=btn_bg/text_secondary。"""
@@ -871,7 +871,7 @@ class LeftPanel(QWidget):
 
     def _on_session_clicked(self, idx: int):
         self._select_session(idx)
-        self.session_selected.emit(idx)
+        self.sign_select_session.emit(idx)
 
     def _select_session(self, idx: int):
         self._active_idx = idx
@@ -939,9 +939,9 @@ class LeftPanel(QWidget):
                 self._all_items.append(item)
             self._groups.append(group)
             self._sess_layout.insertWidget(self._sess_layout.count() - 1, group)
-            group.session_clicked.connect(self._on_session_clicked)
-            group.new_session_requested.connect(self.new_session_requested.emit)
-            group.session_action_requested.connect(self.session_action_requested.emit)
+            group.sign_select_session.connect(self._on_session_clicked)
+            group.sign_new_chat.connect(self.sign_new_chat.emit)
+            group.sign_session_action.connect(self.sign_session_action.emit)
 
         active_idx = self._sid_to_idx.get(old_active, 0)
         self._select_session(active_idx)
