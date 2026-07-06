@@ -1,5 +1,22 @@
 # Changelog
 
+## v5.0.23-alpha (2026-07-06) — v4 归档打包入口与 v5 并行构建
+
+### fix
+- 修复 `v5/service/chat_worker.py` 中 `AgentWorker.TOOL_DEFINITIONS` 属性错误，改为从 `workers.agent_worker` 导入 `TOOL_DEFINITIONS`。
+
+### build
+- 创建 `v4/v4_main.py` 归档入口、`v4/AgentWorkbenchV4.spec` 打包配置、`v4/scripts/rebuild_v4.ps1` 一键打包脚本。
+- `scripts/rebuild.ps1` 生成的桌面快捷方式命名为「AI Agent Workbench V5」。
+- `v4/scripts/rebuild_v4.ps1` 生成 `dist/AgentWorkbenchV4/` 与桌面快捷方式「AI Agent Workbench V4」。
+- 验证 `dist/AgentWorkbench/AgentWorkbench.exe` 与 `dist/AgentWorkbenchV4/AgentWorkbenchV4.exe` 均可独立启动。
+
+### chore
+- 更新 `v4/README.md`，说明 v4 已冻结于 `v4-refactor` 分支 `v4.0.11-alpha`，并标注独立打包入口。
+
+### test
+- 全量测试：`pytest tests/` 272/272 通过。
+
 ## v5.0.22-alpha (2026-07-06) — 补充 Git 忽略规则
 
 ### chore

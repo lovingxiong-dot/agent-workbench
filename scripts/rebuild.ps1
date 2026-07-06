@@ -21,7 +21,7 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "[5/5] Refreshing desktop shortcut..." -ForegroundColor Cyan
     $reg = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
     $desktop = (Get-ItemProperty -Path $reg -Name "Desktop").Desktop
-    $linkPath = Join-Path $desktop "AI Agent Workbench.lnk"
+    $linkPath = Join-Path $desktop "AI Agent Workbench V5.lnk"
     $exePath = Join-Path $projectRoot "dist\AgentWorkbench\AgentWorkbench.exe"
     $icoPath = Join-Path $projectRoot "assets\app.ico"
     $workDir = Join-Path $projectRoot "dist\AgentWorkbench"

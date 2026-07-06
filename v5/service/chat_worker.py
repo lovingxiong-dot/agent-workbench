@@ -14,7 +14,7 @@ from PySide6.QtCore import Signal, QThread
 from agent_engine.agent_session import AgentSession
 from agent_engine.orchestrator import OrchestratorCancelledError
 from tools import TOOL_MAP, ARUN_MAP
-from workers.agent_worker import AgentWorker
+from workers.agent_worker import AgentWorker, TOOL_DEFINITIONS
 
 
 class _ChatWorker(QThread):
@@ -106,7 +106,7 @@ class _ChatWorker(QThread):
             self._session = AgentSession(
                 llm=self.llm,
                 tool_map=TOOL_MAP,
-                tool_definitions=AgentWorker.TOOL_DEFINITIONS,
+                tool_definitions=TOOL_DEFINITIONS,
                 mode=self.mode,
                 project_root=self.project_root,
                 system_prompt=self.system_prompt,

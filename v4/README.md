@@ -4,9 +4,10 @@
 
 ## 状态
 
-- **v4 线路已冻结**：不再接受新功能开发与 bug 修复。
+- **v4 线路已冻结**：Git 分支 `v4-refactor` 最终归档标签为 `v4.0.11-alpha`，不再接受新功能开发与 bug 修复。
 - **只读留存**：保留原始代码、spec 与测试依赖，用于历史对照与回滚参考。
-- **新开发主线**：`v5/` 目录，入口为根目录 `main.py`，打包配置为根目录 `AgentWorkbench.spec` / `AgentWorkbenchV5.spec`。
+- **独立打包入口**：本目录提供 `v4/v4_main.py` + `v4/AgentWorkbenchV4.spec` + `v4/scripts/rebuild_v4.ps1`，可生成 `dist/AgentWorkbenchV4/` 并创建桌面快捷方式「AI Agent Workbench V4」。
+- **新开发主线**：`v5/` 目录，入口为根目录 `main.py`，打包配置为根目录 `AgentWorkbenchV5.spec`。
 
 ## 包含内容
 
