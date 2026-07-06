@@ -6,7 +6,10 @@
 - 通过 Service 层读写配置、会话、消息历史
 - 不保留任何业务计算逻辑
 
-设计来源：docs/v6/SPEC.md 第 3 节。
+设计来源：docs/v6/SPEC.md 第 3 节、第 8.12 节。
+
+B 阶段改造：Service 公共方法统一接收 RuntimeContext。
+C 阶段改造：接入 RuntimeAdapter，将 UI 事件转换为 RuntimeContext 提交给 Runtime。
 """
 from __future__ import annotations
 
@@ -15,6 +18,7 @@ import threading
 
 from PySide6.QtCore import QObject, Signal
 
+from v6.runtime.context import RuntimeContext
 from v6.runtime.event_bus import RuntimeEvent
 from v6.runtime.runtime import AgentRuntime
 from v6.runtime.task import ChatTask
@@ -64,8 +68,6 @@ class UIController(QObject):
             session_manager=self._session.manager, data_dir=data_dir
         )
         self._active_sid: str | None = None
-        self._mode = self._config.last_mode()
-        self._model = self._config.last_model()
         self._project_path = os.getcwd()
         self._streaming = False
         self._runtime = runtime or AgentRuntime()
@@ -75,7 +77,29 @@ class UIController(QObject):
         self._ai_parts: list[str] = []
         self._event_subscribed = False
         self._lock = threading.Lock()
+
+        # 从配置服务加载初始 UI 状态
+        cfg_ctx = RuntimeContext.new()
+        self._config.apply(cfg_ctx)
+        cfg = cfg_ctx.metadata.get("config", {})
+        self._mode = cfg.get("last_mode", "Agent")
+        self._model = cfg.get("last_model", "gpt-4o")
+
         self.destroyed.connect(self.shutdown)
+
+    def _new_ctx(self, session_id: str | None = None, task_id: str | None = None) -> RuntimeContext:
+        """构造一个携带当前 UI 状态的 RuntimeContext。"""
+        ctx = RuntimeContext.new(
+            task_id=task_id,
+            session_id=session_id or self._active_sid,
+        )
+        ctx.metadata["config"] = {
+            "theme": theme.name,
+            "last_mode": self._mode,
+            "last_model": self._model,
+        }
+        ctx.metadata["project_path"] = self._project_path
+        return ctx
 
     def startup(self) -> None:
         """应用启动：加载主题、会话列表与激活状态，并启动 Runtime。"""
@@ -88,17 +112,24 @@ class UIController(QObject):
             self._event_bus.subscribe("error", self._on_runtime_event)
             self._event_subscribed = True
 
-        theme_name = self._config.theme()
+        cfg_ctx = RuntimeContext(task_id="ui-startup")
+        self._config.apply(cfg_ctx)
+        cfg = cfg_ctx.metadata.get("config", {})
+        theme_name = cfg.get("theme", "dark")
         theme.set_theme(theme_name)
         self.sign_theme_changed.emit(theme_name)
 
-        groups = self._session.load_groups()
+        ctx = RuntimeContext(task_id="ui-startup")
+        self._session.load(ctx)
+        groups = ctx.metadata.get("session_groups", [])
         self.sign_update_sessions.emit(groups)
 
-        active = self._session.get_active()
+        self._session.get_active(ctx)
+        active = ctx.session_id
         if active is None and groups:
             active = groups[0][2][0]["sid"]
-            self._session.set_active(active)
+            ctx.session_id = active
+            self._session.set_active(ctx)
         self._active_sid = active
 
         if active:
@@ -133,7 +164,9 @@ class UIController(QObject):
         elif event.type == "ai_end":
             full = "".join(self._ai_parts)
             if full and sid is not None:
-                self._chat.append_message(sid, "ai", full)
+                ctx = self._new_ctx(sid)
+                ctx.add_message("ai", full)
+                self._chat.store(ctx)
             self.sign_stream_end.emit()
             self.sign_set_streaming.emit(False)
             with self._lock:
@@ -167,52 +200,77 @@ class UIController(QObject):
         session = self._session.manager.get(sid)
         title = session["title"] if session else "新会话"
         self.sign_set_title.emit(title, self._project_path)
-        for msg in self._chat.load_history(sid):
-            if msg["role"] == "user":
-                self.sign_chat_user.emit(msg["content"])
-            elif msg["role"] == "ai":
-                self.sign_chat_ai.emit(msg["content"], "")
+
+        ctx = RuntimeContext(task_id="ui-load-view", session_id=sid)
+        self._chat.load(ctx)
+        for msg in ctx.messages:
+            if msg.role == "user":
+                self.sign_chat_user.emit(msg.content)
+            elif msg.role == "ai":
+                self.sign_chat_ai.emit(msg.content, "")
 
     def _reload_sessions(self) -> None:
         """重新加载会话列表并同步激活状态信号。"""
-        self.sign_update_sessions.emit(self._session.load_groups())
-        active = self._session.get_active()
+        ctx = RuntimeContext(task_id="ui-reload")
+        self._session.load(ctx)
+        self.sign_update_sessions.emit(ctx.metadata.get("session_groups", []))
+
+        self._session.get_active(ctx)
+        active = ctx.session_id
         if active and active != self._active_sid:
             self._active_sid = active
             self.sign_set_active_session.emit(active)
 
     def on_session_selected(self, sid: str) -> None:
         self._active_sid = sid
-        self._session.set_active(sid)
+        ctx = self._new_ctx(sid)
+        self._session.set_active(ctx)
         self.sign_set_active_session.emit(sid)
         self._load_session_view(sid)
 
     def on_new_session(self) -> None:
-        sid = self._session.create("新会话")
+        ctx = self._new_ctx()
+        ctx.metadata["session_title"] = "新会话"
+        self._session.create(ctx)
+        sid = ctx.session_id
         self._active_sid = sid
-        self.sign_update_sessions.emit(self._session.load_groups())
+
+        self._session.load(ctx)
+        self.sign_update_sessions.emit(ctx.metadata.get("session_groups", []))
         self.sign_set_active_session.emit(sid)
         self.sign_set_title.emit("新会话", self._project_path)
 
     def on_session_action(self, action: str, sid: str) -> None:
+        ctx = self._new_ctx(sid)
         if action == "delete":
-            self._session.delete(sid)
+            self._session.delete(ctx)
             if self._active_sid == sid:
-                self._active_sid = self._session.get_active()
+                self._active_sid = None
+                self._session.get_active(ctx)
+                self._active_sid = ctx.session_id
         elif action == "pin":
-            self._session.pin(sid)
+            self._session.pin(ctx)
         elif action == "rename":
-            self._session.rename(sid, "重命名会话")
+            ctx.metadata["session_title"] = "重命名会话"
+            self._session.rename(ctx)
         self._reload_sessions()
         if self._active_sid:
             self.sign_set_active_session.emit(self._active_sid)
 
     def on_search_text_changed(self, text: str) -> None:
-        groups = self._session.search(text) if text.strip() else self._session.load_groups()
-        self.sign_update_sessions.emit(groups)
+        ctx = self._new_ctx()
+        ctx.metadata["search_text"] = text
+        if text.strip():
+            self._session.search(ctx)
+        else:
+            self._session.load(ctx)
+        self.sign_update_sessions.emit(ctx.metadata.get("session_groups", []))
 
     def on_theme_toggled(self, name: str) -> None:
-        self._config.set_theme(name)
+        ctx = self._new_ctx()
+        ctx.metadata.setdefault("config", {})
+        ctx.metadata["config"]["theme"] = name
+        self._config.persist(ctx)
         theme.set_theme(name)
         self.sign_theme_changed.emit(name)
 
@@ -226,7 +284,10 @@ class UIController(QObject):
         sid = self._active_sid
         if sid is None:
             return
-        self._chat.append_message(sid, "user", text)
+
+        ctx = self._new_ctx(sid)
+        ctx.add_message("user", text)
+        self._chat.store(ctx)
         self.sign_chat_user.emit(text)
         self.sign_set_streaming.emit(True)
 
@@ -250,11 +311,17 @@ class UIController(QObject):
 
     def on_mode_changed(self, mode: str) -> None:
         self._mode = mode
-        self._config.set_last_mode(mode)
+        ctx = self._new_ctx()
+        ctx.metadata.setdefault("config", {})
+        ctx.metadata["config"]["last_mode"] = mode
+        self._config.persist(ctx)
 
     def on_model_changed(self, model: str) -> None:
         self._model = model
-        self._config.set_last_model(model)
+        ctx = self._new_ctx()
+        ctx.metadata.setdefault("config", {})
+        ctx.metadata["config"]["last_model"] = model
+        self._config.persist(ctx)
 
     def on_export_requested(self) -> None:
         pass

@@ -1,7 +1,12 @@
-"""tests/v6/test_v6_services.py — Services 层单元与集成测试。"""
+"""tests/v6/test_v6_services.py — Services 层单元与集成测试。
+
+所有 Service 公共方法统一接收 RuntimeContext。
+"""
 from __future__ import annotations
 
 import pytest
+
+from v6.runtime.context import RuntimeContext
 
 
 @pytest.fixture(scope="session")
@@ -14,20 +19,24 @@ def qapp():
     yield app
 
 
-def test_config_service_reads_and_writes(tmp_path, qapp):
+def test_config_service_apply_and_persist(tmp_path, qapp):
     from v6.config_manager import ConfigManager
     from v6.services.config_service import ConfigService
 
     svc = ConfigService(data_dir=tmp_path)
-    assert svc.theme() == "dark"
-    assert svc.last_mode() == "Agent"
-    assert svc.last_model() == "gpt-4o"
-    assert svc.window_geometry() is None
+    ctx = RuntimeContext.new()
 
-    svc.set_theme("light")
-    svc.set_last_mode("Coder")
-    svc.set_last_model("claude-3")
-    svc.set_window_geometry({"x": 100, "y": 200})
+    svc.apply(ctx)
+    assert ctx.metadata["config"]["theme"] == "dark"
+    assert ctx.metadata["config"]["last_mode"] == "Agent"
+    assert ctx.metadata["config"]["last_model"] == "gpt-4o"
+    assert ctx.metadata["config"]["window_geometry"] is None
+
+    ctx.metadata["config"]["theme"] = "light"
+    ctx.metadata["config"]["last_mode"] = "Coder"
+    ctx.metadata["config"]["last_model"] = "claude-3"
+    ctx.metadata["config"]["window_geometry"] = {"x": 100, "y": 200}
+    svc.persist(ctx)
 
     cm = ConfigManager(data_dir=tmp_path)
     assert cm.get("theme.name") == "light"
@@ -36,16 +45,26 @@ def test_config_service_reads_and_writes(tmp_path, qapp):
     assert cm.get("window.geometry") == {"x": 100, "y": 200}
 
 
-def test_session_service_create_and_groups(tmp_path, qapp):
+def test_session_service_load_and_create(tmp_path, qapp):
     from v6.services.session_service import SessionService
 
     svc = SessionService(data_dir=tmp_path)
-    assert svc.load_groups() == []
+    ctx = RuntimeContext.new()
 
-    sid = svc.create("new session")
-    assert svc.get_active() == sid
+    svc.load(ctx)
+    assert ctx.metadata["session_groups"] == []
 
-    groups = svc.load_groups()
+    ctx.metadata["session_title"] = "new session"
+    svc.create(ctx)
+    sid = ctx.session_id
+    assert sid is not None
+
+    ctx.session_id = None
+    svc.get_active(ctx)
+    assert ctx.session_id == sid
+
+    svc.load(ctx)
+    groups = ctx.metadata["session_groups"]
     assert len(groups) == 1
     assert groups[0][0] == "today"
     assert groups[0][2][0]["sid"] == sid
@@ -56,21 +75,41 @@ def test_session_service_delete_clears_active(tmp_path, qapp):
     from v6.services.session_service import SessionService
 
     svc = SessionService(data_dir=tmp_path)
-    sid = svc.create("to delete")
-    assert svc.get_active() == sid
-    svc.delete(sid)
-    assert svc.get_active() is None
-    assert svc.load_groups() == []
+    ctx = RuntimeContext.new()
+    ctx.metadata["session_title"] = "to delete"
+    svc.create(ctx)
+    sid = ctx.session_id
+
+    ctx.session_id = sid
+    svc.get_active(ctx)
+    assert ctx.session_id == sid
+
+    ctx.session_id = sid
+    svc.delete(ctx)
+
+    ctx.session_id = None
+    svc.get_active(ctx)
+    assert ctx.session_id is None
+
+    svc.load(ctx)
+    assert ctx.metadata["session_groups"] == []
 
 
 def test_session_service_pin_and_rename(tmp_path, qapp):
     from v6.services.session_service import SessionService
 
     svc = SessionService(data_dir=tmp_path)
-    sid = svc.create("pin me")
-    assert svc.pin(sid) is True
+    ctx = RuntimeContext.new()
+    ctx.metadata["session_title"] = "pin me"
+    svc.create(ctx)
+    sid = ctx.session_id
+
+    ctx.session_id = sid
+    assert svc.pin(ctx) is True
     assert svc.manager.get(sid)["is_pinned"] is True
-    svc.rename(sid, "renamed")
+
+    ctx.metadata["session_title"] = "renamed"
+    svc.rename(ctx)
     assert svc.manager.get(sid)["title"] == "renamed"
 
 
@@ -78,23 +117,36 @@ def test_session_service_search(tmp_path, qapp):
     from v6.services.session_service import SessionService
 
     svc = SessionService(data_dir=tmp_path)
-    sid_apple = svc.create("apple pie")
-    svc.create("banana")
 
-    # 更新 preview 以测试预览搜索
+    ctx = RuntimeContext.new()
+    ctx.metadata["session_title"] = "apple pie"
+    svc.create(ctx)
+    sid_apple = ctx.session_id
+
+    ctx.session_id = None
+    ctx.metadata["session_title"] = "banana"
+    svc.create(ctx)
+
     svc.manager.touch(sid_apple, "apple preview")
 
-    groups = svc.search("apple")
+    ctx.metadata["search_text"] = "apple"
+    svc.search(ctx)
+    groups = ctx.metadata["session_groups"]
     assert len(groups) == 1
     assert len(groups[0][2]) == 1
     assert groups[0][2][0]["sid"] == sid_apple
 
-    assert svc.search("zzzz") == []
-    # 空搜索返回全部分组
-    assert len(svc.search("")) == 1
+    ctx.metadata["search_text"] = "zzzz"
+    svc.search(ctx)
+    assert ctx.metadata["session_groups"] == []
+
+    ctx.metadata["search_text"] = ""
+    svc.search(ctx)
+    assert len(ctx.metadata["session_groups"]) == 1
 
 
-def test_chat_service_append_and_load(tmp_path, qapp):
+def test_chat_service_store_and_load(tmp_path, qapp):
+    from v6.runtime.types import ChatMessage
     from v6.session_manager import SessionManager
     from v6.services.chat_service import ChatService
 
@@ -102,31 +154,41 @@ def test_chat_service_append_and_load(tmp_path, qapp):
     chat = ChatService(session_manager=sm)
     sid = sm.create("chat")
 
-    chat.append_message(sid, "user", "hello")
-    chat.append_message(sid, "ai", "world")
+    ctx = RuntimeContext.new(session_id=sid)
+    ctx.add_message("user", "hello")
+    chat.store(ctx)
+    ctx.add_message("ai", "world")
+    chat.store(ctx)
 
-    history = chat.load_history(sid)
-    assert len(history) == 2
-    assert history[0]["role"] == "user"
-    assert history[0]["content"] == "hello"
-    assert history[1]["role"] == "ai"
-    assert history[1]["content"] == "world"
+    ctx.messages = []
+    chat.load(ctx)
+    assert len(ctx.messages) == 2
+    assert ctx.messages[0] == ChatMessage(role="user", content="hello")
+    assert ctx.messages[1] == ChatMessage(role="ai", content="world")
 
-    # 同步更新会话 preview
     assert sm.get(sid)["preview"] == "world"
 
 
-def test_chat_service_delete_history(tmp_path, qapp):
+def test_chat_service_clear(tmp_path, qapp):
     from v6.session_manager import SessionManager
     from v6.services.chat_service import ChatService
 
     sm = SessionManager(data_dir=tmp_path)
     chat = ChatService(session_manager=sm)
     sid = sm.create("chat")
-    chat.append_message(sid, "user", "msg")
-    assert len(chat.load_history(sid)) == 1
-    chat.delete_history(sid)
-    assert chat.load_history(sid) == []
+
+    ctx = RuntimeContext.new(session_id=sid)
+    ctx.add_message("user", "msg")
+    chat.store(ctx)
+
+    ctx.messages = []
+    chat.load(ctx)
+    assert len(ctx.messages) == 1
+
+    chat.clear(ctx)
+    ctx.messages = []
+    chat.load(ctx)
+    assert ctx.messages == []
 
 
 def test_services_integration_with_ui_controller(tmp_path, qapp):
@@ -138,14 +200,19 @@ def test_services_integration_with_ui_controller(tmp_path, qapp):
     cfg = ConfigService(data_dir=tmp_path)
     sess = SessionService(data_dir=tmp_path)
     chat = ChatService(session_manager=sess.manager)
+
+    # 预先创建并激活一个会话，确保 UIController.startup 能选中它
+    ctx = RuntimeContext.new()
+    ctx.metadata["session_title"] = "integration"
+    sess.create(ctx)
+    sid = ctx.session_id
+    sess.set_active(ctx)
+
     ctrl = UIController(
         config_service=cfg,
         session_service=sess,
         chat_service=chat,
     )
-
-    sid = sess.create("integration")
-    sess.set_active(sid)
 
     sessions_signal = []
     active_signal = []
@@ -158,6 +225,9 @@ def test_services_integration_with_ui_controller(tmp_path, qapp):
     assert ctrl._active_sid == active_signal[-1]
 
     ctrl.on_send_msg("integration test")
-    assert chat.load_history(ctrl._active_sid)[0]["content"] == "integration test"
+
+    ctx = RuntimeContext.new(session_id=ctrl._active_sid)
+    chat.load(ctx)
+    assert ctx.messages[0].content == "integration test"
 
     ctrl.shutdown()

@@ -16,6 +16,7 @@ from __future__ import annotations
 import copy
 import threading
 import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -57,6 +58,23 @@ class RuntimeContext:
 
     def __post_init__(self) -> None:
         self._lock = threading.RLock()
+
+    @classmethod
+    def new(
+        cls,
+        session_id: Optional[str] = None,
+        task_id: Optional[str] = None,
+        **kwargs: Any,
+    ) -> "RuntimeContext":
+        """工厂方法：自动生成 task_id，保持 Runtime 生命周期可追踪性。
+
+        业务代码应优先使用此方法，避免手动填写无意义的 task_id。
+        """
+        return cls(
+            task_id=task_id or uuid.uuid4().hex,
+            session_id=session_id,
+            **kwargs,
+        )
 
     # ─────────────────────────────────────────────────────────
     # 数据管理方法（允许）

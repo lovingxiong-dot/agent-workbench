@@ -4,6 +4,8 @@ from __future__ import annotations
 import pytest
 from PySide6.QtCore import Qt
 
+from v6.runtime.context import RuntimeContext
+
 
 @pytest.fixture(autouse=True)
 def reset_theme():
@@ -132,8 +134,11 @@ def test_uicontroller_signals(qapp, tmp_path):
     from v6.ui_controller import UIController
 
     svc = SessionService(data_dir=tmp_path)
-    sid = svc.create("contract")
-    svc.set_active(sid)
+    ctx = RuntimeContext.new()
+    ctx.metadata["session_title"] = "contract"
+    svc.create(ctx)
+    sid = ctx.session_id
+    svc.set_active(ctx)
     ctrl = UIController(session_service=svc)
     received = []
     ctrl.sign_update_sessions.connect(lambda s: received.append(("sessions", len(s))))
@@ -149,8 +154,11 @@ def test_uicontroller_session_flow(qapp, tmp_path):
     from v6.ui_controller import UIController
 
     svc = SessionService(data_dir=tmp_path)
-    sid = svc.create("flow")
-    svc.set_active(sid)
+    ctx = RuntimeContext.new()
+    ctx.metadata["session_title"] = "flow"
+    svc.create(ctx)
+    sid = ctx.session_id
+    svc.set_active(ctx)
     ctrl = UIController(session_service=svc)
     active = []
     ctrl.sign_set_active_session.connect(lambda s: active.append(s))

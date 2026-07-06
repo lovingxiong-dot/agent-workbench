@@ -1,5 +1,23 @@
 # Changelog
 
+## v6.0.1-alpha (2026-07-07) — V6 Runtime 协议深化与 Service 层统一改造
+
+### refactor
+- `RuntimeContext` 新增 `new()` 工厂方法，由 Runtime Task 自动生成 `task_id` 并初始化 Runtime Facts。
+- `ConfigService` / `SessionService` / `ChatService` 统一为 `(ctx: RuntimeContext)` 输入接口，彻底移除 legacy 方法。
+- `UIController` 全面改用 `RuntimeContext.new()` 构造上下文，避免业务代码手动填写无意义 `task_id`。
+
+### docs
+- `docs/v6/SPEC.md` 补充 Runtime Interface Principle。
+- 明确 `RuntimeContext` 为 Runtime 唯一 Public Runtime Protocol。
+- 明确 Adapter 属于 Application Layer，不保存状态、不做业务。
+- 新增 8.14 节，澄清 `RuntimeContext.new()` 语义为“创建 Runtime Task”而非创建数据对象。
+
+### test
+- 更新 `tests/v6/test_v6_services.py`、`tests/v6/test_v6_runtime.py`、`tests/v6/test_v6_ui_contract.py`，全部使用 `RuntimeContext.new()`。
+- 修复 `test_v6_ui_contract.py` 首行 docstring 语法错误。
+- V6 全量测试 `pytest tests/v6/` 90/90 通过。
+
 ## v6.0.0-alpha (2026-07-07) — V6 项目启动与架构规格
 
 ### feat

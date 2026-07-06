@@ -173,8 +173,11 @@ def test_uicontroller_runtime_end_to_end(qapp, tmp_path):
         chat_service=chat,
     )
 
-    sid = sess.create("runtime-e2e")
-    sess.set_active(sid)
+    ctx = RuntimeContext.new()
+    ctx.metadata["session_title"] = "runtime-e2e"
+    sess.create(ctx)
+    sid = ctx.session_id
+    sess.set_active(ctx)
 
     ai_chunks = []
     stream_ended = []
@@ -200,8 +203,9 @@ def test_uicontroller_runtime_end_to_end(qapp, tmp_path):
 
     assert any(text.startswith("收到：") for text, _ in ai_chunks)
     assert stream_ended
-    history = chat.load_history(sid)
-    assert history[0]["role"] == "user"
-    assert history[0]["content"] == "端到端测试"
-    assert history[1]["role"] == "ai"
-    assert history[1]["content"].startswith("收到：")
+    verify = RuntimeContext.new(session_id=sid)
+    chat.load(verify)
+    assert verify.messages[0].role == "user"
+    assert verify.messages[0].content == "端到端测试"
+    assert verify.messages[1].role == "ai"
+    assert verify.messages[1].content.startswith("收到：")

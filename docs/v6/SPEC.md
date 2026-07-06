@@ -500,6 +500,28 @@ Runtime 只知道：`Runtime.run(ctx)`。
 
 这样 Runtime 成为可嵌入的 Runtime Core。
 
+#### 关键边界：RuntimeAdapter 是 Application Boundary
+**RuntimeAdapter 是 Application Boundary，不属于 Runtime Core。**
+
+依赖方向强制为单向：
+```
+Adapter ──depends──► Runtime Core
+Runtime Core ──does not depend──► Adapter
+```
+
+禁止：
+- Runtime Core 导入任何 Adapter 实现或协议。
+- Runtime Core 中引用 `IRuntimeAdapter`、`LocalRuntimeAdapter` 等 Application Layer 类型。
+- Engine / Scheduler / EventBus 依赖 Adapter。
+
+允许：
+- Adapter 依赖 Runtime Core 的 `AgentRuntime`、`RuntimeContext`、`EventBus` 等。
+
+原因：
+- 保证 Runtime Core 可独立运行、独立测试、独立打包。
+- 防止 Application Layer 的变动反向污染 Runtime Core。
+- 为未来多入口（UI / Gateway / CLI / MCP）共享同一 Runtime Core 奠定基础。
+
 #### Adapter 两条铁律
 **铁律一：Adapter 不保存状态**
 - 所有状态必须保存在 `RuntimeContext` 中。
@@ -511,4 +533,50 @@ Runtime 只知道：`Runtime.run(ctx)`。
   Input → Context → Runtime → Output
   ```
 - 不允许在 Adapter 中实现 LLM 调用、工具执行、记忆存储、策略决策等业务逻辑。
+
+### 8.14 RuntimeContext.new() 的语义：创建 Runtime Task，而非创建数据对象
+**原则：`RuntimeContext.new()` 不应被理解为“创建一个空的数据对象”，而应被理解为“创建一个 Runtime Task”。**
+
+正确语义：
+```
+ctx = RuntimeContext.new(
+    session_id=...,
+    messages=...,
+)
+
+等价于：
+  创建一个 Runtime Task
+        ↓
+  生成 task_id（任务唯一标识）
+        ↓
+  初始化 Runtime Facts
+        ↓
+  得到携带这些事实的 RuntimeContext
+```
+
+核心澄清：
+- `task_id` **不是** `RuntimeContext` 创建出来的。
+- `task_id` **是** `Runtime Task` 创建出来的。
+- `RuntimeContext` 只是携带 `task_id`，作为该任务生命周期内的事实容器。
+
+当前实现：
+- `RuntimeContext.new()` 内部自动生成 `task_id`（UUIDv4）。
+- 业务代码优先使用 `RuntimeContext.new()`，避免手动填写无意义的 `task_id="test"` 或 `task_id="service"`。
+- 这保持了 `task_id` 的必填语义，同时减轻了调用方负担。
+
+未来演进方向：
+```
+Runtime.start_task(...)          → RuntimeContext
+TaskFactory.create(...)          → RuntimeContext
+```
+
+届时：
+- `RuntimeContext(...)` 永远只是一个纯数据对象（Facts Container）。
+- `Runtime` / `TaskFactory` 负责创建任务生命周期、生成 `task_id`、初始化 Trace。
+- 职责边界会更加清晰：创建 Context ≠ 创建 Task。
+
+说明：
+- 当前阶段使用 `RuntimeContext.new()` 作为统一入口是合理且务实的过渡方案。
+- 它既保持了 `task_id` 的必填语义和 Runtime 可追踪性（Traceability / Lifecycle），又不要求每个调用方都手动生成任务 ID。
+- 当 Runtime 的任务生命周期管理足够成熟时，再逐步将 Task 创建语义从 Context 中分离出来。
 

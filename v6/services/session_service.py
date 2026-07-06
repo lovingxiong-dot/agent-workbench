@@ -1,6 +1,8 @@
 """v6/services/session_service.py — 会话业务服务。
 
-对 SessionManager 的薄封装，为 UIController 提供符合左栏渲染契约的分组数据。
+对 SessionManager 的薄封装，为 UIController / Runtime 提供符合 Runtime Interface Principle 的接口。
+
+设计来源：docs/v6/SPEC.md 第 8.12 节。
 """
 from __future__ import annotations
 
@@ -8,11 +10,15 @@ import os
 from pathlib import Path
 from typing import Any
 
+from v6.runtime.context import RuntimeContext
 from v6.session_manager import SessionManager
 
 
 class SessionService:
-    """会话业务服务。"""
+    """会话业务服务。
+
+    公共方法统一接收 RuntimeContext，方法名保留语义。
+    """
 
     def __init__(
         self,
@@ -25,43 +31,57 @@ class SessionService:
     def manager(self) -> SessionManager:
         return self._sm
 
-    def load_groups(self) -> list[tuple[str, str, list[dict[str, Any]]]]:
-        """加载按时间分组的会话列表。"""
-        return self._sm.groups()
+    def load(self, ctx: RuntimeContext) -> None:
+        """将会话列表加载到 RuntimeContext.metadata['session_groups']。"""
+        ctx.metadata["session_groups"] = self._sm.groups()
 
-    def create(self, title: str) -> str:
-        """创建会话并设为当前激活会话。"""
+    def create(self, ctx: RuntimeContext) -> None:
+        """创建新会话，写回 ctx.session_id 与 ctx.metadata['session_title']。"""
+        title = ctx.metadata.get("session_title", "新会话")
         sid = self._sm.create(title)
         self._sm.set_active(sid)
-        return sid
+        ctx.session_id = sid
+        ctx.metadata["session_title"] = title
 
-    def delete(self, sid: str) -> None:
-        """删除会话；若删除的是当前激活会话则清除激活状态。"""
+    def delete(self, ctx: RuntimeContext) -> None:
+        """删除 ctx.session_id 指定的会话。"""
+        sid = ctx.session_id
+        if sid is None:
+            return
         if self._sm.get_active() == sid:
             self._sm.set_active(None)
         self._sm.delete(sid)
 
-    def rename(self, sid: str, title: str) -> None:
-        """重命名会话。"""
-        self._sm.rename(sid, title)
+    def rename(self, ctx: RuntimeContext) -> None:
+        """重命名 ctx.session_id 指定的会话；新标题从 ctx.metadata['session_title'] 读取。"""
+        sid = ctx.session_id
+        title = ctx.metadata.get("session_title", "重命名会话")
+        if sid:
+            self._sm.rename(sid, title)
 
-    def pin(self, sid: str) -> bool:
-        """切换会话置顶状态。"""
-        return self._sm.pin(sid)
+    def pin(self, ctx: RuntimeContext) -> bool:
+        """切换 ctx.session_id 的置顶状态，返回新置顶状态。"""
+        sid = ctx.session_id
+        if sid:
+            return self._sm.pin(sid)
+        return False
 
-    def set_active(self, sid: str) -> None:
-        """设置当前激活会话。"""
-        self._sm.set_active(sid)
+    def set_active(self, ctx: RuntimeContext) -> None:
+        """将 ctx.session_id 设为激活会话。"""
+        sid = ctx.session_id
+        if sid:
+            self._sm.set_active(sid)
 
-    def get_active(self) -> str | None:
-        """返回当前激活会话 ID。"""
-        return self._sm.get_active()
+    def get_active(self, ctx: RuntimeContext) -> None:
+        """将当前激活会话 ID 写回 ctx.session_id。"""
+        ctx.session_id = self._sm.get_active()
 
-    def search(self, text: str) -> list[tuple[str, str, list[dict[str, Any]]]]:
-        """按标题/预览搜索会话，返回分组结构。"""
-        needle = text.strip().lower()
+    def search(self, ctx: RuntimeContext) -> None:
+        """按 ctx.metadata['search_text'] 搜索会话，结果写回 ctx.metadata['session_groups']。"""
+        needle = str(ctx.metadata.get("search_text", "")).strip().lower()
         if not needle:
-            return self.load_groups()
+            self.load(ctx)
+            return
 
         def matches(s: dict[str, Any]) -> bool:
             return needle in s.get("title", "").lower() or needle in s.get(
@@ -73,4 +93,4 @@ class SessionService:
             kept = [s for s in items if matches(s)]
             if kept:
                 result.append((gid, title, kept))
-        return result
+        ctx.metadata["session_groups"] = result
