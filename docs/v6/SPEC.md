@@ -176,7 +176,40 @@ MetricsEngine ──┬──► ContextEngine（上报压缩触发/压缩率）
 3. PolicyEngine 不直接修改 MetricsEngine，只读取聚合结果进行决策。
 4. 所有引擎实现必须可 Mock：构造函数注入依赖，禁止全局单例。
 
-### 8.5 RuntimeContext 作为引擎接口顶层对象
+### 8.5 RuntimeContext 是 Runtime 的唯一公共协议（Public Runtime Protocol）
+**最高层级原则：RuntimeContext 是 Runtime 层对外暴露的唯一公共协议。任何 Engine、Service、Controller、Gateway 的公共接口，只允许传递 RuntimeContext。**
+
+**ChatMessage、ToolCall、MemoryEntry、Metrics 等对象均属于 RuntimeContext 的资源（Resources），不得作为 Runtime 的公共接口。**
+
+核心约定：
+```
+RuntimeContext = Public Runtime Protocol
+    │
+    ├── messages: List[ChatMessage]      ← Resource
+    ├── tool_calls: List[ToolCall]       ← Resource
+    ├── memory: MemoryState              ← Resource
+    ├── metrics: MetricsState            ← Resource
+    ├── metadata: Dict[str, Any]         ← Resource
+    └── ...（未来可扩展）
+```
+
+公共接口规范：
+- Engine：`async def run(ctx: RuntimeContext) -> RuntimeContext`
+- Service：`def run(ctx: RuntimeContext) -> RuntimeContext`
+- Controller：`def dispatch(ctx: RuntimeContext) -> RuntimeContext`
+- Gateway：`def forward(ctx: RuntimeContext) -> RuntimeContext`
+
+禁止：
+- `engine.run(messages)`、`engine.run(tool_call)`、`engine.run(memory)`
+- `service.save(session_id, messages)`
+- `controller.handle(text)`、`controller.on_send(role, content)`
+- `gateway.route(message)`
+
+收益：
+- 新增状态或资源时，只需扩展 `RuntimeContext`，不需要修改任何 Engine / Service / Controller / Gateway 接口。
+- `RuntimeContext` 成为架构演进的稳定锚点，公共接口长期保持不变。
+
+### 8.6 RuntimeContext 作为引擎接口顶层对象
 **原则：Engine 的公共接口统一接收 `RuntimeContext`，`ChatMessage`（或 `Message`）只是 `RuntimeContext` 的组成部分，不得成为 Engine 间通信的顶层对象。**
 
 **RuntimeContext 是运行时唯一状态对象（Single Source of Truth）。Engine 不拥有状态，RuntimeContext 才拥有状态。**
@@ -208,7 +241,7 @@ Engines（统一接收 RuntimeContext，读取输入、写回输出）
 4. `RuntimeContext` 是线程安全的（已加 `RLock`），引擎可安全读写。
 5. 单元测试通过构造 `RuntimeContext` 并调用 `engine.run(ctx)`，验证 `ctx` 状态变化。
 
-### 8.6 RuntimeContext 是可演进对象，不是固定 Schema
+### 8.7 RuntimeContext 是可演进对象，不是固定 Schema
 **原则：Engine 不允许假设 `RuntimeContext` 是固定字段集合，只访问自身职责需要的字段。**
 
 示例演进：
@@ -233,42 +266,7 @@ V6.5+ ctx
 - `async def run(ctx: RuntimeContext)` 保持稳定，架构可长期演进。
 - Engine 只依赖自己读取/写入的字段，天然解耦。
 
-### 8.8 依赖方向固定原则
-**原则：依赖方向永远是 `RuntimeContext` 包含 `ChatMessage`、`MemoryState`、`MetricsState`、`ToolCall`、`SessionInfo` 等，而不是这些对象反过来决定 `RuntimeContext` 的形态。**
-
-正确依赖图：
-```
-v6/runtime/types.py
-    │
-    ├── ChatMessage
-    ├── ToolCall / ToolResult
-    ├── TokenUsage / InferenceMetrics
-    └── CompressionStrategy / CompressionResult
-    │
-v6/runtime/context.py ── imports from types.py
-    │
-    RuntimeContext
-        ├── messages: List[ChatMessage]
-        ├── tool_calls: List[ToolCall]
-        ├── metrics: Dict[str, Any]
-        └── metadata: Dict[str, Any]
-    │
-v6/runtime/engines/interfaces.py ── imports from types.py
-    │
-    Engine.run(ctx: RuntimeContext)
-```
-
-禁止：
-- `context.py` 从 `interfaces.py` 导入 `ChatMessage`。
-- `ChatMessage` 携带 `to_langchain()` 等 V4 兼容方法，反向污染 V6 类型层。
-- Engine 接口围绕 `ChatMessage` 设计（如 `run(messages)`）。
-
-要求：
-- `v6/runtime/types.py` 是类型层最底部模块，不依赖 Engine、RuntimeContext 或业务代码。
-- `RuntimeContext` 从 `types.py` 导入所需类型；`interfaces.py` 也从 `types.py` 导入。
-- V6 的设计目标不是迁移 V4，而是建立新的 Runtime 模型；兼容 V4 只能作为迁移策略，不能成为 V6 架构约束。
-
-### 8.7 全层统一 RuntimeContext 接口铁律
+### 8.8 全层统一 RuntimeContext 接口铁律
 **原则：Engine、Service、Controller、Gateway 的公共接口统一使用 `RuntimeContext`。任何公共接口不得以 `Message`、`dict`、`Session`、`ToolCall` 等对象作为顶层参数，它们只能作为 `RuntimeContext` 的组成部分。**
 
 数据流：
@@ -315,3 +313,38 @@ RuntimeContext
 - `RuntimeContext` 成为 V6 唯一数据载体，跨层传递零碎片化对象。
 - 支持多 LLM、多 Agent、Group 用户、Gateway 路由、会话记忆、协同与争论等高级能力时，只需扩展 `RuntimeContext`，不动公共接口。
 - 各层只读写自己职责字段，天然解耦。
+### 8.9 依赖方向固定原则
+**原则：依赖方向永远是 `RuntimeContext` 包含 `ChatMessage`、`MemoryState`、`MetricsState`、`ToolCall`、`SessionInfo` 等，而不是这些对象反过来决定 `RuntimeContext` 的形态。**
+
+正确依赖图：
+```
+v6/runtime/types.py
+    │
+    ├── ChatMessage
+    ├── ToolCall / ToolResult
+    ├── TokenUsage / InferenceMetrics
+    └── CompressionStrategy / CompressionResult
+    │
+v6/runtime/context.py ── imports from types.py
+    │
+    RuntimeContext
+        ├── messages: List[ChatMessage]
+        ├── tool_calls: List[ToolCall]
+        ├── metrics: Dict[str, Any]
+        └── metadata: Dict[str, Any]
+    │
+v6/runtime/engines/interfaces.py ── imports from types.py
+    │
+    Engine.run(ctx: RuntimeContext)
+```
+
+禁止：
+- `context.py` 从 `interfaces.py` 导入 `ChatMessage`。
+- `ChatMessage` 携带 `to_langchain()` 等 V4 兼容方法，反向污染 V6 类型层。
+- Engine 接口围绕 `ChatMessage` 设计（如 `run(messages)`）。
+
+要求：
+- `v6/runtime/types.py` 是类型层最底部模块，不依赖 Engine、RuntimeContext 或业务代码。
+- `RuntimeContext` 从 `types.py` 导入所需类型；`interfaces.py` 也从 `types.py` 导入。
+- V6 的设计目标不是迁移 V4，而是建立新的 Runtime 模型；兼容 V4 只能作为迁移策略，不能成为 V6 架构约束。
+
