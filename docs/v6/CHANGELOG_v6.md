@@ -16,7 +16,12 @@
   - `MetricsEngine`：指标采集、聚合、告警。
   - `PolicyEngine`：配置查询、模型选择、压缩决策。
 - 更新 `v6/runtime/runtime.py`：`_echo_handler` 改用 `role="assistant"` 适配 `ChatMessage`。
-- 更新 `docs/v6/SPEC.md`：新增第 8.5/8.6 节，明确 RuntimeContext 是唯一状态对象、Engine 统一 run(ctx) 接口、RuntimeContext 可演进非固定 Schema。
+- 更新 `docs/v6/SPEC.md`：
+  - 8.5 节：RuntimeContext 是 Runtime 的唯一公共协议（Public Runtime Protocol）。
+  - 8.6 节：RuntimeContext 作为引擎接口顶层对象。
+  - 8.7 节：RuntimeContext 是可演进对象，不是固定 Schema。
+  - 8.8 节：全层统一 RuntimeContext 接口铁律。
+  - 8.9 节：依赖方向固定原则。
 - 更新 `docs/v6/PROJECT_BLUEPRINT_v6.md`：阶段 5 状态更新为已完成，架构图补全八大引擎。
 - 新增 `tests/v6/test_v6_engines.py`：14 个用例覆盖八大引擎构造、run(ctx) 接口、核心路径、异常降级、上下文同一性。
 - Review Agent 复核通过，无阻塞项；全量回归 78 个测试通过。
