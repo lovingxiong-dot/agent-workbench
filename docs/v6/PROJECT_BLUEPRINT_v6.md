@@ -1,7 +1,7 @@
 # V6 项目蓝图
 
 ## 元信息
-| 项目名称 | AI Agent 工作台 V6 | 当前版本 | v6.0.0-alpha | 状态 | 架构设计中 |
+| 项目名称 | AI Agent 工作台 V6 | 当前版本 | v6.1.0-alpha | 状态 | UI 层已完成（阶段 1 验收） |
 | --- | --- | --- | --- | --- | --- |
 
 ## 项目目标
@@ -42,6 +42,13 @@
 - **接口契约优先**：跨层调用必须先定义接口/信号契约，再写实现。
 - **可测试性**：每个模块必须有独立单元测试或 smoke 测试。
 - **可解释性**：每个类的职责、每条信号的含义必须在注释或文档中明确。
+
+## 最近变更（v6.1.0-alpha，2026-07-07）
+- 完成 V6 纯 UI 层全部组件实现，所有占位已用 Demo 数据填充。
+- 实现 `main_window.py`、`layout_manager.py`、`ui_controller.py` 核心装配与信号桥接。
+- 新增 `tests/v6/test_v6_ui_contract.py` 契约测试，11/11 通过。
+- Review Agent 复核通过，确认 UI 零业务逻辑、信号契约完整、单文件职责单一。
+- 历史归档：v6.0.0-alpha 项目启动与架构规格见本文件底部。
 
 ## 目录结构
 ```
@@ -131,7 +138,7 @@ agent_workbench/
 - Smoke：所有模块可 import 不报错。
 - Git 存档：`v6.0.0-alpha`。
 
-### 阶段 1：纯 UI 层（v6.1.0-alpha）
+### 阶段 1：纯 UI 层（v6.1.0-alpha）✅ 已完成
 - 实现 `ui/base.py` ThemeManager 与主题色板。
 - 实现 `ui/window_frame.py` 无边框框架。
 - 实现 `ui/session_item.py`、`ui/session_group.py`、`ui/function_page.py`。
@@ -140,8 +147,8 @@ agent_workbench/
 - 实现 `ui/tab_button.py`、`ui/recent_files.py`、`ui/right_panel.py`。
 - 所有占位用 Demo 数据填充，确保 UI 可独立运行。
 - Review Agent 校验：零业务逻辑、信号完整、单文件不过重。
-- Smoke：`python v6/main_window.py` 可显示完整三栏 UI。
-- Git 存档：`v6.1.0-alpha`。
+- Smoke：`python v6/main_window.py` 可显示完整三栏 UI；契约测试 11/11 通过。
+- Git 存档：`v6-ui-complete`（里程碑标签），版本号推进至 `v6.1.0-alpha`。
 
 ### 阶段 2：LayoutManager + MainWindow + UIController（v6.2.0-alpha）
 - 实现 `layout_manager.py`：三栏尺寸策略、拖拽热区、折叠/展开。
