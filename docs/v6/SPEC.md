@@ -348,3 +348,22 @@ v6/runtime/engines/interfaces.py ── imports from types.py
 - `RuntimeContext` 从 `types.py` 导入所需类型；`interfaces.py` 也从 `types.py` 导入。
 - V6 的设计目标不是迁移 V4，而是建立新的 Runtime 模型；兼容 V4 只能作为迁移策略，不能成为 V6 架构约束。
 
+### 8.10 RuntimeContext 是 Runtime State Container，不是 Runtime Manager
+**原则：RuntimeContext 只负责保存状态，不负责业务逻辑。**
+
+正确行为：
+- 数据管理：`add_message()`、`clone()`、`snapshot()`、`set_status()`。
+- 状态字段：`messages`、`memory`、`metrics`、`tool_calls`、`metadata`、…
+
+禁止行为：
+- `ctx.call_llm()` — 业务逻辑应交给 `InferenceEngine`。
+- `ctx.execute_tool()` — 业务逻辑应交给 `ToolEngine`。
+- `ctx.save_memory()` — 业务逻辑应交给 `MemoryEngine` / `MemoryService`。
+- `ctx.select_model()` — 业务逻辑应交给 `PolicyEngine`。
+- 任何涉及外部调用、策略决策、持久化、编排的方法。
+
+原因：
+- 防止 Context 越长越胖，最终变成上帝对象。
+- 保证 Engine / Service 是纯业务逻辑单元，便于独立测试和替换。
+- 让 `RuntimeContext` 保持稳定的形态：它是被操作的数据，不是操作者。
+

@@ -212,3 +212,30 @@ def test_chat_message_is_plain_dataclass():
     assert msg.role == "system"
     assert msg.content == "hello"
     assert not hasattr(msg, "to_langchain")
+
+
+def test_runtime_context_is_state_container_not_manager(ctx):
+    """RuntimeContext 只保存状态，不提供业务方法。"""
+    forbidden = {"call_llm", "execute_tool", "save_memory", "select_model"}
+    methods = {name for name in dir(ctx) if callable(getattr(ctx, name)) and not name.startswith("_")}
+    assert not forbidden & methods, f"RuntimeContext 不应包含业务方法: {forbidden & methods}"
+
+
+def test_runtime_context_clone_is_independent(ctx):
+    """clone() 返回深拷贝副本，修改原对象不影响副本。"""
+    ctx.add_message("user", "hello")
+    cloned = ctx.clone()
+    assert cloned is not ctx
+    assert cloned.messages[0].content == "hello"
+    ctx.add_message("assistant", "hi")
+    assert len(cloned.messages) == 1
+    assert len(ctx.messages) == 2
+
+
+def test_runtime_context_snapshot_is_deep_copy(ctx):
+    """snapshot() 返回当前状态的深拷贝快照。"""
+    ctx.add_message("user", "hello")
+    snap = ctx.snapshot()
+    ctx.add_message("assistant", "hi")
+    assert len(snap["messages"]) == 1
+    assert len(ctx.messages) == 2
