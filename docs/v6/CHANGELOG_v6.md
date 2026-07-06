@@ -24,7 +24,8 @@
   - 8.9 节：依赖方向固定原则。
   - 8.10 节：RuntimeContext 是 Runtime State Container，不是 Runtime Manager（三条铁律）。
   - 8.11 节：未来接口 Snapshot → Replay 预留。
-  - 8.12 节：统一参数 `(ctx)`，保留语义方法名。
+  - 8.12 节：Runtime Interface Principle（运行时接口原则）— 统一参数 `(ctx)`，保留语义方法名。
+  - 8.13 节：Adapter 属于 Application Layer，不保存状态、不做业务，只做 Input → Context → Runtime → Output。
 - 实现 `v6/runtime/adapter.py`：定义 `IRuntimeAdapter` 协议与 `LocalRuntimeAdapter` 实现；Runtime 不知调用方是谁。
 - 新增 `tests/v6/test_v6_runtime_adapter.py`：5 个用例覆盖 submit / cancel / subscribe / 协议抽象性 / Runtime 无调用方依赖。
 - 修复 `tests/v6/test_v6_runtime.py::test_runtime_context_tracks_messages` 时序断言，增加 `scheduler.wait_all`。
