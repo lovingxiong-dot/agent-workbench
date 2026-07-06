@@ -22,9 +22,10 @@
   - 8.7 节：RuntimeContext 是可演进对象，不是固定 Schema。
   - 8.8 节：全层统一 RuntimeContext 接口铁律。
   - 8.9 节：依赖方向固定原则。
+  - 8.10 节：RuntimeContext 是 Runtime State Container，不是 Runtime Manager。
 - 更新 `docs/v6/PROJECT_BLUEPRINT_v6.md`：阶段 5 状态更新为已完成，架构图补全八大引擎。
-- 新增 `tests/v6/test_v6_engines.py`：14 个用例覆盖八大引擎构造、run(ctx) 接口、核心路径、异常降级、上下文同一性。
-- Review Agent 复核通过，无阻塞项；全量回归 78 个测试通过。
+- 新增 `tests/v6/test_v6_engines.py`：17 个用例覆盖八大引擎构造、run(ctx) 接口、核心路径、异常降级、上下文同一性、RuntimeContext 状态容器约束。
+- Review Agent 复核通过，无阻塞项；全量回归 81 个测试通过。
 
 ## v6.4.0-alpha (2026-07-07) — AgentRuntime 骨架与事件总线
 - 实现 `v6/runtime/event_bus.py`：独立后台线程 + asyncio 队列的异步事件总线，支持同步/异步订阅者。

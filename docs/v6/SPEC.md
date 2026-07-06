@@ -349,21 +349,99 @@ v6/runtime/engines/interfaces.py ── imports from types.py
 - V6 的设计目标不是迁移 V4，而是建立新的 Runtime 模型；兼容 V4 只能作为迁移策略，不能成为 V6 架构约束。
 
 ### 8.10 RuntimeContext 是 Runtime State Container，不是 Runtime Manager
-**原则：RuntimeContext 只负责保存状态，不负责业务逻辑。**
+**原则：RuntimeContext 保存 Runtime Facts，不拥有 Runtime Behavior / 业务能力。**
 
-正确行为：
-- 数据管理：`add_message()`、`clone()`、`snapshot()`、`set_status()`。
-- 状态字段：`messages`、`memory`、`metrics`、`tool_calls`、`metadata`、…
+#### 铁律一：Context 不拥有业务能力（Ownership）
+- `RuntimeContext` 负责保存 Runtime Facts。
+- `Engine` / `Service` 负责产生 Runtime Facts。
+- `RuntimeContext` 不拥有任何业务能力。
 
-禁止行为：
-- `ctx.call_llm()` — 业务逻辑应交给 `InferenceEngine`。
-- `ctx.execute_tool()` — 业务逻辑应交给 `ToolEngine`。
-- `ctx.save_memory()` — 业务逻辑应交给 `MemoryEngine` / `MemoryService`。
-- `ctx.select_model()` — 业务逻辑应交给 `PolicyEngine`。
+禁止在 `RuntimeContext` 上定义：
+- `ctx.call_llm()`
+- `ctx.execute_tool()`
+- `ctx.save_memory()`
+- `ctx.invoke_agent()`
+- `ctx.dispatch()`
 - 任何涉及外部调用、策略决策、持久化、编排的方法。
+
+#### 铁律二：Context 允许拥有数据管理能力（Data Management）
+允许在 `RuntimeContext` 上定义：
+- `ctx.add_message()`
+- `ctx.clone()`
+- `ctx.snapshot()` / `ctx.freeze()`
+- `ctx.restore(snapshot)`
+- `ctx.reset()`
+- `ctx.to_dict()`
+
+未来可扩展：
+- `ctx.diff(old_ctx)`
+- `ctx.merge(other_ctx)`
+
+这些全部是数据管理，不是业务。
+
+#### 铁律三：Engine 永远修改 Context，而不是彼此调用
+正确模式：
+```
+Runtime
+    │
+    ▼
+Phase
+    │
+    ▼
+Engine A ──► ctx
+    │
+    ▼
+Engine B ──► ctx
+    │
+    ▼
+Engine C ──► ctx
+```
+
+错误模式：
+```
+InferenceEngine ──► ToolEngine.run() ──► MemoryEngine.run()
+```
+
+要求：
+- Engine 之间零耦合。
+- 每个 Engine 只读取/修改 `RuntimeContext` 中自己负责的字段。
+- Runtime 负责编排 Engine 执行顺序。
 
 原因：
 - 防止 Context 越长越胖，最终变成上帝对象。
 - 保证 Engine / Service 是纯业务逻辑单元，便于独立测试和替换。
 - 让 `RuntimeContext` 保持稳定的形态：它是被操作的数据，不是操作者。
+
+### 8.11 未来接口：Snapshot → Replay（预留）
+**原则：`RuntimeContext.snapshot()` / `restore()` 为未来的 Checkpoint / Replay 能力奠定基础。**
+
+未来执行模型：
+```
+Phase
+    │
+    ▼
+Snapshot
+    │
+    ▼
+ToolEngine
+    │
+    ▼
+Snapshot
+    │
+    ▼
+InferenceEngine
+    │
+    ▼
+Snapshot
+```
+
+价值：
+- **Checkpoint**：每个 Phase 或关键操作后可保存快照。
+- **Rollback**：Review / Approval 失败时恢复到上一快照。
+- **Replay**：像录像一样重放完整 Agent 执行过程。
+- **Debugger**：基于快照序列定位问题、查看中间状态。
+
+实现策略：
+- 当前阶段只需保证 `snapshot()` / `restore()` / `freeze()` 数据正确、深拷贝完整。
+- Replay 编排器在后续阶段基于快照序列实现，不修改 `RuntimeContext` 公共接口。
 

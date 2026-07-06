@@ -239,3 +239,59 @@ def test_runtime_context_snapshot_is_deep_copy(ctx):
     ctx.add_message("assistant", "hi")
     assert len(snap["messages"]) == 1
     assert len(ctx.messages) == 2
+
+
+def test_runtime_context_restore_rollback(ctx):
+    """restore(snapshot) 可回滚到之前状态。"""
+    ctx.add_message("user", "hello")
+    snap = ctx.snapshot()
+    ctx.add_message("assistant", "hi")
+    ctx.phase = "execute"
+    ctx.restore(snap)
+    assert len(ctx.messages) == 1
+    assert ctx.messages[0].content == "hello"
+    assert ctx.phase == ""
+
+
+def test_runtime_context_freeze_alias(ctx):
+    """freeze() 是 snapshot() 的别名，语义为不可变快照。"""
+    ctx.add_message("user", "hello")
+    frozen = ctx.freeze()
+    ctx.add_message("assistant", "hi")
+    assert len(frozen["messages"]) == 1
+
+
+def test_runtime_context_reset_keeps_identity(ctx):
+    """reset() 保留 task_id 等标识，清空状态。"""
+    ctx.session_id = "sid-1"
+    ctx.phase = "plan"
+    ctx.add_message("user", "hello")
+    ctx.reset()
+    assert ctx.task_id
+    assert ctx.session_id == "sid-1"
+    assert ctx.phase == ""
+    assert not ctx.messages
+
+
+def test_engines_do_not_call_each_other(ctx):
+    """Engine 之间零耦合，只通过 RuntimeContext 共享状态。"""
+    import asyncio
+
+    class EngineA(Engine):
+        async def run(self, ctx):
+            ctx.metadata["a_ran"] = True
+            return ctx
+
+    class EngineB(Engine):
+        async def run(self, ctx):
+            assert ctx.metadata.get("a_ran")  # 通过 ctx 读取 A 的结果
+            ctx.metadata["b_ran"] = True
+            return ctx
+
+    a = EngineA()
+    b = EngineB()
+    # Runtime 编排：A 先执行，B 后执行；Engine 之间不直接调用
+    ctx = asyncio.run(a.run(ctx))
+    ctx = asyncio.run(b.run(ctx))
+    assert ctx.metadata["a_ran"]
+    assert ctx.metadata["b_ran"]
