@@ -16,7 +16,17 @@ def test_import_v6_ui_modules():
 
 def test_import_v6_runtime_modules():
     from v6.runtime import runtime, context, event_bus, scheduler, task
-    from v6.runtime.engines import phase, inference, tool, policy, memory, metrics
+    from v6.runtime.engines import (
+        base,
+        llm,
+        tool,
+        memory,
+        planner,
+        workflow,
+        code,
+        vision,
+        knowledge,
+    )
 
 
 def test_import_v6_managers():

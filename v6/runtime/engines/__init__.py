@@ -1,45 +1,37 @@
-"""v6/runtime/engines/__init__.py — V6 八引擎层入口。
+"""v6/runtime/engines/__init__.py — V6 Engine 层入口。
 
+当前阶段：Runtime Kernel 骨架验证，八大 Engine 均为空壳实现。
 使用方式：
     from v6.runtime.engines import (
-        ContextEngine, PromptEngine, InferenceEngine, ToolEngine,
-        PhaseEngine, MemoryEngine, MetricsEngine, PolicyEngine,
+        BaseEngine,
+        LLMEngine,
+        ToolEngine,
+        MemoryEngine,
+        PlannerEngine,
+        WorkflowEngine,
+        CodeEngine,
+        VisionEngine,
+        KnowledgeEngine,
     )
 """
-from v6.runtime.engines.context import ContextEngine
-from v6.runtime.engines.inference import InferenceEngine
-from v6.runtime.engines.interfaces import Engine
+from v6.runtime.engines.base import BaseEngine
+from v6.runtime.engines.code import CodeEngine
+from v6.runtime.engines.knowledge import KnowledgeEngine
+from v6.runtime.engines.llm import LLMEngine
 from v6.runtime.engines.memory import MemoryEngine
-from v6.runtime.engines.metrics import MetricsEngine
-from v6.runtime.engines.phase import PhaseEngine
-from v6.runtime.engines.policy import PolicyEngine
-from v6.runtime.engines.prompt import PromptEngine
+from v6.runtime.engines.planner import PlannerEngine
 from v6.runtime.engines.tool import ToolEngine
-from v6.runtime.types import (
-    ChatMessage,
-    CompressionResult,
-    CompressionStrategy,
-    InferenceMetrics,
-    ToolCall,
-    ToolResult,
-    TokenUsage,
-)
+from v6.runtime.engines.vision import VisionEngine
+from v6.runtime.engines.workflow import WorkflowEngine
 
 __all__ = [
-    "ContextEngine",
-    "PromptEngine",
-    "InferenceEngine",
+    "BaseEngine",
+    "LLMEngine",
     "ToolEngine",
-    "PhaseEngine",
     "MemoryEngine",
-    "MetricsEngine",
-    "PolicyEngine",
-    "Engine",
-    "ChatMessage",
-    "TokenUsage",
-    "InferenceMetrics",
-    "ToolCall",
-    "ToolResult",
-    "CompressionStrategy",
-    "CompressionResult",
+    "PlannerEngine",
+    "WorkflowEngine",
+    "CodeEngine",
+    "VisionEngine",
+    "KnowledgeEngine",
 ]

@@ -1,5 +1,35 @@
 # Changelog
 
+## v6.5.8-alpha (2026-07-07) — Step 4：Eight Engine Skeleton + Runtime Integration Test
+
+### feat
+- 新增 `v6/runtime/engines/base.py`：`BaseEngine` 抽象基类，内置统一 `EngineState` 状态机与默认生命周期。
+- 新增八大 Engine 空壳：
+  - `llm.py` — LLM Engine
+  - `tool.py` — Tool Engine
+  - `memory.py` — Memory Engine
+  - `planner.py` — Planner Engine（构造函数注入 `EngineManager`，演示编排 LLM/Tool）
+  - `workflow.py` — Workflow Engine
+  - `code.py` — Code Engine
+  - `vision.py` — Vision Engine
+  - `knowledge.py` — Knowledge Engine
+- 所有 Engine 统一实现 `load()` / `initialize(ctx)` / `health_check()` / `execute(ctx)` / `shutdown()`。
+- `execute(ctx)` 返回 `RuntimeResult`，占位数据写入 `result.extra`，`status="placeholder"`。
+
+### refactor
+- 清理 `v6/runtime/engines/` 下与新版 Engine Protocol 不兼容的旧实现（Context/Prompt/Inference/Metrics/Phase/Policy 等）。
+- 删除 `tests/v6/test_v6_engines.py`，更新 `tests/v6/test_v6_smoke.py` 导入新的 Engine 模块。
+
+### test
+- 新增 `tests/v6/test_v6_runtime_kernel.py` Runtime Kernel 集成测试，覆盖：
+  - EngineManager 动态发现八大 Engine。
+  - 所有 Engine 生命周期一致性（CREATED → READY → STOPPED）。
+  - 所有 Engine 执行返回 `RuntimeResult`。
+  - `EngineManager.execute()` 自动产生 `engine:{name}` TraceStep。
+  - Planner 编排 LLM/Tool 并产生对应 Trace Timeline。
+  - Planner 无 `EngineManager` 注入时回退到 placeholder。
+- V6 全量测试 `pytest tests/v6/` **130/130 通过**。
+
 ## v6.5.7-alpha (2026-07-07) — Step 3：Engine Protocol 与 EngineManager 生命周期
 
 ### feat
