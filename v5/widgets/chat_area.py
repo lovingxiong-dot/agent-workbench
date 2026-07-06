@@ -782,7 +782,20 @@ class ChatArea(QWidget):
         self._scene.refresh()
         self._scroll_to_bottom()
 
+    _PHASE_TITLES = {
+        "analyze": "分析", "confirm": "确认",
+        "execute": "执行", "verify": "验证", "archive": "归档",
+    }
+
     def _add_ai_entry(self, entry: dict, idx: int):
+        phase = entry.get("phase", "")
+        if phase:
+            title = self._PHASE_TITLES.get(phase, phase)
+            accent = PhasePanel.PHASE_COLORS.get(phase, "accent_blue")
+            panel = PhasePanel(title, accent)
+            panel._history_index = idx
+            self._scene.add_chat_item(panel)
+
         thinking = _strip_html(entry.get("thinking", ""))
         if thinking:
             fold = FoldBlock("思考过程", "")
@@ -836,6 +849,15 @@ class ChatArea(QWidget):
     def append_tool_fold(self, tool_html: str):
         self._chat_history.append({"role": "tool", "html": tool_html})
         self._render()
+
+    def append_tool(self, name: str, args: dict, result: str, elapsed_ms: int):
+        """将工具调用渲染为聊天区折叠卡片。"""
+        try:
+            args_text = ", ".join(f"{k}={v}" for k, v in (args or {}).items())
+        except Exception:
+            args_text = str(args)
+        html = f"<b>{name}</b>({args_text})<br/>结果：{result[:200]}<br/>耗时：{elapsed_ms}ms"
+        self.append_tool_fold(html)
 
     def append_chunk(self, chunk: str):
         if self._chat_history and self._chat_history[-1].get("role") in ("ai_stream", "ai"):
@@ -909,15 +931,21 @@ class ChatArea(QWidget):
         self._header._status_lbl.hide()
         self._header._status_lbl.clear()
 
-    def show_confirmation(self, task_list):
-        lines = []
-        for i, t in enumerate(task_list[:5], 1):
-            desc = getattr(t, "description", str(t))
-            lines.append(f"{i}. {desc}")
-        if len(task_list) > 5:
-            lines.append(f"... 等共 {len(task_list)} 项")
-        text = "\n".join(lines) if lines else "（无具体任务）"
-        self._confirm_lbl.setText(f"是否确认执行以下任务？\n{text}")
+    def show_confirmation(self, payload=None, command: str = ""):
+        if isinstance(payload, (list, tuple)):
+            task_list = payload
+            lines = []
+            for i, t in enumerate(task_list[:5], 1):
+                desc = getattr(t, "description", str(t))
+                lines.append(f"{i}. {desc}")
+            if len(task_list) > 5:
+                lines.append(f"... 等共 {len(task_list)} 项")
+            text = "\n".join(lines) if lines else "（无具体任务）"
+            self._confirm_lbl.setText(f"是否确认执行以下任务？\n{text}")
+        elif isinstance(payload, str) and (payload or command):
+            self._confirm_lbl.setText(f"工具 {payload} 请求执行以下命令，是否确认？\n{command}")
+        else:
+            self._confirm_lbl.setText("是否确认执行以下任务？")
         self._confirm_bar.show()
 
     def hide_confirmation(self):
@@ -947,6 +975,8 @@ class ChatArea(QWidget):
                 parts.append(entry.get("body", ""))
             elif role == "system":
                 parts.append(entry.get("text", ""))
+            elif role == "tool":
+                parts.append(entry.get("html", ""))
         return "\n".join(parts)
 
     def _toggle_search(self):

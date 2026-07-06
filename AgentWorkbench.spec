@@ -37,7 +37,7 @@ a = Analysis(
         'v5.service.adapter',
         'v5.service.chat_service',
         'v5.controller.work_controller',
-        'v5.model.events',
+        'v5.service.chat_worker',
         'v5.widgets.base',
         'v5.widgets.window_frame',
         'v5.widgets.left_panel',

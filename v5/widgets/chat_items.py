@@ -215,8 +215,8 @@ class PhasePanel(ChatItem):
     BODY_TOP = 8.0
     # 颜色键（避免类定义时捕获固定颜色）
     PHASE_COLORS = {
-        "analyze": "accent_blue", "execute": "yellow",
-        "archive": "green", "verify": "purple",
+        "analyze": "accent_blue", "confirm": "accent",
+        "execute": "yellow", "archive": "green", "verify": "purple",
     }
 
     def __init__(self, title: str, accent_key: str, body_items: list = None, parent=None):

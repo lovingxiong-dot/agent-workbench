@@ -1,5 +1,27 @@
 # Changelog
 
+## v5.0.20-alpha (2026-07-06) — V5 剩余 5% 细节功能闭环
+
+### fix
+- 修复 `v5/service/adapter.py` 中实例属性 `self._on_tool_executed` 与类方法 `_on_tool_executed` 同名冲突，导致 `worker.tool_executed` 信号连接到空 lambda、终端工具日志无法输出的 Bug。
+- 将实例属性重命名为 `self._on_tool_executed_cb`，保留类方法名不变，信号现在正确连接到方法（先输出终端日志，再转发外部回调）。
+- 修复 `AgentWorkbench.spec` 隐藏导入：移除已删除的 `v5.model.events`，添加 `v5.service.chat_worker`。
+
+### feat
+- `v5/widgets/chat_area.py` 的 `_add_ai_entry` 支持按 `phase` 渲染 `PhasePanel` 阶段面板。
+- `v5/widgets/chat_items.py` 的 `PhasePanel.PHASE_COLORS` 补充 `confirm` 阶段样式，完整支持 analyze/confirm/execute/verify/archive 五种阶段。
+- `ChatArea.to_plain_text()` 增加对 `role == "tool"` 的 HTML 内容拼接，方便测试验证。
+
+### test
+- `tests/test_v5_adapter.py` 新增工具执行/确认请求的终端日志与回调转发测试。
+- `tests/test_v5_controller.py` 新增 `sign_tool_executed`、`sign_confirm_required` 信号透传，`handle_confirmation_result`、`handle_analyze_project`、`handle_session_rename` 行为测试。
+- `tests/test_v5_chat_area.py` 新增 `append_tool` 渲染与全部五种 phase 渲染测试。
+- `tests/test_v5_integration.py` 新增 craft 模式下完整工具调用流程测试（chunk → tool → confirm → ai final）。
+- 全量测试：`pytest tests/` 343/343 通过。
+
+### build
+- PyInstaller 重新打包 `dist/AgentWorkbench/AgentWorkbench.exe`，验证 exe 可独立启动并保持运行。
+
 ## v5.0.19-alpha (2026-07-06) — V5 模式列表统一与全量测试补齐
 
 ### fix

@@ -84,6 +84,11 @@ class _ChatWorker(QThread):
                 pass
         self.quit()
 
+    def confirm(self, confirmed: bool):
+        """用户确认/取消危险命令。"""
+        if self._session is not None:
+            self._session.set_confirm_result(confirmed)
+
     def reset_cancel(self):
         self._cancel_event.clear()
 

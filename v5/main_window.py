@@ -1,6 +1,6 @@
 """v5 轻量化主窗口：仅 UI 组装 + 单层信号转发。"""
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QHBoxLayout, QSplitter, QFileDialog,
+    QMainWindow, QWidget, QHBoxLayout, QSplitter, QFileDialog, QInputDialog,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut
@@ -71,6 +71,13 @@ class MainWindow(QMainWindow):
         self._center.sign_export_requested.connect(self._on_export_requested)
         self._center.sign_settings_requested.connect(self._on_settings_requested)
         self._center.sign_toggle_right.connect(self.toggle_panels)
+        self._center.analyze_project_clicked.connect(self._ctrl.handle_analyze_project)
+        self._center.confirmation_clicked.connect(self._ctrl.handle_confirmation_result)
+
+        self._ctrl.sign_analyze_button_visible.connect(self._center.set_analyze_button_visible)
+        self._ctrl.sign_rename_requested.connect(self._on_rename_requested)
+        self._ctrl.sign_tool_executed.connect(self._center.append_tool)
+        self._ctrl.sign_confirm_required.connect(self._center.show_confirmation)
 
         self._right.sign_open_file.connect(self._ctrl.handle_open_file)
         self._right.sign_load_url.connect(self._ctrl.handle_load_url)
@@ -112,6 +119,13 @@ class MainWindow(QMainWindow):
             self._center._toggle_search()
         if self._center._more_dropdown.isVisible():
             self._center._more_dropdown.hide()
+
+    def _on_rename_requested(self, sid: str, current_title: str):
+        new_title, ok = QInputDialog.getText(
+            self, "重命名会话", "新标题：", text=current_title
+        )
+        if ok and new_title.strip():
+            self._ctrl.handle_session_rename(sid, new_title.strip())
 
     def _on_export_requested(self):
         path, selected_filter = QFileDialog.getSaveFileName(

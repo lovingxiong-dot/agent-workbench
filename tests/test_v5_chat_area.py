@@ -432,6 +432,28 @@ class TestChatArea:
         assert self.widget._search_matches
         assert 0 in self.widget._search_matches
 
+    def test_chat_area_append_tool_adds_tool_entry(self):
+        self.widget.append_tool("read_file", {"path": "/tmp/a"}, "content", 42)
+        self.app.processEvents()
+        assert any(entry.get("role") == "tool" for entry in self.widget._chat_history)
+        assert "read_file" in self.widget.to_plain_text()
+        assert "content" in self.widget.to_plain_text()
+
+    def test_chat_area_append_ai_with_phase_renders_panel(self):
+        self.widget.append_ai("result", phase="analyze")
+        self.app.processEvents()
+        assert self.widget._chat_history[-1].get("phase") == "analyze"
+        # 阶段面板与文本内容都应被渲染到场景
+        assert len(self.widget._scene._items) >= 1
+        assert "result" in self.widget.to_plain_text()
+
+    def test_chat_area_phase_titles_for_all_phases(self):
+        for phase in ("analyze", "confirm", "execute", "verify", "archive"):
+            self.widget.clear_chat()
+            self.widget.append_ai("body", phase=phase)
+            self.app.processEvents()
+            assert self.widget._chat_history[-1].get("phase") == phase
+
 
 # ══════════════════════════════════════════════════════════════
 # 辅助函数

@@ -111,3 +111,61 @@ class TestV5Controller:
         assert "build" not in modes
         assert "review" not in modes
         assert set(modes) == {"ask", "plan", "craft"}
+
+    def test_tool_executed_signal_forwarded(self, tmp_path):
+        ctrl = self._make_controller(tmp_path)
+        received = []
+        ctrl.sign_tool_executed.connect(
+            lambda name, args, result, elapsed: received.append(
+                {"name": name, "args": args, "result": result, "elapsed": elapsed}
+            )
+        )
+        # 通过底层 adapter 回调触发
+        ctrl._chat_service._adapter._on_tool_executed(
+            "read_file", {"path": "/tmp/a"}, "content", 42
+        )
+        self.app.processEvents()
+        assert len(received) == 1
+        assert received[0]["name"] == "read_file"
+        assert received[0]["args"] == {"path": "/tmp/a"}
+        assert received[0]["result"] == "content"
+        assert received[0]["elapsed"] == 42
+
+    def test_confirm_required_signal_forwarded(self, tmp_path):
+        ctrl = self._make_controller(tmp_path)
+        received = []
+        ctrl.sign_confirm_required.connect(
+            lambda tool_name, command: received.append((tool_name, command))
+        )
+        ctrl._chat_service._adapter._on_confirm_required("bash", "rm -rf /tmp")
+        self.app.processEvents()
+        assert received == [("bash", "rm -rf /tmp")]
+
+    def test_handle_confirmation_result_forwards_to_adapter(self, tmp_path):
+        ctrl = self._make_controller(tmp_path)
+        ctrl.handle_create_chat("chat")
+        self.app.processEvents()
+        sid = ctrl._active_session_id
+        # 替换 adapter.set_confirm_result 为 mock，验证被调用
+        called = []
+        ctrl._chat_service._adapter.set_confirm_result = lambda session_id, confirmed: called.append(
+            (session_id, confirmed)
+        )
+        ctrl.handle_confirmation_result(True)
+        assert called == [(sid, True)]
+
+    def test_handle_analyze_project_creates_work_session(self, tmp_path):
+        ctrl = self._make_controller(tmp_path)
+        ctrl.handle_analyze_project()
+        self.app.processEvents()
+        assert ctrl._draft_session_type == "work"
+        assert ctrl._active_session_id
+        messages = ctrl._session_service.list_messages(ctrl._active_session_id)
+        assert any("分析当前项目" in m["content"] for m in messages)
+
+    def test_handle_session_rename_updates_title(self, tmp_path):
+        ctrl = self._make_controller(tmp_path)
+        sid = ctrl._session_service.create_session(session_type="chat", model="tool-agent", mode="ask")
+        ctrl.handle_session_rename(sid, "新标题")
+        session = ctrl._session_service.get_session(sid)
+        assert session.title == "新标题"

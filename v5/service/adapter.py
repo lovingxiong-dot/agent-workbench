@@ -48,6 +48,8 @@ class V5Adapter(QObject):
         self._on_chunk: Callable[[str], None] = lambda text: None
         self._on_stream_end: Callable[[], None] = lambda: None
         self._on_terminal: Callable[[str], None] = lambda text: None
+        self._on_tool_executed_cb: Callable[[str, dict, str, int], None] = lambda name, args, result, elapsed_ms: None
+        self._on_confirm: Callable[[str, str], None] = lambda tool_name, command: None
         self._on_open_file: Callable[[str], None] = lambda path: None
         self._on_load_url: Callable[[str], None] = lambda url: None
         self._on_switch_tab: Callable[[str], None] = lambda tab: None
@@ -63,6 +65,8 @@ class V5Adapter(QObject):
         on_chunk: Callable[[str], None] = None,
         on_stream_end: Callable[[], None] = None,
         on_terminal: Callable[[str], None] = None,
+        on_tool_executed: Callable[[str, dict, str, int], None] = None,
+        on_confirm: Callable[[str, str], None] = None,
         on_open_file: Callable[[str], None] = None,
         on_load_url: Callable[[str], None] = None,
         on_switch_tab: Callable[[str], None] = None,
@@ -77,6 +81,10 @@ class V5Adapter(QObject):
             self._on_stream_end = on_stream_end
         if on_terminal:
             self._on_terminal = on_terminal
+        if on_tool_executed:
+            self._on_tool_executed_cb = on_tool_executed
+        if on_confirm:
+            self._on_confirm = on_confirm
         if on_open_file:
             self._on_open_file = on_open_file
         if on_load_url:
@@ -210,9 +218,16 @@ class V5Adapter(QObject):
 
     def _on_tool_executed(self, name: str, args: dict, result: str, elapsed_ms: int):
         self._on_terminal(f"[工具] {name}({args}) -> {result[:100]} ({elapsed_ms}ms)")
+        self._on_tool_executed_cb(name, args, result, elapsed_ms)
 
     def _on_confirm_required(self, tool_name: str, command: str):
         self._on_terminal(f"[确认] {tool_name}: {command}")
+        self._on_confirm(tool_name, command)
+
+    def set_confirm_result(self, session_id: str, confirmed: bool):
+        worker = self._workers.get(session_id)
+        if worker is not None:
+            worker.confirm(confirmed)
 
     def _get_llm(self, model: str):
         try:

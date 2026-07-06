@@ -109,6 +109,36 @@ class TestV5Adapter:
         assert called["chunk"] == "c"
         assert called["end"] is True
 
+    def test_adapter_tool_executed_logs_and_forwards(self):
+        tool_called = {}
+        terminal = []
+        self.adapter.set_callbacks(
+            on_terminal=terminal.append,
+            on_tool_executed=lambda name, args, result, elapsed: tool_called.update(
+                {"name": name, "args": args, "result": result, "elapsed": elapsed}
+            ),
+        )
+        self.adapter._on_tool_executed("read_file", {"path": "/tmp/a"}, "content", 42)
+        assert tool_called["name"] == "read_file"
+        assert tool_called["args"] == {"path": "/tmp/a"}
+        assert tool_called["result"] == "content"
+        assert tool_called["elapsed"] == 42
+        assert any("[工具]" in t and "read_file" in t for t in terminal)
+
+    def test_adapter_confirm_required_logs_and_forwards(self):
+        confirm_called = {}
+        terminal = []
+        self.adapter.set_callbacks(
+            on_terminal=terminal.append,
+            on_confirm=lambda tool_name, command: confirm_called.update(
+                {"tool": tool_name, "cmd": command}
+            ),
+        )
+        self.adapter._on_confirm_required("bash", "rm -rf /tmp")
+        assert confirm_called["tool"] == "bash"
+        assert confirm_called["cmd"] == "rm -rf /tmp"
+        assert any("[确认]" in t and "bash" in t for t in terminal)
+
     def test_adapter_emit_user_send_adds_message(self):
         self.adapter._get_llm = MagicMock(return_value=MagicMock())
         self.adapter.emit_user_send("sid-1", "hello", "tool-agent", "ask", "chat", "")

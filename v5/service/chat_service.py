@@ -14,6 +14,8 @@ class ChatService:
         self._on_chunk: Callable[[str], None] = lambda text: None
         self._on_stream_end: Callable[[], None] = lambda: None
         self._on_terminal: Callable[[str], None] = lambda text: None
+        self._on_tool_executed: Callable[[str, dict, str, int], None] = lambda name, args, result, elapsed_ms: None
+        self._on_confirm: Callable[[str, str], None] = lambda tool_name, command: None
         self._last_session_id: str = ""
 
     def set_callbacks(
@@ -23,6 +25,8 @@ class ChatService:
         on_chunk: Callable[[str], None] = None,
         on_stream_end: Callable[[], None] = None,
         on_terminal: Callable[[str], None] = None,
+        on_tool_executed: Callable[[str, dict, str, int], None] = None,
+        on_confirm: Callable[[str, str], None] = None,
     ):
         if on_user:
             self._on_user = on_user
@@ -34,6 +38,10 @@ class ChatService:
             self._on_stream_end = on_stream_end
         if on_terminal:
             self._on_terminal = on_terminal
+        if on_tool_executed:
+            self._on_tool_executed = on_tool_executed
+        if on_confirm:
+            self._on_confirm = on_confirm
 
         self._adapter.set_callbacks(
             on_user=self._on_user,
@@ -41,6 +49,8 @@ class ChatService:
             on_chunk=self._on_chunk,
             on_stream_end=self._on_stream_end,
             on_terminal=self._on_terminal,
+            on_tool_executed=self._on_tool_executed,
+            on_confirm=self._on_confirm,
             on_open_file=lambda path: None,
             on_load_url=lambda url: None,
             on_switch_tab=lambda tab: None,
@@ -91,6 +101,9 @@ class ChatService:
     def stop_message(self):
         if self._last_session_id:
             self._adapter.emit_user_stop(self._last_session_id)
+
+    def confirm_result(self, session_id: str, confirmed: bool):
+        self._adapter.set_confirm_result(session_id, confirmed)
 
     def run_terminal_command(self, command: str, cwd: str = ""):
         self._adapter.run_terminal_command(command, cwd)

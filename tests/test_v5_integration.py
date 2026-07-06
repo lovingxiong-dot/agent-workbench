@@ -82,6 +82,16 @@ class MockAdapter(QObject):
         if end:
             end()
 
+    def simulate_tool_executed(self, name: str, args: dict, result: str, elapsed_ms: int):
+        cb = self._callbacks.get("on_tool_executed")
+        if cb:
+            cb(name, args, result, elapsed_ms)
+
+    def simulate_confirm_required(self, tool_name: str, command: str):
+        cb = self._callbacks.get("on_confirm")
+        if cb:
+            cb(tool_name, command)
+
 
 @pytest.fixture(scope="session")
 def qt_app():
@@ -216,3 +226,36 @@ class TestV5Integration:
         self.controller.handle_model_changed("flash")
         assert self.controller._current_model == "flash"
         assert self.config.get("app.last_model") == "flash"
+
+    def test_craft_mode_tool_execution_flow(self):
+        """craft 模式下完整工具调用链路：发送 → 工具执行 → 确认请求 → 结果返回 → 完成。"""
+        # 连接 Controller 新增的 tool/confirm 信号
+        tool_signals = []
+        confirm_signals = []
+        self.controller.sign_tool_executed.connect(
+            lambda name, args, result, elapsed: tool_signals.append(
+                {"name": name, "args": args, "result": result, "elapsed": elapsed}
+            )
+        )
+        self.controller.sign_confirm_required.connect(
+            lambda tool_name, command: confirm_signals.append((tool_name, command))
+        )
+
+        self.controller.handle_create_chat("work")
+        self.controller.handle_mode_changed("craft")
+        self.app.processEvents()
+
+        self.controller.handle_send_message("分析项目")
+        self.app.processEvents()
+
+        # 模拟 chunk、工具执行、确认请求、最终结果
+        self.adapter.simulate_chunk("正在分析")
+        self.adapter.simulate_tool_executed("list_files", {"path": "/project"}, "[a.py, b.py]", 120)
+        self.adapter.simulate_confirm_required("bash", "python /project/analyze.py")
+        self.adapter.simulate_ai("分析完成", phase="verify")
+        self.app.processEvents()
+
+        assert any(s["name"] == "list_files" for s in tool_signals)
+        assert confirm_signals == [("bash", "python /project/analyze.py")]
+        assert any(ai[0] == "分析完成" and ai[1] == "verify" for ai in self.signals["ai"])
+        assert self.signals["stream_end"]

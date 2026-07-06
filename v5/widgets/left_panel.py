@@ -501,9 +501,9 @@ class FunctionPage(QWidget):
 
 class LeftPanel(QWidget):
     """左栏面板：Tab切换 + 分组会话列表 + 底部控制 + 主题切换。"""
-    sign_select_session = Signal(int)
+    sign_select_session = Signal(str)            # session_id
     sign_new_chat = Signal(str)                  # session_type: "chat" | "work"
-    sign_session_action = Signal(str, int)       # action, index
+    sign_session_action = Signal(str, str)       # action, session_id
     sign_search_input = Signal(str)
     sign_switch_theme = Signal(str)
 
@@ -871,7 +871,14 @@ class LeftPanel(QWidget):
 
     def _on_session_clicked(self, idx: int):
         self._select_session(idx)
-        self.sign_select_session.emit(idx)
+        sid = self._idx_to_sid.get(idx)
+        if sid:
+            self.sign_select_session.emit(sid)
+
+    def _on_group_action(self, action: str, idx: int):
+        sid = self._idx_to_sid.get(idx)
+        if sid:
+            self.sign_session_action.emit(action, sid)
 
     def _select_session(self, idx: int):
         self._active_idx = idx
@@ -941,7 +948,7 @@ class LeftPanel(QWidget):
             self._sess_layout.insertWidget(self._sess_layout.count() - 1, group)
             group.sign_select_session.connect(self._on_session_clicked)
             group.sign_new_chat.connect(self.sign_new_chat.emit)
-            group.sign_session_action.connect(self.sign_session_action.emit)
+            group.sign_session_action.connect(self._on_group_action)
 
         active_idx = self._sid_to_idx.get(old_active, 0)
         self._select_session(active_idx)

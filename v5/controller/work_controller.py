@@ -23,6 +23,10 @@ class WorkController(QObject):
     sign_open_file_right = Signal(str)
     sign_update_terminal = Signal(str)
     sign_switch_tab = Signal(str)
+    sign_rename_requested = Signal(str, str)     # sid, current_title
+    sign_analyze_button_visible = Signal(bool)
+    sign_tool_executed = Signal(str, dict, str, int)  # name, args, result, elapsed_ms
+    sign_confirm_required = Signal(str, str)     # tool_name, command
 
     def __init__(
         self,
@@ -49,6 +53,8 @@ class WorkController(QObject):
             on_chunk=lambda text: self.sign_stream_chunk.emit(text),
             on_stream_end=lambda: self.sign_stream_end.emit(),
             on_terminal=lambda text: self.sign_update_terminal.emit(text),
+            on_tool_executed=lambda name, args, result, elapsed_ms: self.sign_tool_executed.emit(name, args, result, elapsed_ms),
+            on_confirm=lambda tool_name, command: self.sign_confirm_required.emit(tool_name, command),
         )
 
     # ---------- UI -> Controller 处理 ----------
@@ -74,8 +80,10 @@ class WorkController(QObject):
             self._draft_session_type = session.session_type or "chat"
             self._draft_project_path = session.project_path or ""
             self.sign_set_title.emit(session.title or "新会话", self._draft_project_path)
+            self.sign_analyze_button_visible.emit(self._draft_session_type == "work")
         else:
             self.sign_set_title.emit("新会话", "")
+            self.sign_analyze_button_visible.emit(False)
 
     def handle_session_action(self, action: str, sid: str):
         if action == "delete":
@@ -84,11 +92,24 @@ class WorkController(QObject):
                 self._active_session_id = ""
                 self.sign_set_active_session.emit("")
                 self.sign_set_title.emit("新会话", "")
+                self.sign_analyze_button_visible.emit(False)
         elif action == "rename":
-            # rename is handled via UI prompt -> controller callback
+            session = self._session_service.get_session(sid)
+            if session:
+                self.sign_rename_requested.emit(sid, session.title or "新会话")
             return
         elif action == "pin":
             self._session_service.pin_session(sid)
+        self._refresh_sessions()
+
+    def handle_session_rename(self, sid: str, new_title: str):
+        if not new_title.strip():
+            return
+        self._session_service.rename_session(sid, new_title.strip())
+        if self._active_session_id == sid:
+            session = self._session_service.get_session(sid)
+            if session:
+                self.sign_set_title.emit(session.title, self._draft_project_path)
         self._refresh_sessions()
 
     def handle_search_input(self, text: str):
@@ -130,6 +151,11 @@ class WorkController(QObject):
             self._chat_service.stop_message()
             self._streaming = False
             self.sign_set_streaming.emit(False)
+
+    def handle_confirmation_result(self, confirmed: bool):
+        """用户点击确认条确认/取消后回传给 Worker。"""
+        if self._active_session_id:
+            self._chat_service.confirm_result(self._active_session_id, confirmed)
 
     def handle_mode_changed(self, mode: str):
         self._current_mode = mode
@@ -206,6 +232,17 @@ class WorkController(QObject):
 
     def handle_terminal_command(self, cmd: str):
         self._chat_service.run_terminal_command(cmd, self._draft_project_path)
+
+    def handle_analyze_project(self):
+        """点击「帮我分析当前项目」：向当前 work 会话发送项目分析请求。"""
+        if not self._active_session_id:
+            self.handle_create_chat("work")
+        if self._draft_session_type != "work":
+            self._draft_session_type = "work"
+        prompt = "请分析当前项目"
+        if self._draft_project_path:
+            prompt += f"，项目路径：{self._draft_project_path}"
+        self.handle_send_message(prompt)
 
     # ---------- 内部辅助 ----------
 
