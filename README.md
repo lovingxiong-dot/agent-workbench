@@ -1,7 +1,10 @@
 # AI Agent Workbench
 
-> 基于 PySide6 的桌面端 AI 助手，v5 新 UI 完整版 + Phase-Driven Workflow Engine，
-> 三种手动模式（Ask / Plan / Craft），多会话运行时隔离，支持 LLM 推理、系统命令、文件操作、网页抓取、终端解释器及量化工具。
+> **当前活跃主线：V6（`v6-dev` 分支）**。V6 是从零重写的 Agent Runtime 平台，
+> 采用 `RuntimeContext` 作为唯一公共协议，八大 Engine 空壳已完成 Runtime 骨架验证。
+> V5 及更早版本已冻结归档，不再维护。
+>
+> 基于 PySide6 的桌面端 AI 助手，V6 目标为可嵌入、可追踪、可回放的 Agent OS Kernel。
 
 ## 技术栈
 
@@ -42,10 +45,10 @@ python main.py
 
 ```bash
 venv\Scripts\Activate.ps1
-python -m pytest tests/ -v
+python -m pytest tests/v6/ -v
 ```
 
-全部 **272 个 V5 单元 / 集成 / UI 测试** 通过（v4 历史测试已归档至 `v4/tests/`）。
+当前 V6 全量测试 **130/130 通过**；V5 / V4 历史测试已归档，不再执行。
 
 ---
 
@@ -68,15 +71,15 @@ python -m pytest tests/ -v
 | `config/config.yaml` | 全局配置（打包后可写副本位于 exe 同级 `config/`） | ★★★★★ |
 | `AgentWorkbenchV5.spec` | PyInstaller V5 打包配置 | ★★★★ |
 | `core/event_bus.py` / `core/events.py` | 事件总线（MessageBus）+ 强类型事件 | ★★★★★ |
-| `v5/` | **全新纯净主线**：轻量化 MainWindow + Controller + Service 包装层 + Widgets | ★★★★★ |
-| `v5/widgets/` | V5 新 UI 控件库：左栏 / 聊天区 / 输入区 / 右栏 / 设置对话框等 | ★★★★★ |
-| `v4/` | 旧 UI 完整版归档区（只读，已停止维护） | ★ |
+| `v6/` | **当前活跃主线**：纯 UI + UIController + Service + AgentRuntime + 八大 Engine | ★★★★★ |
+| `v6/ui/` | V6 纯 UI 组件库（按 `ui-template v0.6-alpha` 设计稿实现） | ★★★★★ |
+| `v6/runtime/` | AgentRuntime 核心：`RuntimeContext` / `EngineManager` / `RuntimeTrace` / 八大 Engine | ★★★★★ |
+| `v6/services/` | V6 业务服务层：`ConfigService` / `SessionService` / `ChatService` | ★★★★ |
+| `v5/` | V5 只读归档区（已冻结，不再维护） | ★ |
+| `v4/` | V4 旧 UI 完整版归档区（只读，已停止维护） | ★ |
 | `v4/legacy/` | v3/v4 历史 UI 组件、QSS 主题、旧 spec 归档 | ★ |
-| `services/` | 根共享服务层：配置 / 持久化 / 活动记录 / 主题 / 解释器 | ★★★★ |
-| `agent_engine/` | 编排器 / Phase 管理 / 记忆管理 / 八引擎（engines/） | ★★★★ |
-| `workers/` | 后台线程：Agent 推理 / 终端捕获 / 验证 | ★★★★ |
-| `tools/` | 工具层：系统命令 / 量化分析 / Web / MT5 / 屏幕 | ★★★ |
-| `tests/` | 272 个 V5 单元 / 集成 / UI 测试 | ★★★ |
+| `tests/v6/` | V6 单元 / 集成 / Runtime / UI 契约测试 | ★★★★ |
+| `docs/v6/` | V6 架构 SPEC、蓝图、变更日志 | ★★★★ |
 | `assets/app.ico` | 应用图标 | ★★ |
 | `scripts/start.bat` | 一键启动脚本 | ★★ |
 | `scripts/rebuild.ps1` | 打包 + 桌面快捷方式刷新 | ★★★ |
@@ -92,12 +95,12 @@ python -m pytest tests/ -v
 
 | 指标 | 详情 |
 |---|---|
-| 版本 | v5.0.20-alpha |
-| 测试 | 272/272 通过 |
-| 架构 | **V5 纯净主线**：`v5/widgets/` + `WorkController` + V5 Service 包装层 + 根共享引擎 / 仓库；彻底隔离 `v4` |
-| 打包 | PyInstaller 单目录 ≈ 17.9 MB；exe 内终端、文件编辑器、浏览器均验证可用 |
-| 分支 | v5-dev |
-| 旧线路归档 | `v4/` 目录只读归档，`v4-refactor` 已冻结，标签 `v4.0.11-alpha` |
+| 版本 | v6.5.8-alpha |
+| 测试 | `pytest tests/v6/` 130/130 通过 |
+| 架构 | **V6 全新主线**：`RuntimeContext` 唯一公共协议 + `EngineManager` + 八大 Engine 空壳 + `RuntimeTrace` Timeline |
+| 打包 | 尚未针对 V6 重新配置；V5 打包配置 `AgentWorkbenchV5.spec` 仅用于归档 |
+| 分支 | **v6-dev**（当前活跃主线）；`v5-dev` 已冻结归档 |
+| 旧线路归档 | `v5/` 目录只读归档，`v5-dev` 分支冻结；`v4/` 及 `v4-refactor` 更早归档 |
 
 ---
 
@@ -113,11 +116,17 @@ python -m pytest tests/ -v
 
 ---
 
+## V6 主线声明
+
+- **`v6-dev` 是当前唯一活跃开发分支**，所有新功能、重构、Runtime 演进均在此分支进行。
+- **`v5-dev` 已冻结归档**：Step 4（`v6.5.8-alpha`）为 `v5-dev` 上最后一个 V6 相关提交，此后 V6 开发迁移至 `v6-dev`。
+- **禁止在 `v5-dev`、`main`、`v4-refactor` 等旧分支上继续提交 V6 代码**，避免版本号、标签、架构文档混淆。
+- V6 设计原则：`RuntimeContext` 是 Runtime 唯一公共协议；Adapter 属于 Application Layer；Engine 只接受 `ctx` 输入；所有状态收敛到 `RuntimeContext`。
+
 ## AI 进入本工作区须知
 
 1. **不得盲目运行系统 Python 或 pip install** — 项目已有完整 venv，通过 `venv\Scripts\Activate.ps1` 激活后直接使用。
-2. **启动走标准入口**：`scripts\start.bat`（日常运行）或 `python main.py`（手动）。
-3. **打包走 `scripts\rebuild.ps1`**：一键激活 venv → PyInstaller → 桌面快捷方式，产物路径为 `dist\AgentWorkbench\`。
-4. **文档由存档流程统一维护**：README / ARCHITECTURE / CHANGELOG / PROJECT_BLUEPRINT / blueprints / docs 均在「请存档」时由 AI 自动更新，禁止私自修改。
-5. **逻辑入口**：`main.py` → `AppContext` → `SessionOrchestrator`，UI 通过 `MainWindow` 转发事件到 MessageBus。
-6. **认知加载路径**：README（1-2 分钟）→ ARCHITECTURE（3-5 分钟）→ blueprints/index（1 分钟）→ CHANGELOG（1 分钟），总计约 10 分钟即可参与开发。
+2. **V6 测试入口**：`pytest tests/v6/ -v`；V5 测试仅作归档参考，不再执行。
+3. **V6 逻辑入口**：`v6/main_window.py` → `UIController` → `Service` → `AgentRuntime` → `EngineManager` → `Engines`。
+4. **文档由存档流程统一维护**：README / CHANGELOG / PROJECT_BLUEPRINT / docs/v6/SPEC.md 均在「请存档」时由 AI 自动更新，禁止私自修改。
+5. **认知加载路径**：README（1 分钟）→ `docs/v6/SPEC.md`（5 分钟）→ `docs/CHANGELOG.md`（1 分钟）→ `docs/PROJECT_BLUEPRINT.md`（2 分钟）。
