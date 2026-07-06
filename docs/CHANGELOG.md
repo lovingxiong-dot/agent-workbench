@@ -1,5 +1,40 @@
 # Changelog
 
+## v5.0.18-alpha (2026-07-06) — V5 P6/P7 收尾归档
+
+### docs
+- README / PROJECT_BLUEPRINT / CHANGELOG 版本号对齐至 `v5.0.18-alpha`。
+- 新增 `v4/README.md` 归档说明，明确 `v4/` 为只读区，`v5/` 为新开发主线。
+
+### test
+- 提交 `tests/test_v5_service.py`、`tests/test_v5_controller.py`、`tests/test_v5_smoke.py`，15 个 V5 用例纳入版本控制。
+- 全量测试 `240/240` 通过。
+
+### build
+- 提交 `AgentWorkbenchV5.spec` 作为 V5 独立打包配置。
+
+### chore
+- 清理 P8/P9/P10/P15 调试产物与临时截图，保持仓库整洁。
+
+## v5.0.17-alpha (2026-07-06) — V5 彻底隔离 v4 与 P6/P7 主体整改
+
+### refactor
+- **彻底隔离 v4**：清理 `v5/` 全部含 v4 文字残留，确认无任何 `v4` 导入；Service 层仅依赖根目录共享核心模块。
+- **Widget 层信号契约统一**：修复 `ChatArea` 与 `MainWindow`、`RightPanel` 与 `MainWindow` 的信号连接，补齐终端/文件/浏览器用户操作信号转发到 `WorkController`。
+- **布局修复**：修正 `InvisibleResizeHandle` 被误作 `QSplitter` pane 的问题，热区父控件改为 central widget，保证三栏尺寸正确。
+
+### test
+- 新增 `tests/test_v5_service.py`、`tests/test_v5_controller.py`、`tests/test_v5_smoke.py`，覆盖 V5 Service/Controller/MainWindow 核心行为，新增 15 个用例。
+- 全量测试 `240/240` 通过。
+
+### build
+- 新增 `AgentWorkbenchV5.spec` 作为 V5 独立打包配置。
+- PyInstaller 打包 `dist/AgentWorkbench/AgentWorkbench.exe` 可正常启动并存活 6 秒以上。
+
+### docs
+- 新增 `v4/README.md` 标注 v4 目录为只读归档区，明确新主线为 `v5/`。
+- 更新 `docs/PROJECT_BLUEPRINT.md` 版本与目录结构说明。
+
 ## v5.0.13-alpha (2026-07-06) — 修复打包后浏览器标签不可用
 
 ### fix

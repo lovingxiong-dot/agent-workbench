@@ -1,10 +1,10 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.13-alpha | 存档次数 | 13 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v5.0.18-alpha | 存档次数 | 18 |
 
 ## 项目概要
-AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v5.0.13-alpha 修复打包后浏览器标签不可用的问题：在 AgentWorkbench.spec 中显式打包 QtWebEngineProcess.exe、resources、qtwebengine_locales，并恢复 WebChannel/WebSockets/Sql 依赖，exe 内浏览器可正常加载 Bing 页面；v5.0.12-alpha 完成 UI 完全移植工程最终完整性检查与存档：复核 P10 旧 UI 清理与 PyInstaller 打包验证，完成 P11 `v4-refactor` 旧 UI 线路最终归档并推送 `v4.0.11-alpha` 归档标签，真实 GUI 验证三栏完整显示、无旧 UI 残留，全量测试 225/225 通过；v5.0.11-alpha 完成 P9 全量冒烟与集成测试验证及 UI 硬编码清理：清理 'v4 架构升级' 等旧 UI 硬编码文本，实现聊天区标题动态化；v5.0.9-alpha 完成新 UI 完全移植与旧 UI 清理；v5.0.8-alpha 完成 GUI 冒烟修复；v5.0.7-alpha 完成右栏真实功能回填；v5.0.6-alpha 完成持久化校验整改；v5.0.5-alpha 完成会话数据持久化与列表同步；v5.0.4-alpha 完成关键用户动作对接；v5.0.3-alpha 完成模块化骨架拆分；v5.0.2-alpha 完成 UIRenderer 与新 UI 桥接；v5.0.1-alpha 备份旧 UI 组件至 `v4/legacy/` 并标记 v5-dev 线路；v5.0.0-alpha 为 v5-dev 线路起点与新 UI 后端核心注入。v4.x 为旧 UI 完整版线路，已归档至 `v4-refactor` / `ui-template` 分支，不再维护。
+AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v5.0.18-alpha 完成 V5 P6/P7 收尾归档：提交 V5 新增测试、独立打包配置与 v4 归档说明，清理调试产物，全量测试 240/240 通过。v5.0.17-alpha 完成 V5 彻底隔离 v4 方案与 P6/P7 主体整改：清理 `v5/` 全部 v4 文字残留并确认无 v4 导入，统一 Widget 层 V5 标准信号契约，修复 `ChatArea`/`RightPanel`/`MainWindow` 信号连接，补齐终端/文件/浏览器用户操作信号转发到 `WorkController`，修正 `InvisibleResizeHandle` 布局问题；新增 `tests/test_v5_service.py`、`test_v5_controller.py`、`test_v5_smoke.py` 共 15 个用例；新增 `AgentWorkbenchV5.spec` 独立打包配置，新增 `v4/README.md` 标注归档废弃。v5.0.13-alpha 修复打包后浏览器标签不可用的问题：在 AgentWorkbench.spec 中显式打包 QtWebEngineProcess.exe、resources、qtwebengine_locales，并恢复 WebChannel/WebSockets/Sql 依赖，exe 内浏览器可正常加载 Bing 页面；v5.0.12-alpha 完成 UI 完全移植工程最终完整性检查与存档：复核 P10 旧 UI 清理与 PyInstaller 打包验证，完成 P11 `v4-refactor` 旧 UI 线路最终归档并推送 `v4.0.11-alpha` 归档标签，真实 GUI 验证三栏完整显示、无旧 UI 残留，全量测试 225/225 通过；v5.0.11-alpha 完成 P9 全量冒烟与集成测试验证及 UI 硬编码清理：清理 'v4 架构升级' 等旧 UI 硬编码文本，实现聊天区标题动态化；v5.0.9-alpha 完成新 UI 完全移植与旧 UI 清理；v5.0.8-alpha 完成 GUI 冒烟修复；v5.0.7-alpha 完成右栏真实功能回填；v5.0.6-alpha 完成持久化校验整改；v5.0.5-alpha 完成会话数据持久化与列表同步；v5.0.4-alpha 完成关键用户动作对接；v5.0.3-alpha 完成模块化骨架拆分；v5.0.2-alpha 完成 UIRenderer 与新 UI 桥接；v5.0.1-alpha 备份旧 UI 组件至 `v4/legacy/` 并标记 v5-dev 线路；v5.0.0-alpha 为 v5-dev 线路起点与新 UI 后端核心注入。v4.x 为旧 UI 完整版线路，已归档至 `v4-refactor` / `ui-template` 分支，不再维护。
 
 ## 技术栈
 | 类别 | 技术 | 版本 | 用途 |
@@ -56,25 +56,59 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │   └── integration/
 │       └── workspace-context.md          # 工作空间上下文感知
 │
-├── # 源码分组（src/）
-├── agent_engine/           # 引擎层
+├── # 源码分组
+├── v5/                     # 【全新纯净主线】
+│   ├── __init__.py
+│   ├── main.py             # V5 启动/引导、依赖组装
+│   ├── main_window.py      # 轻量化顶层窗口（仅 UI 组装 + 单层信号转发）
+│   ├── controller/
+│   │   └── work_controller.py   # 全局唯一业务中枢
+│   ├── service/            # V5 包装层，隔离根共享底层
+│   │   ├── config_service.py
+│   │   ├── session_service.py
+│   │   ├── chat_service.py
+│   │   └── adapter.py
+│   ├── model/              # V5 标准化事件与数据模型
+│   │   └── events.py
+│   └── widgets/            # 纯 UI 层，禁止导入 controller/service
+│       ├── base.py         # V5 主题、字体、SVG 工具
+│       ├── window_frame.py # 无边框、拖拽、Apple 菜单
+│       ├── left_panel.py   # 左侧功能/会话面板
+│       ├── chat_items.py   # 聊天项卡片
+│       ├── chat_scene.py   # 聊天图形渲染场景
+│       ├── chat_area.py    # 中栏聊天区
+│       ├── right_panel.py  # 右侧多标签容器
+│       ├── terminal_widget.py     # 终端面板
+│       ├── file_reader_widget.py  # 文件编辑器面板
+│       ├── browser_widget.py      # 浏览器面板
+│       ├── dropdown_selector.py   # 通用下拉选择器
+│       └── settings_dialog.py     # 设置弹窗
+│
+├── v4/                     # 【只读归档区】旧 UI 完整版
+│   ├── README.md           # 归档说明
+│   ├── main_window.py      # 旧 UI 主窗口
+│   ├── widgets/            # 旧 UI 控件库
+│   ├── legacy/             # 更早版本 UI 备份
+│   └── ...                 # 旧后端骨架（repository/orchestrator/worker 等）
+│
+├── agent_engine/           # 引擎层（v4/v5 共用）
 │   ├── __init__.py
 │   ├── agent_session.py    # 跨 Phase 复用会话
 │   ├── llm_registry.py     # LLM 提供商注册与持久化
 │   ├── memory_manager.py   # 会话记忆管理
-│   ├── orchestrator.py     # 编排器（绞杀者：支持八引擎委托）
+│   ├── orchestrator.py     # 编排器（支持八引擎委托）
 │   ├── phase_manager.py    # Phase-Driven Workflow Engine
 │   └── engines/            # 八引擎模块
 │       ├── __init__.py
-│       ├── interfaces.py       # 8 引擎接口 + 共享 dataclass
-│       ├── context_engine.py   # 上下文组装与压缩
-│       ├── prompt_engine.py    # System prompt 构建
-│       ├── inference_engine.py # LLM 调用 + 重试/降级
-│       ├── tool_engine.py      # 工具执行与权限
-│       ├── phase_engine.py     # Phase 流转管理
-│       ├── memory_engine.py    # 三层记忆系统
-│       ├── metrics_engine.py   # 指标采集与聚合
-│       └── policy_engine.py    # 策略决策驱动
+│       ├── interfaces.py
+│       ├── context_engine.py
+│       ├── prompt_engine.py
+│       ├── inference_engine.py
+│       ├── tool_engine.py
+│       ├── phase_engine.py
+│       ├── memory_engine.py
+│       ├── metrics_engine.py
+│       └── policy_engine.py
 ├── tools/                  # 工具层
 │   ├── __init__.py
 │   ├── system.py           # 系统命令 / 文件读写 / 网络 / 剪贴板 / 通知 / 进程
@@ -82,91 +116,56 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 │   ├── mt5.py              # MT5 报价 + 下单
 │   ├── external_apis.py    # 财经新闻 / 宏观数据
 │   └── screen.py           # 屏幕相关工具
-├── core/                   # 核心基础设施（v3 兼容）
+├── core/                   # 核心基础设施
 │   ├── __init__.py
 │   ├── event_bus.py        # 基于 Qt Signal 的事件总线
 │   └── events.py           # 强类型跨组件事件定义
-├── v4/                     # v5 新 UI 核心（基于 v4 单轨后端骨架）
-│   ├── __init__.py
-│   ├── models.py           # 不可变数据模型
-│   ├── event_bus.py        # v4 MessageBus
-│   ├── events.py           # v4 事件协议
-│   ├── repository.py       # SQLite 会话/消息/环境/任务状态仓库
-│   ├── queue.py            # 会话级双槽位队列
-│   ├── runtime.py          # SessionRuntime 聚合根
-│   ├── worker_manager.py   # 系统级 Worker 并发管理
-│   ├── orchestrator.py     # SessionOrchestrator 统一协调器
-│   ├── ui_renderer.py      # UI 渲染器
-│   ├── main_window.py      # v5 新 UI 主窗口（薄编排层）
-│   ├── widgets/            # v5 新 UI 控件库
-│   │   ├── __init__.py
-│   │   ├── base.py         # 主题、字体、通用辅助函数
-│   │   ├── window_frame.py # AppleMenu / EdgeResizeWidget
-│   │   ├── left_panel.py   # 左栏：功能/会话 Tab、搜索、会话列表
-│   │   ├── chat_items.py   # 聊天项卡片（8 个子类）
-│   │   ├── chat_scene.py   # QGraphicsScene 消息场景
-│   │   ├── chat_area.py    # 中栏聊天区 + 输入区
-│   │   ├── right_panel.py  # 右栏：终端 / 文件编辑器 / 浏览器
-│   │   ├── terminal_widget.py     # 终端面板
-│   │   ├── file_reader_widget.py  # 文件编辑器面板
-│   │   ├── browser_widget.py      # 浏览器面板
-│   │   ├── dropdown_selector.py   # 通用内嵌下拉选择器
-│   │   └── settings_dialog.py     # 设置对话框
-│   ├── legacy/             # 旧 UI 组件备份（已停止维护）
-│   │   ├── __init__.py
-│   │   ├── chat_items.py
-│   │   ├── chat_scene.py
-│   │   ├── conversation_list.py
-│   │   ├── icons.py
-│   │   ├── input_area.py
-│   │   ├── right_panel.py
-│   │   └── main_window_legacy.py
-│   └── tests/              # v4 内部单元测试
-│       └── test_orchestrator.py
-├── services/               # 服务层（v3 兼容，v4 核心逻辑已迁移至 v4/）
+├── services/               # 根共享服务层
 │   ├── __init__.py
 │   ├── config_service.py   # 配置读取与持久化
-│   ├── session_service.py  # SQLite 对话 + Token 用量持久化
+│   ├── session_service.py  # SQLite 对话持久化
 │   ├── theme_service.py    # QSS 主题加载
-│   ├── project_service.py  # 项目目录与会话关联管理
-│   ├── activity_service.py # 结构化活动记录与持久化
-│   ├── context_service.py  # 当前工作空间上下文维护
-│   ├── path_resolver.py    # 基于项目根目录的路径解析
-│   ├── python_resolver.py  # 项目 Python 解释器解析
-│   ├── metrics_collector.py # 请求级指标收集（token/耗时）
-│   ├── interpreter_service.py # 终端解释器发现/选择/持久化
-│   ├── pending_queue.py    # 双槽位等待队列（v3 兼容）
-│   └── task_service.py     # 任务调度中心（v3 兼容）
-├── workers/                # 后台线程（v3 兼容，v4 使用 v4/worker.py）
+│   ├── project_service.py  # 项目目录与会话关联
+│   ├── activity_service.py # 活动记录持久化
+│   ├── context_service.py  # 工作空间上下文
+│   ├── path_resolver.py    # 路径解析
+│   ├── python_resolver.py  # Python 解释器解析
+│   ├── metrics_collector.py
+│   ├── interpreter_service.py
+│   ├── pending_queue.py
+│   └── task_service.py
+├── workers/                # 后台线程
 │   ├── __init__.py
-│   ├── agent_worker.py     # 流式 Agent 推理 + 工具调用
-│   ├── base_worker.py      # Worker 基类
+│   ├── agent_worker.py     # 流式 Agent 推理
+│   ├── base_worker.py
 │   ├── terminal_worker.py  # 终端命令输出捕获
-│   ├── session_task.py     # 会话级任务状态
-│   ├── task_capacity.py    # 资源容量控制
-│   └── task_queue.py       # FIFO 任务排队
-├── ui/                     # 界面层（v3 兼容，当前主界面已迁移至 v4/）
+│   ├── session_task.py
+│   ├── task_capacity.py
+│   └── task_queue.py
+├── ui/                     # v3 兼容界面层
 │   ├── __init__.py
-│   ├── models/             # 数据模型
-│   │   └── explorer_model.py   # 资源管理器数据模型
-│   └── widgets/            # 可复用组件（v3 兼容）
+│   ├── models/
+│   │   └── explorer_model.py
+│   └── widgets/
 │       └── __init__.py
-├── resources/              # 静态资源（主题、样式）
+├── resources/              # 静态资源
 │   └── themes/
-│       ├── dark_github.qss # GitHub Dark 主题
-│       └── trae_dark.qss   # Trae Dark 主题
+│       ├── dark_github.qss
+│       └── trae_dark.qss
 │
-├── tests/                  # 测试分组（225 个单元 / 集成 / UI 测试）
+├── tests/                  # 测试分组（240 个单元 / 集成 / UI 测试）
 │   ├── __init__.py
 │   ├── integration/
-│   │   ├── __init__.py
 │   │   └── integration_test_deepseek_metrics.py
-│   ├── test_v4_basics.py              # v4 数据模型 / 事件总线 / 仓库基础测试
-│   ├── test_v4_gui_smoke.py           # v5 新 UI GUI 冒烟测试
-│   ├── test_v4_integration.py         # v5 MainWindow / Orchestrator / Worker 集成测试
-│   ├── test_v4_widgets_right_panel.py # v5 右栏功能回填测试
-│   ├── test_v4_input_area.py          # v5 输入区组件测试
-│   ├── test_v4_right_panel.py         # v5 旧右面板备份测试
+│   ├── test_v5_service.py
+│   ├── test_v5_controller.py
+│   ├── test_v5_smoke.py
+│   ├── test_v4_basics.py
+│   ├── test_v4_gui_smoke.py
+│   ├── test_v4_integration.py
+│   ├── test_v4_widgets_right_panel.py
+│   ├── test_v4_input_area.py
+│   ├── test_v4_right_panel.py
 │   ├── test_agent_worker.py
 │   ├── test_agent_session_integration.py
 │   ├── test_agent_session_room.py
@@ -199,11 +198,13 @@ AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种�
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v5.0.18-alpha | 2026-07-06 | V5 P6/P7收尾归档：提交v5新增测试、独立打包配置与v4归档说明，清理调试产物，README/PROJECT_BLUEPRINT/CHANGELOG版本对齐，240/240测试通过 | docs/archive/test/build | tests/test_v5_*.py, AgentWorkbenchV5.spec, v4/README.md, docs/README.md, docs/PROJECT_BLUEPRINT.md, docs/CHANGELOG.md |
 | v5.0.13-alpha | 2026-07-06 | 修复打包后浏览器标签不可用：AgentWorkbench.spec 显式打包 QtWebEngineProcess.exe/resources/qtwebengine_locales，恢复 WebChannel/WebSockets/Sql 依赖；exe 内浏览器可正常加载页面，225/225测试通过 | fix/build | AgentWorkbench.spec, docs/README.md, docs/PROJECT_BLUEPRINT.md, docs/CHANGELOG.md |
 
 ## 历史归档
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v5.0.17-alpha | 2026-07-06 | V5彻底隔离v4与P6/P7主体整改：清理v5/全部v4文字残留并确认无v4导入；统一Widget层V5信号契约，修复ChatArea/RightPanel/MainWindow连接，补齐终端/文件/浏览器用户操作信号；修正InvisibleResizeHandle布局；新增15个V5测试，240/240测试通过；新增AgentWorkbenchV5.spec与v4/README.md归档说明 | refactor/test/build/docs | v5/**, tests/test_v5_*.py, AgentWorkbenchV5.spec, v4/README.md, docs/README.md, docs/PROJECT_BLUEPRINT.md, docs/CHANGELOG.md |
 | v5.0.12-alpha | 2026-07-06 | UI完全移植工程最终完整性检查与存档：复核P10旧UI清理与PyInstaller打包验证，完成P11 v4-refactor旧UI线路最终归档并推送v4.0.11-alpha标签，真实GUI验证三栏完整显示，225/225测试通过 | docs/archive/test | docs/README.md, docs/PROJECT_BLUEPRINT.md, docs/CHANGELOG.md |
 | v5.0.11-alpha | 2026-07-06 | P9全量冒烟与集成测试验证及UI硬编码清理：真实GUI启动验证三栏完整显示，清理'v4 架构升级'等旧UI硬编码，实现聊天区标题动态化，225/225测试通过 | fix/test/ui | v4/widgets/chat_area.py, v4/widgets/right_panel.py, v4/widgets/left_panel.py, v4/main_window.py, tests/test_v4_gui_smoke.py |
 | v5.0.10-alpha | 2026-07-06 | v5项目文档同步：README/PROJECT_BLUEPRINT/CHANGELOG全面更新为v5新UI完整版线路，反映v5.0.0~v5.0.9全部阶段成果，目录结构同步v4/widgets/与v4/legacy/，测试数更新为225 | docs | docs/README.md, docs/PROJECT_BLUEPRINT.md, docs/CHANGELOG.md |
