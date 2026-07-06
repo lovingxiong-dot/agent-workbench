@@ -8,6 +8,7 @@ from v6.runtime.adapter import LocalRuntimeAdapter
 from v6.runtime.context import RuntimeContext
 from v6.runtime.enums import RuntimeState, TraceEvent
 from v6.runtime.event_bus import EventBus
+from v6.runtime.metrics import RuntimeMetrics
 from v6.runtime.runtime import AgentRuntime
 from v6.runtime.trace import ReplayPlayer, RuntimeTrace
 
@@ -148,3 +149,131 @@ def test_replay_player_emits_events():
         assert received[1][1]["text"] == "chunk1"
     finally:
         bus.stop()
+
+
+# ─────────────────────────────────────────────────────────
+# Trace + Metrics 联动测试
+# ─────────────────────────────────────────────────────────
+
+
+def test_trace_step_default_metrics_are_zero():
+    trace = RuntimeTrace()
+    trace.add(node="engine", action=TraceEvent.ENGINE_START)
+    step = trace.last()
+    assert step is not None
+    assert step.duration_ms == 0.0
+    assert step.tokens == 0
+    assert step.cost == 0.0
+    assert step.tool_time_ms == 0.0
+
+
+def test_trace_add_with_explicit_metrics():
+    trace = RuntimeTrace()
+    trace.add(
+        node="engine",
+        action=TraceEvent.MODEL_INVOKE,
+        duration_ms=123.4,
+        tokens=42,
+        cost=0.005,
+        tool_time_ms=10.0,
+    )
+    step = trace.last()
+    assert step.duration_ms == 123.4
+    assert step.tokens == 42
+    assert step.cost == 0.005
+    assert step.tool_time_ms == 10.0
+
+
+def test_trace_add_extracts_from_runtime_metrics():
+    metrics = RuntimeMetrics()
+    metrics.record(tokens=100, cost=0.01, tool_time_ms=50.0)
+
+    trace = RuntimeTrace()
+    trace.add(node="engine", action=TraceEvent.MODEL_INVOKE, metrics=metrics)
+
+    step = trace.last()
+    assert step.tokens == 100
+    assert step.cost == 0.01
+    assert step.tool_time_ms == 50.0
+
+
+def test_trace_add_explicit_metrics_override_runtime_metrics():
+    metrics = RuntimeMetrics()
+    metrics.record(tokens=100, cost=0.01)
+
+    trace = RuntimeTrace()
+    trace.add(
+        node="engine",
+        action=TraceEvent.MODEL_INVOKE,
+        tokens=200,
+        cost=0.02,
+        tool_time_ms=30.0,
+        metrics=metrics,
+    )
+
+    step = trace.last()
+    assert step.tokens == 200
+    assert step.cost == 0.02
+    assert step.tool_time_ms == 30.0
+
+
+def test_trace_timed_step_records_duration():
+    trace = RuntimeTrace()
+    with trace.timed_step("engine", TraceEvent.MODEL_INVOKE):
+        time.sleep(0.05)
+
+    step = trace.last()
+    assert step is not None
+    assert step.duration_ms >= 50.0
+
+
+def test_trace_timed_step_captures_metrics():
+    metrics = RuntimeMetrics()
+    trace = RuntimeTrace()
+
+    with trace.timed_step("engine", TraceEvent.MODEL_INVOKE, metrics=metrics):
+        metrics.record(tokens=150, cost=0.015, tool_time_ms=25.0)
+        time.sleep(0.01)
+
+    step = trace.last()
+    assert step.tokens == 150
+    assert step.cost == 0.015
+    assert step.tool_time_ms == 25.0
+    assert step.duration_ms >= 10.0
+
+
+def test_trace_timed_step_yields_mutable_step():
+    trace = RuntimeTrace()
+    with trace.timed_step("engine", TraceEvent.MODEL_INVOKE) as step:
+        step.payload["model"] = "qwen3:4b"
+
+    persisted = trace.last()
+    assert persisted.payload["model"] == "qwen3:4b"
+
+
+def test_trace_snapshot_includes_metrics():
+    trace = RuntimeTrace()
+    trace.add(
+        node="engine",
+        action=TraceEvent.MODEL_INVOKE,
+        duration_ms=100.0,
+        tokens=77,
+        cost=0.007,
+        tool_time_ms=20.0,
+    )
+    snap = trace.snapshot()
+    step = snap["steps"][0]
+    assert step["duration_ms"] == 100.0
+    assert step["tokens"] == 77
+    assert step["cost"] == 0.007
+    assert step["tool_time_ms"] == 20.0
+
+
+def test_trace_metrics_do_not_affect_other_steps():
+    trace = RuntimeTrace()
+    trace.add(node="engine", action=TraceEvent.ENGINE_START, tokens=10)
+    trace.add(node="engine", action=TraceEvent.MODEL_INVOKE, tokens=20)
+
+    steps = trace.steps()
+    assert steps[0].tokens == 10
+    assert steps[1].tokens == 20

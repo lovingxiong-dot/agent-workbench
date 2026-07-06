@@ -4,7 +4,8 @@
 
 核心原则：
 - RuntimeTrace 只记录事实（History），不保存业务逻辑。
-- 每个步骤包含：时间戳、阶段、节点（runtime/engine/service/tool）、动作、载荷摘要。
+- 每个步骤包含：时间戳、阶段、节点（runtime/engine/service/tool）、动作、载荷摘要，
+  并可联动 RuntimeMetrics 记录 duration_ms / tokens / cost / tool_time_ms。
 - Engine / Service / Tool / Runtime 均可向 ctx.trace.add(...) 写入自己负责的步骤。
 - RuntimeTrace 与 RuntimeContext 生命周期绑定，随 Task 创建而创建。
 - ReplayPlayer 按 trace 步骤重放事件，供调试、审计、可视化使用。
@@ -14,23 +15,33 @@ from __future__ import annotations
 import copy
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Generator, List, Optional, Union
 
 from v6.runtime.enums import TraceEvent
 from v6.runtime.event_bus import EventBus
+from v6.runtime.metrics import RuntimeMetrics
 
 
 @dataclass
 class TraceStep:
-    """单次执行步骤。"""
+    """单次执行步骤。
+
+    Metrics 字段（duration_ms / tokens / cost / tool_time_ms）可与 RuntimeMetrics 联动，
+    形成 Task Execution Timeline。
+    """
 
     timestamp: float
     phase: str
     node: str
     action: str
     payload: Dict[str, Any] = field(default_factory=dict)
+    duration_ms: float = 0.0
+    tokens: int = 0
+    cost: float = 0.0
+    tool_time_ms: float = 0.0
 
     def __post_init__(self) -> None:
         """统一把枚举转成字符串存储，保持序列化一致性。"""
@@ -58,6 +69,11 @@ class RuntimeTrace:
         action: Union[str, TraceEvent],
         phase: Union[str, Enum] = "",
         payload: Optional[Dict[str, Any]] = None,
+        duration_ms: float = 0.0,
+        tokens: int = 0,
+        cost: float = 0.0,
+        tool_time_ms: float = 0.0,
+        metrics: Optional[RuntimeMetrics] = None,
     ) -> None:
         """追加一条执行步骤。
 
@@ -66,7 +82,19 @@ class RuntimeTrace:
             action: 具体动作，如 start / dispatch / finish / error / emit_chunk。
             phase: 当前阶段，如 inference / memory / tool / policy。
             payload: 附加结构化信息，建议只放摘要（避免过大对象）。
+            duration_ms: 步骤耗时（毫秒）。
+            tokens: 步骤消耗 token 数。
+            cost: 步骤估算成本。
+            tool_time_ms: 步骤中工具执行耗时（毫秒）。
+            metrics: RuntimeMetrics 实例；若提供且未显式传入指标，
+                     自动提取 tokens / cost / tool_time_ms。
         """
+        if metrics is not None:
+            snap = metrics.snapshot()
+            tokens = tokens or snap.get("tokens", 0)
+            cost = cost or snap.get("cost", 0.0)
+            tool_time_ms = tool_time_ms or snap.get("tool_time_ms", 0.0)
+
         with self._lock:
             self._steps.append(
                 TraceStep(
@@ -75,8 +103,47 @@ class RuntimeTrace:
                     node=node,
                     action=action,
                     payload=copy.deepcopy(payload) if payload else {},
+                    duration_ms=duration_ms,
+                    tokens=tokens,
+                    cost=cost,
+                    tool_time_ms=tool_time_ms,
                 )
             )
+
+    @contextmanager
+    def timed_step(
+        self,
+        node: Union[str, Enum],
+        action: Union[str, TraceEvent],
+        phase: Union[str, Enum] = "",
+        payload: Optional[Dict[str, Any]] = None,
+        metrics: Optional[RuntimeMetrics] = None,
+    ) -> Generator[TraceStep, None, None]:
+        """自动计时并在退出时抓取 metrics 的上下文管理器。
+
+        使用示例：
+            with ctx.trace.timed_step("engine", TraceEvent.MODEL_INVOKE, metrics=ctx.metrics):
+                response = llm.call(...)
+        """
+        start = time.time()
+        step = TraceStep(
+            timestamp=start,
+            phase=phase,
+            node=node,
+            action=action,
+            payload=copy.deepcopy(payload) if payload else {},
+        )
+        with self._lock:
+            self._steps.append(step)
+        try:
+            yield step
+        finally:
+            step.duration_ms = (time.time() - start) * 1000
+            if metrics is not None:
+                snap = metrics.snapshot()
+                step.tokens = snap.get("tokens", 0)
+                step.cost = snap.get("cost", 0.0)
+                step.tool_time_ms = snap.get("tool_time_ms", 0.0)
 
     def steps(self) -> List[TraceStep]:
         """返回步骤列表深拷贝快照。"""
@@ -94,6 +161,10 @@ class RuntimeTrace:
                         "node": s.node,
                         "action": s.action,
                         "payload": copy.deepcopy(s.payload),
+                        "duration_ms": s.duration_ms,
+                        "tokens": s.tokens,
+                        "cost": s.cost,
+                        "tool_time_ms": s.tool_time_ms,
                     }
                     for s in self._steps
                 ]

@@ -1,5 +1,36 @@
 # Changelog
 
+## v6.5.6-alpha (2026-07-07) — Step 2：RuntimeTrace + Metrics 联动
+
+### feat
+- 扩展 `v6/runtime/trace.py` 的 `TraceStep`，新增四个指标字段：
+  - `duration_ms`：步骤耗时（毫秒）
+  - `tokens`：步骤 Token 消耗
+  - `cost`：步骤估算成本
+  - `tool_time_ms`：步骤中工具执行耗时
+- `RuntimeTrace.add()` 支持两种指标写入方式：
+  - 显式传入 `duration_ms` / `tokens` / `cost` / `tool_time_ms`。
+  - 传入 `metrics=RuntimeMetrics(...)`，自动提取当前指标快照。
+  - 显式值优先于 metrics 提取值。
+- 新增 `RuntimeTrace.timed_step()` 上下文管理器：
+  - 进入时自动记录 `timestamp`。
+  - 退出时自动计算 `duration_ms`。
+  - 退出时自动抓取 `RuntimeMetrics` 的 `tokens` / `cost` / `tool_time_ms`。
+  - 支持在 `with` 块内修改 `step.payload`。
+
+### test
+- 扩展 `tests/v6/test_v6_trace.py`，新增 9 个联动测试：
+  - 默认指标字段为 0。
+  - 显式传入指标。
+  - 从 `RuntimeMetrics` 自动提取指标。
+  - 显式指标覆盖 metrics 提取值。
+  - `timed_step` 自动计时。
+  - `timed_step` 退出时抓取 metrics。
+  - `timed_step` 支持修改 `step.payload`。
+  - `snapshot()` 包含指标字段。
+  - 步骤间指标相互独立。
+- V6 全量测试 `pytest tests/v6/` 125/125 通过。
+
 ## v6.5.5-alpha (2026-07-07) — V6.5 Runtime Foundation Layer：状态机固化
 
 ### feat
