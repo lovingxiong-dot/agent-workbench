@@ -445,3 +445,29 @@ Snapshot
 - 当前阶段只需保证 `snapshot()` / `restore()` / `freeze()` 数据正确、深拷贝完整。
 - Replay 编排器在后续阶段基于快照序列实现，不修改 `RuntimeContext` 公共接口。
 
+### 8.12 统一参数 `(ctx)`，保留语义方法名
+**原则：所有 Runtime 内部模块统一以 `RuntimeContext` 作为输入协议，但每个模块保留符合自身语义的方法名。**
+
+正确示例：
+- `ChatService.generate(ctx)`
+- `MemoryService.store(ctx)`
+- `ConfigService.apply(ctx)`
+- `ToolService.invoke(ctx)`
+- `SessionService.load(ctx)`
+- `PromptEngine.run(ctx)`
+- `InferenceEngine.run(ctx)`
+
+错误示例：
+- `ChatService.execute(ctx)` — 语义模糊，无法一眼判断职责。
+- `MemoryService.execute(ctx)` — 同上。
+- `ToolService.execute(ctx)` — 同上。
+
+原因：
+- 统一的是输入协议 `RuntimeContext`，不是方法名。
+- 语义化方法名是模块职责的自我表达。
+- 便于代码阅读、调试、日志追踪和接口审计。
+
+适用范围：
+- Engine、Service、Adapter、Gateway 的公共方法。
+- Controller 可保留 `on_send_msg(text)` 等 UI 事件处理名，但内部必须尽快转换为 `RuntimeContext` 并调用 `adapter.submit(ctx)`。
+

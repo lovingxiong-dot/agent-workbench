@@ -71,6 +71,7 @@ def test_runtime_context_tracks_messages(runtime):
     runtime.submit(task)
 
     assert wait_for(done)
+    runtime.scheduler.wait_all(timeout=2.0)
     ctx = runtime._contexts.get(task.task_id)
     assert ctx is None  # 执行完成后已清理
 
