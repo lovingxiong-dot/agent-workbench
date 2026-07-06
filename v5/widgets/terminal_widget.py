@@ -4,7 +4,7 @@ from typing import Optional
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPlainTextEdit, QLineEdit, QPushButton,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from .base import theme, C, font
 from workers.terminal_worker import TerminalWorker
@@ -12,6 +12,7 @@ from workers.terminal_worker import TerminalWorker
 
 class TerminalWidget(QWidget):
     """命令终端：显示输出 + 输入命令 + 运行/停止/清空。"""
+    command_executed = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -102,6 +103,7 @@ class TerminalWidget(QWidget):
     def _on_run_command(self):
         cmd = self._cmd_input.text().strip()
         if cmd:
+            self.command_executed.emit(cmd)
             self.run_command(cmd)
 
     def _on_command_finished(self, code: int):

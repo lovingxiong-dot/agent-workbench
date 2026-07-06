@@ -90,6 +90,10 @@ class TabButton(QWidget):
 
 
 class RightPanel(QWidget):
+    sign_open_file = Signal(str)
+    sign_load_url = Signal(str)
+    sign_terminal_command = Signal(str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         # 宽度由外部 QSplitter 控制（MainWindow 中设置 min）
@@ -206,6 +210,11 @@ class RightPanel(QWidget):
         # 初始化默认最近文件（项目根目录下部分源码）
         self._refresh_recent_files()
 
+        # 子控件用户操作 → 右栏标准信号
+        self.terminal.command_executed.connect(self.sign_terminal_command.emit)
+        self.file_reader.file_opened.connect(self.sign_open_file.emit)
+        self.browser.url_loaded.connect(self.sign_load_url.emit)
+
     def _make_section_header(self, text: str) -> QLabel:
         lbl = QLabel(text)
         lbl.setStyleSheet(
@@ -247,6 +256,7 @@ class RightPanel(QWidget):
     def _on_recent_file_click(self, path: str):
         """点击最近文件行：在文件编辑器中打开并切换到该标签。"""
         self.open_file(path)
+        self.sign_open_file.emit(path)
 
     def _refresh_recent_files(self):
         """根据 self._recent_files 重建最近文件列表；空时填充项目根目录默认文件。"""

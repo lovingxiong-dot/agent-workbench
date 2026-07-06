@@ -2,7 +2,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel,
 )
-from PySide6.QtCore import Qt, QUrl, QSize
+from PySide6.QtCore import Qt, QUrl, QSize, Signal
 from PySide6.QtGui import QFont
 from .base import theme, C, font, svg_icon
 
@@ -15,6 +15,7 @@ except Exception:
 
 class BrowserWidget(QWidget):
     """嵌入式浏览器：地址栏、前进/后退/刷新/主页。"""
+    url_loaded = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -124,7 +125,9 @@ class BrowserWidget(QWidget):
         self._web_view.setHtml(html)
 
     def _on_navigate(self):
-        self.load_url(self._url_input.text().strip())
+        url = self._url_input.text().strip()
+        self.load_url(url)
+        self.url_loaded.emit(url)
 
     def _on_back(self):
         if _WEBENGINE_AVAILABLE:

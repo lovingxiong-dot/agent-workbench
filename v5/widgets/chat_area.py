@@ -505,10 +505,10 @@ class _ResizeHandle(QWidget):
 class ChatArea(QWidget):
     confirmation_clicked = Signal(bool)
     analyze_project_clicked = Signal()
-    sign_send_msg = Signal()
+    sign_send_msg = Signal(str)
     sign_stop_msg = Signal()
-    sign_mode_changed = Signal()
-    sign_model_changed = Signal()
+    sign_mode_changed = Signal(str)
+    sign_model_changed = Signal(str)
     sign_export_requested = Signal()
     sign_settings_requested = Signal()
     sign_toggle_left = Signal()
@@ -521,6 +521,8 @@ class ChatArea(QWidget):
         self._rebuild_timer.setSingleShot(True)
         self._rebuild_timer.setInterval(80)
         self._rebuild_timer.timeout.connect(self._debounced_rebuild)
+        self._current_mode = "ask"
+        self._current_model = "tool-agent"
         self._setup_ui()
         self._chat_history = []
         self._initialized = True
@@ -586,9 +588,46 @@ class ChatArea(QWidget):
 
         # "..." 下拉面板（内嵌子控件，跟随主窗口，非独立顶层窗口）
         self._more_dropdown = MoreDropdown(self)
-        self._more_dropdown.export_requested.connect(self.export_requested.emit)
-        self._more_dropdown.settings_requested.connect(self.settings_requested.emit)
+        self._more_dropdown.export_requested.connect(self.sign_export_requested.emit)
+        self._more_dropdown.settings_requested.connect(self.sign_settings_requested.emit)
         self._more_dropdown.raise_()
+
+        # 输入区事件 → V5 标准信号
+        self._input.set_mode(self._current_mode)
+        self._input.set_model(self._current_model)
+        self._input.send_clicked.connect(self._on_send_clicked)
+        self._input.stop_clicked.connect(self.sign_stop_msg.emit)
+        self._input.mode_clicked.connect(self._on_mode_clicked)
+        self._input.model_clicked.connect(self._on_model_clicked)
+
+    def _on_send_clicked(self):
+        text = self._input.input_field.toPlainText().strip()
+        if not text:
+            return
+        self._input.input_field.clear()
+        self.sign_send_msg.emit(text)
+
+    def _on_mode_clicked(self):
+        modes = ["ask", "plan", "build", "review"]
+        idx = modes.index(self._current_mode) if self._current_mode in modes else 0
+        self._current_mode = modes[(idx + 1) % len(modes)]
+        self._input.set_mode(self._current_mode)
+        self.sign_mode_changed.emit(self._current_mode)
+
+    def _on_model_clicked(self):
+        models = ["tool-agent", "flash", "deepseek-pro"]
+        idx = models.index(self._current_model) if self._current_model in models else 0
+        self._current_model = models[(idx + 1) % len(models)]
+        self._input.set_model(self._current_model)
+        self.sign_model_changed.emit(self._current_model)
+
+    def set_mode(self, mode: str):
+        self._current_mode = mode
+        self._input.set_mode(mode)
+
+    def set_model(self, model: str):
+        self._current_model = model
+        self._input.set_model(model)
 
     def _refresh_theme(self):
         self.setStyleSheet(f"background-color: {C['bg_primary']};")

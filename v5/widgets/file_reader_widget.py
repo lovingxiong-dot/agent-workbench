@@ -4,13 +4,14 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPlainTextEdit, QLabel, QPushButton, QFileDialog,
     QMessageBox,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from .base import theme, C, font
 
 
 class FileReaderWidget(QWidget):
     """文本文件读取/编辑器：打开、保存、大文件截断、多编码解码。"""
+    file_opened = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -73,6 +74,7 @@ class FileReaderWidget(QWidget):
         path, _ = QFileDialog.getOpenFileName(self, "打开文件")
         if path:
             self.open_file(path)
+            self.file_opened.emit(path)
 
     def open_file(self, path: str):
         if not path or not os.path.isfile(path):

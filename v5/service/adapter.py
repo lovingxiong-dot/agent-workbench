@@ -213,7 +213,7 @@ class _ChatWorker(QThread):
 class V5Adapter(QObject):
     """V5 业务适配器：连接 UI 回调与根目录共享核心。
 
-    - 不导入 v4 任何模块；
+    - 仅依赖根目录平行共享核心模块；
     - 通过底层 Qt 信号隔离，对外仅暴露普通 Python 回调；
     - 会话级 Worker 复用，切换会话不中断后台任务。
     """

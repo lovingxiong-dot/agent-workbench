@@ -196,6 +196,10 @@ class InvisibleResizeHandle(QWidget):
             y = max(0, center_y - half_h)
             w = splitter_rect.width()
             h = self.HOT_ZONE_WIDTH
+        # 当父控件不是 splitter 时，将 splitter 局部坐标转换为父控件坐标
+        if self.parentWidget() is not self._splitter:
+            top_left = self._splitter.mapTo(self.parentWidget(), QPoint(x, y))
+            x, y = top_left.x(), top_left.y()
         self.setGeometry(x, y, w, h)
         self.raise_()
         self.show()

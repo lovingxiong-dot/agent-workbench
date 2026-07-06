@@ -1,4 +1,4 @@
-"""v5 聊天服务包装层：对外纯 Python 接口，无 v4 依赖。"""
+"""v5 聊天服务包装层：对外纯 Python 接口。"""
 from typing import Callable
 
 from v5.service.adapter import V5Adapter

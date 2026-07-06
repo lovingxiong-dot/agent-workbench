@@ -1,4 +1,4 @@
-"""v5 程序入口：统一依赖注入，全程无 v4 依赖。"""
+"""v5 程序入口：统一依赖注入。"""
 import sys
 
 from PySide6.QtWidgets import QApplication

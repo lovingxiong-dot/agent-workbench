@@ -14,6 +14,7 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1200, 800)
         self.resize(1400, 900)
         self._drag_pos = None
+        self.setWindowTitle(controller._config.get("app.version", "AI Agent Workbench"))
 
         self._build_ui()
         self._apply_theme()
@@ -40,8 +41,8 @@ class MainWindow(QMainWindow):
         self._splitter.addWidget(self._right)
         self._splitter.setSizes([220, 760, 400])
 
-        self._handle0 = InvisibleResizeHandle(self._splitter, 0)
-        self._handle1 = InvisibleResizeHandle(self._splitter, 1)
+        self._handle0 = InvisibleResizeHandle(self._splitter, 0, central)
+        self._handle1 = InvisibleResizeHandle(self._splitter, 1, central)
 
         root.addWidget(self._splitter)
 
@@ -72,16 +73,16 @@ class MainWindow(QMainWindow):
         self._right.sign_terminal_command.connect(self._ctrl.handle_terminal_command)
 
         # Controller -> UI
-        self._ctrl.sign_update_sessions.connect(self._left.refresh_sessions)
+        self._ctrl.sign_update_sessions.connect(self._left.refresh)
         self._ctrl.sign_set_active_session.connect(self._left.set_active_session)
         self._ctrl.sign_set_title.connect(self._center.set_title)
-        self._ctrl.sign_chat_user.connect(self._center.append_user_message)
-        self._ctrl.sign_chat_ai.connect(self._center.append_ai_message)
-        self._ctrl.sign_stream_chunk.connect(self._center.append_stream_chunk)
-        self._ctrl.sign_stream_end.connect(self._center.on_stream_end)
+        self._ctrl.sign_chat_user.connect(self._center.append_user)
+        self._ctrl.sign_chat_ai.connect(self._center.append_ai)
+        self._ctrl.sign_stream_chunk.connect(self._center.append_chunk)
+        self._ctrl.sign_stream_end.connect(self._center.finalize_stream)
         self._ctrl.sign_set_streaming.connect(self._center.set_streaming)
         self._ctrl.sign_open_file_right.connect(self._right.open_file)
-        self._ctrl.sign_update_terminal.connect(self._right.append_terminal)
+        self._ctrl.sign_update_terminal.connect(self._right.update_terminal)
         self._ctrl.sign_switch_tab.connect(self._right.switch_tab)
 
     def toggle_left_panel(self):

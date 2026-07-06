@@ -1,4 +1,4 @@
-"""v5 会话服务包装层：仅依赖根目录共享 services.session_service，零 v4 依赖。"""
+"""v5 会话服务包装层：仅依赖根目录共享 services.session_service。"""
 import json
 import os
 import sqlite3
