@@ -445,8 +445,8 @@ Snapshot
 - 当前阶段只需保证 `snapshot()` / `restore()` / `freeze()` 数据正确、深拷贝完整。
 - Replay 编排器在后续阶段基于快照序列实现，不修改 `RuntimeContext` 公共接口。
 
-### 8.12 统一参数 `(ctx)`，保留语义方法名
-**原则：所有 Runtime 内部模块统一以 `RuntimeContext` 作为输入协议，但每个模块保留符合自身语义的方法名。**
+### 8.12 Runtime Interface Principle（运行时接口原则）
+**原则：所有 Runtime 内部模块统一接受 `RuntimeContext` 作为唯一输入协议（Input Protocol），各模块保留符合自身职责的语义化方法名，不强制统一为 `execute()`。**
 
 正确示例：
 - `ChatService.generate(ctx)`
@@ -456,6 +456,7 @@ Snapshot
 - `SessionService.load(ctx)`
 - `PromptEngine.run(ctx)`
 - `InferenceEngine.run(ctx)`
+- `IRuntimeAdapter.submit(ctx)`
 
 错误示例：
 - `ChatService.execute(ctx)` — 语义模糊，无法一眼判断职责。
@@ -470,4 +471,44 @@ Snapshot
 适用范围：
 - Engine、Service、Adapter、Gateway 的公共方法。
 - Controller 可保留 `on_send_msg(text)` 等 UI 事件处理名，但内部必须尽快转换为 `RuntimeContext` 并调用 `adapter.submit(ctx)`。
+
+### 8.13 Adapter 属于 Application Layer，不侵入 Runtime
+**原则：Adapter 不属于 Runtime，属于 Application Layer。**
+
+架构边界：
+```
+Application Layer
+    │
+    ├── UIAdapter
+    ├── GatewayAdapter
+    ├── CLIAdapter
+    ├── MCPAdapter
+    └── RuntimeAdapter
+            │
+            ▼
+        Runtime Core
+            │
+            ▼
+        Runtime.run(ctx)
+```
+
+Runtime 永远不知道：
+- 谁在调用它。
+- 是 GUI、Gateway、REST 还是 CLI。
+
+Runtime 只知道：`Runtime.run(ctx)`。
+
+这样 Runtime 成为可嵌入的 Runtime Core。
+
+#### Adapter 两条铁律
+**铁律一：Adapter 不保存状态**
+- 所有状态必须保存在 `RuntimeContext` 中。
+- Adapter 自身不允许持有业务状态、会话状态或运行时状态。
+
+**铁律二：Adapter 不做业务**
+- Adapter 只负责格式转换与转发：
+  ```
+  Input → Context → Runtime → Output
+  ```
+- 不允许在 Adapter 中实现 LLM 调用、工具执行、记忆存储、策略决策等业务逻辑。
 

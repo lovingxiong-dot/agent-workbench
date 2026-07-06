@@ -1,11 +1,12 @@
-"""v6/runtime/adapter.py — RuntimeAdapter：Runtime 的对外适配层。
+"""v6/runtime/adapter.py — RuntimeAdapter：Application Layer 的 Runtime 适配器。
 
-设计来源：docs/v6/SPEC.md 第 8.12 节。
+设计来源：docs/v6/SPEC.md 第 8.12、8.13 节。
 
-职责：
-- 为 UI / CLI / Web / Gateway / MCP 等调用方提供统一入口。
-- 调用方只与 Adapter 交互，不直接依赖 AgentRuntime。
-- Runtime 永远不知道是谁在调用它。
+重要边界：
+- Adapter 属于 Application Layer，不属于 Runtime。
+- Adapter 不保存状态，所有状态在 RuntimeContext 中。
+- Adapter 不做业务，只做：Input → Context → Runtime → Output。
+- Runtime 永远不知道是谁在调用它（GUI / Gateway / CLI / MCP）。
 - 公共方法统一以 RuntimeContext 作为输入协议，方法名保留语义。
 
 长期演进：

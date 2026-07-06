@@ -24,9 +24,13 @@
   - 8.9 节：依赖方向固定原则。
   - 8.10 节：RuntimeContext 是 Runtime State Container，不是 Runtime Manager（三条铁律）。
   - 8.11 节：未来接口 Snapshot → Replay 预留。
+  - 8.12 节：统一参数 `(ctx)`，保留语义方法名。
+- 实现 `v6/runtime/adapter.py`：定义 `IRuntimeAdapter` 协议与 `LocalRuntimeAdapter` 实现；Runtime 不知调用方是谁。
+- 新增 `tests/v6/test_v6_runtime_adapter.py`：5 个用例覆盖 submit / cancel / subscribe / 协议抽象性 / Runtime 无调用方依赖。
+- 修复 `tests/v6/test_v6_runtime.py::test_runtime_context_tracks_messages` 时序断言，增加 `scheduler.wait_all`。
 - 更新 `docs/v6/PROJECT_BLUEPRINT_v6.md`：阶段 5 状态更新为已完成，架构图补全八大引擎。
 - 新增 `tests/v6/test_v6_engines.py`：22 个用例覆盖八大引擎构造、run(ctx) 接口、核心路径、异常降级、上下文同一性、RuntimeContext 状态容器约束、snapshot/restore/freeze/reset、Engine 零耦合。
-- Review Agent 复核通过，无阻塞项；全量回归 85 个测试通过。
+- Review Agent 复核通过，无阻塞项；全量回归 90 个测试通过。
 
 ## v6.4.0-alpha (2026-07-07) — AgentRuntime 骨架与事件总线
 - 实现 `v6/runtime/event_bus.py`：独立后台线程 + asyncio 队列的异步事件总线，支持同步/异步订阅者。
