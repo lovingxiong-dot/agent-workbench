@@ -580,3 +580,67 @@ TaskFactory.create(...)          → RuntimeContext
 - 它既保持了 `task_id` 的必填语义和 Runtime 可追踪性（Traceability / Lifecycle），又不要求每个调用方都手动生成任务 ID。
 - 当 Runtime 的任务生命周期管理足够成熟时，再逐步将 Task 创建语义从 Context 中分离出来。
 
+### 8.15 Runtime Trace：记录 Task 执行历史，支持 Replay
+**原则：每个 Runtime Task 必须留下可审计、可回放、可调试的执行历史。**
+
+Runtime Trace 记录的不是业务结果，而是执行过程：
+```
+Task
+  ↓
+Phase
+  ↓
+Engine / Service / Tool
+  ↓
+Finish
+```
+
+`RuntimeContext` 携带 `trace: RuntimeTrace`，与 Task 同生命周期：
+- `trace` 属于 History（历史），不是当前状态。
+- `trace` 只追加、不修改已有步骤。
+- `Runtime`、`Adapter`、`Engine`、`Service`、`Tool` 均可向 `ctx.trace.add(...)` 写入自己负责的步骤。
+- 每个 `TraceStep` 包含：`timestamp`、`phase`、`node`、`action`、`payload`。
+
+推荐记录约定：
+| node | 说明 |
+|---|---|
+| `runtime` | Runtime 层生命周期：`task_start` / `handler_dispatch` / `task_finish` / `task_error` |
+| `adapter` | Application Boundary：`submit` / `cancel` |
+| `engine` | 八大引擎：`inference_start` / `prompt_build` / `emit_chunk` / `emit_end` |
+| `service` | 业务服务：`store` / `load` / `apply` |
+| `tool` | 工具执行：`invoke` / `result` |
+
+Replay：
+- `ReplayPlayer(trace, event_bus)` 可按 `trace` 中记录的 `emit_*` 步骤重放事件。
+- Replay 用于调试、可视化、审计、回归测试。
+- Replay 不重新执行业务逻辑，只重放历史事件。
+
+注意：
+- `RuntimeTrace` 只记录摘要（small facts），不应存储大对象、原始响应全文或敏感数据。
+- `trace` 与 `metrics`、`result`、`messages` 一样，是 `RuntimeContext` 的组成部分，不得作为 Runtime 的顶层公共接口。
+
+### 8.16 长期演进：RuntimeTask 四对象模型
+**展望：Runtime 的核心对象最终可收敛为四个。**
+
+```
+RuntimeTask
+    │
+    ├── RuntimeContext   — 当前事实（Facts）
+    │
+    ├── RuntimeTrace     — 执行历史（History）
+    │
+    ├── RuntimeMetrics   — 性能统计（Performance）
+    │
+    └── RuntimeResult    — 最终输出（Output）
+```
+
+职责边界：
+- `RuntimeContext`：保存当前运行状态，供 Engine 读取和修改。
+- `RuntimeTrace`：记录整个执行过程，供调试、回放、可视化、审计。
+- `RuntimeMetrics`：统计耗时、Token、工具调用次数等量化指标。
+- `RuntimeResult`：最终对外输出，供 UI、Gateway、API 返回。
+
+当前阶段：
+- `RuntimeContext` 已携带 `trace`、`metrics`、`result` 字段，向四对象模型兼容。
+- `RuntimeContext.new()` 作为 Task 创建入口，后续可演进为 `RuntimeTask.create()` 或 `Runtime.start_task(...)`。
+- 当前不强制拆分 `RuntimeTask` 类，避免过度设计；当多 Agent 协作、Gateway、可视化调试需求明确时，再正式提取 `RuntimeTask`。
+

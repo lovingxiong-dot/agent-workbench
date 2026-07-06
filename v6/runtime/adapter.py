@@ -66,6 +66,12 @@ class LocalRuntimeAdapter(IRuntimeAdapter):
 
     def submit(self, ctx: RuntimeContext) -> str:
         """提交 RuntimeContext 到本地 Runtime 执行。"""
+        ctx.trace.add(
+            node="adapter",
+            action="submit",
+            phase=ctx.phase,
+            payload={"task_id": ctx.task_id, "session_id": ctx.session_id},
+        )
         task = Task(
             task_id=ctx.task_id,
             session_id=ctx.session_id,

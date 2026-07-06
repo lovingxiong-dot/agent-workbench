@@ -94,20 +94,54 @@ class AgentRuntime:
                 session_id=task.session_id,
             )
         self._contexts[task.task_id] = ctx
+        ctx.set_status("running")
+        ctx.trace.add(
+            node="runtime",
+            action="task_start",
+            phase=ctx.phase,
+            payload={"task_type": task.type, "session_id": task.session_id},
+        )
         try:
             handler = self._handlers.get(task.type)
             if handler is None:
                 if task.type == "chat":
                     handler = self._echo_handler
                 else:
+                    ctx.trace.add(
+                        node="runtime",
+                        action="handler_missing",
+                        phase=ctx.phase,
+                        payload={"task_type": task.type},
+                    )
+                    ctx.set_status("failed")
                     self._event_bus.emit(
                         "error",
                         {"message": f"No handler registered for task type: {task.type}"},
                         task.task_id,
                     )
                     return
+            ctx.trace.add(
+                node="runtime",
+                action="handler_dispatch",
+                phase=ctx.phase,
+                payload={"handler": task.type},
+            )
             handler(task, ctx, self._event_bus)
+            ctx.trace.add(
+                node="runtime",
+                action="task_finish",
+                phase=ctx.phase,
+                payload={"messages_count": len(ctx.messages)},
+            )
+            ctx.set_status("completed")
         except Exception as exc:  # pragma: no cover - defensive
+            ctx.trace.add(
+                node="runtime",
+                action="task_error",
+                phase=ctx.phase,
+                payload={"error": str(exc)},
+            )
+            ctx.set_status("failed")
             self._event_bus.emit(
                 "error",
                 {"message": str(exc)},
@@ -119,13 +153,45 @@ class AgentRuntime:
     @staticmethod
     def _echo_handler(task: Task, ctx: RuntimeContext, bus: EventBus) -> None:
         """最小回声处理器：替换上一阶段的 EchoRuntime。"""
+        ctx.phase = "inference"
+        ctx.trace.add(node="engine", action="echo_start", phase=ctx.phase)
         if ctx.messages:
             text = ctx.messages[-1].content
         else:
             text = getattr(task, "text", task.payload.get("text", ""))
+        ctx.trace.add(
+            node="engine",
+            action="input_read",
+            phase=ctx.phase,
+            payload={"source": "ctx.messages" if ctx.messages else "task.text", "length": len(text)},
+        )
         bus.emit("user_message", {"text": text}, task.task_id)
+        ctx.trace.add(
+            node="engine",
+            action="emit_start",
+            phase=ctx.phase,
+            payload={"data": {"phase": ""}},
+        )
         bus.emit("ai_start", {"phase": ""}, task.task_id)
         response = f"收到：{text.replace(chr(10), ' ')}"
+        ctx.trace.add(
+            node="engine",
+            action="emit_chunk",
+            phase=ctx.phase,
+            payload={"data": {"text": response, "phase": ""}},
+        )
         bus.emit("ai_chunk", {"text": response, "phase": ""}, task.task_id)
+        ctx.trace.add(
+            node="engine",
+            action="emit_end",
+            phase=ctx.phase,
+            payload={"data": {}},
+        )
         bus.emit("ai_end", {}, task.task_id)
         ctx.add_message("ai", response)
+        ctx.trace.add(
+            node="engine",
+            action="echo_end",
+            phase=ctx.phase,
+            payload={"response_length": len(response)},
+        )

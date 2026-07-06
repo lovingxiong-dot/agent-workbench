@@ -20,6 +20,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from v6.runtime.trace import RuntimeTrace
 from v6.runtime.types import ChatMessage
 
 
@@ -46,10 +47,14 @@ class RuntimeContext:
     project_path: str = ""
     memory: Dict[str, Any] = field(default_factory=dict)
 
-    # 消息、工具、指标
+    # 消息、工具、指标、结果
     messages: List[ChatMessage] = field(default_factory=list)
     tool_calls: List[Dict[str, Any]] = field(default_factory=list)
     metrics: Dict[str, Any] = field(default_factory=dict)
+    result: Dict[str, Any] = field(default_factory=dict)
+
+    # 执行历史（History），供调试、回放、审计
+    trace: RuntimeTrace = field(default_factory=RuntimeTrace)
 
     # 通用元数据容器，Engine 可读写自己负责的字段
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -112,9 +117,21 @@ class RuntimeContext:
             self.memory = copy.deepcopy(snapshot.get("memory", {}))
             self.tool_calls = copy.deepcopy(snapshot.get("tool_calls", []))
             self.metrics = copy.deepcopy(snapshot.get("metrics", {}))
+            self.result = copy.deepcopy(snapshot.get("result", {}))
             self.metadata = copy.deepcopy(snapshot.get("metadata", {}))
             self.status = snapshot.get("status", "pending")
             self.created_at = snapshot.get("created_at", time.time())
+            # trace 恢复：若快照含 steps 则重建 RuntimeTrace，否则保留当前实例
+            raw_trace = snapshot.get("trace")
+            if isinstance(raw_trace, dict) and "steps" in raw_trace:
+                self.trace = RuntimeTrace()
+                for s in raw_trace["steps"]:
+                    self.trace.add(
+                        node=s.get("node", ""),
+                        action=s.get("action", ""),
+                        phase=s.get("phase", ""),
+                        payload=s.get("payload", {}),
+                    )
             raw_messages = snapshot.get("messages", [])
             self.messages = [
                 ChatMessage(**copy.deepcopy(m)) if isinstance(m, dict) else copy.deepcopy(m)
@@ -133,13 +150,15 @@ class RuntimeContext:
             self.messages.clear()
             self.tool_calls.clear()
             self.metrics.clear()
+            self.result.clear()
+            self.trace.clear()
             self.metadata.clear()
             self.status = "pending"
 
     def clone(self) -> "RuntimeContext":
         """深拷贝自身，生成独立副本。"""
         with self._lock:
-            return RuntimeContext(
+            cloned = RuntimeContext(
                 task_id=self.task_id,
                 session_id=self.session_id,
                 conversation_id=self.conversation_id,
@@ -153,10 +172,21 @@ class RuntimeContext:
                 messages=copy.deepcopy(self.messages),
                 tool_calls=copy.deepcopy(self.tool_calls),
                 metrics=copy.deepcopy(self.metrics),
+                result=copy.deepcopy(self.result),
                 metadata=copy.deepcopy(self.metadata),
                 status=self.status,
                 created_at=self.created_at,
             )
+        # trace 是独立的可变对象，需要单独深拷贝步骤
+        cloned.trace = RuntimeTrace()
+        for step in self.trace.steps():
+            cloned.trace.add(
+                node=step.node,
+                action=step.action,
+                phase=step.phase,
+                payload=step.payload,
+            )
+        return cloned
 
     def to_dict(self) -> Dict[str, Any]:
         """序列化上下文为字典（兼容旧接口，语义同 snapshot）。"""
@@ -181,6 +211,8 @@ class RuntimeContext:
             "messages": [copy.deepcopy(m.__dict__) for m in self.messages],
             "tool_calls": copy.deepcopy(self.tool_calls),
             "metrics": copy.deepcopy(self.metrics),
+            "result": copy.deepcopy(self.result),
+            "trace": self.trace.snapshot(),
             "metadata": copy.deepcopy(self.metadata),
             "status": self.status,
             "created_at": self.created_at,

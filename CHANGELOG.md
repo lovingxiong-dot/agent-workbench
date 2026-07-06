@@ -1,5 +1,25 @@
 # Changelog
 
+## v6.5.3-alpha (2026-07-07) — Runtime Trace 基础能力与 Replay 支持
+
+### feat
+- 新增 `v6/runtime/trace.py`：定义 `TraceStep`、`RuntimeTrace`、`ReplayPlayer`。
+- `RuntimeTrace` 记录 `Task → Phase → Engine/Service/Tool → Finish` 执行历史，线程安全，支持 `snapshot` / `filter` / `last`。
+- `ReplayPlayer` 可按 trace 中记录的 `emit_*` 步骤重放事件，供调试、审计、回归测试。
+- `RuntimeContext` 新增 `trace` 与 `result` 字段，与 Task 生命周期绑定。
+- `RuntimeContext.snapshot()` / `restore()` / `clone()` / `reset()` 全面支持 `trace` 与 `result`。
+- `AgentRuntime` 自动记录任务生命周期：`task_start` / `handler_dispatch` / `task_finish` / `task_error`。
+- `EchoHandler` 记录 Engine 步骤：`echo_start` / `input_read` / `emit_start` / `emit_chunk` / `emit_end` / `echo_end`。
+- `LocalRuntimeAdapter.submit()` 记录 Adapter 步骤。
+
+### docs
+- `docs/v6/SPEC.md` 新增 8.15 节：Runtime Trace 设计原则与 Replay 能力。
+- `docs/v6/SPEC.md` 新增 8.16 节：RuntimeTask 四对象模型长期演进方向。
+
+### test
+- 新增 `tests/v6/test_v6_trace.py`，覆盖 `RuntimeTrace` 基础操作、`RuntimeContext` trace 生命周期、Runtime 自动记录 trace、`ReplayPlayer` 事件回放。
+- V6 全量测试 `pytest tests/v6/` 99/99 通过。
+
 ## v6.5.2-alpha (2026-07-07) — UIController ↔ RuntimeAdapter Application Boundary 集成
 
 ### refactor
