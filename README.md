@@ -118,10 +118,16 @@ python -m pytest tests/v6/ -v
 
 ## V6 主线声明
 
+> **The active development line is `v6-dev` at version `v6.0.0-alpha`.**
+> **V6.0.0-alpha marks the beginning of the independent V6 Runtime architecture line.**
+
 - **`v6-dev` 是当前唯一活跃开发分支**，所有新功能、重构、Runtime 演进均在此分支进行。
+- **`v6.0.0-alpha` 是 V6 独立产品线的公开立项标签**；`v6.5.8-alpha` 保留为内部迁移标签（记录 Step 4 在 `v5-dev` 上的最终技术成果）。
 - **`v5-dev` 已冻结归档**：Step 4（`v6.5.8-alpha`）为 `v5-dev` 上最后一个 V6 相关提交，此后 V6 开发迁移至 `v6-dev`。
 - **禁止在 `v5-dev`、`main`、`v4-refactor` 等旧分支上继续提交 V6 代码**，避免版本号、标签、架构文档混淆。
 - V6 设计原则：`RuntimeContext` 是 Runtime 唯一公共协议；Adapter 属于 Application Layer；Engine 只接受 `ctx` 输入；所有状态收敛到 `RuntimeContext`。
+
+完整项目血统参见 [`PROJECT_LINEAGE.md`](./PROJECT_LINEAGE.md)。
 
 ## AI 进入本工作区须知
 

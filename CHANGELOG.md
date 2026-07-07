@@ -9,9 +9,10 @@
 - 后续 V6 版本号统一在 `v6-dev` / `v6` 分支上演进，格式为 `v6.x.y-alpha`。
 
 ### docs
-- 更新 `PROJECT_BLUEPRINT.md`：在元信息旁明确标注 `v6.0.0-alpha` 为公开立项版本。
+- 新增 `PROJECT_LINEAGE.md`：根目录项目血统文件，明确 V5（Frozen/Legacy）与 V6（Active Development）身份、分支、标签规则及 AI 行为守则。
+- 更新 `PROJECT_BLUEPRINT.md`：新增 `Current Development Authority` 区块；在元信息旁明确标注 `v6.0.0-alpha` 为公开立项版本。
 - 更新 `README.md` 与 `PROJECT_BLUEPRINT.md`「V6 全新主线声明」：强调 `v6.0.0-alpha` 的立项意义。
-- 更新 `.handoff/HANDOFF.md`：记录 `v6.0.0-alpha` 标签语义与分支状态。
+- 更新 `.handoff/HANDOFF.md`：新增 `Current Development Authority` 区块，记录 `v6.0.0-alpha` 标签语义与分支状态。
 
 ## v6.5.8-alpha (2026-07-07) — Step 4：Eight Engine Skeleton + Runtime Integration Test
 

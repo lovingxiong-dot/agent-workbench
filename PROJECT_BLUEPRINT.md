@@ -3,6 +3,20 @@
 ## 元信息
 | 项目名称 | AI Agent 工作台 | 当前版本 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 32 |
 
+## Current Development Authority
+
+> **The active development line is `v6-dev` at version `v6.0.0-alpha`.**
+
+| Item | Value |
+|---|---|
+| Active branch | `v6-dev` |
+| Public baseline | `v6.0.0-alpha` |
+| Internal migration checkpoint | `v6.5.8-alpha` (historical, not public) |
+| Frozen archive | `v5-dev` |
+| Rule | Do not modify `v5-dev`. All new work goes to `v6-dev`. |
+
+See also [`PROJECT_LINEAGE.md`](./PROJECT_LINEAGE.md) for the complete V5 / V6 identity map.
+
 ## V6 全新主线声明
 
 > **V6.0.0-alpha marks the beginning of the independent V6 Runtime architecture line.**

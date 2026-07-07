@@ -3,6 +3,20 @@ generated: 2026-07-07T14:45:00+08:00
 agent: Kimi-K2.7-Code
 schema_version: 3.1
 
+## Current Development Authority
+
+> **The active development line is `v6-dev` at version `v6.0.0-alpha`.**
+
+| Item | Value |
+|---|---|
+| Active branch | `v6-dev` |
+| Public baseline | `v6.0.0-alpha` |
+| Internal migration checkpoint | `v6.5.8-alpha` (historical, on `v5-dev`) |
+| Frozen archive | `v5-dev` |
+| AI rule | Do not modify `v5-dev`. All new work goes to `v6-dev`. |
+
+See [`PROJECT_LINEAGE.md`](../PROJECT_LINEAGE.md) for the full V5 / V6 identity map.
+
 ## Mission
 完成 V6 Step 4：建立八大 Engine Runtime 骨架（BaseEngine + LLM/Tool/Memory/Planner/Workflow/Code/Vision/Knowledge），验证 EngineManager 动态发现、统一生命周期、Runtime Trace Timeline 与 Planner 编排能力；随后从 `v5-dev` 切出干净的 V6 主线，并以 `v6.0.0-alpha` 作为 V6 独立 Runtime 架构线的公开立项标签。
 
