@@ -7,6 +7,7 @@ import time
 
 import pytest
 
+from v6.runtime.enums import TraceEvent
 from v6.runtime.event_bus import EventBus, RuntimeEvent, RuntimeEventType
 from v6.runtime.trace import RuntimeTrace
 
@@ -192,8 +193,8 @@ def test_trace_hook_routes_by_task_id(bus):
     steps_b = trace_b.filter(node="engine:tool")
     assert len(steps_a) == 1
     assert len(steps_b) == 1
-    assert steps_a[0].action == RuntimeEventType.ENGINE_STARTED
-    assert steps_b[0].action == RuntimeEventType.ENGINE_STARTED
+    assert steps_a[0].action == TraceEvent.ENGINE_START.value
+    assert steps_b[0].action == TraceEvent.ENGINE_START.value
 
     bus.remove_trace_hook("task-a")
     bus.publish(

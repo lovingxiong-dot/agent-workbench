@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -32,6 +33,15 @@ class EchoProvider(ModelProvider):
         if "hello" in lowered or "你好" in lowered:
             return "你好！我是 V6 Agent Workbench，Framework Core 运行正常。"
         return f"收到：{text.replace(chr(10), ' ')}"
+
+    def chat_stream(
+        self, messages: List[Dict[str, str]], params: Dict[str, Any]
+    ) -> Iterator[str]:
+        """按固定长度块流式返回回声回复，方便验证 UI 流式渲染。"""
+        response = self.chat(messages, params)
+        chunk_size = 4
+        for i in range(0, len(response), chunk_size):
+            yield response[i : i + chunk_size]
 
     def validate_config(self, config: Dict[str, Any]) -> bool:
         """Echo provider 无必填配置。"""

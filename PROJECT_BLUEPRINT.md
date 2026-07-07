@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v6.9.0-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 36 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v6.9.1-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 37 |
 
 ## Current Development Authority
 
@@ -21,6 +21,19 @@
 | Rule | Do not modify `v5-dev`. Framework Core (`v6-core`) only accepts bug fixes. Service work goes to `v6-service`. Agent work goes to `v6-agent`. |
 
 See also [`PROJECT_LINEAGE.md`](./PROJECT_LINEAGE.md) for the complete V5 / V6 identity map.
+
+## Agent Workbench 定位
+
+> **Agent Workbench 是 V6 Framework 的官方参考实现（Official Reference Implementation）。**
+
+它不是 Demo，也不是临时测试程序，而是 Runtime、UI、Engine、Service、Module 等全部能力的产品化验证平台。所有新增能力必须首先在 Workbench 中完成集成验证，证明其体验、边界、异常、性能均达到产品化标准后，再决定是否进入 `v6-core` / `v6-service` 框架核心。
+
+这一句话决定以下行为：
+
+- 禁止为 Demo 快速写特殊逻辑或临时分支。
+- 禁止「先放这里，之后再重构」的折中方案。
+- Workbench 自然成为所有新能力的集成验证平台与产品化门槛。
+- 任何在 Workbench 中无法以 Composable 方式集成的新能力，都不应进入框架核心。
 
 ## V6 Framework Core Foundation Baseline
 
@@ -71,18 +84,183 @@ v6-core  ──merge──►  v6-service  ──merge──►  v6-agent
   4. 所有状态收敛到 `RuntimeContext`；ChatMessage、ToolCall、MemoryEntry、Metrics 等仅为 `RuntimeContext` 的资源。
 
 ## 项目概要
+v6.9.1-alpha 完成 **Runtime Observability Foundation**：将 RuntimeTrace 升级为分层事件模型（Task/Capability/Engine/Provider/Execution/Stream/Request），事件语义不再绑定 LLM Streaming，支持未来多模态扩展；新增 `CapabilityRouter` 作为 Runtime 组件发射 `capability.resolved` 事件；`Orchestrator` 统一发射 `engine.selected` 事件；`WorkbenchLLMEngine` 发射 `execution.started` / `provider.selected` / `request.sent` / `first.token` / `chunk.received` / `stream.finished` / `execution.finished` 结构化事件；`EventBus` Trace Hook 改为 `publish` 阶段同步写入，保证事件顺序与 `task.finish` 不丢失，同时保持订阅者回调异步；新增 `TraceEventRegistry` 与 `TraceWorkspaceItem`，UI 通过事件注册表动态渲染图标/标签/状态，不维护硬编码映射；新增 Trace 事件顺序、父子关系、Workspace 接收等测试；V6 全量测试 `pytest tests/v6/` 176/176 通过，Workbench 测试 `pytest agent_workbench/tests/` 20/20 通过，合计 196/196 通过。
+
 v6.9.0-alpha 完成 **Agent Workbench Single Instance**（V6 框架内第一个真实 Agent 产品实例）：新增 `agent_workbench/` 应用层目录，基于 v6.8.0-alpha Framework Core Foundation Baseline 构建可运行、可配置的单一 Agent 工作 bench；引入 `ConfigStore`（YAML 唯一配置源 + 内存缓存 + namespace 变更通知）、`ProfileManager`（Profile 切换/导入/导出/合并）、`ModuleRegistry`（10 个 RuntimeModule 生命周期管理）与 `AgentWorkbenchRuntime`（组合 ConfigStore/ProfileManager/ModuleRegistry/CoreRuntime，注册 WorkbenchLLMEngine/WorkbenchToolEngine）；定义 10 个 `BaseRuntimeModule`（Runtime/Session/Config/Profile/Prompt/Model/Tool/Memory/Strategy/Trace），每个模块支持 `initialize`/`apply_config`/`dispose`/`to_form`，运行态、配置态、能力态、观测态分层清晰；实现 `WorkbenchController` 作为 Application Layer 唯一入口，UI 不直接持有 Module；实现 `AgentConfigPanel` 配置面板，支持左侧模块列表 + 右侧 JSON 编辑器，满足查看/修改/保存/热更新四件事；扩展 v6 三栏高级 UI：`WorkbenchLeftPanel` 在左下角新增「设置」按钮，`WorkbenchRightPanel` 新增「配置」标签页，`WorkbenchMainWindow` 组装完整三栏，`WorkbenchUIController` 继承 v6 UIController 并复用 Session/Chat 服务，聊天请求转发给 WorkbenchController；提供 CLI/GUI 双入口 `agent_workbench/app.py`；新增 7 个 Workbench 端到端测试，验证聊天生命周期、Tool Engine、PlannerLoop 决策、ConfigStore 读写、CLI 入口；V6 全量测试 `pytest tests/v6/` 175/175 通过，Workbench 测试 `pytest agent_workbench/tests/` 7/7 通过，合计 182/182 通过。
 
 v6.8.0-alpha 完成 V6 Framework Core Foundation Baseline（共享核心框架基座）：新增 `v6/runtime/decision.py` 定义 `DecisionAction`/`Decision` 模型；新增 `v6/runtime/decision_policy.py` 定义 `DecisionPolicy` 与 `RuleBasedDecisionPolicy`；新增 `v6/runtime/planner_loop.py` 实现 `PlannerLoop`（observe/decide/evaluate/plan），补齐 Runtime 调度决策机制；升级 `v6/runtime/orchestrator.py` 集成 PlannerLoop，按 Decision 选择 Engine 执行；升级 `v6/runtime/runtime.py` 使 `AgentRuntime` 默认构造 `PlannerLoop` 并注入 Orchestrator；`Orchestrator._ensure_context()` 自动从 `ChatTask` 提取 `task_type` 与 `messages` 供策略匹配；新增 `tests/v6/test_v6_planner_loop.py` 共 10 个测试覆盖决策、事件发布、Orchestrator 集成与 PlannerLoop/Trace 隔离；至此 V6 核心控制面完整闭环：统一入口（RuntimeContext/Task）、统一协议（Engine）、统一通信（EventBus）、能力发现（CapabilityRegistry）、执行追踪（RuntimeTrace/Replay）、任务编排（Orchestrator）、调度决策（PlannerLoop/Decision）；明确 `PlannerLoop` 是 Runtime 决策机制，`PlannerEngine` 是八大 Engine 之一的能力组件，二者职责分离；该版本作为后续 Agent / Service / Adapter 开发的长期依赖基线；V6 全量测试 175/175 通过。
 
 ## 当前任务
 
-**下一步：V6 Runtime Service Architecture**（在 `v6-service` 分支执行）：
+**下一步：v6.9.2-alpha Capability Runtime Foundation**（在 `v6-agent` 分支执行）：
 
-- 基于 `v6.8.0-alpha` Framework Core Foundation Baseline 与 `v6.9.0-alpha` Agent Workbench 产品实例经验，回到 `v6-service` 推进 Runtime 能力接入层。
-- 候选服务：Memory Service、Prompt Service、Model Adapter、Tool Adapter、Knowledge Adapter。
-- 原则：Service 属于 Runtime 能力接入层，不是 Engine 业务逻辑；保持 `RuntimeContext` 作为唯一 Public Protocol；`v6-core` 只接受 bug fix，不增加功能。
-- 目标：为 Runtime Kernel 接入真实世界能力层，使 Framework Core 具备对接真实 LLM、工具、记忆、知识的接口与扩展点。
+v6.9.1-alpha 已完成 **Runtime Observability Foundation**。v6.9.2-alpha 目标是把 Workbench 从「单一 Chat Runtime」升级为「能力驱动的 Single Agent Runtime Foundation」：用户始终面对同一个 Agent 入口，Runtime 根据 Task.capability 路由到不同 Engine。本阶段仍是 Foundation 封板前的最后一步，禁止提前引入 ServiceRegistry、TaskGraph 调度、Workflow Planner 等抽象。
+
+### v6.9.2-alpha 目标
+
+- 定义稳定的 `Task` 数据模型（`id` / `capability` / `payload` / `metadata`），为后续扩展 `priority` / `context` / `attachments` / `parent_task` / `workflow_id` 预留接口。
+- `WorkbenchController.chat()` 升级为 `submit_task(Task)`，`chat()` 保留为兼容包装，Runtime 内部只认识 `Task`。
+- 新增规则版 Manager：User Input → Manager → `Task(capability=...)`；先全部输出 `chat`，再逐步增加 `image_generation` / `tool` 等规则。
+- `CapabilityRouter` 改为 Registry 驱动：`capability → registry.lookup(capability) → Engine`；Router 只识别 capability，不解析 prompt。
+- 新增 `ImageEngineStub` 作为第二条 Capability，返回占位 `ImageResult`，证明 Runtime 主流程无需修改即可承载多能力。
+- Trace 验证：发送不同 capability 的任务后，Trace 树展示 `Task → Manager → CapabilityRouter → Engine → Provider → Finish`，两条 Capability 自然分叉。
+- 全部用户路径可验证：打开 Workbench → 输入「生成一张猫」→ 看到 `capability=image_generation` → ImageEngine 执行 → Trace 展示完整链路。
+
+### Foundation 封板标准
+
+当 chat 与 image_generation 两条 Capability 都能跑通，且 Trace / Inspector / StatusBar 正常观测时，Single Agent Runtime Foundation 封板。后续再进入 Service Registry / TaskGraph / Workflow Planner / Multi-Agent 等 Runtime V2 演进。
+
+### V6 Architecture Constitution（架构宪章）
+
+> 本宪章具有最高优先级，高于普通设计文档与实现细节。任何代码评审、AI 生成代码、未来接手开发的人，都必须先检查是否违反本宪章，再讨论如何实现。
+>
+> 宪章核心原则：**成熟框架真正稳定，不是因为规定了很多「应该怎么做」，而是因为规定了很多「绝对不能怎么做」。**
+
+#### 1. Capability Metadata ≠ UI Metadata（平台无关性）
+
+`BaseRuntimeModule.metadata()` 只能返回 **Capability Metadata**，即模块「是什么、有什么、能做什么」的纯数据描述。Metadata 必须具有 **平台无关性（Platform Agnostic）**：同一份 Metadata 应能被 Qt、Web、CLI、REST API 同时消费，无需重写。
+
+允许出现的内容：
+
+- `id` / `type` / `name` / `description` / `icon`
+- `properties`：属性的名字、类型、当前值、可选值、是否可编辑、描述
+- `statistics`：运行时的只读观测值
+- `actions`：模块暴露的操作名、标签、图标
+
+禁止出现任何 UI 概念：
+
+- `editor: slider` / `textbox` / `checkbox` / `dropdown`
+- `inspector` / `property_editor` / `widget` / `dock` / `panel`
+- `layout` / `section` / `tab` / `column`
+- `width` / `height` / `horizontal` / `vertical` / `position`
+
+如果 Metadata 中出现 `width: 300`、`layout: horizontal`、`editor: slider`，说明已经越界。如果 Module 开始写 `build_property_list()` / `build_actions()` / `build_statistics()` 这类为 UI 服务的方法，立即叫停并回滚。Module 只为 Runtime 负责，UI 怎么画与 Module 无关。
+
+#### 2. 不要 RuntimeObject：Module Metadata → PresentationModel → Inspector
+
+Runtime 与 UI 之间的翻译层必须叫 **MetadataAdapter**，输入是 `ModuleMetadata`，输出是 **PresentationModel**（例如 `PropertyPresentation` / `ActionPresentation` / `StatisticPresentation` / `ModulePresentation`），然后交给 Inspector 渲染。
+
+禁止引入 `RuntimeObject` 这种名字，因为它会越长越像 Qt 的 `QObject`，最终滑向 `RuntimeObject → QObject → Widget` 的混合架构。也不应叫 `UI ViewModel`，因为以后 Qt、Web、CLI 都可以消费同一份 PresentationModel，它不是 Qt 专用的 ViewModel。
+
+Runtime 的边界到 `ModuleMetadata` 为止；后面是 MetadataAdapter → PresentationModel → Inspector，全部是 UI 层。
+
+正确数据流：
+
+```
+PromptModule
+    ↓ metadata()
+ModuleMetadata
+    ↓ MetadataAdapter.adapt()
+ModulePresentation / PropertyPresentation / ActionPresentation
+    ↓ Inspector 渲染
+UI (Qt / Web / CLI)
+```
+
+#### 3. 迁移顺序：UI 先立起来，Runtime 再接
+
+从 `ui-template` 迁移成熟 UI 资产时，顺序必须是：
+
+1. **ui-template**：把已有的纯 UI 资产（主题、布局、组件、动画）完整迁移过来，不带业务。
+2. **Workbench Skeleton**：建立 `WorkbenchHost` → `Workbench` 骨架，包含 Navigator / WorkspaceHost / Inspector / StatusBar / CommandBar。
+3. **Runtime Adapter**：把 Workbench 的信号（selection_changed / property_changed / action_triggered / command_submitted）连接到 Runtime。
+4. **Metadata**：让 10 个 RuntimeModule 返回 Capability Metadata。
+5. **Property Inspector**：让 Inspector 根据 PresentationModel 动态渲染属性编辑器。
+
+原因：不要一边设计 Metadata 一边画 UI。UI 框架和交互骨架必须先稳定，Runtime 再用 Metadata 往里填内容。
+
+#### 4. Workspace 不拥有任何业务（WorkspaceHost 原则）
+
+`Workspace` 不是 Chat、Dashboard、Trace、Task、Editor 这些具体内容。Workspace 自己只是一个 **WorkspaceHost**，负责承载工作区内容。**Workspace 不拥有任何业务逻辑。**
+
+所有内容都是 **WorkspaceItem**：
+
+- Chat 是一个 WorkspaceItem；
+- Trace 是一个 WorkspaceItem；
+- Dashboard 是一个 WorkspaceItem；
+- Task、Editor、Knowledge Graph、Workflow、Profiler 都是可注册的 WorkspaceItem。
+
+以后增加 Knowledge、Workflow、Profiler，WorkspaceHost 一行不用改。第一版可以只实现 ChatWorkspaceItem，但 `WorkspaceHost` 的接口必须允许后续动态注册新的 WorkspaceItem 类型，不能一开始就把 Workspace 的内容写死。
+
+#### 5. MainWindow → WorkbenchHost → Workbench
+
+不要替换 `MainWindow`。正确的分层是：
+
+```
+MainWindow（顶层窗口，只负责 OS 级窗口行为：标题栏、缩放、关闭、菜单）
+    ↓ 持有
+WorkbenchHost（负责把 Workbench 装进窗口，处理 Host 级事件）
+    ↓ 持有
+Workbench（真正的 IDE 骨架：Navigator / WorkspaceHost / Inspector / StatusBar / CommandBar）
+```
+
+这样以后：
+
+- Desktop：`MainWindow` → `WorkbenchHost` → `Workbench`
+- Web：`Browser` → `WorkbenchHost` → `Workbench`
+- Embedded：`Host` → `WorkbenchHost` → `Workbench`
+
+Runtime 完全一样，Workbench 本身保持不变。
+
+#### 6. UI 不保存业务状态
+
+任何 UI 不允许保存业务状态。禁止在 UI 中写：
+
+```python
+self.selected_model = "gpt-4o"
+self.current_profile = "coding"
+self.runtime_enabled_tools = [...]
+```
+
+真正的业务状态必须全部在 Runtime。UI 只允许保存纯界面状态：
+
+- `selection`：当前选中的对象 ID
+- `focus`：当前获得焦点的控件
+- `scroll`：滚动位置
+- `expanded`：树节点展开状态
+- `splitter_sizes`：面板尺寸
+
+当用户修改属性时，UI 只发 Signal，Runtime 自己改；Runtime 改完后通过 EventBus 通知 UI 刷新。
+
+#### 7. Runtime Module 之间禁止互相 Import
+
+任何 Runtime Module 不允许直接 import 另一个 Runtime Module。禁止：
+
+```python
+# PromptModule.py
+from agent_workbench.runtime.modules.memory_module import MemoryModule
+```
+
+模块间通信必须通过：
+
+- **EventBus**：发布/订阅事件；
+- **Interface**：模块间只依赖抽象接口；
+- **Registry**：通过 ModuleRegistry 查询其他模块的能力或 Metadata。
+
+这条规则保证模块之间零编译耦合，未来替换、升级、测试单个模块时不会影响其他模块。
+
+#### 8. 新需求优先扩展 Metadata，而不是新增 UI
+
+任何新需求进来，第一反应该是：「它能不能通过扩展现有 Metadata 解决？」而不是「我要新增一个什么 Panel / Page / Dialog」。
+
+例如：
+
+- 需要显示 Memory Size → 在 MemoryModule 的 `metadata()` 里增加 `statistics`；Inspector 自动显示，不要新增 MemoryPanel。
+- 需要 Provider 切换 → 在 ModelModule 的 `metadata()` 里把 Provider 做成 `select` 类型的 Property；Inspector 自动生成下拉框。
+- 需要 Token 统计 → 在 SessionModule 的 `metadata()` 里增加 `statistics`；StatusBar 自动刷新。
+
+如果 Metadata 无法表达该需求，再考虑是否引入新的 PresentationModel 字段或新的 UI 组件。但绝对禁止为某个模块单独写一个专属 Panel。
+
+### 验收标准（Framework Rule，适用于任何 Runtime Module）
+
+新增任何 Runtime Module（Workflow / Knowledge / Plugin / MCP / Scheduler / 其他）时，正确答案必须满足：
+1. 在 `ModuleRegistry` 注册 Module；
+2. 实现 `metadata()` 返回 Capability Metadata（`id` / `type` / `name` / `properties` / `statistics` / `actions`）。
+
+完成。Navigator 会自动出现新模块，Inspector 会自动渲染其属性、统计和操作，StatusBar 会自动读取相关 statistics。
+
+不应出现：新增 `XXXPanel` / `XXXController` / `XXXInspector` / `XXXNavigator` / `XXXStatus`。如果出现其中任何一个，说明架构又退回到了「堆页面、堆功能」的模式，必须叫停并重构。
+
+简化为一句话：**增加任何 Runtime Module，只允许改两处；任何为该模块单独写的 UI 代码都是犯规。**
 
 ## 历史里程碑
 v6.9.0-alpha 完成 Agent Workbench Single Instance（V6 框架内第一个真实 Agent 产品实例）：新增 `agent_workbench/` 应用层目录，基于 `v6.8.0-alpha` Framework Core Foundation Baseline 构建可运行、可配置的单一 Agent Workbench；引入 `ConfigStore`（YAML 唯一配置源 + 内存缓存 + namespace 变更通知）、`ProfileManager`（Profile 切换/导入/导出/合并）、`ModuleRegistry`（10 个 RuntimeModule 生命周期管理）与 `AgentWorkbenchRuntime`（组合 ConfigStore/ProfileManager/ModuleRegistry/CoreRuntime，注册 WorkbenchLLMEngine/WorkbenchToolEngine）；定义 10 个 `BaseRuntimeModule`（Runtime/Session/Config/Profile/Prompt/Model/Tool/Memory/Strategy/Trace），每个模块支持 `initialize`/`apply_config`/`dispose`/`to_form`，运行态、配置态、能力态、观测态分层清晰；实现 `WorkbenchController` 作为 Application Layer 唯一入口，UI 不直接持有 Module；实现 `AgentConfigPanel` 配置面板，支持左侧模块列表 + 右侧 JSON 编辑器，满足查看/修改/保存/热更新四件事；扩展 v6 三栏高级 UI：`WorkbenchLeftPanel` 在左下角新增「设置」按钮，`WorkbenchRightPanel` 新增「配置」标签页，`WorkbenchMainWindow` 组装完整三栏，`WorkbenchUIController` 继承 v6 UIController 并复用 Session/Chat 服务，聊天请求转发给 WorkbenchController；提供 CLI/GUI 双入口 `agent_workbench/app.py`；新增 7 个 Workbench 端到端测试，验证聊天生命周期、Tool Engine、PlannerLoop 决策、ConfigStore 读写、CLI 入口；V6 全量测试 `pytest tests/v6/` 175/175 通过，Workbench 测试 `pytest agent_workbench/tests/` 7/7 通过，合计 182/182 通过；PyInstaller 打包 `agent_workbench.spec` 生成 `dist/AgentWorkbenchV6.exe`，CLI/GUI 均可独立启动；`main.py` 已切换为 `agent_workbench.app` 入口。v6.8.0-alpha 完成 V6 Framework Core Foundation Baseline（共享核心框架基座）：新增 `v6/runtime/decision.py` 定义 `DecisionAction`/`Decision` 模型；新增 `v6/runtime/decision_policy.py` 定义 `DecisionPolicy` 与 `RuleBasedDecisionPolicy`；新增 `v6/runtime/planner_loop.py` 实现 `PlannerLoop`（observe/decide/evaluate/plan），补齐 Runtime 调度决策机制；升级 `v6/runtime/orchestrator.py` 集成 PlannerLoop，按 Decision 选择 Engine 执行；升级 `v6/runtime/runtime.py` 使 `AgentRuntime` 默认构造 `PlannerLoop` 并注入 Orchestrator；`Orchestrator._ensure_context()` 自动从 `ChatTask` 提取 `task_type` 与 `messages` 供策略匹配；新增 `tests/v6/test_v6_planner_loop.py` 共 10 个测试覆盖决策、事件发布、Orchestrator 集成与 PlannerLoop/Trace 隔离；至此 V6 核心控制面完整闭环：统一入口（RuntimeContext/Task）、统一协议（Engine）、统一通信（EventBus）、能力发现（CapabilityRegistry）、执行追踪（RuntimeTrace/Replay）、任务编排（Orchestrator）、调度决策（PlannerLoop/Decision）；明确 `PlannerLoop` 是 Runtime 决策机制，`PlannerEngine` 是八大 Engine 之一的能力组件，二者职责分离；该版本作为后续 Agent / Service / Adapter 开发的长期依赖基线；V6 全量测试 175/175 通过。
@@ -340,12 +518,13 @@ v6.7.0-alpha 完成 Step 5.4 Runtime Orchestration Foundation：新增 `v6/runti
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
-| v6.9.0-alpha | 2026-07-08 | Agent Workbench Single Instance：新增agent_workbench/应用层，含ConfigStore/ProfileManager/ModuleRegistry/AgentWorkbenchRuntime/10个RuntimeModule/WorkbenchController/Workbench Engine；扩展v6三栏UI实现AgentConfigPanel配置面板，支持查看/修改/保存/热更新；新增7个Workbench端到端测试；V6+Workbench合计182/182测试通过 | feat/test/ui | agent_workbench/**, v6/runtime/planner_loop.py, PROJECT_BLUEPRINT.md, CHANGELOG.md |
-| v6.5.8-alpha | 2026-07-07 | 八大Engine Runtime骨架：新增engines/base.py及llm/tool/memory/planner/workflow/code/vision/knowledge空壳；EngineManager统一execute(name,ctx)；新增Runtime Kernel集成测试验证Engine发现/生命周期/Trace Timeline/Planner编排；清理旧engines不兼容实现；130/130测试通过 | feat/refactor/test | v6/runtime/engines/base.py, v6/runtime/engines/*.py, v6/runtime/engine_manager.py, tests/v6/test_v6_runtime_kernel.py, tests/v6/test_v6_smoke.py |
+| v6.9.1-alpha | 2026-07-08 | Runtime Observability Foundation：重构RuntimeTrace为分层事件模型Task/Capability/Engine/Provider/Execution/Stream/Request；新增CapabilityRouter发射capability.resolved、Orchestrator发射engine.selected、WorkbenchLLMEngine发射execution/provider/request/stream结构化事件；EventBus Trace Hook改为publish同步写入保证顺序；新增TraceEventRegistry与TraceWorkspaceItem；新增Trace顺序/父子关系/Workspace接收测试；V6 176/176、Workbench 20/20通过 | feat/refactor/test/ui | v6/runtime/enums.py, v6/runtime/event_bus.py, v6/runtime/orchestrator.py, v6/runtime/trace.py, v6/runtime/planner_loop.py, agent_workbench/runtime/capability_router.py, agent_workbench/engines/workbench_llm_engine.py, agent_workbench/ui/workbench/trace_*.py, agent_workbench/ui/workbench_ui_controller.py, tests/v6/test_v6_*.py, agent_workbench/tests/test_agent_workbench.py, PROJECT_BLUEPRINT.md, CHANGELOG.md |
 
 ## 历史归档
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v6.9.0-alpha | 2026-07-08 | Agent Workbench Single Instance：新增agent_workbench/应用层，含ConfigStore/ProfileManager/ModuleRegistry/AgentWorkbenchRuntime/10个RuntimeModule/WorkbenchController/Workbench Engine；扩展v6三栏UI实现AgentConfigPanel配置面板，支持查看/修改/保存/热更新；新增7个Workbench端到端测试；V6+Workbench合计182/182测试通过 | feat/test/ui | agent_workbench/**, v6/runtime/planner_loop.py, PROJECT_BLUEPRINT.md, CHANGELOG.md |
+| v6.5.8-alpha | 2026-07-07 | 八大Engine Runtime骨架：新增engines/base.py及llm/tool/memory/planner/workflow/code/vision/knowledge空壳；EngineManager统一execute(name,ctx)；新增Runtime Kernel集成测试验证Engine发现/生命周期/Trace Timeline/Planner编排；清理旧engines不兼容实现；130/130测试通过 | feat/refactor/test | v6/runtime/engines/base.py, v6/runtime/engines/*.py, v6/runtime/engine_manager.py, tests/v6/test_v6_runtime_kernel.py, tests/v6/test_v6_smoke.py |
 | v6.5.7-alpha | 2026-07-07 | Engine Protocol与EngineManager生命周期：新增EngineState/EngineDescriptor/EngineNotReadyError；Engine接口统一execute(ctx)；RuntimeContext新增request；EngineManager支持load/initialize/health_check/execute/shutdown并自动记录Trace；新增/更新26个Engine测试；144/144测试通过 | feat/refactor/test | v6/runtime/engine_state.py, v6/runtime/engines/protocol.py, v6/runtime/engine_manager.py, v6/runtime/context.py, tests/v6/test_engine_protocol.py, tests/v6/test_v6_engine_manager.py |
 | v6.5.6-alpha | 2026-07-07 | Trace+Metrics联动：TraceStep新增duration_ms/tokens/cost/tool_time_ms；RuntimeTrace.add支持从RuntimeMetrics提取；新增timed_step上下文管理器自动计时并抓metrics；test_v6_trace.py新增9个联动测试；125/125测试通过 | feat/test | v6/runtime/trace.py, tests/v6/test_v6_trace.py |
 | v6.5.5-alpha | 2026-07-07 | Runtime Foundation Layer：新增RuntimeStateMachine固化生命周期迁移规则；新增test_runtime_state_machine.py覆盖10个状态迁移场景；116/116测试通过 | feat/test | v6/runtime/state_machine.py, tests/v6/test_runtime_state_machine.py |

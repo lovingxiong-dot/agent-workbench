@@ -9,7 +9,7 @@ from v6.runtime.decision import Decision, DecisionAction
 from v6.runtime.decision_policy import RuleBasedDecisionPolicy
 from v6.runtime.engine_manager import EngineManager
 from v6.runtime.engines import LLMEngine, VisionEngine
-from v6.runtime.enums import RuntimeState
+from v6.runtime.enums import RuntimeState, TraceEvent
 from v6.runtime.event_bus import EventBus, RuntimeEventType
 from v6.runtime.orchestrator import Orchestrator
 from v6.runtime.planner_loop import PlannerLoop
@@ -109,7 +109,7 @@ def test_planner_loop_publishes_decision_event() -> None:
         def listener(event):
             events.append(event)
 
-        bus.subscribe(RuntimeEventType.TASK_STARTED, listener)
+        bus.subscribe(RuntimeEventType.DECISION_PLANNED, listener)
 
         loop, manager = build_planner_loop(event_bus=bus)
         ctx = RuntimeContext.new()
@@ -158,8 +158,8 @@ def test_orchestrator_uses_planner_loop_to_select_vision_engine() -> None:
         assert orchestrator.state(task.task_id) == RuntimeState.COMPLETED
         ctx = orchestrator.context(task.task_id)
         assert ctx is not None
-        # 验证 VisionEngine 被执行过
-        vision_steps = ctx.trace.filter(node="engine:vision")
-        assert len(vision_steps) == 1
+        # 验证 VisionEngine 被执行过（EventBus 自动记录可能产生多个步骤，至少应有一个启动记录）。
+        vision_steps = ctx.trace.filter(node="engine:vision", action=TraceEvent.ENGINE_START.value)
+        assert len(vision_steps) >= 1
     finally:
         bus.stop()

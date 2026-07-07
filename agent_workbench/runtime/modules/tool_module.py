@@ -9,6 +9,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from agent_workbench.runtime.config_store import ConfigStore
+from agent_workbench.runtime.metadata import (
+    ActionMetadata,
+    ModuleMetadata,
+    PropertyMetadata,
+    StatisticMetadata,
+)
 from agent_workbench.runtime.modules.base import BaseRuntimeModule
 from agent_workbench.services.tool_registry import ToolRegistry
 
@@ -45,23 +51,35 @@ class ToolModule(BaseRuntimeModule):
         """返回所有 tool 状态。"""
         return [tool.to_dict() for tool in self._registry.list_tools()]
 
-    def to_form(self) -> Dict[str, Any]:
-        """返回 Tool 配置表单。"""
-        return {
-            "title": "Tool",
-            "description": "管理工具注册、开关与权限。",
-            "fields": [
-                {
-                    "name": "enabled",
-                    "type": "boolean",
-                    "label": "Tools Enabled",
-                    "value": True,
-                },
-                {
-                    "name": "registry",
-                    "type": "list",
-                    "label": "Tool Registry",
-                    "value": self.list_tools(),
-                },
+    def metadata(self) -> ModuleMetadata:
+        """返回 Tool Capability Metadata。"""
+        tools = self.list_tools()
+        enabled_count = sum(1 for t in tools if t.get("enabled", False))
+        return ModuleMetadata(
+            id="tool",
+            type="tool",
+            name="Tool",
+            description="管理工具注册、开关与权限。",
+            icon="wrench",
+            properties=[
+                PropertyMetadata(
+                    name="enabled",
+                    label="Tools Enabled",
+                    type="boolean",
+                    value=True,
+                ),
             ],
-        }
+            statistics=[
+                StatisticMetadata(name="total", label="Total Tools", value=len(tools)),
+                StatisticMetadata(name="enabled", label="Enabled", value=enabled_count),
+                StatisticMetadata(
+                    name="registry",
+                    label="Registry",
+                    value=tools,
+                    format="json",
+                ),
+            ],
+            actions=[
+                ActionMetadata(name="reload", label="Reload Registry", icon="refresh"),
+            ],
+        )

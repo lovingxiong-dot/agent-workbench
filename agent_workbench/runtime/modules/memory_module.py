@@ -10,6 +10,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Dict
 
 from agent_workbench.runtime.config_store import ConfigStore
+from agent_workbench.runtime.metadata import (
+    ActionMetadata,
+    ModuleMetadata,
+    PropertyMetadata,
+    StatisticMetadata,
+)
 from agent_workbench.runtime.modules.base import BaseRuntimeModule
 from agent_workbench.services.memory_service import MemoryService
 
@@ -73,38 +79,54 @@ class MemoryModule(BaseRuntimeModule):
             self._service.close()
             self._service = None
 
-    def to_form(self) -> Dict[str, Any]:
-        """返回 Memory 配置表单。"""
-        return {
-            "title": "Memory",
-            "description": "管理 SQLite Memory Provider 与命名空间。",
-            "fields": [
-                {
-                    "name": "enabled",
-                    "type": "boolean",
-                    "label": "Memory Enabled",
-                    "value": self._enabled,
-                },
-                {
-                    "name": "provider",
-                    "type": "select",
-                    "label": "Provider",
-                    "options": ["sqlite"],
-                    "value": self._config.get("provider", "sqlite"),
-                },
-                {
-                    "name": "db_path",
-                    "type": "text",
-                    "label": "SQLite Path",
-                    "value": self._config.get("sqlite", {}).get("path", ""),
-                },
-                {
-                    "name": "max_records",
-                    "type": "integer",
-                    "label": "Max Records",
-                    "min": 1,
-                    "max": 1000000,
-                    "value": self._config.get("max_records", 10000),
-                },
+    def metadata(self) -> ModuleMetadata:
+        """返回 Memory Capability Metadata。"""
+        db_path = self._config.get("sqlite", {}).get("path", "")
+        records = 0
+        namespaces: list[str] = []
+        if self._service is not None:
+            records = self._service.count()
+            namespaces = self._service.namespaces()
+        return ModuleMetadata(
+            id="memory",
+            type="memory",
+            name="Memory",
+            description="管理 Memory Provider 与命名空间。",
+            icon="database",
+            properties=[
+                PropertyMetadata(
+                    name="enabled",
+                    label="Memory Enabled",
+                    type="boolean",
+                    value=self._enabled,
+                ),
+                PropertyMetadata(
+                    name="provider",
+                    label="Provider",
+                    type="select",
+                    value=self._config.get("provider", "sqlite"),
+                    options=["sqlite"],
+                ),
+                PropertyMetadata(
+                    name="sqlite.path",
+                    label="SQLite Path",
+                    type="string",
+                    value=db_path,
+                ),
+                PropertyMetadata(
+                    name="max_records",
+                    label="Max Records",
+                    type="number",
+                    value=self._config.get("max_records", 10000),
+                ),
             ],
-        }
+            statistics=[
+                StatisticMetadata(name="records", label="Records", value=records),
+                StatisticMetadata(name="namespaces", label="Namespaces", value=namespaces),
+                StatisticMetadata(name="status", label="Status", value="active" if self._enabled and self._service else "inactive"),
+            ],
+            actions=[
+                ActionMetadata(name="clear", label="Clear Memory", icon="trash"),
+                ActionMetadata(name="reload", label="Reload", icon="refresh"),
+            ],
+        )

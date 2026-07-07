@@ -15,12 +15,15 @@ from typing import Any, Dict, Optional
 from v6.runtime.context import RuntimeContext
 from v6.runtime.enums import RuntimeState
 from v6.runtime.event_bus import EventBus
+from v6.runtime.orchestrator import Orchestrator
 from v6.runtime.runtime import AgentRuntime as CoreAgentRuntime
 from v6.runtime.task import ChatTask
 
 from agent_workbench.engines.workbench_llm_engine import WorkbenchLLMEngine
 from agent_workbench.engines.workbench_tool_engine import WorkbenchToolEngine
+from agent_workbench.runtime.capability_router import CapabilityRouter
 from agent_workbench.runtime.config_store import ConfigStore
+from agent_workbench.runtime.metadata import ModuleMetadata
 from agent_workbench.runtime.module_registry import ModuleRegistry
 from agent_workbench.runtime.modules.config_module import ConfigModule
 from agent_workbench.runtime.modules.memory_module import MemoryModule
@@ -42,7 +45,17 @@ class AgentWorkbenchRuntime:
         self._config = ConfigStore(config_path)
         self._profile_manager = ProfileManager(self._config)
         self._event_bus = EventBus()
-        self._core_runtime = CoreAgentRuntime(event_bus=self._event_bus)
+        self._capability_router = CapabilityRouter(default_capability="chat")
+        # 使用带 CapabilityRouter 的 Orchestrator，使 CAPABILITY_RESOLVED 事件由 Router 发出。
+        self._engine_manager = None
+        self._orchestrator = Orchestrator(
+            event_bus=self._event_bus,
+            capability_router=self._capability_router,
+        )
+        self._core_runtime = CoreAgentRuntime(
+            event_bus=self._event_bus,
+            orchestrator=self._orchestrator,
+        )
         self._registry = ModuleRegistry()
         self._current_context: RuntimeContext | None = None
         self._running = False
@@ -88,9 +101,17 @@ class AgentWorkbenchRuntime:
         self._registry.dispose_all()
         self._core_runtime.stop()
 
-    def chat(self, text: str, session_id: str | None = None) -> RuntimeContext:
+    def chat(
+        self,
+        text: str,
+        session_id: str | None = None,
+        task_id: str | None = None,
+    ) -> RuntimeContext:
         """提交一条用户消息，等待任务完成，返回最终 RuntimeContext。"""
-        task = ChatTask(text=text, session_id=session_id)
+        task_kwargs: dict[str, Any] = {}
+        if task_id:
+            task_kwargs["task_id"] = task_id
+        task = ChatTask(text=text, session_id=session_id, **task_kwargs)
         task_id = self._core_runtime.orchestrate(task)
 
         # 轮询等待任务完成
@@ -131,12 +152,12 @@ class AgentWorkbenchRuntime:
         if module is not None:
             module.apply_config(self._config)
 
-    def get_module_form(self, namespace: str) -> Dict[str, Any]:
-        """获取某个模块的 UI 表单描述。"""
+    def get_module_metadata(self, namespace: str) -> ModuleMetadata | None:
+        """获取某个模块的 Capability Metadata。"""
         module = self._registry.get(namespace)
         if module is None:
-            return {}
-        return module.to_form()
+            return None
+        return module.metadata()
 
     def get_overview(self) -> Dict[str, Any]:
         """返回 Overview 面板数据。"""

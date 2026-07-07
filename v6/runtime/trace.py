@@ -15,6 +15,7 @@ from __future__ import annotations
 import copy
 import threading
 import time
+import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
@@ -31,6 +32,9 @@ class TraceStep:
 
     Metrics 字段（duration_ms / tokens / cost / tool_time_ms）可与 RuntimeMetrics 联动，
     形成 Task Execution Timeline。
+
+    parent_id / step_id 支持将 Timeline 展开为 Tree，
+    为 Replay、Metrics、Tree UI 提供结构基础。
     """
 
     timestamp: float
@@ -42,6 +46,9 @@ class TraceStep:
     tokens: int = 0
     cost: float = 0.0
     tool_time_ms: float = 0.0
+    step_id: str = field(default_factory=lambda: uuid.uuid4().hex)
+    parent_id: str = ""
+    status: str = "success"  # pending / running / success / failed
 
     def __post_init__(self) -> None:
         """统一把枚举转成字符串存储，保持序列化一致性。"""
@@ -74,7 +81,9 @@ class RuntimeTrace:
         cost: float = 0.0,
         tool_time_ms: float = 0.0,
         metrics: Optional[RuntimeMetrics] = None,
-    ) -> None:
+        parent_id: str = "",
+        status: str = "success",
+    ) -> TraceStep:
         """追加一条执行步骤。
 
         Args:
@@ -88,6 +97,11 @@ class RuntimeTrace:
             tool_time_ms: 步骤中工具执行耗时（毫秒）。
             metrics: RuntimeMetrics 实例；若提供且未显式传入指标，
                      自动提取 tokens / cost / tool_time_ms。
+            parent_id: 父步骤 ID，支持 Tree 结构。
+            status: 步骤状态：pending / running / success / failed。
+
+        Returns:
+            刚添加的 TraceStep（深拷贝），方便调用方获取 step_id。
         """
         if metrics is not None:
             snap = metrics.snapshot()
@@ -95,20 +109,22 @@ class RuntimeTrace:
             cost = cost or snap.get("cost", 0.0)
             tool_time_ms = tool_time_ms or snap.get("tool_time_ms", 0.0)
 
+        step = TraceStep(
+            timestamp=time.time(),
+            phase=phase,
+            node=node,
+            action=action,
+            payload=copy.deepcopy(payload) if payload else {},
+            duration_ms=duration_ms,
+            tokens=tokens,
+            cost=cost,
+            tool_time_ms=tool_time_ms,
+            parent_id=parent_id,
+            status=status,
+        )
         with self._lock:
-            self._steps.append(
-                TraceStep(
-                    timestamp=time.time(),
-                    phase=phase,
-                    node=node,
-                    action=action,
-                    payload=copy.deepcopy(payload) if payload else {},
-                    duration_ms=duration_ms,
-                    tokens=tokens,
-                    cost=cost,
-                    tool_time_ms=tool_time_ms,
-                )
-            )
+            self._steps.append(step)
+        return copy.deepcopy(step)
 
     @contextmanager
     def timed_step(
@@ -118,6 +134,8 @@ class RuntimeTrace:
         phase: Union[str, Enum] = "",
         payload: Optional[Dict[str, Any]] = None,
         metrics: Optional[RuntimeMetrics] = None,
+        parent_id: str = "",
+        status: str = "success",
     ) -> Generator[TraceStep, None, None]:
         """自动计时并在退出时抓取 metrics 的上下文管理器。
 
@@ -132,6 +150,8 @@ class RuntimeTrace:
             node=node,
             action=action,
             payload=copy.deepcopy(payload) if payload else {},
+            parent_id=parent_id,
+            status=status,
         )
         with self._lock:
             self._steps.append(step)
@@ -144,6 +164,41 @@ class RuntimeTrace:
                 step.tokens = snap.get("tokens", 0)
                 step.cost = snap.get("cost", 0.0)
                 step.tool_time_ms = snap.get("tool_time_ms", 0.0)
+
+    @contextmanager
+    def scope(
+        self,
+        node: Union[str, Enum],
+        action: Union[str, TraceEvent],
+        phase: Union[str, Enum] = "",
+        payload: Optional[Dict[str, Any]] = None,
+        parent_id: str = "",
+        status: str = "success",
+    ) -> Generator[TraceStep, None, None]:
+        """上下文作用域：预留接口，供 Workflow Runtime 维护嵌套 parent_id 栈。
+
+        Foundation 阶段 Chat Runtime 的执行链（Task -> Engine -> Stream）足够扁平，
+        由 EventBus 根据 ``TRACE_EVENT_LEVEL`` / ``TRACE_EVENT_PARENT_LEVEL``
+        自动推断 parent_id，因此不推荐在 Foundation 中广泛使用 ``scope()``。
+
+        未来 Workflow Runtime 引入 Planner / Router / Multi-Tool 等嵌套链路时，
+        可通过 ``with ctx.trace.scope(...)`` 显式管理父子层级。
+        """
+        step = TraceStep(
+            timestamp=time.time(),
+            phase=phase,
+            node=node,
+            action=action,
+            payload=copy.deepcopy(payload) if payload else {},
+            parent_id=parent_id,
+            status="running",
+        )
+        with self._lock:
+            self._steps.append(step)
+        try:
+            yield step
+        finally:
+            step.status = status
 
     def steps(self) -> List[TraceStep]:
         """返回步骤列表深拷贝快照。"""
@@ -165,6 +220,9 @@ class RuntimeTrace:
                         "tokens": s.tokens,
                         "cost": s.cost,
                         "tool_time_ms": s.tool_time_ms,
+                        "step_id": s.step_id,
+                        "parent_id": s.parent_id,
+                        "status": s.status,
                     }
                     for s in self._steps
                 ]

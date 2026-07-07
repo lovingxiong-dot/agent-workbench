@@ -1,5 +1,29 @@
 # Changelog
 
+## v6.9.1-alpha (2026-07-08) — Runtime Observability Foundation
+
+> **里程碑语义**：Runtime 可观测基座成型。Trace 不再是聊天日志，而是结构化执行事件流；事件语义围绕 Task → Capability → Engine → Provider → Execution → Request → Response 分层，避免绑定 LLM Streaming，为未来图片、视频、工作流扩展预留同一套可观测协议。
+
+### Added
+- 新增 `agent_workbench/runtime/capability_router.py`：`CapabilityRouter` 作为 Runtime 组件，根据 `Task.capability` 发射 `capability.resolved` 事件。
+- 新增 `agent_workbench/ui/workbench/trace_event_registry.py`：`TraceEventRegistry` 提供事件显示元数据（label / icon / level / status），UI 不再硬编码字符串映射。
+- 新增 `agent_workbench/ui/workbench/trace_workspace.py`：`TraceWorkspaceItem` 以树形结构实时展示 Trace 事件，支持状态图标与父子层级。
+- 新增 `v6/runtime/enums.py` 分层 `TraceEvent` 枚举：Task / Capability / Engine / Provider / Execution / Stream / Request 七层事件，各层通过 `TRACE_EVENT_LEVEL` / `TRACE_EVENT_PARENT_LEVEL` 自动推断 `parent_id`。
+- 新增 `tests/v6/test_v6_trace.py::test_trace_scope_is_reserved_interface`：验证 `RuntimeTrace.scope()` 作为 Workflow Runtime 预留接口存在。
+- 新增 `agent_workbench/tests/test_agent_workbench.py` 三个 Trace 端到端测试：事件顺序、父子关系、Workspace 接收。
+
+### Changed
+- `v6/runtime/event_bus.py`：Trace Hook 改为 `publish` 阶段同步写入，订阅者回调保持异步；保证事件顺序与 `task.finish` 不丢失。
+- `v6/runtime/orchestrator.py`：在 `submit()` 中提前注册 Trace Hook；移除 `_on_task_started` 中重复的 `TASK_STARTED` 发布；`_complete_task` / `_fail_task` 先发布最终事件再移除 Hook。
+- `v6/runtime/planner_loop.py`：决策事件从 `TASK_STARTED` 改为 `DECISION_PLANNED`，避免混入 Task 生命周期事件。
+- `v6/runtime/enums.py`：`REQUEST_SENT` 层级从 `execution` 调整为 `request`（parent = execution），修复 `FIRST_TOKEN` parent 指向问题。
+- `agent_workbench/engines/workbench_llm_engine.py`：发射 `EXECUTION_STARTED` / `PROVIDER_SELECTED` / `REQUEST_SENT` / `FIRST_TOKEN` / `CHUNK_RECEIVED` / `STREAM_FINISHED` / `EXECUTION_FINISHED` 结构化事件。
+- `agent_workbench/ui/workbench_ui_controller.py`：注册 Trace Workspace，订阅 Runtime 事件并刷新树形 UI。
+
+### Tests
+- `pytest tests/v6/`：**176/176 passed**。
+- `pytest agent_workbench/tests/`：**20/20 passed**。
+
 ## v6.9.0-alpha (2026-07-08) — Agent Workbench Single Instance
 
 > **里程碑语义**：V6 框架内第一个真实 Agent 产品实例落地。

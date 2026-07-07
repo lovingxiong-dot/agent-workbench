@@ -25,6 +25,7 @@ from v6.runtime.task import ChatTask, Task
 from v6.runtime.types import ChatMessage
 
 if TYPE_CHECKING:
+    from agent_workbench.runtime.capability_router import CapabilityRouter
     from v6.runtime.engine_manager import EngineManager
     from v6.runtime.event_bus import EventBus
     from v6.runtime.planner_loop import PlannerLoop
@@ -48,10 +49,12 @@ class Orchestrator:
         event_bus: Optional["EventBus"] = None,
         engine_manager: Optional["EngineManager"] = None,
         planner_loop: Optional["PlannerLoop"] = None,
+        capability_router: Optional["CapabilityRouter"] = None,
     ) -> None:
         self._event_bus = event_bus
         self._engine_manager = engine_manager
         self._planner_loop = planner_loop
+        self._capability_router = capability_router
         self._state_machine = RuntimeStateMachine()
         self._task_states: Dict[str, RuntimeState] = {}
         self._contexts: Dict[str, RuntimeContext] = {}
@@ -69,12 +72,16 @@ class Orchestrator:
         self._subscribed = True
 
     def submit(self, task: Task) -> str:
-        """提交任务到 Orchestrator；发布 task.created 事件并开始编排。"""
+        """提交任务到 Orchestrator；注册 Trace Hook 并发布 task.started 事件。"""
         task_id = task.task_id
         with self._lock:
             self._task_states[task_id] = RuntimeState.CREATED
             ctx = self._ensure_context(task)
             self._contexts[task_id] = ctx
+
+        # 提前注册 Trace Hook，使 TASK_START 及后续事件都能写入 RuntimeTrace。
+        if self._event_bus is not None and ctx.trace is not None:
+            self._event_bus.add_trace_hook(task_id, ctx.trace)
 
         self._publish(
             RuntimeEventType.TASK_STARTED,
@@ -125,15 +132,7 @@ class Orchestrator:
         if ctx is None:
             return
 
-        # Foundation 阶段：直接发布 planning 事件，由订阅者处理；未订阅则进入 EXECUTING。
-        self._publish(
-            RuntimeEventType.TASK_STARTED,
-            {"phase": "planning", "task_id": task_id},
-            task_id=task_id,
-            source="orchestrator",
-        )
-
-        # Foundation 简化：planning 完成后立即进入 EXECUTING。
+        # Foundation 简化：planning 阶段不单独发布事件，立即进入 EXECUTING。
         self._execute_task(task_id)
 
     def _execute_task(self, task_id: str) -> None:
@@ -150,8 +149,10 @@ class Orchestrator:
             self._complete_task(task_id, {"reason": "no engine manager in foundation mode"})
             return
 
-        # Foundation 阶段：通过 PlannerLoop 做决策，而非硬编码能力选择。
-        decision = self._make_decision(ctx)
+        # Foundation 阶段：先由 CapabilityRouter 解析能力，再由 PlannerLoop/回退策略决策。
+        capability = self._resolve_capability(ctx)
+
+        decision = self._make_decision(ctx, capability)
 
         if decision.action == DecisionAction.FAIL:
             self._fail_task(task_id, {"reason": decision.reason, "decision": decision.to_dict()})
@@ -172,8 +173,8 @@ class Orchestrator:
 
         engine_name = decision.target
         self._publish(
-            RuntimeEventType.ENGINE_STARTED,
-            {"engine": engine_name, "task_id": task_id, "decision": decision.to_dict()},
+            RuntimeEventType.ENGINE_SELECTED,
+            {"engine": engine_name, "capability": capability, "task_id": task_id, "decision": decision.to_dict()},
             task_id=task_id,
             source="orchestrator",
         )
@@ -188,23 +189,48 @@ class Orchestrator:
         except Exception as exc:  # pragma: no cover - defensive
             self._fail_task(task_id, {"error": str(exc)})
 
-    def _make_decision(self, ctx: RuntimeContext) -> Decision:
+    def _resolve_capability(self, ctx: RuntimeContext) -> str:
+        """通过 CapabilityRouter 解析能力；未注入时回退到 chat。"""
+        if self._capability_router is not None:
+            return self._capability_router.resolve(ctx, self._event_bus)
+        # 无 Router 时的最小回退，保持 Foundation 默认行为。
+        if self._event_bus is not None:
+            self._publish(
+                RuntimeEventType.CAPABILITY_RESOLVED,
+                {"capability": "chat", "reason": "fallback: no capability router"},
+                task_id=ctx.task_id,
+                source="orchestrator",
+            )
+        return "chat"
+
+    def _make_decision(self, ctx: RuntimeContext, capability: str) -> Decision:
         """通过 PlannerLoop 或回退策略生成 Decision。"""
         if self._planner_loop is not None:
             return self._planner_loop.plan(ctx)
 
-        # 无 PlannerLoop 时的最小回退：默认选 text_generation。
+        # 无 PlannerLoop 时的最小回退：按 capability 选择 Engine。
+        engine_capability = self._map_capability(capability)
         if self._engine_manager is not None:
             try:
-                engine_name = self._engine_manager.select_engine({"capability": "text_generation"})
+                engine_name = self._engine_manager.select_engine({"capability": engine_capability})
                 if engine_name:
                     return Decision.execute(
                         target=engine_name,
-                        reason="fallback: default text_generation capability",
+                        reason=f"fallback: default {engine_capability} capability",
                     )
             except Exception:  # pragma: no cover - defensive
                 traceback.print_exc()
         return Decision.fail(reason="no planner loop and no fallback engine available")
+
+    @staticmethod
+    def _map_capability(capability: str) -> str:
+        """将用户可见 capability 映射到 Engine capability。"""
+        mapping = {
+            "chat": "text_generation",
+            "text": "text_generation",
+            "tool": "tool_execution",
+        }
+        return mapping.get(capability, capability)
 
     def _on_engine_completed(self, event: RuntimeEvent) -> None:
         """Engine 完成事件：推进任务到 COMPLETED。"""
@@ -223,24 +249,28 @@ class Orchestrator:
         self._fail_task(task_id, event.payload)
 
     def _complete_task(self, task_id: str, payload: Dict[str, Any]) -> None:
-        if not self.transition(task_id, RuntimeState.COMPLETED):
-            return
-        self._publish(
-            RuntimeEventType.TASK_COMPLETED,
-            payload,
-            task_id=task_id,
-            source="orchestrator",
-        )
+        transitioned = self.transition(task_id, RuntimeState.COMPLETED)
+        if transitioned:
+            self._publish(
+                RuntimeEventType.TASK_COMPLETED,
+                payload,
+                task_id=task_id,
+                source="orchestrator",
+            )
+        if self._event_bus is not None:
+            self._event_bus.remove_trace_hook(task_id)
 
     def _fail_task(self, task_id: str, payload: Dict[str, Any]) -> None:
-        if not self.transition(task_id, RuntimeState.FAILED):
-            return
-        self._publish(
-            RuntimeEventType.TASK_FAILED,
-            payload,
-            task_id=task_id,
-            source="orchestrator",
-        )
+        transitioned = self.transition(task_id, RuntimeState.FAILED)
+        if transitioned:
+            self._publish(
+                RuntimeEventType.TASK_FAILED,
+                payload,
+                task_id=task_id,
+                source="orchestrator",
+            )
+        if self._event_bus is not None:
+            self._event_bus.remove_trace_hook(task_id)
 
     def _publish(
         self,

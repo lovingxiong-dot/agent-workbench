@@ -139,6 +139,12 @@ class MemoryService:
             rows = conn.execute("SELECT DISTINCT namespace FROM memories ORDER BY namespace").fetchall()
         return [row[0] for row in rows]
 
+    def count(self) -> int:
+        """返回总记录数。"""
+        with self._lock, sqlite3.connect(str(self._db_path)) as conn:
+            row = conn.execute("SELECT COUNT(*) FROM memories").fetchone()
+        return row[0] if row else 0
+
     def _ensure_table(self) -> None:
         """初始化 SQLite 表。"""
         self._db_path.parent.mkdir(parents=True, exist_ok=True)

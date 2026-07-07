@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Callable
 
+from v6.runtime.enums import TRACE_EVENT_LEVEL, TRACE_EVENT_PARENT_LEVEL, TraceEvent
+
 if TYPE_CHECKING:
     from v6.runtime.trace import RuntimeTrace
 
@@ -34,11 +36,30 @@ class RuntimeEventType(str, Enum):
     TASK_COMPLETED = "task.completed"
     TASK_FAILED = "task.failed"
 
+    CAPABILITY_RESOLVED = "capability.resolved"
+
+    DECISION_PLANNED = "decision.planned"
+
+    ENGINE_SELECTED = "engine.selected"
     ENGINE_STARTED = "engine.started"
     ENGINE_COMPLETED = "engine.completed"
     ENGINE_FAILED = "engine.failed"
 
-    SERVICE_STARTED = "service.started"
+    # Provider / Service / Model 选择事件为可选；不同 Engine 按需发射，Trace Viewer 自动处理缺失。
+    PROVIDER_SELECTED = "provider.selected"
+    SERVICE_SELECTED = "service.selected"
+    MODEL_SELECTED = "model.selected"
+
+    REQUEST_SENT = "request.sent"
+    EXECUTION_STARTED = "execution.started"
+    EXECUTION_PROGRESS = "execution.progress"
+    EXECUTION_FINISHED = "execution.finished"
+
+    FIRST_TOKEN = "first.token"
+    CHUNK_RECEIVED = "chunk.received"
+    STREAM_FINISHED = "stream.finished"
+
+    SERVICE_STARTED_LEGACY = "service.started"
     SERVICE_COMPLETED = "service.completed"
     SERVICE_FAILED = "service.failed"
 
@@ -54,6 +75,30 @@ class RuntimeEventType(str, Enum):
     AI_CHUNK = "ai_chunk"
     AI_END = "ai_end"
     ERROR = "error"
+
+
+# RuntimeEventType -> TraceEvent 映射。
+# 未映射的事件不会被 Trace Hook 自动写入 RuntimeTrace（仍可由调用方显式写入）。
+_RUNTIME_EVENT_TO_TRACE: dict[str, TraceEvent] = {
+    RuntimeEventType.TASK_STARTED: TraceEvent.TASK_START,
+    RuntimeEventType.TASK_COMPLETED: TraceEvent.TASK_FINISH,
+    RuntimeEventType.TASK_FAILED: TraceEvent.TASK_ERROR,
+    RuntimeEventType.CAPABILITY_RESOLVED: TraceEvent.CAPABILITY_RESOLVED,
+    RuntimeEventType.ENGINE_SELECTED: TraceEvent.ENGINE_SELECTED,
+    RuntimeEventType.ENGINE_STARTED: TraceEvent.ENGINE_START,
+    RuntimeEventType.ENGINE_COMPLETED: TraceEvent.ENGINE_END,
+    RuntimeEventType.ENGINE_FAILED: TraceEvent.ENGINE_END,
+    RuntimeEventType.SERVICE_SELECTED: TraceEvent.SERVICE_SELECTED,
+    RuntimeEventType.PROVIDER_SELECTED: TraceEvent.PROVIDER_SELECTED,
+    RuntimeEventType.MODEL_SELECTED: TraceEvent.MODEL_SELECTED,
+    RuntimeEventType.REQUEST_SENT: TraceEvent.REQUEST_SENT,
+    RuntimeEventType.EXECUTION_STARTED: TraceEvent.EXECUTION_STARTED,
+    RuntimeEventType.EXECUTION_PROGRESS: TraceEvent.EXECUTION_PROGRESS,
+    RuntimeEventType.EXECUTION_FINISHED: TraceEvent.EXECUTION_FINISHED,
+    RuntimeEventType.FIRST_TOKEN: TraceEvent.FIRST_TOKEN,
+    RuntimeEventType.CHUNK_RECEIVED: TraceEvent.CHUNK_RECEIVED,
+    RuntimeEventType.STREAM_FINISHED: TraceEvent.STREAM_FINISHED,
+}
 
 
 @dataclass
@@ -88,6 +133,8 @@ class EventBus:
         self._queue: asyncio.Queue[RuntimeEvent | None] | None = None
         self._subscribers: dict[str, list[Callable[[RuntimeEvent], None]]] = {}
         self._trace_hooks: dict[str, "RuntimeTrace"] = {}
+        # 每个 task_id 维护一个层级 -> step_id 映射，用于 Trace Hook 自动推断 parent_id。
+        self._trace_contexts: dict[str, dict[str, str]] = {}
         self._running = False
         self._lock = threading.Lock()
         self._ready = threading.Event()
@@ -152,6 +199,8 @@ class EventBus:
             trace_id=trace_id,
             phase=phase,
         )
+        # Trace Hook 同步写入，保证事件顺序与发布顺序一致，避免异步队列导致的乱序/丢失。
+        self._write_trace_hook(event)
         loop.call_soon_threadsafe(queue.put_nowait, event)
 
     emit = publish  # 兼容旧调用
@@ -211,21 +260,41 @@ class EventBus:
                 break
             await self._dispatch(event)
 
+    def _write_trace_hook(self, event: RuntimeEvent) -> None:
+        """将事件同步写入对应 Trace Hook（publish 调用线程内执行）。"""
+        with self._lock:
+            trace = self._trace_hooks.get(event.task_id)
+        if trace is None:
+            return
+        try:
+            trace_action = _RUNTIME_EVENT_TO_TRACE.get(event.type)
+            if trace_action is None:
+                return
+            level = TRACE_EVENT_LEVEL.get(trace_action, "runtime")
+            parent_level = TRACE_EVENT_PARENT_LEVEL.get(level)
+            context = self._trace_contexts.setdefault(event.task_id, {})
+            parent_id = context.get(parent_level, "") if parent_level else ""
+            status = event.payload.get("status", "success")
+            if event.type == RuntimeEventType.ENGINE_FAILED.value:
+                status = "failed"
+            elif event.type == RuntimeEventType.TASK_FAILED.value:
+                status = "failed"
+            step = trace.add(
+                phase=event.phase or level,
+                node=event.source or "event_bus",
+                action=trace_action,
+                payload=event.payload,
+                parent_id=parent_id,
+                status=status,
+            )
+            context[level] = step.step_id
+        except Exception:  # pragma: no cover - defensive
+            traceback.print_exc()
+
     async def _dispatch(self, event: RuntimeEvent) -> None:
-        """调用该事件类型的所有订阅者，并同步写入对应 Trace Hook。"""
+        """调用该事件类型的所有订阅者；Trace Hook 已在 publish 阶段同步写入。"""
         with self._lock:
             callbacks = list(self._subscribers.get(event.type, []))
-            trace = self._trace_hooks.get(event.task_id)
-        if trace is not None:
-            try:
-                trace.add(
-                    phase=event.phase or "runtime",
-                    node=event.source or "event_bus",
-                    action=event.type,
-                    payload=event.payload,
-                )
-            except Exception:  # pragma: no cover - defensive
-                traceback.print_exc()
         for callback in callbacks:
             try:
                 if inspect.iscoroutinefunction(callback):

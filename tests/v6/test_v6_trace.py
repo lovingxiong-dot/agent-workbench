@@ -251,6 +251,20 @@ def test_trace_timed_step_yields_mutable_step():
     assert persisted.payload["model"] == "qwen3:4b"
 
 
+def test_trace_scope_is_reserved_interface():
+    """验证 scope() 接口存在，且默认以 running 进入、以最终 status 退出。"""
+    trace = RuntimeTrace()
+    with trace.scope("planner", TraceEvent.TOOL_INVOKE, payload={"tool": "A"}, status="success") as step:
+        assert step.status == "running"
+        step.payload["detail"] = "inside scope"
+
+    persisted = trace.last()
+    assert persisted.action == TraceEvent.TOOL_INVOKE.value
+    assert persisted.status == "success"
+    assert persisted.payload["tool"] == "A"
+    assert persisted.payload["detail"] == "inside scope"
+
+
 def test_trace_snapshot_includes_metrics():
     trace = RuntimeTrace()
     trace.add(

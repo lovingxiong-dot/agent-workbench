@@ -6,9 +6,15 @@
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING
 
 from agent_workbench.runtime.config_store import ConfigStore
+from agent_workbench.runtime.metadata import (
+    ActionMetadata,
+    ModuleMetadata,
+    PropertyMetadata,
+    StatisticMetadata,
+)
 from agent_workbench.runtime.modules.base import BaseRuntimeModule
 
 if TYPE_CHECKING:
@@ -32,26 +38,35 @@ class ProfileModule(BaseRuntimeModule):
         """Profile 配置变更时，通知 UI 刷新 profile 列表。"""
         pass
 
-    def to_form(self) -> Dict[str, Any]:
-        """返回 Profile 配置表单。"""
+    def metadata(self) -> ModuleMetadata:
+        """返回 Profile Capability Metadata。"""
         profiles: list[dict] = []
         current = "default"
         if self._runtime is not None:
             profiles = self._runtime.profile_manager.list_profiles()
             current = self._runtime.profile_manager.current
-
-        return {
-            "title": "Profile",
-            "description": "管理完整配置集合。",
-            "fields": [
-                {
-                    "name": "current",
-                    "type": "select",
-                    "label": "Current Profile",
-                    "options": [p.get("name", "") for p in profiles],
-                    "value": current,
-                },
-                {"name": "import_path", "type": "file", "label": "Import Profile"},
-                {"name": "export_name", "type": "text", "label": "Export As"},
+        names = [p.get("name", "") for p in profiles]
+        return ModuleMetadata(
+            id="profile",
+            type="profile",
+            name="Profile",
+            description="管理完整配置集合：切换、导入、导出、合并。",
+            icon="user-circle",
+            properties=[
+                PropertyMetadata(
+                    name="current",
+                    label="Current Profile",
+                    type="select",
+                    value=current,
+                    options=names,
+                ),
             ],
-        }
+            statistics=[
+                StatisticMetadata(name="count", label="Profiles", value=len(names)),
+            ],
+            actions=[
+                ActionMetadata(name="import", label="Import", icon="download"),
+                ActionMetadata(name="export", label="Export", icon="upload"),
+                ActionMetadata(name="merge", label="Merge", icon="merge"),
+            ],
+        )

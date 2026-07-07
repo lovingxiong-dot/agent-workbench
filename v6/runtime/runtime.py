@@ -60,6 +60,12 @@ class AgentRuntime:
             engine_manager=self._engine_manager,
             planner_loop=self._planner_loop,
         )
+        # 若外部注入 Orchestrator，确保它能访问本 Runtime 的 EngineManager / PlannerLoop。
+        if orchestrator is not None:
+            if getattr(self._orchestrator, "_engine_manager", None) is None:
+                self._orchestrator._engine_manager = self._engine_manager
+            if getattr(self._orchestrator, "_planner_loop", None) is None:
+                self._orchestrator._planner_loop = self._planner_loop
         self._handlers: dict[str, Handler] = {}
         self._contexts: dict[str, RuntimeContext] = {}
         self._running = False

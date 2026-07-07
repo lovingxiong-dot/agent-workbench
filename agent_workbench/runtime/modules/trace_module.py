@@ -7,9 +7,14 @@
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING
 
 from agent_workbench.runtime.config_store import ConfigStore
+from agent_workbench.runtime.metadata import (
+    ActionMetadata,
+    ModuleMetadata,
+    PropertyMetadata,
+)
 from agent_workbench.runtime.modules.base import BaseRuntimeModule
 
 if TYPE_CHECKING:
@@ -38,30 +43,37 @@ class TraceModule(BaseRuntimeModule):
         self._level = store.get("trace.level", "INFO")
         self._persist = store.get("trace.persist", True)
 
-    def to_form(self) -> Dict[str, Any]:
-        """返回 Trace 配置表单。"""
-        return {
-            "title": "Trace",
-            "description": "管理 Runtime Trace 与日志等级。",
-            "fields": [
-                {
-                    "name": "enabled",
-                    "type": "boolean",
-                    "label": "Trace Enabled",
-                    "value": self._enabled,
-                },
-                {
-                    "name": "level",
-                    "type": "select",
-                    "label": "Log Level",
-                    "options": ["DEBUG", "INFO", "WARNING", "ERROR"],
-                    "value": self._level,
-                },
-                {
-                    "name": "persist",
-                    "type": "boolean",
-                    "label": "Persist Trace",
-                    "value": self._persist,
-                },
+    def metadata(self) -> ModuleMetadata:
+        """返回 Trace Capability Metadata。"""
+        return ModuleMetadata(
+            id="trace",
+            type="trace",
+            name="Trace",
+            description="管理 Runtime Trace 与日志等级。",
+            icon="activity",
+            properties=[
+                PropertyMetadata(
+                    name="enabled",
+                    label="Trace Enabled",
+                    type="boolean",
+                    value=self._enabled,
+                ),
+                PropertyMetadata(
+                    name="level",
+                    label="Log Level",
+                    type="select",
+                    value=self._level,
+                    options=["DEBUG", "INFO", "WARNING", "ERROR"],
+                ),
+                PropertyMetadata(
+                    name="persist",
+                    label="Persist Trace",
+                    type="boolean",
+                    value=self._persist,
+                ),
             ],
-        }
+            statistics=[],
+            actions=[
+                ActionMetadata(name="open_logs", label="Open Logs", icon="folder-open"),
+            ],
+        )

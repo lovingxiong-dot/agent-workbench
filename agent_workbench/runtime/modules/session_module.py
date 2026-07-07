@@ -11,6 +11,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from agent_workbench.runtime.config_store import ConfigStore
+from agent_workbench.runtime.metadata import (
+    ModuleMetadata,
+    PropertyMetadata,
+    StatisticMetadata,
+)
 from agent_workbench.runtime.modules.base import BaseRuntimeModule
 
 if TYPE_CHECKING:
@@ -61,27 +66,36 @@ class SessionModule(BaseRuntimeModule):
         # 第一版从 RuntimeTrace 或上下文收集；此处占位
         return []
 
-    def to_form(self) -> Dict[str, Any]:
-        """返回 Session 配置表单。"""
-        return {
-            "title": "Session",
-            "description": "当前会话与上下文窗口参数。",
-            "fields": [
-                {
-                    "name": "max_history",
-                    "type": "integer",
-                    "label": "Max History Messages",
-                    "min": 1,
-                    "max": 1000,
-                    "value": self._runtime.config.get("session.max_history", 20) if self._runtime else 20,
-                },
-                {
-                    "name": "context_window",
-                    "type": "integer",
-                    "label": "Context Window (tokens)",
-                    "min": 512,
-                    "max": 128000,
-                    "value": self._runtime.config.get("session.context_window", 4096) if self._runtime else 4096,
-                },
+    def metadata(self) -> ModuleMetadata:
+        """返回 Session Capability Metadata。"""
+        state = self.current_state()
+        max_history = self._runtime.config.get("session.max_history", 20) if self._runtime else 20
+        context_window = self._runtime.config.get("session.context_window", 4096) if self._runtime else 4096
+        return ModuleMetadata(
+            id="session",
+            type="session",
+            name="Session",
+            description="当前会话、历史与上下文窗口。",
+            icon="chat-bubble",
+            properties=[
+                PropertyMetadata(
+                    name="max_history",
+                    label="Max History Messages",
+                    type="number",
+                    value=max_history,
+                ),
+                PropertyMetadata(
+                    name="context_window",
+                    label="Context Window (tokens)",
+                    type="number",
+                    value=context_window,
+                ),
             ],
-        }
+            statistics=[
+                StatisticMetadata(name="status", label="Status", value=state.get("status", "idle")),
+                StatisticMetadata(name="task_id", label="Task ID", value=state.get("task_id") or "—"),
+                StatisticMetadata(name="session_id", label="Session ID", value=state.get("session_id") or "—"),
+                StatisticMetadata(name="messages_count", label="Messages", value=state.get("messages_count", 0)),
+            ],
+            actions=[],
+        )

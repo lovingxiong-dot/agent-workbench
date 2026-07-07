@@ -24,6 +24,7 @@ from v6.runtime.engines import (
     WorkflowEngine,
 )
 from v6.runtime.engines.planner import PlannerEngine
+from v6.runtime.enums import TraceEvent
 from v6.runtime.event_bus import EventBus, RuntimeEventType
 from v6.runtime.result import RuntimeResult
 from v6.runtime.trace import RuntimeTrace
@@ -177,8 +178,8 @@ def test_engine_publishes_lifecycle_events_to_trace() -> None:
         # 等待后台事件分发线程处理 engine.completed
         time.sleep(0.1)
 
-        started = trace.filter(action=RuntimeEventType.ENGINE_STARTED)
-        completed = trace.filter(action=RuntimeEventType.ENGINE_COMPLETED)
+        started = trace.filter(action=TraceEvent.ENGINE_START.value)
+        completed = trace.filter(action=TraceEvent.ENGINE_END.value)
         assert len(started) == 1
         assert len(completed) == 1
         assert started[0].node == "engine:llm"

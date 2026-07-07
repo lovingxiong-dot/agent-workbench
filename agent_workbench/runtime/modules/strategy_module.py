@@ -11,6 +11,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Dict
 
 from agent_workbench.runtime.config_store import ConfigStore
+from agent_workbench.runtime.metadata import (
+    ModuleMetadata,
+    PropertyMetadata,
+)
 from agent_workbench.runtime.modules.base import BaseRuntimeModule
 
 if TYPE_CHECKING:
@@ -42,48 +46,47 @@ class StrategyModule(BaseRuntimeModule):
     def get_threshold(self, name: str, default: float = 0.5) -> float:
         return self._thresholds.get(name, default)
 
-    def to_form(self) -> Dict[str, Any]:
-        """返回 Strategy 配置表单。"""
-        return {
-            "title": "Strategy",
-            "description": "管理 Agent 行为策略、Planner 参数与阈值。",
-            "fields": [
-                {
-                    "name": "planner_policy",
-                    "type": "select",
-                    "label": "Planner Policy",
-                    "options": ["rule_based"],
-                    "value": self._planner.get("policy", "rule_based"),
-                },
-                {
-                    "name": "planner_threshold",
-                    "type": "float",
-                    "label": "Planner Threshold",
-                    "min": 0.0,
-                    "max": 1.0,
-                    "value": self._planner.get("threshold", 0.5),
-                },
-                {
-                    "name": "reflection_enabled",
-                    "type": "boolean",
-                    "label": "Reflection Enabled",
-                    "value": self._reflection.get("enabled", False),
-                },
-                {
-                    "name": "reflection_rounds",
-                    "type": "integer",
-                    "label": "Reflection Rounds",
-                    "min": 0,
-                    "max": 10,
-                    "value": self._reflection.get("rounds", 1),
-                },
-                {
-                    "name": "tool_confidence",
-                    "type": "float",
-                    "label": "Tool Confidence Threshold",
-                    "min": 0.0,
-                    "max": 1.0,
-                    "value": self._thresholds.get("tool_confidence", 0.6),
-                },
+    def metadata(self) -> ModuleMetadata:
+        """返回 Strategy Capability Metadata。"""
+        return ModuleMetadata(
+            id="strategy",
+            type="strategy",
+            name="Strategy",
+            description="管理 Agent 行为策略、Planner 参数与阈值。",
+            icon="cog",
+            properties=[
+                PropertyMetadata(
+                    name="planner.policy",
+                    label="Planner Policy",
+                    type="select",
+                    value=self._planner.get("policy", "rule_based"),
+                    options=["rule_based"],
+                ),
+                PropertyMetadata(
+                    name="planner.threshold",
+                    label="Planner Threshold",
+                    type="number",
+                    value=self._planner.get("threshold", 0.5),
+                ),
+                PropertyMetadata(
+                    name="reflection.enabled",
+                    label="Reflection Enabled",
+                    type="boolean",
+                    value=self._reflection.get("enabled", False),
+                ),
+                PropertyMetadata(
+                    name="reflection.rounds",
+                    label="Reflection Rounds",
+                    type="number",
+                    value=self._reflection.get("rounds", 1),
+                ),
+                PropertyMetadata(
+                    name="thresholds.tool_confidence",
+                    label="Tool Confidence Threshold",
+                    type="number",
+                    value=self._thresholds.get("tool_confidence", 0.6),
+                ),
             ],
-        }
+            statistics=[],
+            actions=[],
+        )

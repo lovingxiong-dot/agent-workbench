@@ -133,7 +133,7 @@ class PlannerLoop:
         from v6.runtime.event_bus import RuntimeEvent, RuntimeEventType
 
         self._event_bus.publish(
-            RuntimeEventType.TASK_STARTED,
+            RuntimeEventType.DECISION_PLANNED,
             {
                 "phase": "decision",
                 "observation": observation.to_dict(),

@@ -137,8 +137,8 @@ class AgentConfigPanel(QWidget):
             data = self._controller.get_config_value("")
             self._editor.setReadOnly(True)
         else:
-            form = self._controller.get_module_form(module)
-            self._desc_label.setText(form.get("description", ""))
+            metadata = self._controller.get_module_metadata(module)
+            self._desc_label.setText(metadata.description if metadata is not None else "")
             data = self._controller.get_config_value(module, {})
             self._editor.setReadOnly(True)
 

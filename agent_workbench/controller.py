@@ -12,13 +12,18 @@ from typing import Any, Dict, Optional
 from v6.runtime.context import RuntimeContext
 
 from agent_workbench.runtime.agent_runtime import AgentWorkbenchRuntime
+from agent_workbench.runtime.metadata import ModuleMetadata
 
 
 class WorkbenchController:
     """Agent Workbench V6 控制器。"""
 
-    def __init__(self, runtime: AgentWorkbenchRuntime | None = None) -> None:
-        self._runtime = runtime or AgentWorkbenchRuntime()
+    def __init__(
+        self,
+        runtime: AgentWorkbenchRuntime | None = None,
+        config_path: str | None = None,
+    ) -> None:
+        self._runtime = runtime or AgentWorkbenchRuntime(config_path=config_path)
 
     def start(self) -> None:
         """启动 Runtime。"""
@@ -28,9 +33,24 @@ class WorkbenchController:
         """停止 Runtime。"""
         self._runtime.stop()
 
-    def chat(self, text: str, session_id: Optional[str] = None) -> RuntimeContext:
+    @property
+    def core_runtime(self):
+        """暴露底层 v6 AgentRuntime，供 UI 订阅 EventBus。"""
+        return self._runtime.core_runtime
+
+    @property
+    def runtime(self) -> AgentWorkbenchRuntime:
+        """暴露 AgentWorkbenchRuntime，供 UI 访问模块注册表等内部能力。"""
+        return self._runtime
+
+    def chat(
+        self,
+        text: str,
+        session_id: Optional[str] = None,
+        task_id: Optional[str] = None,
+    ) -> RuntimeContext:
         """提交一条用户消息，返回最终 RuntimeContext。"""
-        return self._runtime.chat(text, session_id=session_id)
+        return self._runtime.chat(text, session_id=session_id, task_id=task_id)
 
     def chat_with_tool(
         self,
@@ -77,9 +97,9 @@ class WorkbenchController:
         """返回 Overview 面板数据。"""
         return self._runtime.get_overview()
 
-    def get_module_form(self, namespace: str) -> Dict[str, Any]:
-        """获取指定模块的 UI 表单。"""
-        return self._runtime.get_module_form(namespace)
+    def get_module_metadata(self, namespace: str) -> ModuleMetadata | None:
+        """获取指定模块的 Capability Metadata。"""
+        return self._runtime.get_module_metadata(namespace)
 
     def apply_config_change(self, namespace: str) -> None:
         """手动触发某个 namespace 的 Module 热更新。"""

@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any
 
 from v6.runtime.engine_state import EngineState
@@ -31,9 +32,9 @@ class WorkbenchLLMEngine(BaseEngine):
         self._model_module = model_module
 
     def execute(self, ctx: "RuntimeContext") -> Any:
-        """使用 ModelModule 生成回复。"""
+        """使用 ModelModule 流式生成回复，并通过 EventBus 推送分层 Trace 事件。"""
         self._state = EngineState.RUNNING
-        self._emit(RuntimeEventType.ENGINE_STARTED, {}, ctx)
+        execution_start = time.time()
         try:
             text = ""
             if ctx.messages:
@@ -46,13 +47,77 @@ class WorkbenchLLMEngine(BaseEngine):
                 payload={"source": "ctx.messages", "length": len(text)},
             )
 
+            self._emit(
+                RuntimeEventType.EXECUTION_STARTED,
+                {"engine": self.name, "capability": "text_generation"},
+                ctx,
+            )
+
+            provider_info = self._model_module.get_active_provider_info()
+            provider_info.setdefault("service", "chat.completions")
+            self._emit(
+                RuntimeEventType.PROVIDER_SELECTED,
+                provider_info,
+                ctx,
+            )
+
             messages = [{"role": m.role, "content": m.content} for m in ctx.messages]
-            response = self._model_module.chat(messages)
+            request_metadata = {
+                "messages_count": len(messages),
+                "tools": [],
+                "system": None,
+                "temperature": self._model_module._sampling.get("temperature", 0.7),
+                "max_tokens": self._model_module._sampling.get("max_tokens", 2048),
+                "stream": True,
+                "json_mode": False,
+                "reasoning": False,
+            }
+            self._emit(
+                RuntimeEventType.REQUEST_SENT,
+                request_metadata,
+                ctx,
+            )
+
+            response_parts: list[str] = []
+            self._emit(RuntimeEventType.AI_START, {"phase": ""}, ctx)
+
+            first_token = True
+            sequence = 0
+            for chunk in self._model_module.chat_stream(messages):
+                sequence += 1
+                now = time.time()
+                if first_token:
+                    self._emit(
+                        RuntimeEventType.FIRST_TOKEN,
+                        {"elapsed_ms": (now - execution_start) * 1000},
+                        ctx,
+                    )
+                    first_token = False
+                response_parts.append(chunk)
+                self._emit(
+                    RuntimeEventType.AI_CHUNK,
+                    {"text": chunk, "phase": ""},
+                    ctx,
+                )
+                self._emit(
+                    RuntimeEventType.CHUNK_RECEIVED,
+                    {"sequence": sequence, "chunk_length": len(chunk)},
+                    ctx,
+                )
+
+            response = "".join(response_parts)
+            self._emit(RuntimeEventType.STREAM_FINISHED, {"chunks": sequence}, ctx)
+            self._emit(RuntimeEventType.AI_END, {"response": response}, ctx)
 
             ctx.add_message("assistant", response)
             ctx.result.status = "completed"
             ctx.result.extra["response"] = response
 
+            self._emit(
+                RuntimeEventType.EXECUTION_FINISHED,
+                {"status": "completed", "response_length": len(response)},
+                ctx,
+            )
             self._emit(
                 RuntimeEventType.ENGINE_COMPLETED,
                 {"status": "completed", "response": response},
@@ -60,6 +125,11 @@ class WorkbenchLLMEngine(BaseEngine):
             )
             return RuntimeResult(status="completed", answer=response)
         except Exception as exc:
+            self._emit(
+                RuntimeEventType.EXECUTION_FINISHED,
+                {"status": "failed", "error": str(exc)},
+                ctx,
+            )
             self._emit(RuntimeEventType.ENGINE_FAILED, {"error": str(exc)}, ctx)
             raise
         finally:

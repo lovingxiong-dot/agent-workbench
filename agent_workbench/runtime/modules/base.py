@@ -1,15 +1,17 @@
 """agent_workbench/runtime/modules/base.py — RuntimeModule 基类。
 
 所有 Agent Workbench V6 模块都继承此类，统一生命周期：
-- initialize：模块初始化，可获取 Runtime 或其他模块引用。
+- initialize：模块初始化，可获取 Runtime 引用。
 - apply_config：配置变更时热更新。
 - dispose：资源释放。
-- to_form：生成 UI 表单结构（描述哪些字段可编辑）。
+- metadata：返回 Capability Metadata（模块唯一对外暴露的能力描述）。
 """
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING
+
+from agent_workbench.runtime.metadata import ModuleMetadata
 
 if TYPE_CHECKING:
     from agent_workbench.runtime.agent_runtime import AgentRuntime
@@ -39,6 +41,9 @@ class BaseRuntimeModule(ABC):
         pass
 
     @abstractmethod
-    def to_form(self) -> Dict[str, Any]:
-        """返回该模块的 UI 表单描述。"""
+    def metadata(self) -> ModuleMetadata:
+        """返回模块 Capability Metadata（不含 UI 概念）。
+
+        UI 通过 MetadataAdapter 将 Metadata 翻译为 PresentationModel。
+        """
         ...
