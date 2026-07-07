@@ -1,11 +1,14 @@
 """tests/v6/test_v6_runtime_kernel.py — Runtime Kernel 集成测试。
 
-设计来源：V6.5 Runtime Foundation Layer Step 4。
+设计来源：V6.5 Runtime Foundation Layer Step 4 / Step 5.1。
 
 目标：验证八大 Engine 空壳可被 EngineManager 统一发现、调度、追踪，
-形成完整的 Task Execution Timeline。
+形成完整的 Task Execution Timeline；验证 EventBus 作为 Runtime 神经系统，
+Engine 事件通过 Trace Hook 写入 RuntimeTrace。
 """
 from __future__ import annotations
+
+import time
 
 from v6.runtime.context import RuntimeContext
 from v6.runtime.engine_manager import EngineManager
@@ -21,6 +24,7 @@ from v6.runtime.engines import (
     WorkflowEngine,
 )
 from v6.runtime.engines.planner import PlannerEngine
+from v6.runtime.event_bus import EventBus, RuntimeEventType
 from v6.runtime.result import RuntimeResult
 from v6.runtime.trace import RuntimeTrace
 
@@ -28,9 +32,12 @@ from v6.runtime.trace import RuntimeTrace
 ALL_ENGINE_NAMES = ["llm", "tool", "memory", "planner", "workflow", "code", "vision", "knowledge"]
 
 
-def build_manager(trace: RuntimeTrace | None = None) -> EngineManager:
+def build_manager(
+    trace: RuntimeTrace | None = None,
+    event_bus: EventBus | None = None,
+) -> EngineManager:
     """构建已注册八大 Engine 的 EngineManager。"""
-    manager = EngineManager(trace=trace)
+    manager = EngineManager(trace=trace, event_bus=event_bus)
     manager.register(LLMEngine())
     manager.register(ToolEngine())
     manager.register(MemoryEngine())
@@ -141,3 +148,66 @@ def test_planner_without_manager_returns_placeholder() -> None:
     assert isinstance(result, RuntimeResult)
     assert result.extra["engine"] == "planner"
     assert "llm" not in result.extra
+
+
+def test_engine_manager_wires_event_bus_to_engines() -> None:
+    """EngineManager 注册 Engine 时应自动注入 EventBus。"""
+    bus = EventBus()
+    manager = build_manager(event_bus=bus)
+
+    llm = manager.get("llm")
+    assert llm is not None
+    assert llm._event_bus is bus
+
+
+def test_engine_publishes_lifecycle_events_to_trace() -> None:
+    """Engine 执行时通过 EventBus 发布 started / completed 事件，并写入 Trace。"""
+    bus = EventBus()
+    bus.start()
+    try:
+        trace = RuntimeTrace()
+        manager = build_manager(event_bus=bus)
+        ctx = RuntimeContext.new()
+        bus.add_trace_hook(ctx.task_id, trace)
+        manager.initialize_all(ctx)
+
+        ctx.request = {"prompt": "hello"}
+        manager.execute("llm", ctx)
+
+        # 等待后台事件分发线程处理 engine.completed
+        time.sleep(0.1)
+
+        started = trace.filter(action=RuntimeEventType.ENGINE_STARTED)
+        completed = trace.filter(action=RuntimeEventType.ENGINE_COMPLETED)
+        assert len(started) == 1
+        assert len(completed) == 1
+        assert started[0].node == "engine:llm"
+        assert completed[0].node == "engine:llm"
+    finally:
+        bus.stop()
+
+
+def test_event_bus_prevents_engine_direct_trace_calls() -> None:
+    """Engine 不直接调用 ctx.trace.add；事件通过 EventBus 路由。"""
+    bus = EventBus()
+    bus.start()
+    try:
+        trace = RuntimeTrace()
+        manager = build_manager(event_bus=bus)
+        ctx = RuntimeContext.new()
+        bus.add_trace_hook(ctx.task_id, trace)
+        manager.initialize_all(ctx)
+
+        # 清空 trace，确保只有事件总线写入
+        trace.clear()
+        ctx.request = {"prompt": "hello"}
+        manager.execute("llm", ctx)
+
+        # 等待后台事件分发线程处理
+        time.sleep(0.1)
+
+        # 至少应有 engine.started / engine.completed 两个事件来自 EventBus
+        assert len(trace.steps()) >= 2
+        assert all(step.node.startswith("engine:") for step in trace.steps())
+    finally:
+        bus.stop()

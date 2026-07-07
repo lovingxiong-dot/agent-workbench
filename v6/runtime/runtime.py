@@ -35,7 +35,12 @@ class AgentRuntime:
     ) -> None:
         self._event_bus = event_bus or EventBus()
         self._scheduler = scheduler or Scheduler(executor=self._execute)
-        self._engine_manager = engine_manager or EngineManager()
+        self._engine_manager = engine_manager or EngineManager(event_bus=self._event_bus)
+        if self._engine_manager and engine_manager is None:
+            # 默认创建的 EngineManager 已注入 EventBus；外部注入的由调用方保证。
+            pass
+        elif self._engine_manager:
+            self._engine_manager.set_event_bus(self._event_bus)
         self._handlers: dict[str, Handler] = {}
         self._contexts: dict[str, RuntimeContext] = {}
         self._running = False
@@ -103,6 +108,9 @@ class AgentRuntime:
             )
         self._contexts[task.task_id] = ctx
         ctx.set_status(RuntimeState.RUNNING)
+        # 将当前任务的 Trace 注册为 EventBus Trace Hook，使 Engine 事件自动写入 Trace
+        if ctx.trace is not None:
+            self._event_bus.add_trace_hook(task.task_id, ctx.trace)
         ctx.trace.add(
             node="runtime",
             action=TraceEvent.TASK_START,
@@ -156,6 +164,7 @@ class AgentRuntime:
                 task.task_id,
             )
         finally:
+            self._event_bus.remove_trace_hook(task.task_id)
             self._contexts.pop(task.task_id, None)
 
     @staticmethod

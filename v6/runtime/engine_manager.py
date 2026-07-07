@@ -12,7 +12,7 @@
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 from v6.runtime.context import RuntimeContext
 from v6.runtime.engine_state import EngineState
@@ -20,22 +20,46 @@ from v6.runtime.engines.protocol import Engine, EngineDescriptor, EngineNotReady
 from v6.runtime.enums import TraceEvent
 from v6.runtime.trace import RuntimeTrace
 
+if TYPE_CHECKING:
+    from v6.runtime.event_bus import EventBus
+
 
 class EngineManager:
     """Engine 生命周期管理器。
 
     维护 Engine 注册表、描述符与状态机，提供统一执行入口。
+    若注入 EventBus，会把 EventBus 传给支持 `set_event_bus` 的 Engine，
+    使 Engine 通过事件总线通信，而不是直接调用 Trace 或其他 Engine。
     """
 
-    def __init__(self, trace: Optional[RuntimeTrace] = None) -> None:
+    def __init__(
+        self,
+        trace: Optional[RuntimeTrace] = None,
+        event_bus: Optional["EventBus"] = None,
+    ) -> None:
         self._engines: Dict[str, Engine] = {}
         self._descriptors: Dict[str, EngineDescriptor] = {}
         self._states: Dict[str, EngineState] = {}
         self._trace: Optional[RuntimeTrace] = trace
+        self._event_bus: Optional["EventBus"] = event_bus
 
     def set_trace(self, trace: Optional[RuntimeTrace]) -> None:
         """设置用于记录 Engine 执行轨迹的 RuntimeTrace。"""
         self._trace = trace
+
+    def set_event_bus(self, event_bus: Optional["EventBus"]) -> None:
+        """设置 Runtime Event Bus，并重新注入给所有已注册 Engine。"""
+        self._event_bus = event_bus
+        for engine in self._engines.values():
+            self._wire_event_bus(engine)
+
+    def _wire_event_bus(self, engine: Engine) -> None:
+        """如果 Engine 支持，注入 EventBus。"""
+        if self._event_bus is None:
+            return
+        setter = getattr(engine, "set_event_bus", None)
+        if callable(setter):
+            setter(self._event_bus)
 
     # ─────────────────────────────────────────────────────────
     # 注册与查询
@@ -50,6 +74,7 @@ class EngineManager:
             instance=engine,
         )
         self._states[name] = EngineState.CREATED
+        self._wire_event_bus(engine)
 
     def get(self, name: str) -> Optional[Engine]:
         """获取已注册的 Engine 实例。"""

@@ -1,15 +1,17 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 32 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v6.6.0-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 33 |
 
 ## Current Development Authority
 
-> **The active development line is `v6-dev` at version `v6.0.0-alpha`.**
+> **The active development line is `v6-dev` at version `v6.6.0-alpha`.**
+> **Public baseline: `v6.0.0-alpha`.**
 
 | Item | Value |
 |---|---|
 | Active branch | `v6-dev` |
+| Current development version | `v6.6.0-alpha` |
 | Public baseline | `v6.0.0-alpha` |
 | Internal migration checkpoint | `v6.5.8-alpha` (historical, not public) |
 | Frozen archive | `v5-dev` |

@@ -1,5 +1,51 @@
 # Changelog
 
+## v6.6.0-alpha (2026-07-07) — Runtime Event Bus Foundation
+
+> **里程碑语义**：V6 Runtime 内部神经系统（communication backbone）已冻结。
+> 本版本之后，Engine / Service / Adapter / Observer 之间的通信统一走 Runtime Event Bus，不再允许 Engine 直接调用 Trace 或其他 Engine。
+
+### Added
+- 升级 `v6/runtime/event_bus.py`：从普通 EventEmitter 升级为 **Runtime Event Bus**。
+  - 新增 `RuntimeEventType` 枚举：统一 `task.*` / `engine.*` / `service.*` / `tool.*` / `adapter.*` 事件命名。
+  - 扩展 `RuntimeEvent` Schema：必填 `type` / `payload` / `task_id`，可选 `source` / `trace_id` / `phase` / `timestamp`。
+  - 保留原有同步 `publish` / `emit` API，兼容旧调用。
+  - 新增异步 `dispatch(event)` API：供 Runtime 内部精确控制事件时机。
+  - 新增按 `task_id` 路由的 **Trace Hook**：`add_trace_hook(task_id, trace)` / `remove_trace_hook(task_id)`，使 `RuntimeTrace` 成为事件订阅者，Engine 不再直接调用 Trace。
+- 升级 `v6/runtime/engines/base.py`：`BaseEngine` 支持 `set_event_bus()` 注入 EventBus，在 `execute()` 生命周期关键点发布 `engine.started` / `engine.completed` / `engine.failed` 标准事件。
+- 升级 `v6/runtime/engine_manager.py`：构造函数支持 `event_bus` 参数；注册 Engine 时自动调用 `set_event_bus()` 完成注入。
+- 升级 `v6/runtime/runtime.py`：`AgentRuntime` 默认将自身 `EventBus` 注入 `EngineManager`；任务执行期间自动将 `ctx.trace` 注册为 Trace Hook，任务结束后移除。
+
+### test
+- 新增 `test_runtime_event_schema`：验证 `source` / `trace_id` / `phase` 字段。
+- 新增 `test_async_dispatch`：验证 `dispatch(RuntimeEvent)` 可 await。
+- 新增 `test_trace_hook_routes_by_task_id` / `test_trace_hook_does_not_write_without_task_id`：验证 Trace Hook 按 task 路由。
+- 新增 `test_engine_manager_wires_event_bus_to_engines`：验证 EngineManager 自动注入 EventBus。
+- 新增 `test_engine_publishes_lifecycle_events_to_trace`：验证 Engine 事件经 EventBus 写入 Trace。
+- 新增 `test_event_bus_prevents_engine_direct_trace_calls`：验证 Engine 不直接写 Trace，事件流是 Trace 唯一来源。
+
+### Architecture
+- 明确 EventBus 定位：**Runtime 内部神经系统（communication backbone）**，连接 Task / AgentRuntime / Engine / Service / Adapter / Observer。
+- 明确与 Trace 的关系：EventBus 是事件来源，RuntimeTrace 是记录器；Engine 只 publish 事件，不调用 `ctx.trace.add`。
+- 明确 Engine 间通信规则：禁止 Engine 直接互相调用，未来协作通过 EventBus 事件驱动。
+- 事件流向：
+  ```
+  Engine
+    |
+    v
+  RuntimeEventBus
+    |
+    +------> RuntimeTrace (via Trace Hook)
+    |
+    +------> Subscribers
+  ```
+
+### Guarantees
+- Engine 不直接访问 `RuntimeTrace`；所有生命周期事件通过 `RuntimeEventBus` 路由。
+- Engine 间通信使用标准 `RuntimeEvent`，禁止 `engine_a.call(engine_b)` 式直接调用。
+- 每个 `RuntimeEvent` 必须携带 `task_id`，确保 Trace 可按 Task 关联与回放。
+- `EngineManager` 负责 Engine 生命周期；事件总线负责 Engine 间通信；两者职责分离。
+
 ## v6.0.0-alpha (2026-07-07) — V6 独立 Runtime 架构线公开立项
 
 ### declaration

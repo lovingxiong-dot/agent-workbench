@@ -1,12 +1,14 @@
-"""tests/v6/test_v6_event_bus.py — EventBus 单元测试。"""
+"""tests/v6/test_v6_event_bus.py — Runtime Event Bus 单元测试。"""
 from __future__ import annotations
 
+import asyncio
 import threading
 import time
 
 import pytest
 
-from v6.runtime.event_bus import EventBus, RuntimeEvent
+from v6.runtime.event_bus import EventBus, RuntimeEvent, RuntimeEventType
+from v6.runtime.trace import RuntimeTrace
 
 
 @pytest.fixture
@@ -105,3 +107,109 @@ def test_emit_before_start_is_dropped():
 
     time.sleep(0.1)
     assert not received
+
+
+def test_runtime_event_schema(bus):
+    """RuntimeEvent 应携带 source / trace_id / phase / task_id。"""
+    received = []
+    done = threading.Event()
+
+    def callback(event: RuntimeEvent) -> None:
+        received.append(event)
+        done.set()
+
+    bus.subscribe(RuntimeEventType.ENGINE_STARTED, callback)
+    bus.publish(
+        RuntimeEventType.ENGINE_STARTED,
+        {},
+        task_id="t-schema",
+        source="engine:llm",
+        trace_id="trace-1",
+        phase="inference",
+    )
+
+    assert wait_for(done)
+    event = received[0]
+    assert event.type == RuntimeEventType.ENGINE_STARTED
+    assert event.task_id == "t-schema"
+    assert event.source == "engine:llm"
+    assert event.trace_id == "trace-1"
+    assert event.phase == "inference"
+    assert isinstance(event.timestamp, float)
+
+
+def test_async_dispatch():
+    """dispatch(RuntimeEvent) 应可被 await，并在当前事件循环同步分发。"""
+
+    async def run() -> None:
+        loop = asyncio.get_running_loop()
+        bus = EventBus()
+        bus._loop = loop
+        bus._queue = asyncio.Queue()
+        bus._running = True
+
+        received = []
+
+        async def callback(event: RuntimeEvent) -> None:
+            received.append(event)
+
+        bus.subscribe("async.test", callback)
+        event = RuntimeEvent(type="async.test", payload={"k": "v"}, task_id="t-async")
+        await bus.dispatch(event)
+
+        assert len(received) == 1
+        assert received[0].type == "async.test"
+        assert received[0].payload == {"k": "v"}
+
+    asyncio.run(run())
+
+
+def test_trace_hook_routes_by_task_id(bus):
+    """Trace Hook 按 task_id 路由，事件自动写入对应 RuntimeTrace。"""
+    trace_a = RuntimeTrace()
+    trace_b = RuntimeTrace()
+    bus.add_trace_hook("task-a", trace_a)
+    bus.add_trace_hook("task-b", trace_b)
+
+    bus.publish(
+        RuntimeEventType.ENGINE_STARTED,
+        {"engine": "llm"},
+        task_id="task-a",
+        source="engine:llm",
+        phase="inference",
+    )
+    bus.publish(
+        RuntimeEventType.ENGINE_STARTED,
+        {"engine": "tool"},
+        task_id="task-b",
+        source="engine:tool",
+        phase="tool",
+    )
+
+    time.sleep(0.1)
+
+    steps_a = trace_a.filter(node="engine:llm")
+    steps_b = trace_b.filter(node="engine:tool")
+    assert len(steps_a) == 1
+    assert len(steps_b) == 1
+    assert steps_a[0].action == RuntimeEventType.ENGINE_STARTED
+    assert steps_b[0].action == RuntimeEventType.ENGINE_STARTED
+
+    bus.remove_trace_hook("task-a")
+    bus.publish(
+        RuntimeEventType.ENGINE_COMPLETED,
+        {},
+        task_id="task-a",
+        source="engine:llm",
+    )
+    time.sleep(0.1)
+    assert len(trace_a.steps()) == 1  # hook 移除后不再写入
+
+
+def test_trace_hook_does_not_write_without_task_id(bus):
+    """没有 task_id 的事件不应被 Trace Hook 记录。"""
+    trace = RuntimeTrace()
+    bus.add_trace_hook("task-x", trace)
+    bus.publish(RuntimeEventType.ENGINE_STARTED, {}, task_id="")
+    time.sleep(0.1)
+    assert len(trace.steps()) == 0

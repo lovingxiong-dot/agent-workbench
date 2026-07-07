@@ -5,11 +5,13 @@ schema_version: 3.1
 
 ## Current Development Authority
 
-> **The active development line is `v6-dev` at version `v6.0.0-alpha`.**
+> **The active development line is `v6-dev` at version `v6.6.0-alpha`.**
+> **Public baseline: `v6.0.0-alpha`.**
 
 | Item | Value |
 |---|---|
 | Active branch | `v6-dev` |
+| Current development version | `v6.6.0-alpha` |
 | Public baseline | `v6.0.0-alpha` |
 | Internal migration checkpoint | `v6.5.8-alpha` (historical, on `v5-dev`) |
 | Frozen archive | `v5-dev` |
@@ -18,12 +20,48 @@ schema_version: 3.1
 See [`PROJECT_LINEAGE.md`](../PROJECT_LINEAGE.md) for the full V5 / V6 identity map.
 
 ## Mission
-完成 V6 Step 4：建立八大 Engine Runtime 骨架（BaseEngine + LLM/Tool/Memory/Planner/Workflow/Code/Vision/Knowledge），验证 EngineManager 动态发现、统一生命周期、Runtime Trace Timeline 与 Planner 编排能力；随后从 `v5-dev` 切出干净的 V6 主线，并以 `v6.0.0-alpha` 作为 V6 独立 Runtime 架构线的公开立项标签。
+完成 V6 Step 5.1：将现有 EventBus 从普通 EventEmitter 升级为 Runtime 内部神经系统（communication backbone）。增强 RuntimeEvent Schema、新增 RuntimeEventType 枚举、保留同步 API 并新增异步 dispatch、实现按 task_id 路由的 Trace Hook；让 BaseEngine 通过 EventBus 发布生命周期事件，EngineManager / AgentRuntime 完成 EventBus 注入与 Trace Hook 自动注册，形成 Engine publish → EventBus → Trace 的完整事件流。
+
+## Current Architecture State
+
+### Runtime Communication Layer
+**READY** — `v6/runtime/event_bus.py` 已升级为 Runtime Event Bus。
+
+### Event Flow
+```
+Engine
+  |
+  v
+RuntimeEventBus
+  |
+  +------> RuntimeTrace (via Trace Hook)
+  |
+  +------> Subscribers
+```
+
+### Guarantees
+- Engine 不直接访问 `RuntimeTrace`；生命周期事件通过 `RuntimeEventBus` 路由。
+- Engine 间通信使用标准 `RuntimeEvent`，禁止直接互相调用。
+- `EngineManager` 负责 Engine 生命周期；`EventBus` 负责运行时通信；职责分离。
 
 ## Progress
 - [x] Step 3 已归档：`v6/runtime/engine_state.py` 定义 `EngineState`；`v6/runtime/engines/protocol.py` 定义 `Engine` Protocol、`EngineDescriptor`、`EngineNotReadyError`；`EngineManager` 支持完整生命周期；标签 `v6.5.7-alpha`。
-- [x] 新增 `v6/runtime/engines/base.py`：`BaseEngine` 抽象基类，内置统一 `EngineState` 状态机与默认生命周期。
-- [x] 新增八大 Engine 空壳：
+- [x] Step 4 已归档：新增 `BaseEngine` 与八大 Engine 空壳（LLM/Tool/Memory/Planner/Workflow/Code/Vision/Knowledge），Runtime Kernel 集成测试通过；标签 `v6.5.8-alpha`（内部迁移）。
+- [x] V6 独立产品线立项：新增 `PROJECT_LINEAGE.md` 与 `Current Development Authority` 认知层；标签 `v6.0.0-alpha`（公开 baseline）；当前开发版本 `v6.6.0-alpha`。
+- [x] Step 5.1 完成：Runtime Event Bus 升级为神经系统，Engine 事件经 EventBus 写入 Trace。
+- [ ] Step 5.2：Engine Capability Registry（待执行）。
+- [ ] Step 5.3：Runtime Trace Replay 增强（待执行）。
+
+## Step 5.1 Details
+- [x] 审计现有 `v6/runtime/event_bus.py`：保留 `subscribe` / `unsubscribe` / `publish` / `emit` API。
+- [x] 增强 `RuntimeEvent` Schema：`type` / `payload` / `task_id` / `source` / `trace_id` / `phase` / `timestamp`。
+- [x] 新增 `RuntimeEventType` 枚举统一事件命名。
+- [x] 新增异步 `dispatch(RuntimeEvent)` API。
+- [x] 新增按 `task_id` 路由的 Trace Hook：`add_trace_hook` / `remove_trace_hook`。
+- [x] `BaseEngine` 支持 `set_event_bus()`，在 `execute()` 发布 `engine.started` / `engine.completed` / `engine.failed`。
+- [x] `EngineManager` 构造函数接受 `event_bus`，注册 Engine 时自动注入。
+- [x] `AgentRuntime` 默认把 EventBus 注入 EngineManager；任务执行期间为当前 task 注册 Trace Hook。
+- [x] 新增 7 个测试覆盖 EventBus Schema、异步 dispatch、Trace Hook 路由、Engine 事件流。
   - `llm.py` — LLM Engine
   - `tool.py` — Tool Engine
   - `memory.py` — Memory Engine
@@ -102,14 +140,20 @@ no uncommitted changes
 - 用户进一步分析 Agent Runtime 中 Memory / Prompt 的本地私有化设计，建议 Step 5 不要立即接八大 Engine 功能，而是先做 Runtime Event Bus + Engine Capability Registry + Runtime Trace Replay。
 
 ## Next Steps (AI-Inferred)
-1. **Step 5 优先建立 Runtime Event Bus**：让 Engine、Service、Adapter 之间通过事件总线异步通信，减少直接调用耦合。
-2. **Engine Capability Registry**：让 EngineManager 能按能力（capabilities）发现和调度 Engine，而非只按名称。
-3. **Runtime Trace Replay**：扩展 `ReplayPlayer`，支持按 `Task → Phase → Engine → Service → Tool` 全链路重放。
-4. **Memory / Prompt 本地私有化预留**：在 `RuntimeContext` 中预留 `agent_id` / `workspace` 等字段；MemoryEngine / PromptEngine 保持接口，底层先用 SQLite / 本地文件，未来通过 Backend 协议切换。
-5. **暂不实现八大 Engine 真实业务逻辑**：LLM/Tool/Memory 等功能开发应在 Event Bus + Capability Registry + Replay 基础稳固后再进行。
+1. **Step 5.2：Engine Capability Registry**（当前最高优先级）
+   - 目标：让调用者按**能力需求**选择 Engine，而不是按名称硬编码 `manager.execute("llm")`。
+   - 输入示例：`{"capability": "text_generation", "priority": "high", "streaming": true}`。
+   - 输出：匹配到的 Engine 名称列表或最佳候选。
+   - 关键边界：`EngineManager` 继续负责 Engine 生命周期；Capability Registry 只负责**选择**，不替代 `EngineManager`。
+2. **Step 5.3：Runtime Trace Replay 增强**
+   - 扩展 `ReplayPlayer`，支持按事件流重放 `Task → Phase → Engine → Service → Tool` 全链路。
+3. **Memory / Prompt 本地私有化预留**
+   - 在 `RuntimeContext` 中预留 `agent_id` / `workspace` 等字段；MemoryEngine / PromptEngine 保持接口，底层先用 SQLite / 本地文件，未来通过 Backend 协议切换。
+4. **暂不实现八大 Engine 真实业务逻辑**
+   - LLM/Tool/Memory 等功能开发应在 Event Bus + Capability Registry + Replay 基础稳固后再进行。
 
 ## Test Status
-- latest: [test:130/130]
+- latest: [test:137/137]
 - command: `python -m pytest tests/v6/ -q --tb=short`
 
 ## Notes
