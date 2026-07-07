@@ -5,22 +5,49 @@ schema_version: 3.1
 
 ## Current Development Authority
 
-> **The active development line is `v6-dev` at version `v6.8.0-alpha`.**
+> **The active development line is `v6-service` based on `v6.8.0-alpha` (V6 Framework Core Foundation).**
 > **Public baseline: `v6.0.0-alpha`.**
+> **Framework Core baseline: `v6.8.0-alpha`.**
 
 | Item | Value |
 |---|---|
-| Active branch | `v6-dev` |
-| Current development version | `v6.8.0-alpha` |
+| Active branch | `v6-service` |
+| Base branch | `v6-dev` @ `v6.8.0-alpha` |
+| Current development version | `v6.9.0-alpha` (planned) |
+| Framework Core baseline | `v6.8.0-alpha` |
 | Public baseline | `v6.0.0-alpha` |
 | Internal migration checkpoint | `v6.5.8-alpha` (historical, on `v5-dev`) |
 | Frozen archive | `v5-dev` |
-| AI rule | Do not modify `v5-dev`. All new work goes to `v6-dev`. |
+| AI rule | Do not modify `v5-dev`. Framework Core (`v6-core`) only accepts bug fixes; all new Service work goes to `v6-service`; Agent work goes to `v6-agent`. |
 
 See [`PROJECT_LINEAGE.md`](../PROJECT_LINEAGE.md) for the full V5 / V6 identity map.
 
 ## Mission
-完成 V6.8.0-alpha：建立 V6 Framework Core Foundation（共享核心框架基座）。该版本是 V6 Runtime 第一个完整闭环版本，包含统一入口、统一协议、统一通信、能力发现、执行追踪、任务编排、调度决策七要素。当前作为后续 Agent / Service / Adapter 开发的基础版本，不接真实 LLM，不做自治循环。
+基于 `v6.8.0-alpha`（V6 Framework Core Foundation）建立 Runtime Service Architecture。当前进入 Step 6.1：Memory Service Foundation，为 V6 Runtime 提供可演进的 Memory 能力接入层。
+
+## V6 Branch Strategy
+
+`v6.8.0-alpha` 起，V6 从单分支演进拆为三条垂直支线：
+
+```
+v6-dev
+  |
+  v6.8.0-alpha  ← Framework Core Foundation 基准点
+      |
+      +---- v6-core   (Runtime Kernel — frozen, bug fixes only)
+      |
+      +---- v6-service (Runtime Service Architecture — Memory / Prompt / Model / Tool / Knowledge)
+      |
+      +---- v6-agent   (Agent Application — Coding / Research / Trading / Desktop / Workflow)
+```
+
+| 分支 | 定位 | 规则 |
+|---|---|---|
+| `v6-core` | Framework Core Foundation | 冻结 RuntimeContext、Engine Protocol、EventBus、CapabilityRegistry、Trace、Replay、Orchestrator、PlannerLoop；只修 bug，不增加大功能。 |
+| `v6-service` | Runtime Service Architecture | 基于 Core 扩展 Memory、Prompt、Model Adapter、Tool Adapter、Knowledge Adapter 等能力层。 |
+| `v6-agent` | Agent Application | 基于 Core + Service 构建具体 Agent 类型、Persona、Policy、Workflow、UI 等产品化功能。 |
+
+当前活跃分支为 `v6-service`。
 
 ## Current Architecture State
 
@@ -123,8 +150,11 @@ EngineManager.execute(name, ctx)
 - [x] Step 5.2 已归档：新增 `CapabilityRegistry`，八大 Engine 声明 capabilities；`EngineManager` 支持按能力选择；标签 `v6.6.1-alpha`。
 - [x] Step 5.3 已归档：新增 `ReplayRecord` / `ReplayLog` / `ReplayService`，Runtime Execution Replay Foundation 落地；标签 `v6.6.2-alpha`。
 - [x] Step 5.4 已归档：新增 `Orchestrator` 与 Task Lifecycle State Machine，AgentRuntime 持有 Orchestrator；标签 `v6.7.0-alpha`。
-- [x] Step 5.5 已归档：新增 `PlannerLoop` / `Decision` / `DecisionPolicy`，Orchestrator 按决策选择 Engine；与前面四层共同构成 V6 Framework Core Foundation；标签 `v6.8.0-alpha`。
-- [ ] Step 6 / V6.9+：Runtime Service Architecture（Memory / Prompt / Model Adapter / Tool Adapter / Knowledge Adapter 等真实世界能力接入层）。
+- [x] Step 5.5 / V6.8.0-alpha 已归档：新增 `PlannerLoop` / `Decision` / `DecisionPolicy`，Orchestrator 按决策选择 Engine；与前面四层共同构成 **V6 Framework Core Foundation**。
+- [ ] Step 6.1 / V6.9.0-alpha：Memory Service Foundation（基于 `v6-service` 分支）。
+- [ ] Step 6.2 / V6.10.0-alpha：Prompt Service Foundation。
+- [ ] Step 6.3 / V6.11.0-alpha：Model Adapter Foundation。
+- [ ] Step 6.4 / V6.12.0-alpha：Tool Adapter Foundation（MCP 作为适配协议，不进入 Runtime Core）。
 
 ## Step 5.5 / V6.8.0-alpha Details
 - [x] 新增 `v6/runtime/decision.py`：定义 `DecisionAction` 枚举与 `Decision` 数据类，含工厂方法 `execute()` / `complete()` / `fail()` / `wait()`。
@@ -261,25 +291,32 @@ PROJECT_BLUEPRINT.md
 
 ### Recent Conversation
 - 用户确认当前方向：V6 已形成 Runtime Kernel 雏形，不建议继续堆功能，应先归档 v6.8.0-alpha。
-- 用户强调：v6.8.0-alpha 语义为 "V6 Runtime Autonomous Decision Foundation"，不是 Planner Engine。
+- 用户将 v6.8.0-alpha 语义重新定义为 **V6 Framework Core Foundation**（共享核心框架基座），而非普通功能版本。
 - 用户明确 `PlannerLoop`（Runtime 决策机制）与 `PlannerEngine`（Engine 能力组件）必须分离。
-- 用户建议 HANDOFF 增加 Decision Layer READY 与分离声明，避免后续 Agent 混淆。
-- 用户建议下一步进入 Step 6 Runtime Service Architecture（Memory / Prompt / Model Adapter / Tool Adapter / Knowledge Adapter），而非自治循环。
+- 用户建议从 v6.8.0-alpha 分出三条垂直支线：
+  - `v6-core`：冻结 Framework Core，只修 bug。
+  - `v6-service`：Runtime Service Architecture（Memory / Prompt / Model / Tool / Knowledge）。
+  - `v6-agent`：Agent Application（Coding / Research / Trading / Desktop / Workflow）。
+- 用户建议下一步进入 Step 6.1 Memory Service Foundation，在 `v6-service` 分支上开发。
+- 用户强调 Service ≠ Engine，结构为：Runtime → Service Layer → Adapter Layer → External System。
 
 ## Next Steps (AI-Inferred)
-1. **Step 6 / V6.9：Runtime Service Architecture**（当前最高优先级）
-   - 目标：为 Runtime Kernel 接入真实世界能力层。
-   - 候选服务：Memory Service、Prompt Service、Model Adapter、Tool Adapter、Knowledge Adapter。
+1. **Step 6.1 / V6.9.0-alpha：Memory Service Foundation**（当前最高优先级，基于 `v6-service` 分支）
+   - 目标：建立 Memory 能力接入层，不是 Memory Engine 业务实现。
+   - 结构：`v6/runtime/services/memory_service.py` + `MemoryRecord` + `MemoryBackend` 接口 + `SQLiteMemoryBackend` 实现。
+   - 通过 EventBus 发布 memory 相关事件；上层（MemoryEngine）调用 MemoryService，底层未来可切换为 LAN Memory Server / Vector DB。
    - 原则：Service 属于 Runtime 能力接入层，不是 Engine 业务逻辑；保持 `RuntimeContext` 作为唯一 Public Protocol。
-2. **Runtime Task 模型完善**
+2. **Step 6.2 / V6.10.0-alpha：Prompt Service Foundation**
+   - system prompt / agent prompt / template / context assembly。
+3. **Step 6.3 / V6.11.0-alpha：Model Adapter Foundation**
+   - OpenAI / Gemini / 本地模型 / Ollama 适配；LLM Engine 调用 ModelService，不直接依赖外部 API。
+4. **Step 6.4 / V6.12.0-alpha：Tool Adapter Foundation**
+   - MCP 作为 Tool Adapter 的一种协议，不进入 Runtime Core；ToolEngine 调用 ToolService。
+5. **Runtime Task 模型完善**
    - 将 `RuntimeContext`、`RuntimeTrace`、`RuntimeMetrics`、`RuntimeResult` 进一步封装为 `RuntimeTask` 工厂产物，同时保持 Context 作为唯一 Public Protocol。
-3. **Memory / Prompt 本地私有化预留**
-   - 在 `RuntimeContext` 中预留 `agent_id` / `workspace` 等字段；MemoryEngine / PromptEngine 保持接口，底层先用 SQLite / 本地文件，未来通过 Backend 协议切换。
-4. **暂不实现八大 Engine 真实业务逻辑**
-   - LLM/Tool/Memory 等功能开发应在 Runtime 基础（Event Bus + Capability Registry + Replay + Orchestration + Decision + Task Model）稳固后再进行。
-5. **未来：真正的 Replay Execution**
+6. **未来：真正的 Replay Execution**
    - 待 checkpoint + snapshot + engine sandbox 成熟后，再推进 `replay(task)` 重新执行能力。
-6. **未来：自治 Agent 循环（更远期）**
+7. **未来：自治 Agent 循环（更远期）**
    - 不做 `observe → think → act → repeat` 式的 ReAct 循环；待 Service Architecture 与真实 Adapter 稳定后再评估是否需要多轮决策循环。
 
 ## Test Status
