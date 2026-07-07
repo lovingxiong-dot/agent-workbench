@@ -14,3 +14,4 @@ class WorkflowEngine(BaseEngine):
     """Workflow Engine：负责工作流编排与执行。"""
 
     name = "workflow"
+    capabilities = ["workflow_execution"]

@@ -14,3 +14,4 @@ class MemoryEngine(BaseEngine):
     """Memory Engine：负责记忆管理与检索。"""
 
     name = "memory"
+    capabilities = ["memory_retrieval", "memory_storage"]

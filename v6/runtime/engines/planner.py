@@ -24,6 +24,7 @@ class PlannerEngine(BaseEngine):
     """Planner Engine：负责任务规划与 Engine 编排。"""
 
     name = "planner"
+    capabilities = ["orchestration"]
 
     def __init__(self, manager: Optional["EngineManager"] = None) -> None:
         super().__init__()

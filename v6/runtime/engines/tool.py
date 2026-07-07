@@ -14,3 +14,4 @@ class ToolEngine(BaseEngine):
     """Tool Engine：负责工具调用与编排。"""
 
     name = "tool"
+    capabilities = ["tool_execution"]

@@ -14,3 +14,4 @@ class KnowledgeEngine(BaseEngine):
     """Knowledge Engine：负责知识与检索增强。"""
 
     name = "knowledge"
+    capabilities = ["knowledge_retrieval"]

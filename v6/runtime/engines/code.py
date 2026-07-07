@@ -14,3 +14,4 @@ class CodeEngine(BaseEngine):
     """Code Engine：负责代码生成与执行。"""
 
     name = "code"
+    capabilities = ["code_generation", "code_execution"]

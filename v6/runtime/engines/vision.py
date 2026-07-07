@@ -14,3 +14,4 @@ class VisionEngine(BaseEngine):
     """Vision Engine：负责视觉与多模态处理。"""
 
     name = "vision"
+    capabilities = ["image_understanding"]

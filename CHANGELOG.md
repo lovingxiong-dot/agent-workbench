@@ -46,6 +46,51 @@
 - 每个 `RuntimeEvent` 必须携带 `task_id`，确保 Trace 可按 Task 关联与回放。
 - `EngineManager` 负责 Engine 生命周期；事件总线负责 Engine 间通信；两者职责分离。
 
+## v6.6.1-alpha (2026-07-07) — Engine Capability Registry
+
+> **里程碑语义**：Runtime 进入"按能力选择 Engine"阶段。
+> `EngineManager` 继续负责生命周期；`CapabilityRegistry` 负责按需求匹配与选择 Engine。
+
+### Added
+- 新增 `v6/runtime/capability_registry.py`：
+  - `CapabilityQuery`：能力查询条件，支持 `capability` / `priority` / `streaming` / `metadata`。
+  - `EngineMatch`：匹配结果，包含名称、得分与描述符。
+  - `CapabilityRegistry`：按能力注册、查询、排序和选择 Engine。
+- 为八大 Engine 声明 `capabilities`：
+  - `llm`：`text_generation`
+  - `tool`：`tool_execution`
+  - `memory`：`memory_retrieval`, `memory_storage`
+  - `planner`：`orchestration`
+  - `workflow`：`workflow_execution`
+  - `code`：`code_generation`, `code_execution`
+  - `vision`：`image_understanding`
+  - `knowledge`：`knowledge_retrieval`
+- 升级 `v6/runtime/engine_manager.py`：
+  - 构造函数支持 `capability_registry` 参数；默认自建。
+  - `register()` 自动将 EngineDescriptor 同步到 CapabilityRegistry。
+  - 新增 `capabilities()` / `find_engines(query)` / `select_engine(query)` 方法。
+  - `unregister()` / `clear()` 同步清理 CapabilityRegistry。
+
+### test
+- 新增 `tests/v6/test_v6_capability_registry.py` 共 13 个测试，覆盖：
+  - 能力列表聚合。
+  - 按能力名称查询。
+  - 匹配结果排序。
+  - 最佳候选选择。
+  - dict 查询条件转换。
+  - metadata 过滤。
+  - EngineManager 与 Registry 集成。
+
+### Architecture
+- 明确职责分离：
+  - `EngineManager` = Engine 生命周期管理。
+  - `CapabilityRegistry` = Engine 能力发现与选择。
+- 调用方式升级：
+  ```
+  旧：manager.execute("llm")
+  新：manager.execute(manager.select_engine({"capability": "text_generation"}))
+  ```
+
 ## v6.0.0-alpha (2026-07-07) — V6 独立 Runtime 架构线公开立项
 
 ### declaration

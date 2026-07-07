@@ -12,8 +12,9 @@
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
 
+from v6.runtime.capability_registry import CapabilityQuery, CapabilityRegistry
 from v6.runtime.context import RuntimeContext
 from v6.runtime.engine_state import EngineState
 from v6.runtime.engines.protocol import Engine, EngineDescriptor, EngineNotReadyError
@@ -36,12 +37,14 @@ class EngineManager:
         self,
         trace: Optional[RuntimeTrace] = None,
         event_bus: Optional["EventBus"] = None,
+        capability_registry: Optional[CapabilityRegistry] = None,
     ) -> None:
         self._engines: Dict[str, Engine] = {}
         self._descriptors: Dict[str, EngineDescriptor] = {}
         self._states: Dict[str, EngineState] = {}
         self._trace: Optional[RuntimeTrace] = trace
         self._event_bus: Optional["EventBus"] = event_bus
+        self._capability_registry: CapabilityRegistry = capability_registry or CapabilityRegistry()
 
     def set_trace(self, trace: Optional[RuntimeTrace]) -> None:
         """设置用于记录 Engine 执行轨迹的 RuntimeTrace。"""
@@ -68,12 +71,16 @@ class EngineManager:
     def register(self, engine: Engine) -> None:
         """注册一个 Engine 实例。"""
         name = engine.name
-        self._engines[name] = engine
-        self._descriptors[name] = EngineDescriptor(
+        caps = getattr(engine, "capabilities", []) or []
+        descriptor = EngineDescriptor(
             name=name,
+            capabilities=list(caps),
             instance=engine,
         )
+        self._engines[name] = engine
+        self._descriptors[name] = descriptor
         self._states[name] = EngineState.CREATED
+        self._capability_registry.register(descriptor)
         self._wire_event_bus(engine)
 
     def get(self, name: str) -> Optional[Engine]:
@@ -87,6 +94,32 @@ class EngineManager:
     def names(self) -> List[str]:
         """返回所有已注册 Engine 名称。"""
         return list(self._engines.keys())
+
+    def descriptors(self) -> Dict[str, EngineDescriptor]:
+        """返回所有 EngineDescriptor 快照。"""
+        return dict(self._descriptors)
+
+    def capabilities(self) -> List[str]:
+        """返回所有已注册 Engine 提供的能力列表。"""
+        return self._capability_registry.capabilities()
+
+    def find_engines(
+        self,
+        query: Union[CapabilityQuery, Dict[str, Any]],
+    ) -> List[str]:
+        """按能力需求返回匹配 Engine 名称列表（按匹配得分降序）。"""
+        if isinstance(query, dict):
+            query = CapabilityQuery.from_dict(query)
+        return [match.name for match in self._capability_registry.find(query)]
+
+    def select_engine(
+        self,
+        query: Union[CapabilityQuery, Dict[str, Any]],
+    ) -> Optional[str]:
+        """按能力需求选择最佳 Engine 名称；无匹配返回 None。"""
+        if isinstance(query, dict):
+            query = CapabilityQuery.from_dict(query)
+        return self._capability_registry.select(query)
 
     def descriptor(self, name: str) -> Optional[EngineDescriptor]:
         """返回 Engine 描述符。"""
@@ -106,6 +139,7 @@ class EngineManager:
             del self._engines[name]
             del self._descriptors[name]
             del self._states[name]
+            self._capability_registry.unregister(name)
             return True
         return False
 
@@ -114,6 +148,7 @@ class EngineManager:
         self._engines.clear()
         self._descriptors.clear()
         self._states.clear()
+        self._capability_registry.clear()
 
     # ─────────────────────────────────────────────────────────
     # 生命周期

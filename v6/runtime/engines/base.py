@@ -9,7 +9,7 @@
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from v6.runtime.context import RuntimeContext
 from v6.runtime.engine_state import EngineState
@@ -29,6 +29,7 @@ class BaseEngine:
     """
 
     name: str = "base"
+    capabilities: List[str] = []
 
     def __init__(self) -> None:
         self._state = EngineState.CREATED

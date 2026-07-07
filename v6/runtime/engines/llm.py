@@ -14,3 +14,4 @@ class LLMEngine(BaseEngine):
     """LLM Engine：负责大语言模型调用。"""
 
     name = "llm"
+    capabilities = ["text_generation"]
