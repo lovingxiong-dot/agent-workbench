@@ -32,8 +32,21 @@ class RuntimeStateMachine:
     """
 
     _transitions: Dict[RuntimeState, Set[RuntimeState]] = {
-        RuntimeState.CREATED: {RuntimeState.QUEUED, RuntimeState.CANCELLED},
-        RuntimeState.QUEUED: {RuntimeState.RUNNING, RuntimeState.CANCELLED},
+        RuntimeState.CREATED: {RuntimeState.QUEUED, RuntimeState.PLANNING, RuntimeState.CANCELLED},
+        RuntimeState.QUEUED: {RuntimeState.PLANNING, RuntimeState.RUNNING, RuntimeState.CANCELLED},
+        RuntimeState.PLANNING: {
+            RuntimeState.EXECUTING,
+            RuntimeState.WAITING,
+            RuntimeState.CANCELLED,
+            RuntimeState.FAILED,
+        },
+        RuntimeState.EXECUTING: {
+            RuntimeState.WAITING,
+            RuntimeState.PAUSED,
+            RuntimeState.CANCELLED,
+            RuntimeState.COMPLETED,
+            RuntimeState.FAILED,
+        },
         RuntimeState.RUNNING: {
             RuntimeState.WAITING,
             RuntimeState.PAUSED,
@@ -43,10 +56,11 @@ class RuntimeStateMachine:
         },
         RuntimeState.WAITING: {
             RuntimeState.RUNNING,
+            RuntimeState.EXECUTING,
             RuntimeState.CANCELLED,
             RuntimeState.FAILED,
         },
-        RuntimeState.PAUSED: {RuntimeState.RUNNING, RuntimeState.CANCELLED},
+        RuntimeState.PAUSED: {RuntimeState.RUNNING, RuntimeState.EXECUTING, RuntimeState.CANCELLED},
         RuntimeState.FAILED: {RuntimeState.QUEUED},  # retry：重新回到队列
         RuntimeState.CANCELLED: set(),  # 终态
         RuntimeState.COMPLETED: set(),  # 终态

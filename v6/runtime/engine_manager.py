@@ -228,10 +228,11 @@ class EngineManager:
         engine = self._get_or_raise(name)
         self._ensure_state(name, {EngineState.READY, EngineState.RUNNING})
         self._transition(name, EngineState.RUNNING)
+        trace = self._trace if self._trace is not None else ctx.trace
         try:
             request_type = type(ctx.request).__name__ if ctx.request is not None else "None"
-            if self._trace is not None:
-                with self._trace.timed_step(
+            if trace is not None:
+                with trace.timed_step(
                     node=f"engine:{name}",
                     action=TraceEvent.ENGINE_START,
                     payload={"request_type": request_type},

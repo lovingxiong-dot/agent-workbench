@@ -77,6 +77,8 @@ class RuntimeState(str, Enum):
 
     CREATED = "created"
     QUEUED = "queued"
+    PLANNING = "planning"
+    EXECUTING = "executing"
     RUNNING = "running"
     WAITING = "waiting"
     PAUSED = "paused"

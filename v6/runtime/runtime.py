@@ -17,6 +17,7 @@ from v6.runtime.context import RuntimeContext
 from v6.runtime.engine_manager import EngineManager
 from v6.runtime.enums import RuntimePhase, RuntimeState, TraceEvent
 from v6.runtime.event_bus import EventBus, RuntimeEvent
+from v6.runtime.orchestrator import Orchestrator
 from v6.runtime.scheduler import Scheduler
 from v6.runtime.task import Task
 
@@ -32,6 +33,7 @@ class AgentRuntime:
         event_bus: EventBus | None = None,
         scheduler: Scheduler | None = None,
         engine_manager: EngineManager | None = None,
+        orchestrator: Orchestrator | None = None,
     ) -> None:
         self._event_bus = event_bus or EventBus()
         self._scheduler = scheduler or Scheduler(executor=self._execute)
@@ -41,6 +43,10 @@ class AgentRuntime:
             pass
         elif self._engine_manager:
             self._engine_manager.set_event_bus(self._event_bus)
+        self._orchestrator = orchestrator or Orchestrator(
+            event_bus=self._event_bus,
+            engine_manager=self._engine_manager,
+        )
         self._handlers: dict[str, Handler] = {}
         self._contexts: dict[str, RuntimeContext] = {}
         self._running = False
@@ -56,6 +62,10 @@ class AgentRuntime:
     @property
     def engine_manager(self) -> EngineManager:
         return self._engine_manager
+
+    @property
+    def orchestrator(self) -> Orchestrator:
+        return self._orchestrator
 
     @property
     def running(self) -> bool:
@@ -83,6 +93,14 @@ class AgentRuntime:
         return self._scheduler.submit(task)
 
     submit_task = submit  # SPEC 接口别名
+
+    def orchestrate(self, task: Task) -> str:
+        """通过 Orchestrator 提交任务；驱动 Task Lifecycle State Machine。
+
+        当前为 Foundation 阶段：线性推进 CREATED -> PLANNING -> EXECUTING -> COMPLETED，
+        不做自治循环，不接真实 LLM。
+        """
+        return self._orchestrator.submit(task)
 
     def cancel(self, task_id: str) -> bool:
         """取消指定任务。"""

@@ -147,6 +147,61 @@
         +------> Timeline / Export / View
   ```
 
+## v6.7.0-alpha (2026-07-07) — Runtime Orchestration Foundation
+
+> **里程碑语义**：V6 Runtime 进入编排层。
+> 本版本建立 **Orchestrator** 层与 **Task Lifecycle State Machine**，让 Runtime 从"调用者驱动 execute"升级为"Runtime 接收 Task 后自主推进生命周期"。
+> 当前为 Foundation 阶段：不接真实 LLM，不做自治循环，只做线性状态推进。
+
+### Added
+- 扩展 `v6/runtime/enums.py` 的 `RuntimeState`：新增 `PLANNING` 与 `EXECUTING` 状态。
+- 扩展 `v6/runtime/state_machine.py`：
+  - 支持 `CREATED -> PLANNING -> EXECUTING -> COMPLETED/FAILED` 生命周期。
+  - 保留原有 `RUNNING` 兼容路径。
+  - 终态（`COMPLETED` / `CANCELLED`）无出边。
+- 新增 `v6/runtime/orchestrator.py`：
+  - `Orchestrator` 位于 AgentRuntime 与 EngineManager/CapabilityRegistry/EventBus/Trace 之间。
+  - 维护每个 Task 的当前生命周期状态。
+  - 通过 EventBus 订阅/发布任务事件驱动流程。
+  - 使用 CapabilityRegistry 选择 Engine（如 `text_generation` -> `llm`）。
+  - 不直接访问 Trace；Trace 由 EventBus Trace Hook 自动记录。
+- 升级 `v6/runtime/runtime.py`：
+  - `AgentRuntime` 默认创建并持有 `Orchestrator`。
+  - 新增 `orchestrator` 属性。
+  - 新增 `orchestrate(task)` 方法，通过 Orchestrator 提交任务。
+
+### Design
+- 明确 `Planner` 不是 Runtime 大脑：
+  - `Orchestrator` 负责任务编排与生命周期。
+  - `Planner` 只是 Orchestrator 可调度的一种决策能力（未来可替换为 Rule Planner / Workflow Planner / Human Approval Planner）。
+- 明确第一阶段边界：
+  - 不做 LLM 决策。
+  - 不做自治循环（Observe → Reason → Plan → Act → Evaluate → Repeat）。
+  - 只做线性 Task Lifecycle + EventBus 驱动 + Capability-based Engine 选择。
+
+### test
+- 新增 `tests/v6/test_v6_orchestrator.py` 共 7 个测试，覆盖：
+  - Task 经历 `CREATED -> PLANNING -> EXECUTING -> COMPLETED`。
+  - Orchestrator 通过 EventBus 发布任务事件。
+  - 非法状态迁移返回 False。
+  - Capability Registry 选择 Engine。
+  - Orchestrator 不直接写 Trace。
+
+### Architecture
+- Runtime 核心层次成型：
+  ```
+  AgentRuntime
+        |
+        v
+  Orchestrator
+        |
+        +---- EngineManager (lifecycle)
+        +---- CapabilityRegistry (selection)
+        +---- EventBus (communication)
+        +---- RuntimeTrace (observation)
+        +---- ReplayService (replay)
+  ```
+
 ## v6.0.0-alpha (2026-07-07) — V6 独立 Runtime 架构线公开立项
 
 ### declaration
