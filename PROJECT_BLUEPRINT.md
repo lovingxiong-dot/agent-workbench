@@ -5,30 +5,36 @@
 
 ## Current Development Authority
 
-> **The active development line is `v6-dev` at version `v6.8.0-alpha`.**
+> **The active development line is `v6-service` based on `v6.8.0-alpha` (V6 Framework Core Foundation Baseline).**
 > **Public baseline: `v6.0.0-alpha`.**
+> **Framework Core baseline: `v6.8.0-alpha`.**
 
 | Item | Value |
 |---|---|
-| Active branch | `v6-dev` |
-| Current development version | `v6.8.0-alpha` |
+| Active branch | `v6-service` |
+| Framework Core baseline | `v6.8.0-alpha` |
+| Frozen foundation branch | `v6-core` |
+| Future application branch | `v6-agent` |
 | Public baseline | `v6.0.0-alpha` |
 | Internal migration checkpoint | `v6.5.8-alpha` (historical, not public) |
 | Frozen archive | `v5-dev` |
-| Rule | Do not modify `v5-dev`. All new work goes to `v6-dev`. |
+| Rule | Do not modify `v5-dev`. Framework Core (`v6-core`) only accepts bug fixes. All new Service work goes to `v6-service`; Agent work goes to `v6-agent`. |
 
 See also [`PROJECT_LINEAGE.md`](./PROJECT_LINEAGE.md) for the complete V5 / V6 identity map.
 
-## V6 全新主线声明
+## V6 Framework Core Foundation Baseline
 
-> **V6.0.0-alpha marks the beginning of the independent V6 Runtime architecture line.**
+> **`v6.8.0-alpha` is the V6 Framework Core Foundation Baseline** — a shared, frozen core for the V6 Runtime platform, not a regular feature release or archive.
 
-- **本分支 `v6-dev` 是 AI Agent Workbench 的当前唯一活跃开发主线**。
+- **`v6-dev`** 承载 V6 Framework Core Foundation 的演进历史，并在 `v6.8.0-alpha` 处作为三条垂直支线的公共祖先。
+- **`v6-core`** 从 `v6.8.0-alpha` 切出，冻结 Framework Core（RuntimeContext、Engine Protocol、EventBus、CapabilityRegistry、Trace、Replay、Orchestrator、PlannerLoop），只接受 bug fix。
+- **`v6-service`** 从 `v6.8.0-alpha` 切出，是当前活跃开发分支，负责 Runtime Service Architecture（Memory / Prompt / Model Adapter / Tool Adapter / Knowledge Adapter）。
+- **`v6-agent`** 从 `v6.8.0-alpha` 切出，负责 Agent Application（Coding / Research / Trading / Desktop / Workflow 等具体 Agent 类型、Persona、Policy、Workflow、UI）。
 - V6 为从零重写的 Agent Runtime 平台，与 V5、V4 在代码层面完全隔离，仅在经验和设计思路上提取可复用部分。
 - **`v6.0.0-alpha` 是 V6 独立产品线的公开立项标签**，代表 V6 作为第二代独立架构线正式对外发布。
 - **`v6.5.8-alpha` 保留为内部迁移标签**，记录 Step 4 在 `v5-dev` 上的最终技术成果；它不参与 V6 产品线后续版本演进，仅作为历史追溯参考。
-- **`v5-dev` 已冻结归档**：`v6.5.8-alpha`（Step 4）为 `v5-dev` 上最后一个 V6 相关提交；自此之后，所有 V6 演进在 `v6-dev` / `v6` 分支上进行。
-- **禁止反向合并**：不允许将 V5 / V4 代码合并入 V6 主线；V6 如需兼容旧能力，必须通过 Adapter 或重新实现。
+- **`v5-dev` 已冻结归档**：`v6.5.8-alpha`（Step 4）为 `v5-dev` 上最后一个 V6 相关提交。
+- **禁止反向合并**：不允许将 V5 / V4 / `v6-agent` 代码合并入 `v6-core`；`v6-core` 的修复向下合并到 `v6-service`，`v6-service` 的能力向下合并到 `v6-agent`。
 - **版本号规则**：V6 版本号独立演进，格式为 `v6.x.y-alpha`，与 V5 的 `v5.x.y-alpha` 互不干扰。
 - **设计铁律**：
   1. `RuntimeContext` 是 Runtime 唯一公共协议（Public Runtime Protocol）。
@@ -57,6 +63,17 @@ v6-dev
 | `v6-core` | Framework Core Foundation | 只修 bug，不增加功能；冻结 RuntimeContext、Engine Protocol、EventBus、CapabilityRegistry、Trace、Replay、Orchestrator、PlannerLoop。 |
 | `v6-service` | Runtime Service Architecture | Memory、Prompt、Model Adapter、Tool Adapter、Knowledge Adapter 等能力层。 |
 | `v6-agent` | Agent Application | Coding / Research / Trading / Desktop / Workflow 等具体 Agent 类型、Persona、Policy、Workflow、UI。 |
+
+**合并方向（强制单向）**：
+
+```
+v6-core  ──merge──►  v6-service  ──merge──►  v6-agent
+```
+
+- `v6-core` 的 bug fix 可以向下合并到 `v6-service` 和 `v6-agent`。
+- `v6-service` 的能力可以向下合并到 `v6-agent`。
+- **禁止反向合并**：`v6-agent`、`v6-service` 不得反向合并入 `v6-core`；`v6-agent` 不得反向合并入 `v6-service`。
+- 目的：防止业务功能、Adapter 依赖、产品化代码污染 Framework Core。
 
 当前活跃开发分支为 `v6-service`，基于 `v6.8.0-alpha` 继续演进。
 

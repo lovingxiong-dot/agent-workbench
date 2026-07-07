@@ -23,7 +23,7 @@ schema_version: 3.1
 See [`PROJECT_LINEAGE.md`](../PROJECT_LINEAGE.md) for the full V5 / V6 identity map.
 
 ## Mission
-基于 `v6.8.0-alpha`（V6 Framework Core Foundation）建立 Runtime Service Architecture。当前进入 Step 6.1：Memory Service Foundation，为 V6 Runtime 提供可演进的 Memory 能力接入层。
+基于 `v6.8.0-alpha`（V6 Framework Core Foundation Baseline）在 `v6-service` 分支上建立 Runtime Service Architecture。当前进入 Step 6.1：Memory Service Foundation，为 V6 Runtime 提供可演进的 Memory 能力接入层。
 
 ## V6 Branch Strategy
 
@@ -45,7 +45,17 @@ v6-dev
 |---|---|---|
 | `v6-core` | Framework Core Foundation | 冻结 RuntimeContext、Engine Protocol、EventBus、CapabilityRegistry、Trace、Replay、Orchestrator、PlannerLoop；只修 bug，不增加大功能。 |
 | `v6-service` | Runtime Service Architecture | 基于 Core 扩展 Memory、Prompt、Model Adapter、Tool Adapter、Knowledge Adapter 等能力层。 |
-| `v6-agent` | Agent Application | 基于 Core + Service 构建具体 Agent 类型、Persona、Policy、Workflow、UI 等产品化功能。 |
+| `v6-agent` | Agent Application | 基于 Core + Service 构建具体 Agent 类型、Persona、Policy、Workflow、UI。 |
+
+**合并方向（强制单向）**：
+
+```
+v6-core  ──merge──►  v6-service  ──merge──►  v6-agent
+```
+
+- `v6-core` 的 bug fix 向下合并到 `v6-service` 和 `v6-agent`。
+- `v6-service` 的能力向下合并到 `v6-agent`。
+- **禁止反向合并**：`v6-agent`、`v6-service` 不得反向合并入 `v6-core`；`v6-agent` 不得反向合并入 `v6-service`。
 
 当前活跃分支为 `v6-service`。
 
@@ -150,7 +160,7 @@ EngineManager.execute(name, ctx)
 - [x] Step 5.2 已归档：新增 `CapabilityRegistry`，八大 Engine 声明 capabilities；`EngineManager` 支持按能力选择；标签 `v6.6.1-alpha`。
 - [x] Step 5.3 已归档：新增 `ReplayRecord` / `ReplayLog` / `ReplayService`，Runtime Execution Replay Foundation 落地；标签 `v6.6.2-alpha`。
 - [x] Step 5.4 已归档：新增 `Orchestrator` 与 Task Lifecycle State Machine，AgentRuntime 持有 Orchestrator；标签 `v6.7.0-alpha`。
-- [x] Step 5.5 / V6.8.0-alpha 已归档：新增 `PlannerLoop` / `Decision` / `DecisionPolicy`，Orchestrator 按决策选择 Engine；与前面四层共同构成 **V6 Framework Core Foundation**。
+- [x] Step 5.5 / V6.8.0-alpha **Framework Core Foundation Baseline established**：新增 `PlannerLoop` / `Decision` / `DecisionPolicy`，Orchestrator 按决策选择 Engine；与前面四层共同构成 **V6 Framework Core Foundation**，作为后续 Service / Agent 开发的公共基线。
 - [ ] Step 6.1 / V6.9.0-alpha：Memory Service Foundation（基于 `v6-service` 分支）。
 - [ ] Step 6.2 / V6.10.0-alpha：Prompt Service Foundation。
 - [ ] Step 6.3 / V6.11.0-alpha：Model Adapter Foundation。
@@ -290,8 +300,8 @@ PROJECT_BLUEPRINT.md
 新增 Planner Decision Loop Foundation：Decision 模型、规则决策策略、PlannerLoop、Orchestrator 集成、AgentRuntime 初始化、10 个测试；更新文档与日志。
 
 ### Recent Conversation
-- 用户确认当前方向：V6 已形成 Runtime Kernel 雏形，不建议继续堆功能，应先归档 v6.8.0-alpha。
-- 用户将 v6.8.0-alpha 语义重新定义为 **V6 Framework Core Foundation**（共享核心框架基座），而非普通功能版本。
+- 用户确认当前方向：V6 已形成 Runtime Kernel 雏形，不建议继续堆功能，应先确立 v6.8.0-alpha 为 Framework Core Foundation Baseline。
+- 用户将 v6.8.0-alpha 语义重新定义为 **V6 Framework Core Foundation Baseline**（共享核心框架基座），不是普通功能版本，也不是 archive。
 - 用户明确 `PlannerLoop`（Runtime 决策机制）与 `PlannerEngine`（Engine 能力组件）必须分离。
 - 用户建议从 v6.8.0-alpha 分出三条垂直支线：
   - `v6-core`：冻结 Framework Core，只修 bug。
@@ -324,8 +334,9 @@ PROJECT_BLUEPRINT.md
 - command: `python -m pytest tests/v6/ -q --tb=short`
 
 ## Notes
-- `v6-dev` 已推送至 origin；当前 HEAD 同时承载公开立项标签 `v6.0.0-alpha`，作为 V6 独立产品线的对外起点。
-- `v6.8.0-alpha` 是 **V6 Framework Core Foundation**（共享核心框架基座），不是普通功能版本。它标志着 V6 Runtime 七要素（统一入口、统一协议、统一通信、能力发现、执行追踪、任务编排、调度决策）完整闭环，是后续 Agent / Service / Adapter 开发的长期依赖基线。
+- `v6-service` 是当前活跃开发分支，已推送至 origin；`v6-dev` 作为 Framework Core Foundation 演进历史的母线保留。
+- `v6.8.0-alpha` 是 **V6 Framework Core Foundation Baseline**（共享核心框架基座），不是普通功能版本，也不是 archive。它标志着 V6 Runtime 七要素（统一入口、统一协议、统一通信、能力发现、执行追踪、任务编排、调度决策）完整闭环，是后续 Agent / Service / Adapter 开发的长期依赖基线。
+- 三条垂直支线：`v6-core`（冻结，只修 bug）→ `v6-service`（Runtime Service Architecture）→ `v6-agent`（Agent Application）。合并方向强制单向，禁止反向合并。
 - `v6.5.8-alpha` 保留为内部迁移标签，指向 `v5-dev` 上的 `76c7871`；它记录 Step 4 在旧线上的最终成果，但不参与 V6 产品线后续演进。
-- `v5-dev` 已冻结，其最后一个 V6 相关提交为 `76c7871`。
-- 后续所有 V6 版本号应在 V6 主线上打标签并推送；当前建议下一里程碑为 `v6.9.0-alpha`（Runtime Service Architecture，如 Memory / Prompt / Model Adapter / Tool Adapter / Knowledge Adapter）。
+- `v5-dev` 已冻结归档，其最后一个 V6 相关提交为 `76c7871`。
+- 后续所有 V6 版本号应在各自支线上打标签并推送；当前 `v6-service` 建议下一里程碑为 `v6.9.0-alpha`（Memory Service Foundation）。
