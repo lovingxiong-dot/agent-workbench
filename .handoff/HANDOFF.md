@@ -5,22 +5,24 @@ schema_version: 3.1
 
 ## Current Development Authority
 
-> **The active development line is `v6-dev` at version `v6.8.0-alpha`.**
+> **The active development line is `v6-agent` based on `v6.8.0-alpha` (V6 Framework Core Foundation Baseline).**
 > **Public baseline: `v6.0.0-alpha`.**
 
 | Item | Value |
 |---|---|
-| Active branch | `v6-dev` |
-| Current development version | `v6.8.0-alpha` |
+| Active branch | `v6-agent` |
+| Framework Core baseline | `v6.8.0-alpha` |
+| Frozen foundation branch | `v6-core` |
+| Service extension branch | `v6-service` |
 | Public baseline | `v6.0.0-alpha` |
 | Internal migration checkpoint | `v6.5.8-alpha` (historical, on `v5-dev`) |
 | Frozen archive | `v5-dev` |
-| AI rule | Do not modify `v5-dev`. All new work goes to `v6-dev`. |
+| AI rule | Do not modify `v5-dev`. Framework Core (`v6-core`) only accepts bug fixes. Service work goes to `v6-service`. Agent work goes to `v6-agent`. |
 
 See [`PROJECT_LINEAGE.md`](../PROJECT_LINEAGE.md) for the full V5 / V6 identity map.
 
 ## Mission
-完成 V6.8.0-alpha：建立 V6 Framework Core Foundation（共享核心框架基座）。该版本是 V6 Runtime 第一个完整闭环版本，包含统一入口、统一协议、统一通信、能力发现、执行追踪、任务编排、调度决策七要素。当前作为后续 Agent / Service / Adapter 开发的基础版本，不接真实 LLM，不做自治循环。
+基于 `v6.8.0-alpha`（V6 Framework Core Foundation Baseline）在 `v6-agent` 分支上执行 **V6.8.0-alpha Baseline Validation**：构建一个最小真实 Agent 产品实例 `demo_agent/`，验证 Framework Core 能否承载完整端到端链路（Desktop UI → UIController → RuntimeAdapter → AgentRuntime → Orchestrator → PlannerLoop → Engine → Trace/Replay）。目标不是扩展 Runtime 能力，而是证明基座可用。
 
 ## Current Architecture State
 
@@ -103,6 +105,32 @@ CapabilityRegistry
 EngineManager.execute(name, ctx)
 ```
 
+## V6 Branch Strategy
+
+`v6.8.0-alpha` 起，V6 拆为三条垂直支线：
+
+```
+v6-dev
+  |
+  v6.8.0-alpha  ← Framework Core Foundation Baseline
+      |
+      +---- v6-core   (Runtime Kernel — bug fixes only)
+      |
+      +---- v6-service (Runtime Service Architecture)
+      |
+      +---- v6-agent   (Agent Application — current active)
+```
+
+**合并方向（强制单向）**：
+
+```
+v6-core  ──merge──►  v6-service  ──merge──►  v6-agent
+```
+
+- `v6-core` 的 bug fix 向下合并到 `v6-service` 和 `v6-agent`。
+- `v6-service` 的能力向下合并到 `v6-agent`。
+- **禁止反向合并**：`v6-agent`、`v6-service` 不得反向合并入 `v6-core`；`v6-agent` 不得反向合并入 `v6-service`。
+
 ### Guarantees
 - Engine 不直接访问 `RuntimeTrace`；生命周期事件通过 `RuntimeEventBus` 路由。
 - Engine 间通信使用标准 `RuntimeEvent`，禁止直接互相调用。
@@ -123,8 +151,8 @@ EngineManager.execute(name, ctx)
 - [x] Step 5.2 已归档：新增 `CapabilityRegistry`，八大 Engine 声明 capabilities；`EngineManager` 支持按能力选择；标签 `v6.6.1-alpha`。
 - [x] Step 5.3 已归档：新增 `ReplayRecord` / `ReplayLog` / `ReplayService`，Runtime Execution Replay Foundation 落地；标签 `v6.6.2-alpha`。
 - [x] Step 5.4 已归档：新增 `Orchestrator` 与 Task Lifecycle State Machine，AgentRuntime 持有 Orchestrator；标签 `v6.7.0-alpha`。
-- [x] Step 5.5 已归档：新增 `PlannerLoop` / `Decision` / `DecisionPolicy`，Orchestrator 按决策选择 Engine；与前面四层共同构成 V6 Framework Core Foundation；标签 `v6.8.0-alpha`。
-- [ ] Step 6 / V6.9+：Runtime Service Architecture（Memory / Prompt / Model Adapter / Tool Adapter / Knowledge Adapter 等真实世界能力接入层）。
+- [x] Step 5.5 / V6.8.0-alpha **Framework Core Foundation Baseline established**：新增 `PlannerLoop` / `Decision` / `DecisionPolicy`，Orchestrator 按决策选择 Engine；与前面四层共同构成 V6 Framework Core Foundation，作为后续 Service / Agent 开发的公共基线；标签 `v6.8.0-alpha`。
+- [ ] **V6.8.0-alpha Baseline Validation**（基于 `v6-agent` 分支）：构建最小真实 Agent 产品实例 `demo_agent/`，验证 Framework Core 端到端可用性。通过后再进入 `v6-service` 的 Memory / Prompt / Model Adapter 等扩展。
 
 ## Step 5.5 / V6.8.0-alpha Details
 - [x] 新增 `v6/runtime/decision.py`：定义 `DecisionAction` 枚举与 `Decision` 数据类，含工厂方法 `execute()` / `complete()` / `fail()` / `wait()`。
@@ -267,19 +295,36 @@ PROJECT_BLUEPRINT.md
 - 用户建议下一步进入 Step 6 Runtime Service Architecture（Memory / Prompt / Model Adapter / Tool Adapter / Knowledge Adapter），而非自治循环。
 
 ## Next Steps (AI-Inferred)
-1. **Step 6 / V6.9：Runtime Service Architecture**（当前最高优先级）
+1. **V6.8.0-alpha Baseline Validation**（当前最高优先级，基于 `v6-agent` 分支）
+   - 目标：用最小真实 Agent 产品实例 `demo_agent/` 验证 Framework Core 能否承载完整端到端链路。
+   - 结构：
+     ```
+     demo_agent/
+     ├── ui/              # Desktop UI（Agent 产品层，非 Runtime Core）
+     ├── app.py           # 应用入口
+     ├── controller.py    # UIController
+     ├── adapter.py       # RuntimeAdapter（Application Boundary）
+     ├── config/          # agent 配置、prompt 工程、memory 工程
+     └── tests/           # 端到端冒烟测试
+     ```
+   - 验证项：
+     - 单 Agent 生命周期（submit → planning → executing → completed/failed）。
+     - GUI 调用链（Desktop UI → UIController → RuntimeAdapter → AgentRuntime）。
+     - LLM Engine 调用（占位或真实 OpenAI adapter，不污染 Core）。
+     - Tool Engine 调用。
+     - Trace 记录与 Replay 查看。
+     - 配置加载。
+     - 打包启动（PyInstaller）。
+   - 不进入：用户权限系统、动态 UI Builder、MCP、Admin Panel、Memory Service、Prompt Service；这些属于后续 `v6-service` 或更远期 `v6-agent` 产品化工作。
+2. **Step 6 / V6.9+：Runtime Service Architecture**（Baseline Validation 通过后，回到 `v6-service` 分支）
    - 目标：为 Runtime Kernel 接入真实世界能力层。
    - 候选服务：Memory Service、Prompt Service、Model Adapter、Tool Adapter、Knowledge Adapter。
    - 原则：Service 属于 Runtime 能力接入层，不是 Engine 业务逻辑；保持 `RuntimeContext` 作为唯一 Public Protocol。
-2. **Runtime Task 模型完善**
+3. **Runtime Task 模型完善**
    - 将 `RuntimeContext`、`RuntimeTrace`、`RuntimeMetrics`、`RuntimeResult` 进一步封装为 `RuntimeTask` 工厂产物，同时保持 Context 作为唯一 Public Protocol。
-3. **Memory / Prompt 本地私有化预留**
-   - 在 `RuntimeContext` 中预留 `agent_id` / `workspace` 等字段；MemoryEngine / PromptEngine 保持接口，底层先用 SQLite / 本地文件，未来通过 Backend 协议切换。
-4. **暂不实现八大 Engine 真实业务逻辑**
-   - LLM/Tool/Memory 等功能开发应在 Runtime 基础（Event Bus + Capability Registry + Replay + Orchestration + Decision + Task Model）稳固后再进行。
-5. **未来：真正的 Replay Execution**
+4. **未来：真正的 Replay Execution**
    - 待 checkpoint + snapshot + engine sandbox 成熟后，再推进 `replay(task)` 重新执行能力。
-6. **未来：自治 Agent 循环（更远期）**
+5. **未来：自治 Agent 循环（更远期）**
    - 不做 `observe → think → act → repeat` 式的 ReAct 循环；待 Service Architecture 与真实 Adapter 稳定后再评估是否需要多轮决策循环。
 
 ## Test Status
@@ -287,8 +332,9 @@ PROJECT_BLUEPRINT.md
 - command: `python -m pytest tests/v6/ -q --tb=short`
 
 ## Notes
-- `v6-dev` 已推送至 origin；当前 HEAD 同时承载公开立项标签 `v6.0.0-alpha`，作为 V6 独立产品线的对外起点。
-- `v6.8.0-alpha` 是 **V6 Framework Core Foundation**（共享核心框架基座），不是普通功能版本。它标志着 V6 Runtime 七要素（统一入口、统一协议、统一通信、能力发现、执行追踪、任务编排、调度决策）完整闭环，是后续 Agent / Service / Adapter 开发的长期依赖基线。
+- `v6-agent` 是当前活跃开发分支，已推送至 origin；`v6-dev` 作为 Framework Core Foundation 演进历史的母线保留。
+- `v6.8.0-alpha` 是 **V6 Framework Core Foundation Baseline**（共享核心框架基座），不是普通功能版本，也不是 archive。它标志着 V6 Runtime 七要素（统一入口、统一协议、统一通信、能力发现、执行追踪、任务编排、调度决策）完整闭环，是后续 Agent / Service / Adapter 开发的长期依赖基线。
+- 三条垂直支线：`v6-core`（冻结，只修 bug）→ `v6-service`（Runtime Service Architecture）→ `v6-agent`（Agent Application）。合并方向强制单向，禁止反向合并。
 - `v6.5.8-alpha` 保留为内部迁移标签，指向 `v5-dev` 上的 `76c7871`；它记录 Step 4 在旧线上的最终成果，但不参与 V6 产品线后续演进。
-- `v5-dev` 已冻结，其最后一个 V6 相关提交为 `76c7871`。
-- 后续所有 V6 版本号应在 V6 主线上打标签并推送；当前建议下一里程碑为 `v6.9.0-alpha`（Runtime Service Architecture，如 Memory / Prompt / Model Adapter / Tool Adapter / Knowledge Adapter）。
+- `v5-dev` 已冻结归档，其最后一个 V6 相关提交为 `76c7871`。
+- 当前任务：在 `v6-agent` 上完成 **V6.8.0-alpha Baseline Validation**，通过后再回到 `v6-service` 推进 Memory / Prompt / Model Adapter 等扩展。
