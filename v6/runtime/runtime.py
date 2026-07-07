@@ -18,6 +18,7 @@ from v6.runtime.engine_manager import EngineManager
 from v6.runtime.enums import RuntimePhase, RuntimeState, TraceEvent
 from v6.runtime.event_bus import EventBus, RuntimeEvent
 from v6.runtime.orchestrator import Orchestrator
+from v6.runtime.planner_loop import PlannerLoop
 from v6.runtime.scheduler import Scheduler
 from v6.runtime.task import Task
 
@@ -34,6 +35,7 @@ class AgentRuntime:
         scheduler: Scheduler | None = None,
         engine_manager: EngineManager | None = None,
         orchestrator: Orchestrator | None = None,
+        planner_loop: PlannerLoop | None = None,
     ) -> None:
         self._event_bus = event_bus or EventBus()
         self._scheduler = scheduler or Scheduler(executor=self._execute)
@@ -43,9 +45,20 @@ class AgentRuntime:
             pass
         elif self._engine_manager:
             self._engine_manager.set_event_bus(self._event_bus)
+
+        self._planner_loop = planner_loop
+        if self._planner_loop is None:
+            from v6.runtime.decision_policy import RuleBasedDecisionPolicy
+
+            self._planner_loop = PlannerLoop(
+                policy=RuleBasedDecisionPolicy(),
+                registry=self._engine_manager.capability_registry,
+                event_bus=self._event_bus,
+            )
         self._orchestrator = orchestrator or Orchestrator(
             event_bus=self._event_bus,
             engine_manager=self._engine_manager,
+            planner_loop=self._planner_loop,
         )
         self._handlers: dict[str, Handler] = {}
         self._contexts: dict[str, RuntimeContext] = {}
@@ -66,6 +79,10 @@ class AgentRuntime:
     @property
     def orchestrator(self) -> Orchestrator:
         return self._orchestrator
+
+    @property
+    def planner_loop(self) -> PlannerLoop:
+        return self._planner_loop
 
     @property
     def running(self) -> bool:

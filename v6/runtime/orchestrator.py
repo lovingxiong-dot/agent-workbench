@@ -17,14 +17,17 @@ import traceback
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from v6.runtime.context import RuntimeContext
+from v6.runtime.decision import Decision, DecisionAction
 from v6.runtime.enums import RuntimeState
 from v6.runtime.event_bus import RuntimeEvent, RuntimeEventType
 from v6.runtime.state_machine import RuntimeStateMachine, RuntimeStateTransitionError
-from v6.runtime.task import Task
+from v6.runtime.task import ChatTask, Task
+from v6.runtime.types import ChatMessage
 
 if TYPE_CHECKING:
     from v6.runtime.engine_manager import EngineManager
     from v6.runtime.event_bus import EventBus
+    from v6.runtime.planner_loop import PlannerLoop
 
 
 class Orchestrator:
@@ -44,9 +47,11 @@ class Orchestrator:
         self,
         event_bus: Optional["EventBus"] = None,
         engine_manager: Optional["EngineManager"] = None,
+        planner_loop: Optional["PlannerLoop"] = None,
     ) -> None:
         self._event_bus = event_bus
         self._engine_manager = engine_manager
+        self._planner_loop = planner_loop
         self._state_machine = RuntimeStateMachine()
         self._task_states: Dict[str, RuntimeState] = {}
         self._contexts: Dict[str, RuntimeContext] = {}
@@ -109,6 +114,10 @@ class Orchestrator:
     def _on_task_started(self, event: RuntimeEvent) -> None:
         """Task 启动事件：进入 PLANNING 阶段。"""
         task_id = event.task_id
+        current = self.state(task_id)
+        if current != RuntimeState.CREATED:
+            return
+
         if not self.transition(task_id, RuntimeState.PLANNING):
             return
 
@@ -128,7 +137,7 @@ class Orchestrator:
         self._execute_task(task_id)
 
     def _execute_task(self, task_id: str) -> None:
-        """将任务从 PLANNING 推进到 EXECUTING 并尝试执行 Engine。"""
+        """将任务从 PLANNING 推进到 EXECUTING，并根据 PlannerLoop 的 Decision 执行。"""
         if not self.transition(task_id, RuntimeState.EXECUTING):
             return
 
@@ -136,39 +145,66 @@ class Orchestrator:
         if ctx is None:
             return
 
-        # Foundation 阶段：默认使用 text_generation 能力选择 Engine。
-        engine_name: Optional[str] = None
-        if self._engine_manager is not None:
-            try:
-                engine_name = self._engine_manager.select_engine({"capability": "text_generation"})
-            except Exception:  # pragma: no cover - defensive
-                traceback.print_exc()
-
-        if engine_name is None:
-            # 无可用 Engine 时直接完成任务。
-            self._complete_task(task_id, {"message": "no engine matched"})
+        # Foundation 降级：无 EngineManager 时直接完成任务，避免决策失败。
+        if self._engine_manager is None:
+            self._complete_task(task_id, {"reason": "no engine manager in foundation mode"})
             return
 
+        # Foundation 阶段：通过 PlannerLoop 做决策，而非硬编码能力选择。
+        decision = self._make_decision(ctx)
+
+        if decision.action == DecisionAction.FAIL:
+            self._fail_task(task_id, {"reason": decision.reason, "decision": decision.to_dict()})
+            return
+
+        if decision.action == DecisionAction.COMPLETE:
+            self._complete_task(task_id, {"reason": decision.reason, "decision": decision.to_dict()})
+            return
+
+        if decision.action == DecisionAction.WAIT:
+            # Foundation 阶段不实现 WAIT 后续处理，直接完成。
+            self._complete_task(task_id, {"reason": "wait not implemented in foundation", "decision": decision.to_dict()})
+            return
+
+        if decision.action != DecisionAction.EXECUTE_ENGINE or not decision.target:
+            self._fail_task(task_id, {"reason": "invalid decision", "decision": decision.to_dict()})
+            return
+
+        engine_name = decision.target
         self._publish(
             RuntimeEventType.ENGINE_STARTED,
-            {"engine": engine_name, "task_id": task_id},
+            {"engine": engine_name, "task_id": task_id, "decision": decision.to_dict()},
             task_id=task_id,
             source="orchestrator",
         )
 
         try:
-            if self._engine_manager is not None:
-                ctx.request = {"prompt": ctx.messages[-1].content if ctx.messages else ""}
-                self._engine_manager.initialize_all(ctx)
-                result = self._engine_manager.execute(engine_name, ctx)
-                # execute 成功后会由 Engine 发布 engine.completed，Orchestrator 在该事件里推进状态。
-                # 这里把结果放入 ctx.result 供后续使用。
-                if result is not None and hasattr(result, "status"):
-                    ctx.result.status = result.status
-            else:
-                self._complete_task(task_id, {"message": "no engine manager"})
+            ctx.request = {"prompt": ctx.messages[-1].content if ctx.messages else ""}
+            self._engine_manager.initialize_all(ctx)
+            result = self._engine_manager.execute(engine_name, ctx)
+            # execute 成功后会由 Engine 发布 engine.completed，Orchestrator 在该事件里推进状态。
+            if result is not None and hasattr(result, "status"):
+                ctx.result.status = result.status
         except Exception as exc:  # pragma: no cover - defensive
             self._fail_task(task_id, {"error": str(exc)})
+
+    def _make_decision(self, ctx: RuntimeContext) -> Decision:
+        """通过 PlannerLoop 或回退策略生成 Decision。"""
+        if self._planner_loop is not None:
+            return self._planner_loop.plan(ctx)
+
+        # 无 PlannerLoop 时的最小回退：默认选 text_generation。
+        if self._engine_manager is not None:
+            try:
+                engine_name = self._engine_manager.select_engine({"capability": "text_generation"})
+                if engine_name:
+                    return Decision.execute(
+                        target=engine_name,
+                        reason="fallback: default text_generation capability",
+                    )
+            except Exception:  # pragma: no cover - defensive
+                traceback.print_exc()
+        return Decision.fail(reason="no planner loop and no fallback engine available")
 
     def _on_engine_completed(self, event: RuntimeEvent) -> None:
         """Engine 完成事件：推进任务到 COMPLETED。"""
@@ -226,11 +262,25 @@ class Orchestrator:
 
     @staticmethod
     def _ensure_context(task: Task) -> RuntimeContext:
-        """从 Task payload 提取或新建 RuntimeContext。"""
+        """从 Task payload 提取或新建 RuntimeContext。
+
+        若 Task 包含文本输入（如 ChatTask），自动加入 ctx.messages 并设置 task_type，
+        供 PlannerLoop 基于内容进行能力匹配。
+        """
         ctx = task.payload.get("ctx")
         if isinstance(ctx, RuntimeContext):
             return ctx
-        return RuntimeContext.new(
+
+        ctx = RuntimeContext.new(
             task_id=task.task_id,
             session_id=task.session_id,
         )
+        ctx.metadata["task_type"] = task.type
+        text = ""
+        if isinstance(task, ChatTask):
+            text = task.text
+        if not text:
+            text = task.payload.get("text", "")
+        if text:
+            ctx.messages.append(ChatMessage(role="user", content=text))
+        return ctx

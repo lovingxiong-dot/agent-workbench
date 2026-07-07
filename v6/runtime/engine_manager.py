@@ -64,6 +64,11 @@ class EngineManager:
         if callable(setter):
             setter(self._event_bus)
 
+    @property
+    def capability_registry(self) -> CapabilityRegistry:
+        """返回内部 CapabilityRegistry，供 PlannerLoop / Orchestrator 使用。"""
+        return self._capability_registry
+
     # ─────────────────────────────────────────────────────────
     # 注册与查询
     # ─────────────────────────────────────────────────────────

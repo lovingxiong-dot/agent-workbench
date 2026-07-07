@@ -1,5 +1,79 @@
 # Changelog
 
+## v6.8.0-alpha (2026-07-07) — V6 Framework Core Foundation
+
+> **里程碑语义**：V6 共享核心框架基座版本已冻结。
+> 从本版本开始，V6 Runtime 的核心控制面完整闭环：统一入口（`RuntimeContext` / `Task`）、统一协议（`Engine`）、统一通信（`EventBus`）、能力发现（`CapabilityRegistry`）、执行追踪（`RuntimeTrace` / `Replay`）、任务编排（`Orchestrator`）、调度决策（`PlannerLoop` / `Decision`）。
+> 该版本作为后续 Agent / Service / Adapter 开发的基础版本，不是普通功能迭代。
+> 注意：`PlannerLoop` 是 Runtime 决策机制，`PlannerEngine` 是八大 Engine 之一的能力组件，二者职责刻意分离。
+
+### Added
+- 新增 `v6/runtime/decision.py`：
+  - `DecisionAction` 枚举：`execute_engine` / `wait` / `complete` / `fail`。
+  - `Decision` 数据类：描述"下一步做什么"，含 `action` / `target` / `reason` / `metadata`。
+- 新增 `v6/runtime/decision_policy.py`：
+  - `DecisionPolicy` 策略基类。
+  - `RuleBasedDecisionPolicy`：基于规则推断所需能力（image/code/tool/text），并通过 `CapabilityRegistry` 选择最佳 Engine。
+- 新增 `v6/runtime/planner_loop.py`：
+  - `Observation`：对当前 Runtime 状态的观察摘要。
+  - `PlannerLoop`：Runtime 决策循环（Foundation），包含 `observe()` / `decide()` / `evaluate()` / `plan()` / `on_event()`。
+  - 通过 EventBus 发布 `task.started`（phase=decision）事件，不直接写 Trace。
+- 升级 `v6/runtime/orchestrator.py`：
+  - 构造函数支持注入 `PlannerLoop`。
+  - `_execute_task()` 改为先调用 `_make_decision()` 获取 `Decision`，再按决策执行 Engine / 完成 / 失败。
+  - `_ensure_context()` 自动从 `ChatTask` 提取 `task_type` 与 `messages`，供策略匹配。
+  - 增加状态防护：`_on_task_started()` 只处理 `CREATED` 状态任务，避免已失败/已完成任务被重入。
+- 升级 `v6/runtime/runtime.py`：
+  - `AgentRuntime` 默认构造 `PlannerLoop`（使用 `RuleBasedDecisionPolicy`）。
+  - 将 `PlannerLoop` 注入 `Orchestrator`。
+  - 新增 `planner_loop` 属性。
+- 升级 `v6/runtime/engine_manager.py`：
+  - 新增 `capability_registry` 只读属性，供 `PlannerLoop` / `Orchestrator` 使用。
+
+### test
+- 新增 `tests/v6/test_v6_planner_loop.py` 共 10 个测试，覆盖：
+  - 文本任务决策为 `execute_engine` 并选择 `llm`。
+  - 图像任务决策为 `execute_engine` 并选择 `vision`。
+  - 无匹配能力时决策为 `fail`。
+  - 无对应 Engine 时决策为 `fail`。
+  - `Observation` 包含 `task_type`、`status`、`available_capabilities`。
+  - `evaluate()` 返回 `complete`。
+  - `plan()` 通过 EventBus 发布决策事件。
+  - `PlannerLoop` 不直接写 Trace。
+  - Orchestrator 通过 PlannerLoop 选择 VisionEngine 并完成 Task。
+
+### Architecture
+- 定义 V6 Framework Core Foundation：
+  ```
+  Task / RuntimeContext
+    |
+    v
+  AgentRuntime
+    |
+    v
+  Orchestrator + PlannerLoop
+    |
+    +---> EventBus (Runtime 神经系统)
+    |
+    +---> CapabilityRegistry (能力发现)
+    |
+    +---> EngineManager.execute(name, ctx) (Engine 单入口)
+    |
+    +---> RuntimeTrace / ReplayService (可观测与回放)
+  ```
+- 明确 `PlannerLoop` 与 `PlannerEngine` 分离：
+  - `PlannerLoop`：Runtime 调度决策机制，输入 `RuntimeContext`，输出 `Decision`。
+  - `PlannerEngine`：八大 Engine 之一，未来负责生成计划（plan generation）。
+- 保持 Engine 单入口：`EngineManager.execute(name, ctx)` 继续作为 Runtime 调用 Engine 的唯一入口。
+- 事件驱动：PlannerLoop 不直接调用 Trace，决策通过 EventBus 发布，由 Trace Hook 记录。
+- V6 核心控制面闭环：统一入口、统一协议、统一通信、能力发现、执行追踪、任务编排、调度决策七要素齐备。
+
+### Guarantees
+- 不引入 LangChain Agent / ReAct / OpenAI function calling / MCP / Prompt Chain。
+- 第一版 `PlannerLoop` 使用规则策略；未来可替换为 LLM-based / Human-approval 策略，而 Orchestrator 不变。
+- Orchestrator 不硬编码 Engine 名称，所有 Engine 选择通过 `CapabilityRegistry` + `DecisionPolicy` 完成。
+- 不接真实 LLM，不做自治循环（observe → think → act → repeat）。
+
 ## v6.6.0-alpha (2026-07-07) — Runtime Event Bus Foundation
 
 > **里程碑语义**：V6 Runtime 内部神经系统（communication backbone）已冻结。
