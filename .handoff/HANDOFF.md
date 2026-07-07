@@ -4,7 +4,7 @@ agent: Kimi-K2.7-Code
 schema_version: 3.1
 
 ## Mission
-完成 V6 Step 4：建立八大 Engine Runtime 骨架（BaseEngine + LLM/Tool/Memory/Planner/Workflow/Code/Vision/Knowledge），验证 EngineManager 动态发现、统一生命周期、Runtime Trace Timeline 与 Planner 编排能力；随后从 `v5-dev` 切出干净的 `v6-dev` 主线并声明 V6 为唯一活跃开发分支。
+完成 V6 Step 4：建立八大 Engine Runtime 骨架（BaseEngine + LLM/Tool/Memory/Planner/Workflow/Code/Vision/Knowledge），验证 EngineManager 动态发现、统一生命周期、Runtime Trace Timeline 与 Planner 编排能力；随后从 `v5-dev` 切出干净的 V6 主线，并以 `v6.0.0-alpha` 作为 V6 独立 Runtime 架构线的公开立项标签。
 
 ## Progress
 - [x] Step 3 已归档：`v6/runtime/engine_state.py` 定义 `EngineState`；`v6/runtime/engines/protocol.py` 定义 `Engine` Protocol、`EngineDescriptor`、`EngineNotReadyError`；`EngineManager` 支持完整生命周期；标签 `v6.5.7-alpha`。
@@ -22,9 +22,11 @@ schema_version: 3.1
 - [x] 清理旧 Engine 实现（Context/Prompt/Inference/Metrics/Phase/Policy）及不兼容测试 `tests/v6/test_v6_engines.py`。
 - [x] 新增 `tests/v6/test_v6_runtime_kernel.py` 验证：EngineManager 动态发现、生命周期一致性、Trace 记录、Planner 编排 LLM/Tool。
 - [x] V6 全量测试 `pytest tests/v6/` **130/130 通过**。
-- [x] 在 `v5-dev` 提交并推送标签 `v6.5.8-alpha`。
+- [x] 在 `v5-dev` 提交并推送标签 `v6.5.8-alpha`（内部迁移标签）。
 - [x] 从 `v6.5.8-alpha` 切出干净分支 `v6-dev` 并推送。
 - [x] 更新 `README.md` 与 `PROJECT_BLUEPRINT.md`，添加「V6 全新主线声明」，明确 `v6-dev` 为唯一活跃分支，`v5-dev` 已冻结归档。
+- [x] 在 V6 主线上新增公开立项标签 `v6.0.0-alpha`，声明 **V6.0.0-alpha marks the beginning of the independent V6 Runtime architecture line.**
+- [x] `v6.5.8-alpha` 保留为内部迁移标签，仅作历史追溯；`v6.0.0-alpha` 作为 V6 产品线对外起点。
 
 ## Blocker
 无。
@@ -97,6 +99,7 @@ no uncommitted changes
 - command: `python -m pytest tests/v6/ -q --tb=short`
 
 ## Notes
-- `v6-dev` 已推送至 origin，当前 HEAD 为 V6 唯一活跃开发起点。
-- `v5-dev` 已冻结，其最后一个相关提交为 `76c7871`（`v6.5.8-alpha` 标签）。
-- 后续所有 V6 版本号（如 `v6.5.9-alpha`、`v6.6.0-alpha`）应在 `v6-dev` 上打标签并推送。
+- `v6-dev` 已推送至 origin；当前 HEAD 同时承载公开立项标签 `v6.0.0-alpha`，作为 V6 独立产品线的对外起点。
+- `v6.5.8-alpha` 保留为内部迁移标签，指向 `v5-dev` 上的 `76c7871`；它记录 Step 4 在旧线上的最终成果，但不参与 V6 产品线后续演进。
+- `v5-dev` 已冻结，其最后一个 V6 相关提交为 `76c7871`。
+- 后续所有 V6 版本号（如 `v6.5.9-alpha`、`v6.6.0-alpha`）应在 V6 主线上打标签并推送。

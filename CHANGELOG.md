@@ -1,5 +1,18 @@
 # Changelog
 
+## v6.0.0-alpha (2026-07-07) — V6 独立 Runtime 架构线公开立项
+
+### declaration
+- **V6.0.0-alpha marks the beginning of the independent V6 Runtime architecture line.**
+- 从本版本起，V6 作为 AI Agent Workbench 的第二代独立产品线正式立项，与 V5 在架构、接口、版本号上完全隔离。
+- `v6.5.8-alpha` 保留为**内部迁移标签**，记录 Step 4 在 `v5-dev` 上的最终技术成果；`v6.0.0-alpha` 作为**公开立项标签**，代表 V6 独立产品线的起点。
+- 后续 V6 版本号统一在 `v6-dev` / `v6` 分支上演进，格式为 `v6.x.y-alpha`。
+
+### docs
+- 更新 `PROJECT_BLUEPRINT.md`：在元信息旁明确标注 `v6.0.0-alpha` 为公开立项版本。
+- 更新 `README.md` 与 `PROJECT_BLUEPRINT.md`「V6 全新主线声明」：强调 `v6.0.0-alpha` 的立项意义。
+- 更新 `.handoff/HANDOFF.md`：记录 `v6.0.0-alpha` 标签语义与分支状态。
+
 ## v6.5.8-alpha (2026-07-07) — Step 4：Eight Engine Skeleton + Runtime Integration Test
 
 ### feat

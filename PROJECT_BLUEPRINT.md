@@ -1,14 +1,18 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v6.5.8-alpha | 存档次数 | 32 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 32 |
 
 ## V6 全新主线声明
 
+> **V6.0.0-alpha marks the beginning of the independent V6 Runtime architecture line.**
+
 - **本分支 `v6-dev` 是 AI Agent Workbench 的当前唯一活跃开发主线**。
 - V6 为从零重写的 Agent Runtime 平台，与 V5、V4 在代码层面完全隔离，仅在经验和设计思路上提取可复用部分。
-- **`v5-dev` 已冻结归档**：`v6.5.8-alpha`（Step 4）为 `v5-dev` 上最后一个 V6 相关提交；自此之后，所有 V6 演进在 `v6-dev` 上进行。
-- **禁止反向合并**：不允许将 V5 / V4 代码合并入 `v6-dev`；V6 如需兼容旧能力，必须通过 Adapter 或重新实现。
+- **`v6.0.0-alpha` 是 V6 独立产品线的公开立项标签**，代表 V6 作为第二代独立架构线正式对外发布。
+- **`v6.5.8-alpha` 保留为内部迁移标签**，记录 Step 4 在 `v5-dev` 上的最终技术成果；它不参与 V6 产品线后续版本演进，仅作为历史追溯参考。
+- **`v5-dev` 已冻结归档**：`v6.5.8-alpha`（Step 4）为 `v5-dev` 上最后一个 V6 相关提交；自此之后，所有 V6 演进在 `v6-dev` / `v6` 分支上进行。
+- **禁止反向合并**：不允许将 V5 / V4 代码合并入 V6 主线；V6 如需兼容旧能力，必须通过 Adapter 或重新实现。
 - **版本号规则**：V6 版本号独立演进，格式为 `v6.x.y-alpha`，与 V5 的 `v5.x.y-alpha` 互不干扰。
 - **设计铁律**：
   1. `RuntimeContext` 是 Runtime 唯一公共协议（Public Runtime Protocol）。
