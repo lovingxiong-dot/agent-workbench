@@ -1,0 +1,73 @@
+agent:
+  name: Agent Workbench V6
+  version: v6.9.0-alpha-workbench
+  description: V6 框架内第一个真实 Agent Workbench 产品实例
+ui:
+  title: Agent Workbench V6
+  width: 1200
+  height: 800
+runtime:
+  use_orchestrator: true
+  decision_policy: rule_based
+session:
+  max_history: 20
+  context_window: 4096
+model:
+  providers:
+  - name: echo
+    type: echo
+    enabled: true
+    config: {}
+  default_provider: echo
+  sampling:
+    temperature: 0.5
+    max_tokens: 2048
+  context:
+    max_history: 20
+prompt:
+  renderer: python
+  templates:
+  - name: system
+    template: You are a helpful assistant.
+    enabled: true
+  - name: chat
+    template: '{messages}'
+    enabled: true
+tool:
+  enabled: true
+  registry:
+  - name: echo
+    description: 回声工具
+    enabled: true
+    permission: user
+  - name: get_time
+    description: 获取当前时间
+    enabled: true
+    permission: user
+memory:
+  enabled: true
+  provider: sqlite
+  sqlite:
+    path: storage/agents/agent_workbench_v6/memory.db
+  max_records: 10000
+  namespaces:
+  - chat_history
+  - session_context
+strategy:
+  planner:
+    policy: rule_based
+    threshold: 0.5
+  reflection:
+    enabled: false
+    rounds: 1
+  thresholds:
+    tool_confidence: 0.6
+trace:
+  enabled: true
+  level: INFO
+  persist: true
+profile:
+  current: default
+  profiles:
+  - name: default
+    path: profiles/default.yaml

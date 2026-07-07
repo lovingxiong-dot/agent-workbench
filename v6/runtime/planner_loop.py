@@ -72,6 +72,10 @@ class PlannerLoop:
         self._registry = registry
         self._event_bus = event_bus
 
+    def set_policy(self, policy: "DecisionPolicy") -> None:
+        """运行时切换决策策略。"""
+        self._policy = policy
+
     def observe(self, ctx: "RuntimeContext") -> Observation:
         """观察当前 Runtime 状态。"""
         last_action = ""

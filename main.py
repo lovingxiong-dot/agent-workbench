@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AI Agent Workbench · V5 新 UI 主入口
+AI Agent Workbench · V6 主入口
 """
 import sys
 import os
@@ -21,8 +21,8 @@ def _diagnostic_hook(exc_type, exc_value, exc_tb):
 
 sys.excepthook = _diagnostic_hook
 
-from v5.main import main
+from agent_workbench.app import main
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

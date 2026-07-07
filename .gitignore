@@ -8,6 +8,7 @@ __pycache__/
 *.db
 storage/*.db
 storage/*.json
+storage/*.yaml
 storage/vector_store/
 config/.env
 *.spec.bak

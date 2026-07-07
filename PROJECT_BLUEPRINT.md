@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v6.8.0-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 34 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v6.9.0-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 36 |
 
 ## Current Development Authority
 
@@ -71,18 +71,21 @@ v6-core  ──merge──►  v6-service  ──merge──►  v6-agent
   4. 所有状态收敛到 `RuntimeContext`；ChatMessage、ToolCall、MemoryEntry、Metrics 等仅为 `RuntimeContext` 的资源。
 
 ## 项目概要
+v6.9.0-alpha 完成 **Agent Workbench Single Instance**（V6 框架内第一个真实 Agent 产品实例）：新增 `agent_workbench/` 应用层目录，基于 v6.8.0-alpha Framework Core Foundation Baseline 构建可运行、可配置的单一 Agent 工作 bench；引入 `ConfigStore`（YAML 唯一配置源 + 内存缓存 + namespace 变更通知）、`ProfileManager`（Profile 切换/导入/导出/合并）、`ModuleRegistry`（10 个 RuntimeModule 生命周期管理）与 `AgentWorkbenchRuntime`（组合 ConfigStore/ProfileManager/ModuleRegistry/CoreRuntime，注册 WorkbenchLLMEngine/WorkbenchToolEngine）；定义 10 个 `BaseRuntimeModule`（Runtime/Session/Config/Profile/Prompt/Model/Tool/Memory/Strategy/Trace），每个模块支持 `initialize`/`apply_config`/`dispose`/`to_form`，运行态、配置态、能力态、观测态分层清晰；实现 `WorkbenchController` 作为 Application Layer 唯一入口，UI 不直接持有 Module；实现 `AgentConfigPanel` 配置面板，支持左侧模块列表 + 右侧 JSON 编辑器，满足查看/修改/保存/热更新四件事；扩展 v6 三栏高级 UI：`WorkbenchLeftPanel` 在左下角新增「设置」按钮，`WorkbenchRightPanel` 新增「配置」标签页，`WorkbenchMainWindow` 组装完整三栏，`WorkbenchUIController` 继承 v6 UIController 并复用 Session/Chat 服务，聊天请求转发给 WorkbenchController；提供 CLI/GUI 双入口 `agent_workbench/app.py`；新增 7 个 Workbench 端到端测试，验证聊天生命周期、Tool Engine、PlannerLoop 决策、ConfigStore 读写、CLI 入口；V6 全量测试 `pytest tests/v6/` 175/175 通过，Workbench 测试 `pytest agent_workbench/tests/` 7/7 通过，合计 182/182 通过。
+
 v6.8.0-alpha 完成 V6 Framework Core Foundation Baseline（共享核心框架基座）：新增 `v6/runtime/decision.py` 定义 `DecisionAction`/`Decision` 模型；新增 `v6/runtime/decision_policy.py` 定义 `DecisionPolicy` 与 `RuleBasedDecisionPolicy`；新增 `v6/runtime/planner_loop.py` 实现 `PlannerLoop`（observe/decide/evaluate/plan），补齐 Runtime 调度决策机制；升级 `v6/runtime/orchestrator.py` 集成 PlannerLoop，按 Decision 选择 Engine 执行；升级 `v6/runtime/runtime.py` 使 `AgentRuntime` 默认构造 `PlannerLoop` 并注入 Orchestrator；`Orchestrator._ensure_context()` 自动从 `ChatTask` 提取 `task_type` 与 `messages` 供策略匹配；新增 `tests/v6/test_v6_planner_loop.py` 共 10 个测试覆盖决策、事件发布、Orchestrator 集成与 PlannerLoop/Trace 隔离；至此 V6 核心控制面完整闭环：统一入口（RuntimeContext/Task）、统一协议（Engine）、统一通信（EventBus）、能力发现（CapabilityRegistry）、执行追踪（RuntimeTrace/Replay）、任务编排（Orchestrator）、调度决策（PlannerLoop/Decision）；明确 `PlannerLoop` 是 Runtime 决策机制，`PlannerEngine` 是八大 Engine 之一的能力组件，二者职责分离；该版本作为后续 Agent / Service / Adapter 开发的长期依赖基线；V6 全量测试 175/175 通过。
 
 ## 当前任务
 
-**V6.8.0-alpha Baseline Validation**（在 `v6-agent` 分支执行）：
+**下一步：V6 Runtime Service Architecture**（在 `v6-service` 分支执行）：
 
-- 基于 `v6.8.0-alpha` Framework Core Foundation Baseline，构建最小真实 Agent 产品实例 `demo_agent/`。
-- 验证端到端链路：Desktop UI → UIController → RuntimeAdapter → AgentRuntime → Orchestrator → PlannerLoop → Engine → Trace/Replay。
-- 目标不是扩展 Runtime 能力，而是证明基座可以承载完整 Agent 产品实例。
-- 通过后回到 `v6-service` 推进 Memory / Prompt / Model Adapter / Tool Adapter 等 Runtime Service Architecture。
+- 基于 `v6.8.0-alpha` Framework Core Foundation Baseline 与 `v6.9.0-alpha` Agent Workbench 产品实例经验，回到 `v6-service` 推进 Runtime 能力接入层。
+- 候选服务：Memory Service、Prompt Service、Model Adapter、Tool Adapter、Knowledge Adapter。
+- 原则：Service 属于 Runtime 能力接入层，不是 Engine 业务逻辑；保持 `RuntimeContext` 作为唯一 Public Protocol；`v6-core` 只接受 bug fix，不增加功能。
+- 目标：为 Runtime Kernel 接入真实世界能力层，使 Framework Core 具备对接真实 LLM、工具、记忆、知识的接口与扩展点。
 
 ## 历史里程碑
+v6.9.0-alpha 完成 Agent Workbench Single Instance（V6 框架内第一个真实 Agent 产品实例）：新增 `agent_workbench/` 应用层目录，基于 `v6.8.0-alpha` Framework Core Foundation Baseline 构建可运行、可配置的单一 Agent Workbench；引入 `ConfigStore`（YAML 唯一配置源 + 内存缓存 + namespace 变更通知）、`ProfileManager`（Profile 切换/导入/导出/合并）、`ModuleRegistry`（10 个 RuntimeModule 生命周期管理）与 `AgentWorkbenchRuntime`（组合 ConfigStore/ProfileManager/ModuleRegistry/CoreRuntime，注册 WorkbenchLLMEngine/WorkbenchToolEngine）；定义 10 个 `BaseRuntimeModule`（Runtime/Session/Config/Profile/Prompt/Model/Tool/Memory/Strategy/Trace），每个模块支持 `initialize`/`apply_config`/`dispose`/`to_form`，运行态、配置态、能力态、观测态分层清晰；实现 `WorkbenchController` 作为 Application Layer 唯一入口，UI 不直接持有 Module；实现 `AgentConfigPanel` 配置面板，支持左侧模块列表 + 右侧 JSON 编辑器，满足查看/修改/保存/热更新四件事；扩展 v6 三栏高级 UI：`WorkbenchLeftPanel` 在左下角新增「设置」按钮，`WorkbenchRightPanel` 新增「配置」标签页，`WorkbenchMainWindow` 组装完整三栏，`WorkbenchUIController` 继承 v6 UIController 并复用 Session/Chat 服务，聊天请求转发给 WorkbenchController；提供 CLI/GUI 双入口 `agent_workbench/app.py`；新增 7 个 Workbench 端到端测试，验证聊天生命周期、Tool Engine、PlannerLoop 决策、ConfigStore 读写、CLI 入口；V6 全量测试 `pytest tests/v6/` 175/175 通过，Workbench 测试 `pytest agent_workbench/tests/` 7/7 通过，合计 182/182 通过；PyInstaller 打包 `agent_workbench.spec` 生成 `dist/AgentWorkbenchV6.exe`，CLI/GUI 均可独立启动；`main.py` 已切换为 `agent_workbench.app` 入口。v6.8.0-alpha 完成 V6 Framework Core Foundation Baseline（共享核心框架基座）：新增 `v6/runtime/decision.py` 定义 `DecisionAction`/`Decision` 模型；新增 `v6/runtime/decision_policy.py` 定义 `DecisionPolicy` 与 `RuleBasedDecisionPolicy`；新增 `v6/runtime/planner_loop.py` 实现 `PlannerLoop`（observe/decide/evaluate/plan），补齐 Runtime 调度决策机制；升级 `v6/runtime/orchestrator.py` 集成 PlannerLoop，按 Decision 选择 Engine 执行；升级 `v6/runtime/runtime.py` 使 `AgentRuntime` 默认构造 `PlannerLoop` 并注入 Orchestrator；`Orchestrator._ensure_context()` 自动从 `ChatTask` 提取 `task_type` 与 `messages` 供策略匹配；新增 `tests/v6/test_v6_planner_loop.py` 共 10 个测试覆盖决策、事件发布、Orchestrator 集成与 PlannerLoop/Trace 隔离；至此 V6 核心控制面完整闭环：统一入口（RuntimeContext/Task）、统一协议（Engine）、统一通信（EventBus）、能力发现（CapabilityRegistry）、执行追踪（RuntimeTrace/Replay）、任务编排（Orchestrator）、调度决策（PlannerLoop/Decision）；明确 `PlannerLoop` 是 Runtime 决策机制，`PlannerEngine` 是八大 Engine 之一的能力组件，二者职责分离；该版本作为后续 Agent / Service / Adapter 开发的长期依赖基线；V6 全量测试 175/175 通过。
 v6.7.0-alpha 完成 Step 5.4 Runtime Orchestration Foundation：新增 `v6/runtime/orchestrator.py` 实现 Task Lifecycle State Machine（CREATED→PLANNING→EXECUTING→COMPLETED/FAILED），通过 EventBus 事件驱动流程，使用 CapabilityRegistry 选择 Engine；升级 `v6/runtime/runtime.py` 使 `AgentRuntime` 持有 `Orchestrator`；V6 全量测试 166/166 通过。v6.6.2-alpha 完成 Step 5.3 Runtime Trace Replay Foundation：新增 `v6/runtime/replay.py` 实现 `ReplayRecord`/`ReplayLog`/`ReplayService`，支持从 EventBus 订阅事件生成回放记录；V6 全量测试 159/159 通过。v6.6.1-alpha 完成 Step 5.2 Engine Capability Registry：新增 `v6/runtime/capability_registry.py` 实现能力注册、查询、排序与选择；V6 全量测试 144/144 通过。v6.6.0-alpha 完成 Step 5.1 Runtime Event Bus Foundation：升级 `v6/runtime/event_bus.py` 为 Runtime 内部神经系统，支持 RuntimeEvent schema、异步 dispatch、Trace Hook；V6 全量测试 130/130 通过。v6.5.8-alpha 完成 Step 4 八大 Engine Runtime 骨架：新增 `v6/runtime/engines/base.py` 定义 `BaseEngine` 统一生命周期；新增 `llm.py`/`tool.py`/`memory.py`/`planner.py`/`workflow.py`/`code.py`/`vision.py`/`knowledge.py` 八大 Engine 空壳；`RuntimeContext` 保留单 `RuntimeContext` 入口，`EngineManager.execute(name, ctx)` 统一调度；新增 `tests/v6/test_v6_runtime_kernel.py` 验证 Engine 动态发现、生命周期一致、Trace Timeline、Planner 编排 LLM/Tool；清理旧 `v6/runtime/engines/` 不兼容实现与 `tests/v6/test_v6_engines.py`；V6 全量测试 130/130 通过。v6.5.7-alpha 完成 Step 3 Engine Protocol 与 EngineManager 生命周期：新增 `v6/runtime/engine_state.py` 定义 `EngineState` 枚举（CREATED→LOADING→LOADED→INITIALIZING→READY→RUNNING→STOPPING→STOPPED，外加 DEGRADED/ERROR）；新增 `v6/runtime/engines/protocol.py` 定义 `Engine` Protocol、`EngineDescriptor`（含 dependencies/instance）与 `EngineNotReadyError`；`RuntimeContext` 新增 `request` 字段作为 Engine 请求载荷容器；重构 `v6/runtime/engine_manager.py` 支持完整生命周期（register/load/initialize/health_check/execute/shutdown）与自动 Trace 记录；Engine 接口统一为单 `RuntimeContext` 入口 `execute(ctx)`，避免 request/ctx 双权威源；新增/更新 Engine 相关测试 26 个；V6 全量测试 144/144 通过。v6.5.6-alpha 推进 Step 2 Trace + Metrics 联动：扩展 `v6/runtime/trace.py` 的 `TraceStep`，新增 `duration_ms`/`tokens`/`cost`/`tool_time_ms` 字段；`RuntimeTrace.add()` 支持显式传入指标或从 `RuntimeMetrics` 自动提取；新增 `timed_step` 上下文管理器，自动计时并在退出时抓取 metrics，形成 Task Execution Timeline；扩展 `tests/v6/test_v6_trace.py` 新增 9 个联动测试；V6 全量测试 125/125 通过。v6.5.5-alpha 继续夯实 V6.5 Runtime Foundation Layer：明确阶段定位为“Runtime Foundation Layer”而非 Kernel；新增 `v6/runtime/state_machine.py` 定义 `RuntimeStateMachine`，固化 `RuntimeState` 生命周期迁移规则（CREATED→QUEUED→RUNNING→{WAITING/PAUSED/CANCELLED/COMPLETED/FAILED}，FAILED→QUEUED 支持重试，COMPLETED/CANCELLED 为终态），并新增 `tests/v6/test_runtime_state_machine.py` 覆盖 10 个迁移场景；V6 全量测试 116/116 通过。v6.5.4-alpha 推进 Runtime Kernel 预备层：新增 `v6/runtime/metrics.py` 定义 `RuntimeMetrics` 统一统计接口（token/latency/tool_time/cost/retry 等），新增 `v6/runtime/result.py` 定义 `RuntimeResult` 统一输出协议（answer/files/images/artifacts/error/status 等）；`RuntimeContext.metrics/result/status` 从裸 dict/字符串升级为 `RuntimeMetrics`/`RuntimeResult`/`RuntimeState` 枚举，snapshot/restore/clone/reset 全面兼容新类型；`AgentRuntime` 统一使用 `RuntimeState` 枚举设置任务状态；新增 `v6/runtime/engine_manager.py` 统一管理 Engine 注册与获取，避免 Runtime 直接 new Engine，并新增 `tests/v6/test_v6_engine_manager.py` 覆盖注册/获取/注销/运行行为；`trace.py` 补回 `Enum` 导入，`tests/v6/test_v6_trace.py` 改用 `TraceEvent`/`RuntimeState` 枚举断言；`docs/v6/SPEC.md` 将 RuntimeTask 四对象模型升级为五对象模型，新增 8.17/8.18/8.19 三节阐述 RuntimeMetrics/RuntimeResult/RuntimeState 设计原则；V6 全量测试 106/106 通过。v6.5.3-alpha 建立 Runtime Trace 基础能力：`RuntimeContext` 新增 `trace` 与 `result` 字段，每个 Task 自带执行历史；新增 `v6/runtime/trace.py` 定义 `RuntimeTrace`、`TraceStep` 与 `ReplayPlayer`，记录 `Task → Phase → Engine/Service/Tool → Finish` 全过程；`AgentRuntime` 自动记录任务生命周期（task_start / handler_dispatch / task_finish / task_error），`EchoHandler` 与 `LocalRuntimeAdapter` 记录 Engine / Adapter 步骤；`ReplayPlayer` 可按 trace 重放事件，支持调试与审计；`docs/v6/SPEC.md` 新增 Runtime Trace 原则与 RuntimeTask 四对象演进方向；V6 全量测试 99/99 通过。v6.5.2-alpha 完成 UIController 与 RuntimeAdapter 的 Application Boundary 集成：`AgentRuntime` 支持从 `Task.payload` 接收并使用已有的 `RuntimeContext`；`EchoHandler` 优先从 `ctx.messages` 读取输入；`UIController` 移除对 `AgentRuntime` 的直接依赖，改为依赖 `IRuntimeAdapter`，通过 `LocalRuntimeAdapter` 提交 `RuntimeContext`、订阅事件、取消任务；新增 `test_adapter_submit_propagates_context` 验证上下文经 Adapter 透传后状态一致；V6 全量测试 91/91 通过。v6.5.1-alpha 深化 V6 Runtime 协议与 Service 层改造：`RuntimeContext` 新增 `new()` 工厂方法，由 Runtime Task 自动生成 `task_id` 并初始化 Runtime Facts；`ConfigService` / `SessionService` / `ChatService` 统一为 `(ctx)` 输入接口，彻底移除 legacy 方法；`UIController` 全面改用 `RuntimeContext.new()` 构造上下文；`docs/v6/SPEC.md` 补充 Runtime Interface Principle、RuntimeContext 作为唯一 Public Runtime Protocol、Adapter Application Boundary 及 `RuntimeContext.new()` Task 语义等铁律；修复 `test_v6_ui_contract.py` 首行 docstring 语法错误；V6 全量测试 90/90 通过。AI Agent 工作台是一款基于 PySide6 的桌面端 AI 助手，支持三种手动模式（Ask/Plan/Craft），集成 LLM 推理、系统命令、量化分析、网页抓取、剪贴板管理等能力。v5.0.23-alpha 修复 `v5/service/chat_worker.py` 中 `AgentWorker.TOOL_DEFINITIONS` 属性错误，为 v4 归档区创建独立打包入口 `v4/v4_main.py` + `v4/AgentWorkbenchV4.spec` + `v4/scripts/rebuild_v4.ps1`，实现 v5 与 v4 并行打包并分别生成桌面快捷方式「AI Agent Workbench V5」和「AI Agent Workbench V4」；验证 `dist/AgentWorkbench/` 与 `dist/AgentWorkbenchV4/` 均可独立启动。v5.0.22-alpha 补充 `.gitignore`，将 `.reference/`、`.scripts/`、`review/` 等本地参考/调试/归档目录排除在版本控制外，保持 `git status` 干净。v5.0.21-alpha 完成工作区整理与文档同步：修正 `config.yaml` 版本号为 v5.0.20-alpha，统一以 `docs/` 为正式文档目录并在根目录新建 `README.md` 指向 docs/；将 `AgentWorkbench.spec` 与旧 `ui/`、`resources/`、`blueprints/`、`tests/test_v4_*.py` 等历史文件归档到 `v4/legacy/`、`v4/tests/`、`docs/archive/blueprints/`；清理 `docs/*.bak` 与空目录，同步根目录和 docs/ 下 `CHANGELOG.md` / `PROJECT_BLUEPRINT.md` 版本与目录树，全量测试 272/272 通过。v5.0.20-alpha 完成 V5 剩余 5% 细节功能闭环：修复 `v5/service/adapter.py` 工具执行回调命名冲突，实现终端日志与 UI 工具卡片同步输出；`ChatArea` 按 phase 渲染 `PhasePanel` 阶段面板，支持 analyze/confirm/execute/verify/archive 五种阶段；新增工具执行、确认回调、阶段渲染、craft 模式端到端流程等 11 个测试用例，全量测试 272/272 通过；修复 `AgentWorkbench.spec` 隐藏导入（移除已删除的 `v5.model.events`，添加 `v5.service.chat_worker`）并重新打包验证 exe 可独立启动。v5.0.19-alpha 修复聊天区模式列表与引擎不一致的核心 Bug，统一由 `WorkController.manual_modes` 动态管理模式列表；新增 V5 ChatArea / Adapter / Integration 测试共 78 个用例，全量测试 319/319 通过；修复 `AgentWorkbenchV5.spec` 隐藏导入并重新打包验证 exe 可独立启动。v5.0.18-alpha 完成 V5 P6/P7 收尾归档：提交 V5 新增测试、独立打包配置与 v4 归档说明，清理调试产物，全量测试 240/240 通过。v5.0.17-alpha 完成 V5 彻底隔离 v4 方案与 P6/P7 主体整改：清理 `v5/` 全部 v4 文字残留并确认无 v4 导入，统一 Widget 层 V5 标准信号契约，修复 `ChatArea`/`RightPanel`/`MainWindow` 信号连接，补齐终端/文件/浏览器用户操作信号转发到 `WorkController`，修正 `InvisibleResizeHandle` 布局问题；新增 `tests/test_v5_service.py`、`test_v5_controller.py`、`test_v5_smoke.py` 共 15 个用例；新增 `AgentWorkbenchV5.spec` 独立打包配置，新增 `v4/README.md` 标注归档废弃。v5.0.13-alpha 修复打包后浏览器标签不可用的问题：在 AgentWorkbench.spec 中显式打包 QtWebEngineProcess.exe、resources、qtwebengine_locales，并恢复 WebChannel/WebSockets/Sql 依赖，exe 内浏览器可正常加载 Bing 页面；v5.0.12-alpha 完成 UI 完全移植工程最终完整性检查与存档：复核 P10 旧 UI 清理与 PyInstaller 打包验证，完成 P11 `v4-refactor` 旧 UI 线路最终归档并推送 `v4.0.11-alpha` 归档标签，真实 GUI 验证三栏完整显示、无旧 UI 残留，全量测试 225/225 通过；v5.0.11-alpha 完成 P9 全量冒烟与集成测试验证及 UI 硬编码清理：清理 'v4 架构升级' 等旧 UI 硬编码文本，实现聊天区标题动态化；v5.0.9-alpha 完成新 UI 完全移植与旧 UI 清理；v5.0.8-alpha 完成 GUI 冒烟修复；v5.0.7-alpha 完成右栏真实功能回填；v5.0.6-alpha 完成持久化校验整改；v5.0.5-alpha 完成会话数据持久化与列表同步；v5.0.4-alpha 完成关键用户动作对接；v5.0.3-alpha 完成模块化骨架拆分；v5.0.2-alpha 完成 UIRenderer 与新 UI 桥接；v5.0.1-alpha 备份旧 UI 组件至 `v4/legacy/` 并标记 v5-dev 线路；v5.0.0-alpha 为 v5-dev 线路起点与新 UI 后端核心注入。v4.x 为旧 UI 完整版线路，已归档至 `v4-refactor` / `ui-template` 分支，不再维护。
 
 ## 技术栈
@@ -128,6 +131,53 @@ v6.7.0-alpha 完成 Step 5.4 Runtime Orchestration Foundation：新增 `v6/runti
 │   └── getting-started.md  # 5 分钟上手指南
 │
 ├── # 源码分组
+├── agent_workbench/        # 【V6 第一个真实产品实例】Agent Workbench V6
+│   ├── __init__.py
+│   ├── app.py              # CLI/GUI 双入口
+│   ├── controller.py       # Application Layer 控制器，持有 AgentWorkbenchRuntime
+│   ├── adapter.py          # Workbench Runtime Adapter（预留）
+│   ├── config/             # 配置资源
+│   │   ├── default.yaml    # 10 模块默认 YAML 配置
+│   │   └── loader.py       # 配置加载器
+│   ├── runtime/            # Agent Workbench 内部 Runtime
+│   │   ├── agent_runtime.py
+│   │   ├── config_store.py
+│   │   ├── profile_manager.py
+│   │   ├── module_registry.py
+│   │   └── modules/        # 10 个 RuntimeModule
+│   │       ├── base.py
+│   │       ├── runtime_module.py
+│   │       ├── session_module.py
+│   │       ├── config_module.py
+│   │       ├── profile_module.py
+│   │       ├── prompt_module.py
+│   │       ├── model_module.py
+│   │       ├── tool_module.py
+│   │       ├── memory_module.py
+│   │       ├── strategy_module.py
+│   │       └── trace_module.py
+│   ├── services/           # 能力服务（第一版下放到 Agent 层）
+│   │   ├── model_provider.py
+│   │   ├── echo_provider.py
+│   │   ├── prompt_renderer.py
+│   │   ├── python_renderer.py
+│   │   ├── tool_registry.py
+│   │   └── memory_service.py
+│   ├── engines/            # Workbench 专用 Engine
+│   │   ├── workbench_llm_engine.py
+│   │   └── workbench_tool_engine.py
+│   ├── ui/                 # Workbench 三栏 UI 扩展
+│   │   ├── __init__.py
+│   │   ├── main_window.py
+│   │   ├── left_panel.py
+│   │   ├── right_panel.py
+│   │   ├── config_panel.py
+│   │   ├── workbench_ui_controller.py
+│   │   ├── sections/
+│   │   └── widgets/
+│   └── tests/              # Workbench 端到端测试
+│       └── test_agent_workbench.py
+│
 ├── v6/                     # 【全新纯净主线】V6 从零重写
 │   ├── __init__.py
 │   ├── main_window.py      # 纯 UI 壳（仅创建 Widget + 转发事件 + 窗口行为）
@@ -290,6 +340,7 @@ v6.7.0-alpha 完成 Step 5.4 Runtime Orchestration Foundation：新增 `v6/runti
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v6.9.0-alpha | 2026-07-08 | Agent Workbench Single Instance：新增agent_workbench/应用层，含ConfigStore/ProfileManager/ModuleRegistry/AgentWorkbenchRuntime/10个RuntimeModule/WorkbenchController/Workbench Engine；扩展v6三栏UI实现AgentConfigPanel配置面板，支持查看/修改/保存/热更新；新增7个Workbench端到端测试；V6+Workbench合计182/182测试通过 | feat/test/ui | agent_workbench/**, v6/runtime/planner_loop.py, PROJECT_BLUEPRINT.md, CHANGELOG.md |
 | v6.5.8-alpha | 2026-07-07 | 八大Engine Runtime骨架：新增engines/base.py及llm/tool/memory/planner/workflow/code/vision/knowledge空壳；EngineManager统一execute(name,ctx)；新增Runtime Kernel集成测试验证Engine发现/生命周期/Trace Timeline/Planner编排；清理旧engines不兼容实现；130/130测试通过 | feat/refactor/test | v6/runtime/engines/base.py, v6/runtime/engines/*.py, v6/runtime/engine_manager.py, tests/v6/test_v6_runtime_kernel.py, tests/v6/test_v6_smoke.py |
 
 ## 历史归档

@@ -1,5 +1,93 @@
 # Changelog
 
+## v6.9.0-alpha (2026-07-08) — Agent Workbench Single Instance
+
+> **里程碑语义**：V6 框架内第一个真实 Agent 产品实例落地。
+> 本版本在 `v6-agent` 分支基于 `v6.8.0-alpha` Framework Core Foundation Baseline，构建可运行、可配置的单一 Agent Workbench，证明基座可以承载完整 Agent 产品实例。
+> 配置/Prompt/Memory 工程先下放到 Agent 层，不引入 Embedding、向量搜索、多 Agent 协作等复杂能力；目标是把所有可调能力统一管理，并通过 UI 配置面板支持 Runtime 热更新。
+
+### Added
+- 新增 `agent_workbench/` 应用层目录，作为 V6 第一个真实产品实例：
+  - `agent_workbench/app.py`：CLI / GUI 双入口，`--mode cli/gui` 启动。
+  - `agent_workbench/controller.py`：`WorkbenchController`，Application Layer 唯一入口，只持有 `AgentWorkbenchRuntime`，不直接持有 Module。
+  - `agent_workbench/runtime/agent_runtime.py`：`AgentWorkbenchRuntime`，组合 `ConfigStore` / `ProfileManager` / `ModuleRegistry` / `CoreAgentRuntime`，注册 `WorkbenchLLMEngine` 与 `WorkbenchToolEngine`。
+  - `agent_workbench/runtime/config_store.py`：`ConfigStore`，YAML 唯一配置源 + 内存缓存 + 点分路径 get/set/delete + 按 namespace 变更通知。
+  - `agent_workbench/runtime/profile_manager.py`：`ProfileManager`，独立管理 Profile 切换 / 导入 / 导出 / 合并，通过 `ConfigStore` 读写。
+  - `agent_workbench/runtime/module_registry.py`：`ModuleRegistry`，注册 10 个 `BaseRuntimeModule`，统一调用 `initialize` / `apply_config` / `dispose`。
+  - `agent_workbench/runtime/modules/base.py`：`BaseRuntimeModule` 抽象基类，统一生命周期与 `to_form()` UI 表单接口。
+  - 10 个 RuntimeModule：
+    - `runtime_module.py` —— Agent 生命周期、运行状态、热加载入口。
+    - `session_module.py` —— Conversation 状态、History、Context Window。
+    - `config_module.py` —— 完整 YAML 配置查看与编辑入口。
+    - `profile_module.py` —— Profile 切换 / 导入 / 导出 UI 入口。
+    - `prompt_module.py` —— Prompt 模板、Renderer 切换、热更新。
+    - `model_module.py` —— Provider Registry、Sampling / Context 参数。
+    - `tool_module.py` —— Tool 注册、开关、权限。
+    - `memory_module.py` —— Memory Provider、参数、生命周期。
+    - `strategy_module.py` —— Agent 行为策略、Planner 参数、Reflection、阈值。
+    - `trace_module.py` —— Trace 开关、日志等级、Runtime Trace 参数。
+  - `agent_workbench/services/`：能力服务（第一版下放到 Agent 层）。
+    - `model_provider.py` / `echo_provider.py`：统一 Provider 接口，Echo 占位实现。
+    - `prompt_renderer.py` / `python_renderer.py`：PromptRenderer 统一接口，Python `str.format()` 实现。
+    - `tool_registry.py`：Tool 注册表，支持开关、权限、schema。
+    - `memory_service.py`：SQLite Memory 服务，基础 CRUD + namespace，不引入 Embedding / 向量搜索。
+  - `agent_workbench/engines/workbench_llm_engine.py` / `workbench_tool_engine.py`：Workbench 专用 Engine，调用 ModelModule / ToolModule，通过 RuntimeContext 与 Runtime 交互。
+- 扩展 v6 三栏高级 UI：
+  - `agent_workbench/ui/left_panel.py`：`WorkbenchLeftPanel` 在 v6 左栏基础上新增左下角「设置」按钮，发射 `settings_requested` 信号。
+  - `agent_workbench/ui/right_panel.py`：`WorkbenchRightPanel` 在 v6 右栏基础上新增「配置」标签页，内嵌配置面板。
+  - `agent_workbench/ui/config_panel.py`：`AgentConfigPanel`，左侧模块列表 + 右侧 JSON 编辑器，支持查看 / 修改 / 保存 / 热更新四件事。
+  - `agent_workbench/ui/main_window.py`：`WorkbenchMainWindow`，基于 v6 三栏 UI 组装完整窗口，集成自定义左右栏与配置面板。
+  - `agent_workbench/ui/workbench_ui_controller.py`：`WorkbenchUIController` 继承 `v6.ui_controller.UIController`，复用 Session/Chat 服务，聊天请求转发给 `WorkbenchController`；设置按钮切换到右侧配置标签页。
+- 新增 `agent_workbench/config/default.yaml`：完整 10 模块默认配置，YAML 唯一配置源。
+- 新增 `agent_workbench/tests/test_agent_workbench.py`：7 个端到端测试，覆盖聊天生命周期、Tool Engine、PlannerLoop 决策、ConfigStore 读写、CLI 入口。
+
+### Architecture
+- Agent Workbench 内部分层：
+  ```
+  Desktop UI (WorkbenchMainWindow)
+    |
+    v
+  WorkbenchUIController ──► v6 UIController (Session/Chat/Config 服务复用)
+    |
+    v
+  WorkbenchController
+    |
+    v
+  AgentWorkbenchRuntime
+    ├── ConfigStore (YAML 唯一源)
+    ├── ProfileManager
+    ├── ModuleRegistry (10 RuntimeModules)
+    ├── CoreAgentRuntime (v6 Framework Core)
+    │     ├── Orchestrator
+    │     ├── PlannerLoop
+    │     ├── EngineManager
+    │     ├── CapabilityRegistry
+    │     ├── EventBus
+    │     ├── RuntimeTrace
+    │     └── ReplayService
+    └── WorkbenchLLMEngine / WorkbenchToolEngine
+  ```
+- 10 模块分层：
+  - 运行态：Runtime / Session
+  - 配置态：Config / Profile
+  - 能力态：Prompt / Model / Tool / Memory / Strategy
+  - 观测态：Trace
+- 热更新机制：`ConfigStore` 变更 → namespace 通知 → `Module.apply_config()`，无需重启 Runtime。
+- UI 不直接持有 Module：`WorkbenchController` 只暴露 `AgentWorkbenchRuntime` 能力给 UI。
+
+### test
+- V6 核心测试：`pytest tests/v6/` **175/175 通过**。
+- Workbench 测试：`pytest agent_workbench/tests/` **7/7 通过**。
+- 合计：**182/182 通过**。
+- GUI 冒烟：WorkbenchMainWindow 可正常实例化并退出。
+- 打包验证：`python -m PyInstaller agent_workbench.spec` 成功生成 `dist/AgentWorkbenchV6.exe`；CLI/GUI 均可独立启动。
+
+### Guarantees
+- 不引入 Embedding、向量搜索、RAG、多 Agent 协作。
+- 不引入真实 LLM 依赖；第一版仅 Echo Provider。
+- 不修改 v6-core 功能；仅在 `v6/runtime/planner_loop.py` 补充 `set_policy()` 公共方法以修复外部切换策略的边界问题。
+- 保持 v6 三栏 UI 设计风格 100% 不变，只做扩展不做重构。
+
 ## v6.8.0-alpha (2026-07-07) — V6 Framework Core Foundation
 
 > **里程碑语义**：V6 共享核心框架基座版本已冻结。

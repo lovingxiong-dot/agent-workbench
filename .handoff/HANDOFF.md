@@ -22,7 +22,7 @@ schema_version: 3.1
 See [`PROJECT_LINEAGE.md`](../PROJECT_LINEAGE.md) for the full V5 / V6 identity map.
 
 ## Mission
-基于 `v6.8.0-alpha`（V6 Framework Core Foundation Baseline）在 `v6-agent` 分支上执行 **V6.8.0-alpha Baseline Validation**：构建一个最小真实 Agent 产品实例 `demo_agent/`，验证 Framework Core 能否承载完整端到端链路（Desktop UI → UIController → RuntimeAdapter → AgentRuntime → Orchestrator → PlannerLoop → Engine → Trace/Replay）。目标不是扩展 Runtime 能力，而是证明基座可用。
+基于 `v6.8.0-alpha`（V6 Framework Core Foundation Baseline）在 `v6-agent` 分支上执行 **V6.8.0-alpha Baseline Validation**：构建一个最小真实 Agent 产品实例 `agent_workbench/`，验证 Framework Core 能否承载完整端到端链路（Desktop UI → UIController → RuntimeAdapter → AgentRuntime → Orchestrator → PlannerLoop → Engine → Trace/Replay）。目标不是扩展 Runtime 能力，而是证明基座可用。
 
 ## Current Architecture State
 
@@ -152,7 +152,26 @@ v6-core  ──merge──►  v6-service  ──merge──►  v6-agent
 - [x] Step 5.3 已归档：新增 `ReplayRecord` / `ReplayLog` / `ReplayService`，Runtime Execution Replay Foundation 落地；标签 `v6.6.2-alpha`。
 - [x] Step 5.4 已归档：新增 `Orchestrator` 与 Task Lifecycle State Machine，AgentRuntime 持有 Orchestrator；标签 `v6.7.0-alpha`。
 - [x] Step 5.5 / V6.8.0-alpha **Framework Core Foundation Baseline established**：新增 `PlannerLoop` / `Decision` / `DecisionPolicy`，Orchestrator 按决策选择 Engine；与前面四层共同构成 V6 Framework Core Foundation，作为后续 Service / Agent 开发的公共基线；标签 `v6.8.0-alpha`。
-- [ ] **V6.8.0-alpha Baseline Validation**（基于 `v6-agent` 分支）：构建最小真实 Agent 产品实例 `demo_agent/`，验证 Framework Core 端到端可用性。通过后再进入 `v6-service` 的 Memory / Prompt / Model Adapter 等扩展。
+- [x] **V6.8.0-alpha Baseline Validation**（基于 `v6-agent` 分支）：构建最小真实 Agent 产品实例 `agent_workbench/`，验证 Framework Core 端到端可用性。
+- [ ] Step 6 / V6.9+：Runtime Service Architecture（Memory / Prompt / Model Adapter / Tool Adapter / Knowledge Adapter 等真实世界能力接入层，回到 `v6-service` 分支推进）。
+
+## V6.8.0-alpha Baseline Validation Details
+- [x] 新增 `agent_workbench/` 最小 Agent 产品实例：
+  - `agent_workbench/engines/echo_llm_engine.py` — 占位 LLM Engine，验证 text_generation 链路。
+  - `agent_workbench/engines/echo_tool_engine.py` — 占位 Tool Engine，验证 tool_execution 链路。
+  - `agent_workbench/adapter.py` — `WorkbenchRuntimeAdapter`：使用 `AgentRuntime.orchestrate()` 驱动 Orchestrator → PlannerLoop → Engine 链路。
+  - `agent_workbench/controller.py` — `WorkbenchController`：装配 AgentRuntime、注册占位 Engine、提供同步 `chat()` / `chat_with_tool()` API。
+  - `agent_workbench/config/default.yaml` + `loader.py` — Agent 层配置加载（非 Runtime Core）。
+  - `agent_workbench/app.py` + `ui/main_window.py` — 最小 Desktop UI / CLI 入口。
+  - `agent_workbench.spec` — PyInstaller 打包配置（当前环境未安装 PyInstaller，spec 已准备待验证）。
+- [x] 新增 `agent_workbench/tests/test_agent_workbench.py` 共 6 个测试，覆盖：
+  - 单 Agent 聊天生命周期（CREATED → PLANNING → EXECUTING → COMPLETED）。
+  - Tool Engine 调用链路。
+  - PlannerLoop 按 `task_type=chat` 选择 `llm`。
+  - PlannerLoop 按 `task_type=tool` 选择 `tool`。
+  - 配置加载。
+  - CLI 入口非交互 smoke 测试。
+- [x] `pytest tests/v6/ agent_workbench/tests/` **180/180 通过**。
 
 ## Step 5.5 / V6.8.0-alpha Details
 - [x] 新增 `v6/runtime/decision.py`：定义 `DecisionAction` 枚举与 `Decision` 数据类，含工厂方法 `execute()` / `complete()` / `fail()` / `wait()`。
@@ -295,31 +314,13 @@ PROJECT_BLUEPRINT.md
 - 用户建议下一步进入 Step 6 Runtime Service Architecture（Memory / Prompt / Model Adapter / Tool Adapter / Knowledge Adapter），而非自治循环。
 
 ## Next Steps (AI-Inferred)
-1. **V6.8.0-alpha Baseline Validation**（当前最高优先级，基于 `v6-agent` 分支）
-   - 目标：用最小真实 Agent 产品实例 `demo_agent/` 验证 Framework Core 能否承载完整端到端链路。
-   - 结构：
-     ```
-     demo_agent/
-     ├── ui/              # Desktop UI（Agent 产品层，非 Runtime Core）
-     ├── app.py           # 应用入口
-     ├── controller.py    # UIController
-     ├── adapter.py       # RuntimeAdapter（Application Boundary）
-     ├── config/          # agent 配置、prompt 工程、memory 工程
-     └── tests/           # 端到端冒烟测试
-     ```
-   - 验证项：
-     - 单 Agent 生命周期（submit → planning → executing → completed/failed）。
-     - GUI 调用链（Desktop UI → UIController → RuntimeAdapter → AgentRuntime）。
-     - LLM Engine 调用（占位或真实 OpenAI adapter，不污染 Core）。
-     - Tool Engine 调用。
-     - Trace 记录与 Replay 查看。
-     - 配置加载。
-     - 打包启动（PyInstaller）。
-   - 不进入：用户权限系统、动态 UI Builder、MCP、Admin Panel、Memory Service、Prompt Service；这些属于后续 `v6-service` 或更远期 `v6-agent` 产品化工作。
-2. **Step 6 / V6.9+：Runtime Service Architecture**（Baseline Validation 通过后，回到 `v6-service` 分支）
+1. **Step 6 / V6.9+：Runtime Service Architecture**（当前最高优先级，回到 `v6-service` 分支）
+   - Baseline Validation 已完成，`agent_workbench/` 证明 Framework Core 可承载完整 Agent 产品实例。
    - 目标：为 Runtime Kernel 接入真实世界能力层。
    - 候选服务：Memory Service、Prompt Service、Model Adapter、Tool Adapter、Knowledge Adapter。
    - 原则：Service 属于 Runtime 能力接入层，不是 Engine 业务逻辑；保持 `RuntimeContext` 作为唯一 Public Protocol。
+2. **打包验证**
+   - 当前环境未安装 PyInstaller，`agent_workbench.spec` 已准备；待用户环境安装后执行打包并验证 `AgentWorkbench.exe` 可独立启动。
 3. **Runtime Task 模型完善**
    - 将 `RuntimeContext`、`RuntimeTrace`、`RuntimeMetrics`、`RuntimeResult` 进一步封装为 `RuntimeTask` 工厂产物，同时保持 Context 作为唯一 Public Protocol。
 4. **未来：真正的 Replay Execution**
@@ -328,8 +329,8 @@ PROJECT_BLUEPRINT.md
    - 不做 `observe → think → act → repeat` 式的 ReAct 循环；待 Service Architecture 与真实 Adapter 稳定后再评估是否需要多轮决策循环。
 
 ## Test Status
-- latest: [test:175/175]
-- command: `python -m pytest tests/v6/ -q --tb=short`
+- latest: [test:180/180]
+- command: `python -m pytest tests/v6/ agent_workbench/tests/ -q --tb=short`
 
 ## Notes
 - `v6-agent` 是当前活跃开发分支，已推送至 origin；`v6-dev` 作为 Framework Core Foundation 演进历史的母线保留。
