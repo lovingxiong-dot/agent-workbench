@@ -91,6 +91,62 @@
   新：manager.execute(manager.select_engine({"capability": "text_generation"}))
   ```
 
+## v6.6.2-alpha (2026-07-07) — Runtime Trace Replay Foundation
+
+> **里程碑语义**：V6 Runtime Execution Replay 基础已落地。
+> 本版本只做 **Deterministic Trace Replay**：记录、导出、查看执行轨迹，不重新调用 LLM/Tool/Memory。
+
+### Added
+- 新增 `v6/runtime/replay.py`：
+  - `ReplayRecord`：独立回放记录，字段包括 `trace_id` / `task_id` / `timestamp` / `component` / `component_type` / `event_type` / `input_snapshot` / `output_snapshot` / `metadata`。
+  - `ReplayLog`：线程安全的 ReplayRecord 容器，支持 `filter` / `timeline` / `export`。
+  - `ReplayService`：Runtime Infrastructure 服务，订阅 EventBus 事件并生成 ReplayRecord；支持从 `RuntimeTrace` 批量导入历史步骤。
+- `ReplayService` 作为 EventBus 订阅者接入 Runtime 事件流：
+  ```
+  Engine
+    |
+    v
+  RuntimeEventBus
+    |
+    +------> RuntimeTrace (via Trace Hook)
+    |
+    +------> ReplayService
+  ```
+
+### Design
+- `ReplayRecord` 与 `TraceStep` 职责分离：
+  - `TraceStep` 关注"发生了什么"。
+  - `ReplayRecord` 关注"如何重新发生"（输入 / 输出 / 组件 / 事件类型）。
+- `ReplayService` 不是 Engine，不替代 `EngineManager` 或 `EventBus`；属于 Runtime Infrastructure。
+- 第一版范围：
+  - 5.3.1 Trace Persistence：保存 Task / Phase / Engine / Event / Result 轨迹。
+  - 5.3.2 Replay Viewer：通过 `trace_id` / `task_id` 查看 Timeline 与 Step Detail。
+  - 5.3.3 Replay Execution：暂不实现真正重新执行，待后续 checkpoint + snapshot + engine sandbox 成熟后再推进。
+
+### test
+- 新增 `tests/v6/test_v6_replay.py` 共 9 个测试，覆盖：
+  - `ReplayRecord.from_event()` 字段解析。
+  - `ReplayLog` 排序、筛选、导出。
+  - `ReplayService` 从 `RuntimeTrace` 导入记录。
+  - `ReplayService.view()` 摘要统计。
+  - `ReplayService` 订阅 EventBus 事件。
+  - `ReplayService` 不重新执行 Engine（Deterministic Replay 保证）。
+
+### Architecture
+- Runtime 可观测链路成型：
+  ```
+  Task → Phase → Engine → Service → Tool → Event → Result
+                |
+                v
+        RuntimeEventBus
+                |
+        +-------+-------+
+        |               |
+  RuntimeTrace    ReplayService
+        |               |
+        +------> Timeline / Export / View
+  ```
+
 ## v6.0.0-alpha (2026-07-07) — V6 独立 Runtime 架构线公开立项
 
 ### declaration
