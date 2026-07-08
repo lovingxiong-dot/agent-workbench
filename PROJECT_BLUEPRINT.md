@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v6.9.2-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 38 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v6.9.3-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 39 |
 
 ## Current Development Authority
 
@@ -84,6 +84,8 @@ v6-core  ──merge──►  v6-service  ──merge──►  v6-agent
   4. 所有状态收敛到 `RuntimeContext`；ChatMessage、ToolCall、MemoryEntry、Metrics 等仅为 `RuntimeContext` 的资源。
 
 ## 项目概要
+v6.9.3-alpha 进入 **Multi-Capability Runtime & Manager Routing** 实施阶段：Capability 从 metadata 提升为 Runtime 一级对象，位于 `agent_workbench/runtime/capability/`；建立以 `assistant` 为根的能力树（Tree，非 Graph），由 `AgentWorkbenchRuntime` 单例持有 `CapabilityRegistry`；`ManagerRuntime` 取代 `AgentManager` 成为默认 Manager，完成 `UserRequest → CapabilityMatch → Task` 路由；`CapabilityRouter` 按 `Task.metadata["capability_id"]` 解析 engine_capability；Orchestrator 支持 `metadata["capability_chain"]` 静态链顺序执行；UI Bridge 后半段只读接入。Task 五字段保持不变，所有扩展写入 metadata。本版本为单一 Agent 实例的能力操作系统奠基，不进入 Multi-Agent / Agent Memory / MCP 大规模接入。
+
 v6.9.2-alpha 完成 **Single Agent Runtime Foundation**：定义稳定的 `Task` 数据模型（`id` / `capability` / `payload` / `metadata` / `created_at`），`submit_task(Task)` 成为 Runtime 唯一入口，`chat()` 降级为 Adapter 包装；新增 `UserRequest` 协议对象与 `Manager` 协议，`AgentManager` 实现 `UserRequest → Task` 解析，Runtime 不再感知 Chat/Prompt 等输入形式；`Orchestrator` 合并 `Task.metadata` 到 `RuntimeContext`；Workbench UI 骨架升级为 `WorkbenchHost → Workbench → NavigatorHost / WorkspaceHost / InspectorHost / StatusBarHost / CommandBarHost`，Host 负责 mount / replace / dispose 生命周期，WorkbenchUIController 与测试均通过 Host 接口交互，不再直接依赖 Qt Widget 内部属性；V6 全量测试 `pytest tests/v6/` 176/176 通过，Workbench 测试 `pytest agent_workbench/tests/` 34/34 通过，合计 210/210 通过。
 
 v6.9.1-alpha 完成 **Runtime Observability Foundation**：将 RuntimeTrace 升级为分层事件模型（Task/Capability/Engine/Provider/Execution/Stream/Request），事件语义不再绑定 LLM Streaming，支持未来多模态扩展；新增 `CapabilityRouter` 作为 Runtime 组件发射 `capability.resolved` 事件；`Orchestrator` 统一发射 `engine.selected` 事件；`WorkbenchLLMEngine` 发射 `execution.started` / `provider.selected` / `request.sent` / `first.token` / `chunk.received` / `stream.finished` / `execution.finished` 结构化事件；`EventBus` Trace Hook 改为 `publish` 阶段同步写入，保证事件顺序与 `task.finish` 不丢失，同时保持订阅者回调异步；新增 `TraceEventRegistry` 与 `TraceWorkspaceItem`，UI 通过事件注册表动态渲染图标/标签/状态，不维护硬编码映射；新增 Trace 事件顺序、父子关系、Workspace 接收等测试；V6 全量测试 `pytest tests/v6/` 176/176 通过，Workbench 测试 `pytest agent_workbench/tests/` 20/20 通过，合计 196/196 通过。
@@ -94,22 +96,35 @@ v6.8.0-alpha 完成 V6 Framework Core Foundation Baseline（共享核心框架�
 
 ## 当前任务
 
-**下一步：v6.9.3-alpha Multi-Capability Runtime & Manager Routing**（在 `v6-agent` 分支执行）：
+**v6.9.3-alpha Multi-Capability Runtime & Manager Routing**（在 `v6-agent` 分支执行）：
 
-v6.9.2-alpha 已完成 **Single Agent Runtime Foundation**：Task / UserRequest / Manager / CapabilityRouter / Engine 主链固定，Workbench UI Host 骨架固定。v6.9.3-alpha 目标是在不改变 Runtime 与 Workbench 骨架的前提下，新增第二条 Capability（如 `image_generation`）并完善 Manager 的规则路由，证明「新增 Capability 只需注册 Engine + 扩展 Manager 规则 + 注册 WorkspaceItem」，无需修改 Runtime 或 Workbench 结构。
+v6.9.2-alpha 已完成 **Single Agent Runtime Foundation**。v6.9.3-alpha 目标是把 Capability 从 metadata 提升为 Runtime 一级对象，建立以 `assistant` 为根的能力树，让 Manager 成为真正的能力路由层，Orchestrator 支持静态 Capability Chain 顺序执行，同时保持 Task 五字段、Runtime 骨架与 Workbench Host 骨架不变。
 
 ### v6.9.3-alpha 目标
 
-- 新增 `ImageEngineStub`（或真实 Image Provider）作为 `image_generation` capability 的实现，返回占位结果或调用真实图片生成 API。
-- 扩展 `AgentManager` 规则：根据 `UserRequest.text` 识别「画/生成图片」等意图，输出 `Task(capability="image_generation")`。
-- `WorkbenchController` 新增 `submit_request(UserRequest)` 便捷入口，保持 `chat()` / `chat_with_tool()` 兼容。
-- 在 WorkspaceHost 中注册 `ImageWorkspaceItem`，展示图片生成结果。
-- Trace 验证：不同 capability 的任务在 Trace 树中自然分叉，Inspector / StatusBar 正常观测。
-- 用户路径可验证：打开 Workbench → 输入「生成一张猫」→ Manager 解析为 `image_generation` → Image Engine 执行 → Workspace 展示结果 → Trace 展示完整链路。
+- **Commit 0 Runtime Contract**：定义 `CapabilityDefinition` / `CapabilityMatch` / `CapabilityIntent` / `CapabilityStep` 模型，新增 Manager 级 Event 类型，建立空壳 `CapabilityRegistry` / `ManagerRuntime`。
+- **Commit 1 Capability Runtime**：实现 `agent_workbench/runtime/capability/graph.py` 能力树（Tree，非 Graph），支持 `register / get / lineage / children / roots / find / resolve`，默认树为 `assistant → chat/analyze/tool/coding → ...`。
+- **Commit 2 Manager Routing**：实现 `agent_workbench/runtime/manager/runtime.py`，`ManagerRuntime` 完成 `UserRequest → CapabilityMatch → Task`，保持 `AgentManager` 作为 Legacy Adapter；`WorkbenchController` 默认注入 `ManagerRuntime`。
+- **Commit 3 Capability Resolution**：升级 `agent_workbench/runtime/capability_router.py`，按 `Task.metadata["capability_id"]` 解析 engine_capability，事件 payload 携带 `capability_id` / `capability_path`。
+- **Commit 4 Capability Chain**：Orchestrator 支持 `metadata["capability_chain"]` 静态链顺序执行；Chain 只控制 Capability 顺序，不控制 Engine / Provider / Policy / Retry。
+- **Commit 5 Workbench Runtime Bridge**：新增只读 `WorkbenchRuntimeBridge`，`Runtime → UI` 事件流驱动 Navigator / StatusBar / TraceWorkspace；默认可通过开关关闭。
 
 ### Foundation 封板标准
 
-当 chat、tool、image_generation 三条 Capability 都能跑通，且 Runtime / Workbench / Host 骨架无需为新 Capability 改动时，Single Agent Runtime Foundation 正式封板。后续再进入 Service Registry、TaskGraph、Workflow Planner、Multi-Agent 等 Runtime V2 演进。
+当 `UserRequest → ManagerRuntime → CapabilityRegistry → CapabilityRouter → Task → Orchestrator → Engine` 主链稳定，且「分析这个 Python 项目并修复 bug」能生成 coding 能力链并顺序执行时，Multi-Capability Runtime Foundation 封板。后续再进入 Service Registry、TaskGraph、Workflow Planner、Multi-Agent 等 Runtime V2 演进。
+
+### 开发约束
+
+1. `CapabilityDefinition` 纯数据，禁止携带 Runtime 状态。
+2. `CapabilityRegistry` 由 `AgentWorkbenchRuntime` 单例持有并注入 Manager 与 Router。
+3. Capability Chain 第一版仅静态链，禁止根据中间结果动态扩展。
+4. `ManagerRuntime` 不调用 Engine，只生成 Task。
+5. UI Bridge 第一版只读。
+6. 能力树根节点使用 `assistant`，避免与 Manager 调度器混淆。
+
+### 实施计划文件
+
+详见 `.trae/documents/v6.9.3_multi_capability_runtime_plan.md`。
 
 ### V6 Architecture Constitution（架构宪章）
 

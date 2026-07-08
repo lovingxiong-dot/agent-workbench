@@ -1,5 +1,33 @@
 # Changelog
 
+## v6.9.3-alpha (2026-07-08) — Multi-Capability Runtime & Manager Routing (Planning Approved)
+
+> **里程碑语义**：Capability 从 metadata 提升为 Runtime 一级公民。单一 Agent 实例进化为能力操作系统：以 `assistant` 为根的能力树（Tree）、`ManagerRuntime` 作为能力路由层、静态 Capability Chain 顺序执行、只读 Runtime UI Bridge。Task 五字段保持不变，所有扩展写入 metadata/payload。不进入 Multi-Agent / Agent Memory / MCP 大规模接入。
+
+### Planned
+- 新增 `agent_workbench/runtime/capability/model.py`：`CapabilityDefinition` / `CapabilityPersona` / `CapabilityIntent` / `CapabilityMatch` 运行时模型。
+- 新增 `agent_workbench/runtime/capability/graph.py`：`CapabilityRegistry` 能力树，支持 `register / get / lineage / children / roots / find / resolve`。
+- 新增 `agent_workbench/runtime/capability/chain.py`：`CapabilityStep` / `CapabilityChain`，静态链序列化工具。
+- 新增 `agent_workbench/runtime/manager/runtime.py`：`ManagerRuntime` 默认 Manager，完成 `UserRequest → CapabilityMatch → Task`。
+- 新增 `agent_workbench/ui/workbench_runtime_bridge.py`：只读 Runtime → UI 事件桥（后半段，可开关）。
+- 新增 Manager 级事件类型：`manager.intent.classified` / `manager.capability.selected` / `manager.chain.step.started` / `capability.chain.step.started`。
+- 升级 `agent_workbench/runtime/capability_router.py`：按 `Task.metadata["capability_id"]` 解析 engine_capability。
+- 升级 `agent_workbench/runtime/agent_runtime.py`：单例持有 `CapabilityRegistry` 并注入 Manager 与 Router。
+- 升级 `agent_workbench/controller.py`：默认注入 `ManagerRuntime`；`AgentManager` 保留为 Legacy Adapter。
+- 升级 `v6/runtime/orchestrator.py`：支持 `metadata["capability_chain"]` 静态链顺序执行。
+
+### Constraints
+- `CapabilityDefinition` 纯数据，不携带 Runtime 状态。
+- `CapabilityRegistry` 由 `AgentWorkbenchRuntime` 单例持有。
+- Capability Chain 仅静态链，不根据中间结果动态扩展。
+- `ManagerRuntime` 不调用 Engine。
+- UI Bridge 第一版只读。
+- 能力树根节点为 `assistant`。
+
+### Tests
+- 新增 `tests/v6/runtime/test_capability_model.py` / `test_capability_registry.py` / `test_manager.py` / `test_router.py` / `test_capability_chain.py`。
+- 目标：全量 260~280 passed。
+
 ## v6.9.2-alpha (2026-07-08) — Single Agent Runtime Foundation
 
 > **里程碑语义**：Runtime 从 Chat API 转向 Task API，Workbench UI 从配置工具转向 IDE Host 骨架。Task / UserRequest / Manager / CapabilityRouter / Engine 主链固定；WorkbenchHost → Workbench → NavigatorHost / WorkspaceHost / InspectorHost / StatusBarHost / CommandBarHost 骨架固定。后续新增 Capability 只需扩展 Manager 规则与注册 Engine，无需修改 Runtime 或 Workbench 结构。
