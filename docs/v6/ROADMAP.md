@@ -1,29 +1,50 @@
 # V6 路线图
 
-## 总览
-| 阶段 | 目标 | 版本标签 | 验收标准 |
-| --- | --- | --- | --- |
-| 0 | 骨架与规格 | v6.0.0-alpha | 目录完整、spec 就绪、所有模块可 import |
-| 1 | 纯 UI 层 | v6.1.0-alpha | 三栏 UI 可独立显示，零业务逻辑 |
-| 2 | Layout/UIController/MainWindow | v6.2.0-alpha | 窗口/分栏/折叠正常，MainWindow 无业务逻辑 |
-| 3 | Session/Config Manager | v6.3.0-alpha | 会话持久化、配置验证通过 |
-| 4 | AgentRuntime 骨架 | v6.4.0-alpha | 任务调度、事件总线可运行 |
-| 5 | Engines | v6.5.0-alpha | 八大 Engine 独立并通过测试 |
-| 6 | 业务服务与集成 | v6.6.0-alpha | 端到端 ChatTask 通过 |
-| 7 | 打包与最终存档 | v6.7.0-alpha | exe 可启动、全量测试通过 |
+## 产品定位
 
-## 当前阶段：阶段 0（v6.0.0-alpha）
+**Personal Agent Workbench / Agent IDE**
+
+不是一个聊天机器人，而是一个可以不断安装能力、工具、Provider、Workflow 的 AI 工作台。
+
+## 演进路径
+
+```text
+Foundation Runtime      ← v6.9.6-foundation 已冻结
+        ↓
+Agent Workbench         ← v6.10.x 当前阶段
+        ↓
+Provider Ecosystem
+        ↓
+Tool Ecosystem
+        ↓
+Skill Ecosystem
+        ↓
+Workflow Ecosystem
+        ↓
+Knowledge & Memory
+        ↓
+Digital Identity
+        ↓
+   （未来）
+    Gateway             ← 最后才做
+```
+
+## 优先级梯队
+
+| 梯队 | 优先级 | 内容 | 预计版本 |
+|---|---|---|---|
+| 第一梯队 | ⭐⭐⭐⭐⭐ | GUI、Provider、Tool Runtime、Skill Registry | v6.10.x |
+| 第二梯队 | ⭐⭐⭐⭐ | Workflow、Memory、Knowledge | v6.11.x |
+| 第三梯队 | ⭐⭐⭐ | MCP、Browser、External Service、Plugin Marketplace | v6.12.x |
+| 第四梯队 | ⭐⭐ | Gateway、Distributed、Remote Runtime | 未来 |
+
+## 当前阶段：v6.10.0-alpha Agent Workbench Ecosystem Bootstrap
 
 ### 任务清单
-- [x] 创建 `v6/` 目录结构
-- [x] 编写 `docs/v6/PROJECT_BLUEPRINT_v6.md`
-- [x] 编写 `docs/v6/SPEC.md`
-- [x] 编写 `docs/v6/ROADMAP.md`
-- [x] 编写 `docs/v6/CHANGELOG_v6.md`
-- [x] 创建空模块文件（`__init__.py` 等）
-- [x] 编写最小 import smoke 测试
-- [x] Review Agent 校验
-- [ ] Git 存档 `v6.0.0-alpha`
+- [ ] GUI：Workbench UI 完整跑通、稳定、可交互
+- [ ] Provider：接入第一个真实 LLM Provider
+- [ ] Tool Runtime：Tool 可注册、可执行、可观测
+- [ ] Skill Registry：Skill 能力包的注册、发现、加载机制
 
-### 下阶段预告：阶段 1（v6.1.0-alpha）
-由 UI Agent 主导，实现完整纯 UI 层。
+### 下阶段预告：v6.11.x
+Workflow / Memory / Knowledge 让 Agent 真正开始工作。

@@ -8,7 +8,7 @@
 > **The active development line is `v6-agent` based on `v6.8.0-alpha` (V6 Framework Core Foundation Baseline).**
 > **Public baseline: `v6.0.0-alpha`.**
 > **Framework Core baseline: `v6.8.0-alpha`.**
-> **V6 Runtime Foundation Baseline: `v6.9.6-foundation` — frozen at 2026-07-09. All future Provider, MCP, Gateway, and Workflow work starts from here.**
+> **V6 Runtime Foundation Baseline: `v6.9.6-foundation` — frozen at 2026-07-09. The Runtime Kernel is complete. The next era is the Agent Workbench Ecosystem.**
 
 | Item | Value |
 |---|---|
@@ -48,9 +48,9 @@ From this point forward:
 
 ## Agent Workbench 定位
 
-> **Agent Workbench 是 V6 Framework 的官方参考实现（Official Reference Implementation）。**
+> **Agent Workbench 是 Personal Agent Workbench / Agent IDE 的第一个参考实现，也是 V6 Framework 的官方产品化验证平台。**
 
-它不是 Demo，也不是临时测试程序，而是 Runtime、UI、Engine、Service、Module 等全部能力的产品化验证平台。所有新增能力必须首先在 Workbench 中完成集成验证，证明其体验、边界、异常、性能均达到产品化标准后，再决定是否进入 `v6-core` / `v6-service` 框架核心。
+它不是 Demo，也不是一个聊天机器人。它是一个可以不断安装能力、工具、Provider、Workflow 的 AI 工作台。Runtime、UI、Engine、Service、Module 等全部能力首先在 Workbench 中完成集成验证，证明其体验、边界、异常、性能均达到产品化标准后，再决定是否进入 `v6-core` / `v6-service` 框架核心。
 
 这一句话决定以下行为：
 
@@ -234,17 +234,37 @@ Provider
 | v6.9.5-alpha | Interaction Boundary Layer Contract — `RuntimeRequest` / `InteractionEvent` 统一入口与输出协议。 |
 | v6.9.6-alpha | Capability Runtime Contract — `CapabilityDefinition` / `CapabilityContext` / `CapabilityState` / `CapabilityRegistry` 运行时索引冻结。 |
 
-### 后续路线
+### 后续路线：Agent Workbench 生态
 
 ```text
-v6.9.x  Runtime Kernel Freeze Series
-   ↓
-v6.10.x UI Runtime / Real LLM Production Loop
-   ↓
-v6.11.x Runtime Capability Expansion (MCP / Browser / Multi-Agent)
-   ↓
-v6.12.x Distributed Runtime / Workspace Identity
+Foundation Runtime      ← v6.9.6-foundation 已冻结
+        ↓
+Agent Workbench         ← v6.10.x 当前阶段：GUI / Provider / Tool / Skill
+        ↓
+Provider Ecosystem
+        ↓
+Tool Ecosystem
+        ↓
+Skill Ecosystem
+        ↓
+Workflow Ecosystem
+        ↓
+Knowledge & Memory
+        ↓
+Digital Identity
+        ↓
+   （未来）
+    Gateway             ← 最后才做，管理多个成熟 Agent
 ```
+
+优先级：
+
+| 梯队 | 优先级 | 内容 |
+|---|---|---|
+| 第一梯队 | ⭐⭐⭐⭐⭐ | GUI、Provider、Tool Runtime、Skill Registry |
+| 第二梯队 | ⭐⭐⭐⭐ | Workflow、Memory、Knowledge |
+| 第三梯队 | ⭐⭐⭐ | MCP、Browser、External Service、Plugin Marketplace |
+| 第四梯队 | ⭐⭐ | Gateway、Distributed、Remote Runtime |
 
 ## V6 全新主线声明
 
@@ -275,49 +295,40 @@ v6.8.0-alpha 完成 V6 Framework Core Foundation Baseline（共享核心框架�
 
 ## 当前任务
 
-**v6.9.6-alpha Capability Runtime Contract Freeze**（在 `v6-agent` 分支执行）：
+**v6.10.0-alpha Agent Workbench Ecosystem Bootstrap**（在 `v6-agent` 分支执行）：
 
-v6.9.5-alpha 已完成 **Workbench Interaction Boundary Layer**。v6.9.6-alpha 目标不是新增业务功能，而是冻结 Runtime 对 Capability 的契约：任何未来新增能力（图片、视频、浏览器、MCP、本地 Agent、远程 Agent）都必须通过注册 `CapabilityDefinition` 和实现 `CapabilityContext` 接入，不允许为单个能力增加专用 Runtime 流程。
+v6.9.x Runtime Kernel Freeze Series 已收官，`v6.9.6-foundation` 成为长期基线。v6.10.0-alpha 开始，项目从「打磨 Runtime 内核」转向「建设 Agent Workbench 生态」。产品定位升级为 **Personal Agent Workbench / Agent IDE**：不是一个聊天机器人，而是一个可以不断安装能力、工具、Provider、Workflow 的 AI 工作台。
 
-### v6.9.6-alpha 目标
+### v6.10.0-alpha 目标
 
-- **CapabilityDefinition 补全静态契约**：新增 `category` / `summary` / `version` / `provider_type` / `supported_modes` / `priority`，使其成为 Runtime 对能力的唯一静态描述。
-- **CapabilityContext 独立**：定义 `CapabilityContext` 及其子上下文 `WorkspaceContext` / `AttachmentContext` / `SelectionContext` / `ExecutionContext`，能力执行环境不再塞进 `RuntimeRequest.payload`。
-- **CapabilityState 生命周期冻结**：定义 `CapabilityState`（含 `PENDING` / `RESOLVED` / `SCHEDULED` / `RUNNING` / `COMPLETED` / `FAILED` / `CANCELLED` / `TIMEOUT` / `SKIPPED`）与 `CapabilityExecutionState`。
-- **CapabilityRegistry 扩展运行时索引**：在现有 Registry 上增加 `state_ref` / `context_ref` / `provider_binding_ref` 索引，Registry 只做索引，不做数据库。
-- **CapabilityContextBuilder 协议**：从 `RuntimeRequest` 构建 `CapabilityContext`，`RuntimeRequest.source` 仅作为 `CapabilityContext.origin`，不参与 Capability 路由决策。
+第一梯队（⭐⭐⭐⭐⭐，立即执行）：
 
-### Contract Freeze 封板标准
-
-当任何新增 Capability 都能回答以下四个问题时，Capability Runtime Contract 封板：
-
-1. 它的 `CapabilityDefinition` 是什么？
-2. 它的 `CapabilityContext` 需要哪些上下文？
-3. 它的 `CapabilityState` 生命周期如何表达？
-4. Runtime 如何通过 `CapabilityRegistry` 查询和管理这些运行时信息？
+- **GUI**：把现有 Workbench UI 跑通、稳定、可交互，成为每天可用的主界面。
+- **Provider**：接入第一个真实 LLM Provider，让 Runtime 真正说话。
+- **Tool Runtime**：让 Tool 能力在 Workbench 中可注册、可执行、可观测。
+- **Skill Registry**：建立 Skill（能力包）的注册、发现、加载机制，让能力可以「安装」。
 
 ### 开发约束
 
-1. 不新增 `CapabilityDescriptor`，不新增 `CapabilityRuntimeRegistry`；只扩展现有 `CapabilityDefinition` 和 `CapabilityRegistry`。
-2. `CapabilityDefinition` 保持纯数据，不携带 Runtime 状态。
-3. Capability Context 必须是类型化子上下文，禁止做成万能 Dict。
-4. Registry 只保存 State / Context / Provider Binding 的引用/索引，不保存执行历史、统计、Trace 等重数据。
-5. `RuntimeRequest.source` 只表示 Origin，不进入 Decision / Capability 路由。
-6. Runtime 内部禁止出现任何 UI 概念（`QtSelection`、`QtWorkspace` 等）。
-7. 不接真实 LLM、不改 Orchestrator 执行模型、不做 UI。
+1. **Runtime Kernel 不再扩展**：不允许新增 Runtime-level 模块；所有新能力通过 Capability Runtime Contract 接入。
+2. **从 UI 开始逐步完善**：先让 GUI 可用，再反向补齐 Provider / Tool / Skill，避免先做底层再补交互。
+3. **不接 Gateway / Distributed / Remote Runtime**：第四梯队内容全部冻结到未来阶段。
+4. **不接 MCP / Browser / External Service**：第三梯队内容在第二梯队跑通后再启动。
 
 ### V6 Runtime Kernel Freeze Roadmap
 
 ```text
 v6.9.5-alpha  Interaction Boundary Layer              ✅
-v6.9.6-alpha  Capability Runtime Contract Freeze      当前
-v6.9.7-alpha  Provider Runtime Foundation
-v6.9.8-alpha  Workspace Runtime Foundation
-v6.9.9-alpha  Archive Runtime Foundation
-v6.10.0-alpha UI Runtime / Real LLM Production Loop
+v6.9.6-alpha  Capability Runtime Contract Freeze      ✅
+v6.9.6-foundation  V6 Runtime Foundation Baseline     ✅ 当前基线
+v6.10.0-alpha  Agent Workbench Ecosystem Bootstrap    当前
+        ↓
+v6.11.x  Workflow / Memory / Knowledge
+        ↓
+v6.12.x  MCP / Browser / External Service / Marketplace
+        ↓
+（未来） Gateway / Distributed / Remote Runtime
 ```
-
-注意：真实 LLM 集成整体后移到 v6.10.0-alpha。在 Capability / Provider / Workspace / Archive Runtime 契约冻结之前接入真实 LLM，会导致 Provider 接口反复返工。
 
 ### 最高级设计约束
 
