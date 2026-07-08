@@ -38,6 +38,12 @@ class RuntimeEventType(str, Enum):
 
     CAPABILITY_RESOLVED = "capability.resolved"
 
+    MANAGER_INTENT_CLASSIFIED = "manager.intent.classified"
+    MANAGER_CAPABILITY_SELECTED = "manager.capability.selected"
+    MANAGER_CHAIN_STEP_STARTED = "manager.chain.step.started"
+
+    CAPABILITY_CHAIN_STEP_STARTED = "capability.chain.step.started"
+
     DECISION_PLANNED = "decision.planned"
 
     ENGINE_SELECTED = "engine.selected"

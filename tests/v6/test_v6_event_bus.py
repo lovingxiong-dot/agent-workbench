@@ -214,3 +214,11 @@ def test_trace_hook_does_not_write_without_task_id(bus):
     bus.publish(RuntimeEventType.ENGINE_STARTED, {}, task_id="")
     time.sleep(0.1)
     assert len(trace.steps()) == 0
+
+
+def test_manager_event_types_exist():
+    """v6.9.3-alpha 新增 Manager 级事件类型应存在。"""
+    assert RuntimeEventType.MANAGER_INTENT_CLASSIFIED == "manager.intent.classified"
+    assert RuntimeEventType.MANAGER_CAPABILITY_SELECTED == "manager.capability.selected"
+    assert RuntimeEventType.MANAGER_CHAIN_STEP_STARTED == "manager.chain.step.started"
+    assert RuntimeEventType.CAPABILITY_CHAIN_STEP_STARTED == "capability.chain.step.started"
