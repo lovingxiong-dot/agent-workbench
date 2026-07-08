@@ -1,138 +1,153 @@
 ---
-generated: 2026-07-08T02:00:00+08:00
+generated: 2026-07-08T16:05:00+08:00
 agent: Kimi-K2.7-Code
 schema_version: 3.1
 
 ## Mission
-基于 `v6.8.0-alpha` Framework Core Foundation Baseline，在 `v6-agent` 分支构建 V6 框架内第一个真实 Agent 产品实例 **AI Agent Workbench V6**，实现 10 个 RuntimeModule 的运行时可统一配置能力，并通过 UI 配置面板支持 Runtime 热更新。目标不是功能做全，而是把所有可调能力统一管理。
+
+完成 v6.9.2-alpha **Single Agent Runtime Foundation** 的存档、推送与最终移交：固定 `UserRequest → Manager → Task → CapabilityRouter → Engine` Runtime 主链，固定 `WorkbenchHost → Workbench → 五大 Host` UI 骨架，全量测试 210/210 通过，推送 `v6.9.2-alpha` 标签并生成交接文档。
 
 ## Progress
-- [x] 10 个 RuntimeModule 落地：Runtime / Session / Config / Profile / Prompt / Model / Tool / Memory / Strategy / Trace。
-- [x] `ConfigStore` YAML 唯一配置源 + 内存缓存 + 点分路径 get/set/delete + namespace 变更通知。
-- [x] `ProfileManager` 独立管理 Profile 切换 / 导入 / 导出 / 合并。
-- [x] `ModuleRegistry` 统一注册与生命周期管理。
-- [x] `AgentWorkbenchRuntime` 组合 ConfigStore/ProfileManager/ModuleRegistry/CoreAgentRuntime，注册 WorkbenchLLMEngine / WorkbenchToolEngine。
-- [x] `WorkbenchController` 作为 Application Layer 唯一入口，UI 不直接持有 Module。
-- [x] v6 三栏 UI 扩展：WorkbenchLeftPanel「设置」按钮、WorkbenchRightPanel「配置」标签页、AgentConfigPanel JSON 编辑器。
-- [x] `WorkbenchUIController` 继承 v6 UIController，聊天请求转发给 WorkbenchController。
-- [x] 7 个 Workbench 端到端测试 + 175 个 V6 核心测试，合计 182/182 通过。
-- [x] PyInstaller 打包验证通过，`dist/AgentWorkbenchV6.exe` CLI/GUI 均可独立启动。
-- [x] Git 归档完成：commit `d02d5a2`，tag `v6.9.0-alpha`，已推送 `v6-agent` 分支与标签到 origin。
+
+- [x] Phase A — Runtime Foundation
+  - [x] `Task` 数据模型固定五字段：`id / capability / payload / metadata / created_at`。
+  - [x] 保留 `task_id` / `type` 旧别名兼容，支持旧代码平滑迁移。
+  - [x] 新增 `UserRequest` 协议对象与 `Manager` Protocol。
+  - [x] 新增 `AgentManager` 默认实现 `resolve(UserRequest) -> Task`。
+  - [x] `WorkbenchController.chat()` / `chat_with_tool()` 改为 `UserRequest → Manager → submit_task()`。
+  - [x] 移除 `AgentWorkbenchRuntime.chat()`，仅保留 `submit_task()` 作为 Runtime 唯一入口。
+  - [x] `Orchestrator._ensure_context()` 合并 `Task.metadata` 到 `RuntimeContext`。
+  - [x] 新增 `tests/v6/test_v6_user_request.py`、`tests/v6/test_v6_task.py` 与 `agent_workbench/tests/test_manager.py`。
+
+- [x] Phase B — Workbench Host Skeleton
+  - [x] 新增 `WorkbenchAreaHost` 基类（mount / replace / dispose 生命周期）。
+  - [x] 新增 `NavigatorHost / InspectorHost / StatusBarHost / CommandBarHost`。
+  - [x] `Workbench` 改为组装五大 Host，形成 IDE 骨架。
+  - [x] `WorkbenchUIController` 与测试均通过 Host 接口交互，不再直接断言 `_list / _items / _object_id` 等 Qt 内部属性。
+
+- [x] Archive & Push
+  - [x] 更新 `PROJECT_BLUEPRINT.md` 与 `CHANGELOG.md` 至 v6.9.2-alpha。
+  - [x] 提交 `v6.9.2-alpha` 并推送 `v6-agent` 分支与标签。
+  - [x] 补充提交遗漏的 `tests/v6/test_v6_task.py`，最新提交 `1625e34` 测试记录 210/210。
+
+- [x] Handoff
+  - [x] 生成本 `.handoff/HANDOFF.md` 并提交。
 
 ## Blocker
-无。
+
+无。所有目标均已完成并通过测试。
 
 ## Decision Log
-1. **决策**：配置/Prompt/Memory 工程先下放到 Agent 层，不在 v6-core/v6-service 中实现。
-   - 排除：在 Core 中提前实现完整 Memory/Prompt 服务——会过早绑定具体实现，且第一版目标是验证「可配置」而非「真实能力」。
+
+1. **Task 字段保持五字段，扩展信息进 metadata**
+   - 决策：`Task` 只包含 `id / capability / payload / metadata / created_at`；`origin / workflow_id / priority / timeout` 等暂不实现，未来通过 `metadata` 扩展。
+   - 排除：在 Task 上新增 `origin` 字段。原因：Foundation 阶段持续膨胀字段会破坏协议稳定性，metadata 已足够承载来源、策略、调度信息。
    - 状态：已执行。
 
-2. **决策**：ConfigStore 使用 YAML 唯一源 + 内存缓存，不把配置写入 SQLite。
-   - 排除：YAML + SQLite 双存储——会带来同步问题，且配置本质是资源文件，应支持 Git diff。
+2. **Manager 命名为 Protocol 而非 TaskManager**
+   - 决策：`v6/runtime/manager.py` 定义 `Manager` Protocol，方法为 `resolve(UserRequest) -> Task`。
+   - 排除：`TaskManager` 或 `resolve(prompt, task_id, session, context)`。原因：未来输入可能是 Voice / Image / Workflow / System Event，`UserRequest` 能统一封装，Manager 名字更通用。
    - 状态：已执行。
 
-3. **决策**：ProfileManager 独立于 ConfigStore。
-   - 排除：把 Profile 逻辑合并进 ConfigStore——两者职责不同（ConfigStore 管当前配置读写通知，ProfileManager 管 Profile 切换/导入/导出/合并）。
+3. **Workbench Host 是真正容器，不是简单包裹**
+   - 决策：每个 Host 继承 `WorkbenchAreaHost`，提供 `mount / replace / dispose`，并对外暴露业务接口（如 `NavigatorHost.register_module`）。
+   - 排除：直接把现有 `Navigator / Inspector / StatusBar / CommandBar` 改名为 Host。原因：Host 应承担生命周期，内部 content widget 应可替换。
    - 状态：已执行。
 
-4. **决策**：热更新直接走 ConfigStore → EventBus → Module.apply_config()，不引入独立 HotReloadManager。
-   - 排除：第一版引入 HotReloadScheduler / debounce——属于优化而非架构，后续需要时再抽。
+4. **UI 测试调整到 Host 接口层**
+   - 决策：`test_navigator_registers_runtime_modules` 使用 `nav.modules()`；`test_inspector_renders_model_properties` 使用 `inspector.object_id / title`；`test_status_bar_reflects_runtime_state` 使用 `sb.values()`。
+   - 排除：继续通过 `_list / _object_id / _items` 断言 Qt 内部。原因：Qt 实现细节变化会导致测试脆弱，Host 接口才是稳定契约。
    - 状态：已执行。
 
-5. **决策**：模块基类命名为 `BaseRuntimeModule`，不叫 `RuntimeModule`。
-   - 排除：`RuntimeModule` 会与具体 Runtime 模块类名冲突，且模块未来会承担生命周期/初始化/释放，基类名应更准确。
+5. **Phase A 与 Phase B 分阶段执行**
+   - 决策：先完成 Manager/UserRequest（Runtime），再完成 Host Skeleton（UI），最后存档移交。
+   - 排除：两阶段同时写。原因：避免 Runtime 与 UI 再次耦合，先固定 Runtime 主链再固定 UI 骨架。
    - 状态：已执行。
 
-6. **决策**：Prompt 使用 `PromptRenderer` 统一接口，第一版实现 `PythonRenderer`（`str.format()`），不用 `string.Template`。
-   - 排除：直接上 Jinja2 或 string.Template——前者引入外部依赖，后者未来一定会换，会产生过渡性 Registry 改动。
+6. **旧参数别名兼容**
+   - 决策：`Task.__init__` 显式接收 `task_id` 和 `type` 并映射到 `id` 和 `capability`，同时提供同名 property 访问器。
+   - 排除：直接删除旧接口并全局替换。原因：v6-core 与 agent_workbench 中仍有大量旧代码使用 `task_id`/`type`，一次性全改风险高；通过构造函数兼容可在不破坏外部调用的情况下完成模型升级。
    - 状态：已执行。
-
-7. **决策**：Memory 第一版只提供 SQLite CRUD + namespace，不引入 Embedding / 向量搜索 / RAG。
-   - 排除：第一版做向量召回——超出「可配置」目标，且需外部依赖。
-   - 状态：已执行。
-
-8. **决策**：模型 Provider 统一接口，EchoProvider 只是众多 Provider 之一，不做特殊处理。
-   - 排除：Workbench 内部硬编码 Echo 逻辑——未来替换 OpenAI/Gemini/Claude 时需要改 Workbench。
-   - 状态：已执行。
-
-9. **决策**：UI 配置面板使用通用 JSON 编辑器，第一版不为每个模块定制表单。
-   - 排除：为 10 个模块各自写专用表单——开发量大，且第一版重点是验证「查看/修改/保存/热更新」四件事。
-   - 状态：已执行。
-
-10. **决策**：Workbench UI 完全基于 v6 三栏高级 UI 扩展，不做老 UI 兼容。
-    - 排除：混合老 UI 布局或保留旧代码路径——会破坏 v6 UI 设计一致性。
-    - 状态：已执行。
-
-11. **决策**：`main.py` 切换到 `agent_workbench.app` 入口，作为 V6 Workbench 主入口。
-    - 排除：保留 `main.py` 指向 v5——v5-dev 已冻结，当前主线是 v6-agent。
-    - 状态：已执行。
 
 ## Key Files
-- `agent_workbench/runtime/agent_runtime.py` — `AgentWorkbenchRuntime`，组合所有模块与 CoreRuntime。
-- `agent_workbench/runtime/config_store.py` — YAML 唯一配置源 + namespace 通知。
-- `agent_workbench/runtime/profile_manager.py` — Profile 切换/导入/导出/合并。
-- `agent_workbench/runtime/module_registry.py` — 10 个模块注册与生命周期。
-- `agent_workbench/runtime/modules/base.py` — `BaseRuntimeModule` 抽象基类。
-- `agent_workbench/runtime/modules/{runtime,session,config,profile,prompt,model,tool,memory,strategy,trace}_module.py` — 10 个模块。
-- `agent_workbench/controller.py` — `WorkbenchController`，Application Layer 唯一入口。
-- `agent_workbench/engines/workbench_llm_engine.py` / `workbench_tool_engine.py` — Workbench 专用 Engine。
-- `agent_workbench/services/{model_provider,echo_provider,prompt_renderer,python_renderer,tool_registry,memory_service}.py` — 能力服务。
-- `agent_workbench/ui/main_window.py` — `WorkbenchMainWindow` 三栏主窗口。
-- `agent_workbench/ui/left_panel.py` — 左栏新增「设置」按钮。
-- `agent_workbench/ui/right_panel.py` — 右栏新增「配置」标签页。
-- `agent_workbench/ui/config_panel.py` — `AgentConfigPanel` 配置面板。
-- `agent_workbench/ui/workbench_ui_controller.py` — UI 与 Workbench Runtime 桥接。
-- `agent_workbench/app.py` — CLI/GUI 双入口。
-- `agent_workbench/config/default.yaml` — 完整 10 模块默认配置。
-- `agent_workbench/tests/test_agent_workbench.py` — 7 个端到端测试。
-- `agent_workbench.spec` — PyInstaller 打包配置。
-- `main.py` — 已切换为 V6 入口。
-- `v6/runtime/planner_loop.py` — 补充 `set_policy()` 公共方法，支持运行时切换策略。
+
+- `v6/runtime/task.py` — Task 数据模型五字段与旧别名兼容。
+- `v6/runtime/user_request.py` — 用户请求协议对象。
+- `v6/runtime/manager.py` — Manager Protocol。
+- `v6/runtime/orchestrator.py` — 合并 Task.metadata 到 RuntimeContext。
+- `agent_workbench/services/manager.py` — AgentManager 默认实现。
+- `agent_workbench/controller.py` — 通过 Manager 生成 Task 并提交。
+- `agent_workbench/runtime/agent_runtime.py` — 移除 chat()，仅保留 submit_task()。
+- `agent_workbench/ui/workbench/host_base.py` — WorkbenchAreaHost 基类。
+- `agent_workbench/ui/workbench/navigator_host.py` — NavigatorHost。
+- `agent_workbench/ui/workbench/inspector_host.py` — InspectorHost。
+- `agent_workbench/ui/workbench/status_bar_host.py` — StatusBarHost。
+- `agent_workbench/ui/workbench/command_bar_host.py` — CommandBarHost。
+- `agent_workbench/ui/workbench/workbench.py` — Workbench 组装五大 Host。
+- `agent_workbench/ui/workbench/__init__.py` — 导出 Host 类。
+- `agent_workbench/tests/test_manager.py` — Manager 层测试。
+- `tests/v6/test_v6_user_request.py` — UserRequest 测试。
+- `tests/v6/test_v6_task.py` — Task 模型测试。
+- `agent_workbench/tests/test_agent_workbench.py` — UI 测试调整到 Host 接口层。
+- `PROJECT_BLUEPRINT.md` — 更新版本、项目概要、当前任务、最近变更。
+- `CHANGELOG.md` — v6.9.2-alpha 变更日志。
+- `.handoff/HANDOFF.md` — 本交接文档。
 
 ## Error Log
-No error.
+
+无。全量测试通过。
 
 ## Environment Snapshot
+
 - branch: v6-agent
 - python: Python 3.14.6
 - venv: none
-- last_commit: d02d5a2 feat(agent): 实现 Agent Workbench V6 单一实例与运行时配置面板 [test:182/182] [hint:v6.9.0-alpha workbench config ui] (by AI-Kimi-K2.7-Code)
+- last_commit: 1625e34 test(v6): add missing Task model unit tests [test:210/210] [hint:TaskFoundation] (by AI-Kimi-K2.7-Code)
 
 ## Working State
+
 ### Dirty Files
-working tree clean
+
+`M .handoff/HANDOFF.md`（本交接文档本身待提交）
 
 ### Uncommitted Changes Summary
-no uncommitted changes
+
+`.handoff/HANDOFF.md | 189 ++++++++++++++++++++++++++--------------------------`
+`1 file changed, 96 insertions(+), 93 deletions(-)`
 
 ### Recent Conversation
-- 用户确认将 `demo_agent` 升级为 **AI Agent Workbench V6**，去掉 demo 命名，作为迭代多次的最高级 workbench。
-- 用户要求 UI 中左下角主题和设置两个按钮直接赋值定义，实现 Agent Configuration 面板。
-- 用户强调 UI 工作要做完整仔细全面，完全用新 UI 设计思路，不得改变。
-- 用户确认方案后要求全面实施；实施完成后要求存档 push 移交，任务分几个推进写清楚，然后进行下一步。
+
+- 用户确认 Phase A（Manager + UserRequest）与 Phase B（Workbench Host Skeleton）分阶段推进，Task 保持五字段，所有扩展信息进 metadata。
+- 用户明确 v6.9.2 封板标准：`UserRequest → Manager → Task → CapabilityRouter → Engine` 主链固定，以及 `WorkbenchHost → Workbench → 五大 Host` UI 骨架固定。
+- 用户要求完成后执行「存档 push + 移交」。
+- 用户最终回复「可以。推进 完成。」确认继续完成移交。
+- AI 完成两阶段实现，全量测试 210/210 通过，`v6.9.2-alpha` 标签已推送，现提交最终 HANDOFF.md。
 
 ## Next Steps (AI-Inferred)
-1. **切换到 `v6-service` 分支，推进 V6 Runtime Service Architecture**（最高优先级）
-   - 基于 `v6.8.0-alpha` Framework Core Foundation Baseline 与 `v6.9.0-alpha` Agent Workbench 产品实例经验。
-   - 候选服务：Memory Service、Prompt Service、Model Adapter、Tool Adapter、Knowledge Adapter。
-   - 原则：Service 属于 Runtime 能力接入层，不是 Engine 业务逻辑；保持 `RuntimeContext` 作为唯一 Public Protocol；`v6-core` 只接受 bug fix。
-2. **细化 Service 层接口设计**
-   - Memory Service：Backend 抽象（SQLite/Remote/LAN），基础 CRUD + namespace，不引入 embedding/向量搜索。
-   - Prompt Service：Prompt 管理 + Renderer 抽象，支持本地文件 provider。
-   - Model Adapter：统一 Provider 接口，接入真实 LLM（OpenAI/Claude/Gemini/DeepSeek/Ollama）。
-   - Tool Adapter：Tool 执行沙箱与外部工具调用协议。
-   - Knowledge Adapter：知识库接入（未来）。
-3. **保持 v6-agent 可运行**
-   - v6-service 的新能力通过单向合并进入 v6-agent，确保 Agent Workbench 持续可用。
-4. **未来：自治 Agent 循环（更远期）**
-   - 待 Service Architecture 与真实 Adapter 稳定后再评估多轮决策循环。
+
+1. **v6.9.3-alpha Multi-Capability Runtime & Manager Routing**
+   - 新增 `image_generation` capability 的 Engine（stub 或真实 Provider）。
+   - 扩展 `AgentManager` 规则：根据 `UserRequest.text` 识别「画/生成图片」意图。
+   - `WorkbenchController` 新增 `submit_request(UserRequest)` 便捷入口。
+   - 在 `WorkspaceHost` 注册 `ImageWorkspaceItem` 展示结果。
+   - 验证 Trace / Inspector / StatusBar 对不同 capability 正常观测。
+
+2. **Manager 策略可替换**
+   - 在 `AgentManager` 基础上预留 `LLMManager / PolicyManager / HumanApprovalManager` 接入点。
+
+3. **后续长期演进**
+   - Service Registry、TaskGraph、Workflow Planner、Multi-Agent 等 Runtime V2 能力，应在当前两条稳定链上扩展，不再修改 Runtime 或 Workbench 骨架。
 
 ## Test Status
-- latest: [test:182/182]
-- command: `python -m pytest agent_workbench/tests/ tests/v6/ -q --tb=short`
+
+- latest: [test:210/210]
+- command: `$env:PYTHONPATH="."; pytest tests/v6/ agent_workbench/tests/`
+- 状态：全部通过
+  - `pytest tests/v6/`：184/184 passed
+  - `$env:PYTHONPATH="."; pytest agent_workbench/tests/`：26/26 passed
 
 ## Notes
-- `v6.9.0-alpha` 已归档并推送，tag 为 `v6.9.0-alpha`。
-- 三条垂直支线保持不变：`v6-core`（冻结）→ `v6-service`（当前下一步）→ `v6-agent`（当前分支）。
-- 禁止反向合并：`v6-agent`、`v6-service` 不得反向合并入 `v6-core`；`v6-agent` 不得反向合并入 `v6-service`。
-- `v6.8.0-alpha` 是 Framework Core Foundation Baseline，`v6.9.0-alpha` 是 Agent Workbench Single Instance 产品实例里程碑。
+
+- v6.9.2-alpha 标签已推送至远程；当前工作区仅余本 HANDOFF.md 未提交，提交后工作区完全干净。
+- 接替方可直接基于 `v6-agent` 分支的 `v6.9.2-alpha` 标签继续 v6.9.3-alpha。
+- 本次 Foundation 的核心价值：Runtime 与 Workbench 骨架均已固定，新增 Capability 只需扩展 Manager 规则与注册 Engine/WorkspaceItem，无需修改 Runtime 或 Workbench 结构。
