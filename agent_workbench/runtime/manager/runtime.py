@@ -15,7 +15,7 @@ from v6.runtime.manager import Manager
 from v6.runtime.task import Task
 from v6.runtime.user_request import UserRequest
 
-from agent_workbench.runtime.capability import CapabilityIntent
+from agent_workbench.runtime.capability import CapabilityIntent, CapabilityStep
 from agent_workbench.runtime.capability.model import CapabilityMatch
 
 if TYPE_CHECKING:
@@ -127,9 +127,30 @@ class ManagerRuntime(Manager):
 
         return metadata
 
-    def _build_chain(self, match: CapabilityMatch, intent: CapabilityIntent) -> None:
-        """根据 CapabilityMatch 与 CapabilityIntent 生成静态链（Commit 4 实现）。"""
-        return None
+    def _build_chain(
+        self,
+        match: CapabilityMatch,
+        intent: CapabilityIntent,
+    ) -> list[CapabilityStep] | None:
+        """根据 CapabilityMatch 生成静态 Capability Chain。
+
+        Commit 4 规则：
+        - 仅对父节点生成其子树所有叶子的顺序链。
+        - "coding.python" -> [analysis, debugging, testing]
+        - "coding" -> [python.analysis, python.debugging, python.testing, code_editor]
+        - 叶子能力（chat / tool / analyze / debugging 等）不生成链。
+        """
+        leaves = self._registry.leaves(match.definition.id)
+        if not leaves or len(leaves) == 1 and leaves[0].id == match.definition.id:
+            return None
+
+        return [
+            CapabilityStep(
+                capability_id=definition.id,
+                engine_capability=definition.engine_capability or "text_generation",
+            )
+            for definition in leaves
+        ]
 
     def _publish_manager_events(self, intent: CapabilityIntent, match: CapabilityMatch) -> None:
         """发布 Manager 级事件（Commit 2 可选，事件总线启动时生效）。"""

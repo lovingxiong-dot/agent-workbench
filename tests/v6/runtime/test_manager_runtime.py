@@ -65,7 +65,7 @@ def test_manager_resolves_coding_request():
 def test_manager_sets_capability_metadata():
     registry = _make_registry()
     manager = ManagerRuntime(registry)
-    request = UserRequest(text="analyze project")
+    request = UserRequest(text="review code")
 
     task = manager.resolve(request)
 
@@ -136,3 +136,53 @@ def test_manager_silent_when_bus_not_running():
     # 总线未启动不应抛错。
     task = manager.resolve(request)
     assert task.metadata["capability_id"] == "chat"
+
+
+def test_manager_builds_capability_chain_for_coding_python():
+    from agent_workbench.runtime.capability import CapabilityChain
+
+    registry = _make_registry()
+    manager = ManagerRuntime(registry)
+    request = UserRequest(text="analyze and fix this python code")
+
+    task = manager.resolve(request)
+
+    chain_steps = CapabilityChain.from_metadata(task.metadata)
+    assert chain_steps is not None
+    assert [step.capability_id for step in chain_steps] == [
+        "coding.python.analysis",
+        "coding.python.debugging",
+        "coding.python.testing",
+    ]
+
+
+def test_manager_builds_capability_chain_for_coding():
+    from agent_workbench.runtime.capability import CapabilityChain
+
+    registry = _make_registry()
+    manager = ManagerRuntime(registry)
+    request = UserRequest(text="structure code")
+
+    task = manager.resolve(request)
+
+    chain_steps = CapabilityChain.from_metadata(task.metadata)
+    assert chain_steps is not None
+    assert [step.capability_id for step in chain_steps] == [
+        "coding.python.analysis",
+        "coding.python.debugging",
+        "coding.python.testing",
+        "coding.code_editor",
+    ]
+
+
+def test_manager_no_chain_for_chat():
+    from agent_workbench.runtime.capability import CapabilityChain
+
+    registry = _make_registry()
+    manager = ManagerRuntime(registry)
+    request = UserRequest(text="hello")
+
+    task = manager.resolve(request)
+
+    assert "capability_chain" not in task.metadata
+    assert CapabilityChain.from_metadata(task.metadata) is None

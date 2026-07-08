@@ -24,6 +24,8 @@ from v6.runtime.state_machine import RuntimeStateMachine, RuntimeStateTransition
 from v6.runtime.task import ChatTask, Task
 from v6.runtime.types import ChatMessage
 
+from agent_workbench.runtime.capability import CapabilityChain
+
 if TYPE_CHECKING:
     from agent_workbench.runtime.capability_router import CapabilityRouter
     from v6.runtime.engine_manager import EngineManager
@@ -152,6 +154,12 @@ class Orchestrator:
         # Foundation 阶段：先由 CapabilityRouter 解析能力，再由 PlannerLoop/回退策略决策。
         capability = self._resolve_capability(ctx)
 
+        # Commit 4：若 Task 携带 capability_chain，按顺序执行链，不走 PlannerLoop。
+        chain_steps = CapabilityChain.from_metadata(ctx.metadata)
+        if chain_steps:
+            self._execute_chain(task_id, ctx, chain_steps)
+            return
+
         decision = self._make_decision(ctx, capability)
 
         if decision.action == DecisionAction.FAIL:
@@ -188,6 +196,105 @@ class Orchestrator:
                 ctx.result.status = result.status
         except Exception as exc:  # pragma: no cover - defensive
             self._fail_task(task_id, {"error": str(exc)})
+
+    def _execute_chain(
+        self,
+        task_id: str,
+        ctx: RuntimeContext,
+        chain_steps: list,
+    ) -> None:
+        """顺序执行 CapabilityChain 中的每个 Step。
+
+        Commit 4 约束：
+        - 无 retry / branch / parallel。
+        - 单步失败即停止并标记任务失败。
+        - 每步开始前发布 CAPABILITY_CHAIN_STEP_STARTED 事件。
+        """
+        if self._engine_manager is None:
+            self._fail_task(task_id, {"reason": "no engine manager for chain execution"})
+            return
+
+        for index, step in enumerate(chain_steps):
+            ctx.phase = f"chain_step_{index}"
+            self._publish(
+                RuntimeEventType.CAPABILITY_CHAIN_STEP_STARTED,
+                {
+                    "step_index": index,
+                    "capability_id": step.capability_id,
+                    "engine_capability": step.engine_capability,
+                    "total_steps": len(chain_steps),
+                },
+                task_id=task_id,
+                source="orchestrator",
+            )
+
+            engine_capability = self._map_capability(step.engine_capability)
+            try:
+                engine_name = self._engine_manager.select_engine(
+                    {"capability": engine_capability}
+                )
+            except Exception as exc:
+                self._fail_task(
+                    task_id,
+                    {
+                        "reason": f"chain step {index} engine selection failed",
+                        "error": str(exc),
+                        "capability_id": step.capability_id,
+                    },
+                )
+                return
+
+            if not engine_name:
+                self._fail_task(
+                    task_id,
+                    {
+                        "reason": f"chain step {index}: no engine for {step.engine_capability}",
+                        "capability_id": step.capability_id,
+                    },
+                )
+                return
+
+            self._publish(
+                RuntimeEventType.ENGINE_SELECTED,
+                {
+                    "engine": engine_name,
+                    "capability": step.engine_capability,
+                    "step_index": index,
+                    "task_id": task_id,
+                },
+                task_id=task_id,
+                source="orchestrator",
+            )
+
+            try:
+                ctx.request = {
+                    "step_index": index,
+                    "capability_id": step.capability_id,
+                    "engine_capability": step.engine_capability,
+                }
+                self._engine_manager.initialize_all(ctx)
+                result = self._engine_manager.execute(engine_name, ctx)
+                if result is not None and getattr(result, "status", None) == "failed":
+                    self._fail_task(
+                        task_id,
+                        {
+                            "reason": f"chain step {index} failed",
+                            "capability_id": step.capability_id,
+                        },
+                    )
+                    return
+            except Exception as exc:
+                self._fail_task(
+                    task_id,
+                    {
+                        "reason": f"chain step {index} exception",
+                        "error": str(exc),
+                        "capability_id": step.capability_id,
+                    },
+                )
+                return
+
+        self._complete_task(task_id, {"reason": "capability chain completed"})
 
     def _resolve_capability(self, ctx: RuntimeContext) -> str:
         """通过 CapabilityRouter 解析能力；未注入时回退到 chat。"""
@@ -229,6 +336,7 @@ class Orchestrator:
             "chat": "text_generation",
             "text": "text_generation",
             "tool": "tool_execution",
+            "code_generation": "text_generation",
         }
         return mapping.get(capability, capability)
 

@@ -90,6 +90,24 @@ class CapabilityRegistry:
             if node.definition.parent_id is None
         ]
 
+    def leaves(self, capability_id: str) -> list[CapabilityDefinition]:
+        """返回以 capability_id 为根的子树中所有叶子节点定义（保持注册顺序）。"""
+        node = self._nodes.get(capability_id)
+        if node is None:
+            return []
+
+        result: list[CapabilityDefinition] = []
+
+        def _collect(current: CapabilityNode) -> None:
+            if not current.children:
+                result.append(current.definition)
+                return
+            for child in current.children:
+                _collect(child)
+
+        _collect(node)
+        return result
+
     def find(self, intent: CapabilityIntent) -> list[CapabilityMatch]:
         """根据 CapabilityIntent 查找匹配的能力。
 
@@ -171,6 +189,7 @@ class CapabilityRegistry:
           ├── tool (tool_execution)
           └── coding
                 ├── python
+                │     ├── analysis (code_generation)
                 │     ├── debugging (code_generation)
                 │     └── testing (code_generation)
                 └── code_editor (code_generation)
@@ -218,6 +237,14 @@ class CapabilityRegistry:
                 description="Python development.",
                 parent_id="coding",
                 keywords=["python", "py"],
+            ),
+            CapabilityDefinition(
+                id="coding.python.analysis",
+                name="Python Analysis",
+                description="Analyze Python code or project.",
+                parent_id="coding.python",
+                keywords=["analyze", "analysis", "review", "project"],
+                engine_capability="code_generation",
             ),
             CapabilityDefinition(
                 id="coding.python.debugging",
