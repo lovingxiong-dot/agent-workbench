@@ -82,6 +82,16 @@ def generate() -> str:
         ".gitignore",
         "```",
         "",
+        "Environment directories (outside Git, same parent):",
+        "",
+        "```text",
+        ".dist/                # Packaged releases and build artifacts",
+        ".resource/            # Models, images, datasets, and other assets",
+        ".sandbox/             # Temporary experiments and downloads",
+        ".monitor/             # Local monitoring and runtime environment data",
+        ".workbuddy/           # Local AI collaboration state",
+        "```",
+        "",
     ]
 
     for title, items in SECTIONS:

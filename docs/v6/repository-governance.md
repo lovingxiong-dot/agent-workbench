@@ -71,6 +71,18 @@ A new contributor should understand the layout within 5 minutes.
 - `docs/v6/repository-governance.md` explains why the repository is organized this way.
 - `scripts/audit_repository.py` can be run to verify repository health.
 
+## Principle 6: Environment Directories Are Not Source
+
+Directories that begin with `.` and live next to the Git repository are part of the local development environment, not the project source. Git does not track them, and they can be recreated or discarded.
+
+- `.dist/` — packaged releases and build artifacts.
+- `.resource/` — models, images, datasets, and other large assets.
+- `.sandbox/` — temporary experiments, downloads, and scratch work.
+- `.monitor/` — local monitoring and runtime environment data.
+- `.workbuddy/` — local AI collaboration state.
+
+Any new top-level directory in the workspace that is not source must fit into one of these environment categories. If it cannot be classified, it should not exist.
+
 ---
 
 ## Directory Structure Standard
@@ -137,16 +149,18 @@ Run them manually or integrate into CI.
 
 ---
 
-## Local Workspace Recommendation
+## Local Workspace Layout
 
-To keep the development repository clean, maintain related but non-source assets outside Git:
+Keep the Git repository focused on source. All non-source assets live in sibling environment directories under the same parent:
 
 ```text
-AI/
-├── AgentWorkbench/              ← Git repository (development only)
-├── AgentWorkbench-Release/      ← Packaged releases
-├── AgentWorkbench-Assets/       ← Models, images, datasets
-└── Sandbox/                     ← Temporary experiments and downloads
+F:\Agent/
+├── agent_workbench/      ← Git repository (development only)
+├── .dist/                ← Packaged releases and build artifacts
+├── .resource/            ← Models, images, datasets, and other assets
+├── .sandbox/             ← Temporary experiments and downloads
+├── .monitor/             ← Local monitoring and runtime environment data
+└── .workbuddy/           ← Local AI collaboration state
 ```
 
 The Git repository should never contain release binaries, large models, or temporary downloads.

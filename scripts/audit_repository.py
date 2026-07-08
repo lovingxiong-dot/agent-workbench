@@ -64,6 +64,9 @@ ALWAYS_SKIP_DIRS = {
     ".scripts",
     ".workbuddy",
     ".handoff",
+    ".dist",
+    ".resource",
+    ".sandbox",
     "review",
 }
 
@@ -155,6 +158,9 @@ def find_legacy_files(report: AuditReport) -> None:
 
         for dirname in list(dirnames):
             if dirname.lower() in FORBIDDEN_DIR_NAMES:
+                # The top-level v5 directory is the active V5 runtime library used by V6 adapter tests.
+                if rel_dir == Path(".") and dirname == "v5":
+                    continue
                 report.legacy_files.append(str(rel_dir / dirname))
                 dirnames.remove(dirname)
 

@@ -101,7 +101,7 @@ For the full map, see [`docs/v6/repository-map.md`](./docs/v6/repository-map.md)
 .\scripts\rebuild.ps1
 ```
 
-Release artifacts are generated under `dist/` and `build/`. These directories are disposable and ignored by Git.
+Release artifacts are generated under `F:\Agent\.dist/`. Build cache goes to `F:\Agent\.dist\build/`. These environment directories are outside the Git repository and can be discarded at any time.
 
 ---
 

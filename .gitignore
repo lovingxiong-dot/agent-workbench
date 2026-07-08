@@ -24,3 +24,6 @@ last_pytest.log
 review/
 .workbuddy/
 .handoff/
+.dist/
+.resource/
+.sandbox/

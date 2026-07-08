@@ -35,6 +35,16 @@ pytest.ini
 .gitignore
 ```
 
+Environment directories (outside Git, same parent):
+
+```text
+.dist/                # Packaged releases and build artifacts
+.resource/            # Models, images, datasets, and other assets
+.sandbox/             # Temporary experiments and downloads
+.monitor/             # Local monitoring and runtime environment data
+.workbuddy/           # Local AI collaboration state
+```
+
 ## Core Source
 
 📁 agent_workbench
@@ -267,11 +277,14 @@ pytest.ini
                 📄 v2-multi-session-design.md
                 📄 v3-event-bus-architecture.md
             📄 index.md
+        📄 v6.9.3_multi_capability_runtime_plan.md
     📁 assets
         📄 v5_packaged_window.png
     📁 v6
         📄 repository-governance.md
+        📄 repository-map.md
         📄 ROADMAP.md
+        📄 runtime-glossary.md
         📄 runtime-kernel-spec.md
         📄 SPEC.md
     📄 ARCHITECTURE.md
@@ -366,6 +379,7 @@ pytest.ini
     📄 smoke_craft_flow.py
     📄 start.bat
     📄 test_llm_direct.py
+    📄 verify_repository.py
 📄 main.py
 📄 agent_workbench.spec
 📄 requirements.txt
