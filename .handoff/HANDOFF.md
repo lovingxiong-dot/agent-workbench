@@ -1,153 +1,124 @@
 ---
-generated: 2026-07-08T16:05:00+08:00
+generated: 2026-07-08T15:30:00+08:00
 agent: Kimi-K2.7-Code
 schema_version: 3.1
 
 ## Mission
 
-完成 v6.9.2-alpha **Single Agent Runtime Foundation** 的存档、推送与最终移交：固定 `UserRequest → Manager → Task → CapabilityRouter → Engine` Runtime 主链，固定 `WorkbenchHost → Workbench → 五大 Host` UI 骨架，全量测试 210/210 通过，推送 `v6.9.2-alpha` 标签并生成交接文档。
+完成 v6.9.3-alpha "Multi-Capability Runtime & Manager Routing" 的规划、存档与交接，确保后续实施者能无缝从 Commit 0 开始，按顺序执行 Commit 0~5，不并行、不提前做 UI。
 
 ## Progress
 
-- [x] Phase A — Runtime Foundation
-  - [x] `Task` 数据模型固定五字段：`id / capability / payload / metadata / created_at`。
-  - [x] 保留 `task_id` / `type` 旧别名兼容，支持旧代码平滑迁移。
-  - [x] 新增 `UserRequest` 协议对象与 `Manager` Protocol。
-  - [x] 新增 `AgentManager` 默认实现 `resolve(UserRequest) -> Task`。
-  - [x] `WorkbenchController.chat()` / `chat_with_tool()` 改为 `UserRequest → Manager → submit_task()`。
-  - [x] 移除 `AgentWorkbenchRuntime.chat()`，仅保留 `submit_task()` 作为 Runtime 唯一入口。
-  - [x] `Orchestrator._ensure_context()` 合并 `Task.metadata` 到 `RuntimeContext`。
-  - [x] 新增 `tests/v6/test_v6_user_request.py`、`tests/v6/test_v6_task.py` 与 `agent_workbench/tests/test_manager.py`。
-
-- [x] Phase B — Workbench Host Skeleton
-  - [x] 新增 `WorkbenchAreaHost` 基类（mount / replace / dispose 生命周期）。
-  - [x] 新增 `NavigatorHost / InspectorHost / StatusBarHost / CommandBarHost`。
-  - [x] `Workbench` 改为组装五大 Host，形成 IDE 骨架。
-  - [x] `WorkbenchUIController` 与测试均通过 Host 接口交互，不再直接断言 `_list / _items / _object_id` 等 Qt 内部属性。
-
-- [x] Archive & Push
-  - [x] 更新 `PROJECT_BLUEPRINT.md` 与 `CHANGELOG.md` 至 v6.9.2-alpha。
-  - [x] 提交 `v6.9.2-alpha` 并推送 `v6-agent` 分支与标签。
-  - [x] 补充提交遗漏的 `tests/v6/test_v6_task.py`，最新提交 `1625e34` 测试记录 210/210。
-
-- [x] Handoff
-  - [x] 生成本 `.handoff/HANDOFF.md` 并提交。
+- [x] v6.9.2-alpha 已作为 Single Agent Runtime Foundation 封板并移交（tag: `v6.9.2-alpha`）。
+- [x] v6.9.3-alpha 实施计划已制定，并经架构反馈调整后定稿。
+- [x] 计划文件已强制纳入版本控制：`.trae/documents/v6.9.3_multi_capability_runtime_plan.md`。
+- [x] `PROJECT_BLUEPRINT.md` 已更新：版本号 `v6.9.3-alpha`、存档次数 `39`、项目概要、当前任务、开发约束。
+- [x] `CHANGELOG.md` 已新增 `v6.9.3-alpha (Planning Approved)` 条目。
+- [x] 已提交并打标签 `v6.9.3-alpha`，已推送分支 `v6-agent` 与标签到 Gitee 远程。
+- [ ] Commit 0 ~ Commit 5 待后续实施者按顺序执行。
 
 ## Blocker
 
-无。所有目标均已完成并通过测试。
+无技术卡点。当前处于**规划已批准、等待实施**状态。
 
 ## Decision Log
 
-1. **Task 字段保持五字段，扩展信息进 metadata**
-   - 决策：`Task` 只包含 `id / capability / payload / metadata / created_at`；`origin / workflow_id / priority / timeout` 等暂不实现，未来通过 `metadata` 扩展。
-   - 排除：在 Task 上新增 `origin` 字段。原因：Foundation 阶段持续膨胀字段会破坏协议稳定性，metadata 已足够承载来源、策略、调度信息。
+1. **决策：Capability Registry 放在 `agent_workbench/runtime/capability/` 而非 `services/`**
+   - 原因：Capability 承担 Runtime 能力发现、Routing、Graph、Execution Mapping，属于 Runtime Domain Model，不是 Application Service。放到 Runtime 层可避免 `runtime -> services -> runtime` 的依赖倒置。
+   - 排除：最初计划放在 `agent_workbench/services/capability_registry.py`，因位置偏 Service 而被调整。
    - 状态：已执行。
 
-2. **Manager 命名为 Protocol 而非 TaskManager**
-   - 决策：`v6/runtime/manager.py` 定义 `Manager` Protocol，方法为 `resolve(UserRequest) -> Task`。
-   - 排除：`TaskManager` 或 `resolve(prompt, task_id, session, context)`。原因：未来输入可能是 Voice / Image / Workflow / System Event，`UserRequest` 能统一封装，Manager 名字更通用。
+2. **决策：Capability Graph 第一版实际实现为 Tree**
+   - 原因：v6.9.3 不做 DAG、图搜索、权重传播、自动规划。Tree（parent_id + children + lineage）已足够支撑能力层次与路径。
+   - 排除：直接实现 Capability Graph 复杂算法。
    - 状态：已执行。
 
-3. **Workbench Host 是真正容器，不是简单包裹**
-   - 决策：每个 Host 继承 `WorkbenchAreaHost`，提供 `mount / replace / dispose`，并对外暴露业务接口（如 `NavigatorHost.register_module`）。
-   - 排除：直接把现有 `Navigator / Inspector / StatusBar / CommandBar` 改名为 Host。原因：Host 应承担生命周期，内部 content widget 应可替换。
+3. **决策：Task 五字段保持不变，所有扩展进 metadata/payload**
+   - 原因：Task 是 Runtime Contract，膨胀后会破坏 Foundation。metadata 类比 HTTP Headers，扩展空间足够。
+   - 排除：在 Task 上新增 `chain`、`persona`、`routing`、`provider` 等字段。
    - 状态：已执行。
 
-4. **UI 测试调整到 Host 接口层**
-   - 决策：`test_navigator_registers_runtime_modules` 使用 `nav.modules()`；`test_inspector_renders_model_properties` 使用 `inspector.object_id / title`；`test_status_bar_reflects_runtime_state` 使用 `sb.values()`。
-   - 排除：继续通过 `_list / _object_id / _items` 断言 Qt 内部。原因：Qt 实现细节变化会导致测试脆弱，Host 接口才是稳定契约。
+4. **决策：ManagerRuntime 成为默认 Manager，AgentManager 保留为 Legacy Adapter**
+   - 原因：实现真正的 Runtime 解耦，同时避免旧测试大面积震荡。
+   - 排除：直接删除 `AgentManager` 或同时保留两个默认 Manager。
    - 状态：已执行。
 
-5. **Phase A 与 Phase B 分阶段执行**
-   - 决策：先完成 Manager/UserRequest（Runtime），再完成 Host Skeleton（UI），最后存档移交。
-   - 排除：两阶段同时写。原因：避免 Runtime 与 UI 再次耦合，先固定 Runtime 主链再固定 UI 骨架。
+5. **决策：Capability Chain 第一版仅静态链，不控制 Engine/Provider/Policy/Retry**
+   - 原因：防止 Chain 变成第二套 Planner。
+   - 排除：允许链动态扩展、链内切换 Provider、链内重试。
    - 状态：已执行。
 
-6. **旧参数别名兼容**
-   - 决策：`Task.__init__` 显式接收 `task_id` 和 `type` 并映射到 `id` 和 `capability`，同时提供同名 property 访问器。
-   - 排除：直接删除旧接口并全局替换。原因：v6-core 与 agent_workbench 中仍有大量旧代码使用 `task_id`/`type`，一次性全改风险高；通过构造函数兼容可在不破坏外部调用的情况下完成模型升级。
+6. **决策：UI Bridge 第一版只读，且默认可关闭**
+   - 原因：v6.9.3 前半段主要验证 CLI/Test Runtime Path，后半段再打开 UI；避免 UI 反向污染 Runtime。
+   - 排除：v6.9.3 一开始就双向交互。
+   - 状态：已执行。
+
+7. **决策：能力树根节点使用 `assistant` 而非 `manager`**
+   - 原因：Manager 是调度器，不是能力；避免 `Manager → Manager Capability` 语义混淆。
+   - 排除：根节点叫 `manager` 或 `capability.root`。
    - 状态：已执行。
 
 ## Key Files
 
-- `v6/runtime/task.py` — Task 数据模型五字段与旧别名兼容。
-- `v6/runtime/user_request.py` — 用户请求协议对象。
-- `v6/runtime/manager.py` — Manager Protocol。
-- `v6/runtime/orchestrator.py` — 合并 Task.metadata 到 RuntimeContext。
-- `agent_workbench/services/manager.py` — AgentManager 默认实现。
-- `agent_workbench/controller.py` — 通过 Manager 生成 Task 并提交。
-- `agent_workbench/runtime/agent_runtime.py` — 移除 chat()，仅保留 submit_task()。
-- `agent_workbench/ui/workbench/host_base.py` — WorkbenchAreaHost 基类。
-- `agent_workbench/ui/workbench/navigator_host.py` — NavigatorHost。
-- `agent_workbench/ui/workbench/inspector_host.py` — InspectorHost。
-- `agent_workbench/ui/workbench/status_bar_host.py` — StatusBarHost。
-- `agent_workbench/ui/workbench/command_bar_host.py` — CommandBarHost。
-- `agent_workbench/ui/workbench/workbench.py` — Workbench 组装五大 Host。
-- `agent_workbench/ui/workbench/__init__.py` — 导出 Host 类。
-- `agent_workbench/tests/test_manager.py` — Manager 层测试。
-- `tests/v6/test_v6_user_request.py` — UserRequest 测试。
-- `tests/v6/test_v6_task.py` — Task 模型测试。
-- `agent_workbench/tests/test_agent_workbench.py` — UI 测试调整到 Host 接口层。
-- `PROJECT_BLUEPRINT.md` — 更新版本、项目概要、当前任务、最近变更。
-- `CHANGELOG.md` — v6.9.2-alpha 变更日志。
-- `.handoff/HANDOFF.md` — 本交接文档。
+- `.trae/documents/v6.9.3_multi_capability_runtime_plan.md` — v6.9.3 完整实施计划（已提交到版本库）。
+- `PROJECT_BLUEPRINT.md` — 已更新当前版本为 `v6.9.3-alpha`，记录实施目标与开发约束。
+- `CHANGELOG.md` — 已新增 `v6.9.3-alpha (Planning Approved)` 条目。
+- `agent_workbench/runtime/capability/` — 待创建：model.py / graph.py / chain.py。
+- `agent_workbench/runtime/manager/runtime.py` — 待创建：`ManagerRuntime`。
+- `agent_workbench/runtime/capability_router.py` — 待升级接入 `CapabilityRegistry`。
+- `agent_workbench/runtime/agent_runtime.py` — 待实例化 `CapabilityRegistry` 并注入。
+- `agent_workbench/controller.py` — 待默认注入 `ManagerRuntime`。
+- `v6/runtime/orchestrator.py` — 待支持 `capability_chain` 静态链执行。
+- `v6/runtime/event_bus.py` — 待新增 Manager 级事件类型。
+- `agent_workbench/services/manager.py` — 保留为 Legacy Adapter，不删除。
+- `agent_workbench/ui/workbench_runtime_bridge.py` — Commit 5 待创建。
 
 ## Error Log
 
-无。全量测试通过。
+无错误。工作区干净。
 
 ## Environment Snapshot
 
-- branch: v6-agent
-- python: Python 3.14.6
-- venv: none
-- last_commit: 1625e34 test(v6): add missing Task model unit tests [test:210/210] [hint:TaskFoundation] (by AI-Kimi-K2.7-Code)
+- branch: `v6-agent`
+- python: `Python 3.14.6`
+- venv: `none`
+- last_commit: `c3e599d docs(plan): v6.9.3-alpha Multi-Capability Runtime and Manager Routing implementation plan [test:210/210] [hint:v6.9.3-alpha plan] (by AI-Kimi-K2.7-Code)`
+- last_tag: `v6.9.3-alpha`
 
 ## Working State
 
 ### Dirty Files
 
-`M .handoff/HANDOFF.md`（本交接文档本身待提交）
+working tree clean
 
 ### Uncommitted Changes Summary
 
-`.handoff/HANDOFF.md | 189 ++++++++++++++++++++++++++--------------------------`
-`1 file changed, 96 insertions(+), 93 deletions(-)`
+no uncommitted changes
 
 ### Recent Conversation
 
-- 用户确认 Phase A（Manager + UserRequest）与 Phase B（Workbench Host Skeleton）分阶段推进，Task 保持五字段，所有扩展信息进 metadata。
-- 用户明确 v6.9.2 封板标准：`UserRequest → Manager → Task → CapabilityRouter → Engine` 主链固定，以及 `WorkbenchHost → Workbench → 五大 Host` UI 骨架固定。
-- 用户要求完成后执行「存档 push + 移交」。
-- 用户最终回复「可以。推进 完成。」确认继续完成移交。
-- AI 完成两阶段实现，全量测试 210/210 通过，`v6.9.2-alpha` 标签已推送，现提交最终 HANDOFF.md。
+- 用户提供 v6.9.3-alpha 详细架构设想，强调 Multi-Capability 而非 Multi-Agent，明确 Manager / Capability Registry / Capability Graph / Capability Chain / Manager Policy 五阶段。
+- 我进入 Plan Mode 制定实施计划，用户反馈 6 条微调和 5 条开发约束，特别要求先存档 push + 移交所有内容。
+- 用户选择「强制添加计划文件」到版本控制。
+- 我更新计划、PROJECT_BLUEPRINT.md、CHANGELOG.md，提交并打标签 `v6.9.3-alpha`，推送完成。
 
 ## Next Steps (AI-Inferred)
 
-1. **v6.9.3-alpha Multi-Capability Runtime & Manager Routing**
-   - 新增 `image_generation` capability 的 Engine（stub 或真实 Provider）。
-   - 扩展 `AgentManager` 规则：根据 `UserRequest.text` 识别「画/生成图片」意图。
-   - `WorkbenchController` 新增 `submit_request(UserRequest)` 便捷入口。
-   - 在 `WorkspaceHost` 注册 `ImageWorkspaceItem` 展示结果。
-   - 验证 Trace / Inspector / StatusBar 对不同 capability 正常观测。
-
-2. **Manager 策略可替换**
-   - 在 `AgentManager` 基础上预留 `LLMManager / PolicyManager / HumanApprovalManager` 接入点。
-
-3. **后续长期演进**
-   - Service Registry、TaskGraph、Workflow Planner、Multi-Agent 等 Runtime V2 能力，应在当前两条稳定链上扩展，不再修改 Runtime 或 Workbench 骨架。
+1. **执行 Commit 0 Runtime Contract**：创建 `agent_workbench/runtime/capability/model.py` / `chain.py` / `graph.py`（空壳）/ `agent_workbench/runtime/manager/runtime.py`（空壳），在 `v6/runtime/event_bus.py` 新增 Manager 事件类型，新增对应测试并验证通过。
+2. **执行 Commit 1 Capability Runtime**：实现能力树 `CapabilityRegistry`，新增 `tests/v6/runtime/test_capability_registry.py`，验证通过。
+3. **执行 Commit 2 Manager Routing**：实现 `ManagerRuntime`，`WorkbenchController` 默认注入，`AgentManager` 保留；新增 `tests/v6/runtime/test_manager.py`。
+4. **执行 Commit 3 Capability Resolution**：升级 `CapabilityRouter`，新增 `tests/v6/runtime/test_router.py`。
+5. **执行 Commit 4 Capability Chain**：升级 `Orchestrator`，新增 `tests/v6/runtime/test_capability_chain.py`。
+6. **执行 Commit 5 Workbench Runtime Bridge**：新增只读 Bridge，默认可关闭，补充 UI 测试。
+7. **最终验收**：全量测试 260~280 passed；验证「分析这个 Python 项目并修复 bug」生成 coding 能力链并顺序执行。
 
 ## Test Status
 
-- latest: [test:210/210]
-- command: `$env:PYTHONPATH="."; pytest tests/v6/ agent_workbench/tests/`
-- 状态：全部通过
-  - `pytest tests/v6/`：184/184 passed
-  - `$env:PYTHONPATH="."; pytest agent_workbench/tests/`：26/26 passed
+- latest: `[test:210/210]`（来自最新提交 message）
+- command: `$env:PYTHONPATH="."; pytest tests/v6/ agent_workbench/tests/ -q`
 
 ## Notes
 
-- v6.9.2-alpha 标签已推送至远程；当前工作区仅余本 HANDOFF.md 未提交，提交后工作区完全干净。
-- 接替方可直接基于 `v6-agent` 分支的 `v6.9.2-alpha` 标签继续 v6.9.3-alpha。
-- 本次 Foundation 的核心价值：Runtime 与 Workbench 骨架均已固定，新增 Capability 只需扩展 Manager 规则与注册 Engine/WorkspaceItem，无需修改 Runtime 或 Workbench 结构。
+- 计划文件路径 `.trae/documents/v6.9.3_multi_capability_runtime_plan.md` 原本在 `.gitignore` 中，本次已强制提交，确保交接时计划本身随仓库一起传递。
+- v6.9.3 的核心价值是第一次把 Capability 从「属性」提升为 Runtime 一级对象。这一步完成后，Agent Identity、多专家 Agent、AgentBus 才有稳定承载层。
+- 不要并行执行 Commit，尤其不要先做 UI。
