@@ -35,6 +35,53 @@ See also [`PROJECT_LINEAGE.md`](./PROJECT_LINEAGE.md) for the complete V5 / V6 i
 - Workbench 自然成为所有新能力的集成验证平台与产品化门槛。
 - 任何在 Workbench 中无法以 Composable 方式集成的新能力，都不应进入框架核心。
 
+## Runtime Decision Layer Contract Boundary (v6.9.4-alpha)
+
+> **v6.9.4-alpha introduces the Runtime Decision Layer.**
+
+### Frozen Control Plane Contracts
+
+以下对象在 v6.9.4-alpha 冻结，作为 Runtime Control Plane 与 Execution Plane 之间的稳定 ABI（Application Binary Interface）边界：
+
+| Contract | Location | Status |
+|---|---|---|
+| `RuntimeMode` | `agent_workbench/runtime/decision/schema.py` | Frozen |
+| `Intent` / `IntentType` | `agent_workbench/runtime/decision/schema.py` | Frozen |
+| `RuntimeDecision` | `agent_workbench/runtime/decision/schema.py` | Frozen |
+| `RuntimeDecision → Orchestrator` boundary | `Orchestrator.dispatch(decision)` | Frozen |
+
+### What RuntimeDecision Is NOT
+
+- **Not a UI Model**：UI 不允许直接构造 `RuntimeDecision`；UI 必须生成 `RuntimeRequest`，由 Decision Layer 转换为 `RuntimeDecision`。
+- **Not an API Request Model**：MCP / Gateway / Remote Agent 入口同样必须先转换为 `RuntimeRequest`，再进入 Decision Layer。
+- **Not a Capability Model**：`RuntimeDecision` 不持有 `CapabilityChain` / `CapabilityDefinition` 对象，只保存字符串引用与序列化后的基础数据。
+- **Not a Task Model**：`Task` 是 Execution Plane 内部状态；`RuntimeDecision` 是 Control Plane 输出。
+
+### Dependency Direction
+
+```
+User / UI / MCP / Local Agent / Remote Agent
+                |
+                ↓
+        RuntimeRequest
+                |
+                ↓
+        Decision Layer (ManagerAI → Interpreter → Resolver → Policy)
+                |
+                ↓
+        RuntimeDecision  ←── frozen contract
+                |
+                ↓
+    Orchestrator / Execution Layer
+```
+
+### Forbidden Patterns
+
+- UI 直接调用 Capability / Provider / Service。
+- LLM 直接选择 Tool（由 `Interpreter` 拒绝 tool/function calling）。
+- `decision` 包反向依赖 `capability` / `planner` / `service` / `orchestrator` 实现。
+- 任何入口绕过 `RuntimeDecision` 直接操作 `Task` 内部状态。
+
 ## V6 Framework Core Foundation Baseline
 
 > **`v6.8.0-alpha` is the V6 Framework Core Foundation Baseline** — a shared, frozen core for the V6 Runtime platform, not a regular feature release or archive.

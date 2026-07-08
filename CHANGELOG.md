@@ -28,9 +28,14 @@
 - 不修改 PlannerLoop、不接 UI、不增加动态规划、retry、parallel、memory 调度。
 - LLM 不能直接选择 Tool；任何 tool/function calling 格式都会被 Interpreter 拒绝。
 
+### Contract Freeze (Post-Commit 5)
+- `schema.py` 增加架构注释：明确 `RuntimeDecision` 是 Runtime Control Plane 稳定 ABI，不是 UI Model / API Request Model / Capability Model / Task Model。
+- `PROJECT_BLUEPRINT.md` 新增 `Runtime Decision Layer Contract Boundary` 章节，记录冻结对象、依赖方向、禁止模式。
+- 新增 `tests/v6/runtime/test_runtime_decision_contract.py`：验证 `RuntimeDecision` 可被 UI / MCP / Local Agent 三类入口共同构造，只携带基础类型，序列化稳定，且能被 `Orchestrator.dispatch` 接受。
+
 ### Tests
-- `pytest tests/v6/runtime`：**57/57 passed**。
-- `pytest`：**514/514 passed**。
+- `pytest tests/v6/runtime`：**63/63 passed**（含 Contract Freeze 新增 6 个测试）。
+- `pytest`：**520/520 passed**。
 
 ## v6.9.3-alpha (2026-07-08) — Multi-Capability Runtime & Manager Routing (Planning Approved)
 

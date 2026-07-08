@@ -1,5 +1,31 @@
 """agent_workbench/runtime/decision/schema.py — Runtime Decision Layer 协议对象。
 
+契约冻结（v6.9.4-alpha Contract Freeze）：
+- RuntimeDecision 是 Runtime Control Plane 的稳定交换协议（ABI）。
+- 它不是：UI Model / API Request Model / Capability Model / Task Model。
+- 所有入口（UI / MCP / Local Agent / Remote Agent）必须先把输入转换为 RuntimeRequest，
+  再经由 Decision Layer 生成 RuntimeDecision，最后交给 Execution Layer。
+
+依赖方向：
+    User / UI / MCP / Local Agent
+                |
+                ↓
+        RuntimeRequest
+                |
+                ↓
+        Decision Layer
+                |
+                ↓
+        RuntimeDecision  ←── 本文件冻结的契约
+                |
+                ↓
+        Orchestrator / Execution Layer
+
+禁止：
+- UI 直接调用 Capability / Provider / Service。
+- LLM 直接选择 Tool（由 Interpreter 拒绝 tool/function calling）。
+- decision 包反向依赖 capability / planner / service / orchestrator 实现。
+
 设计约束：
 - 本文件只定义协议（schema），禁止导入 capability / planner / service / orchestrator 等执行层模块。
 - 所有引用均使用 str / dict / list 等基础类型，避免循环依赖。
@@ -72,6 +98,10 @@ class Intent:
 @dataclass
 class RuntimeDecision:
     """Orchestrator 控制平面入口。
+
+    契约状态：v6.9.4-alpha 冻结。
+    - 字段集合与语义在后续版本中保持稳定，所有外部入口必须生成或转换为此对象。
+    - 新增字段属于破坏性变更，需经过架构审查。
 
     字段说明：
     - mode: Runtime 调度模式。
