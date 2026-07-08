@@ -288,6 +288,7 @@ Environment directories (outside Git, same parent):
         📄 runtime-glossary.md
         📄 runtime-kernel-spec.md
         📄 SPEC.md
+        📄 v6.10-task-list.md
     📄 ARCHITECTURE.md
     📄 getting-started.md
 

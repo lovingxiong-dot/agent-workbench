@@ -83,6 +83,7 @@ OFFICIAL_DOC_PATHS = {
     "repository-governance.md": "docs/v6/repository-governance.md",
     "repository-map.md": "docs/v6/repository-map.md",
     "data-layer-inventory.md": "docs/v6/data-layer-inventory.md",
+    "v6.10-task-list.md": "docs/v6/v6.10-task-list.md",
     "SPEC.md": "docs/v6/SPEC.md",
     "ROADMAP.md": "docs/v6/ROADMAP.md",
 }

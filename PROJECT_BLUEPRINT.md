@@ -23,6 +23,20 @@
 
 See also [`PROJECT_LINEAGE.md`](./PROJECT_LINEAGE.md) for the complete V5 / V6 identity map.
 
+## Agent Workbench 是 Runtime 的官方产品化验证平台
+
+> **Agent Workbench is the Official Product Validation Platform of the V6 Runtime.**
+
+这句话决定以后所有开发行为：
+
+- **任何 Provider**，只有能安装到 Workbench 并跑通，才算完成。
+- **任何 Tool**，只有能在 Workbench 中注册、执行、观测，才算完成。
+- **任何 Skill**，只有能在 Workbench 中安装、发现、调用，才算完成。
+- **任何 Workflow**，只有能在 Workbench 中编排、运行、调试，才算完成。
+- **任何 Memory / Knowledge / Agent Identity**，只有能在 Workbench 中验证体验，才算完成。
+
+Workbench 不是 Demo，不是临时演示程序，不是「先放这里之后重构」的妥协。它是所有新能力的集成验证平台与产品化门槛。任何在 Workbench 中无法以 Composable 方式集成的新能力，都不应进入框架核心。
+
 ## V6 Runtime Foundation Baseline (Frozen)
 
 > **Status: `v6.9.6-foundation` — V6 Runtime Foundation Baseline Frozen.**
@@ -43,12 +57,12 @@ From this point forward:
 
 - **No new Runtime-level modules** may be added without architecture review.
 - **All new capabilities** must enter through the frozen Capability Runtime Contract.
-- **All Provider, MCP, Gateway, and Workflow work** branches from `v6.9.6-foundation`.
+- **All GUI, Provider, Tool, Skill, Workflow, Memory, and Knowledge work** branches from `v6.9.6-foundation`.
 - **Repository hygiene** is enforced by `scripts/audit_repository.py` and `scripts/verify_repository.py`.
 
 ## Agent Workbench 定位
 
-> **Agent Workbench 是 Personal Agent Workbench / Agent IDE 的第一个参考实现，也是 V6 Framework 的官方产品化验证平台。**
+> **Agent Workbench 是 Personal Agent Workbench / Agent IDE 的第一个参考实现，也是 V6 Runtime 的官方产品化验证平台（Official Product Validation Platform）。**
 
 它不是 Demo，也不是一个聊天机器人。它是一个可以不断安装能力、工具、Provider、Workflow 的 AI 工作台。Runtime、UI、Engine、Service、Module 等全部能力首先在 Workbench 中完成集成验证，证明其体验、边界、异常、性能均达到产品化标准后，再决定是否进入 `v6-core` / `v6-service` 框架核心。
 
@@ -295,25 +309,53 @@ v6.8.0-alpha 完成 V6 Framework Core Foundation Baseline（共享核心框架�
 
 ## 当前任务
 
-**v6.10.0-alpha Agent Workbench Ecosystem Bootstrap**（在 `v6-agent` 分支执行）：
+**v6.10.0-alpha Workbench Product — GUI Platform**（在 `v6-agent` 分支执行）：
 
-v6.9.x Runtime Kernel Freeze Series 已收官，`v6.9.6-foundation` 成为长期基线。v6.10.0-alpha 开始，项目从「打磨 Runtime 内核」转向「建设 Agent Workbench 生态」。产品定位升级为 **Personal Agent Workbench / Agent IDE**：不是一个聊天机器人，而是一个可以不断安装能力、工具、Provider、Workflow 的 AI 工作台。
+v6.9.x Runtime Kernel Freeze Series 已收官，`v6.9.6-foundation` 成为长期基线。v6.10.0-alpha 开始，项目从「打磨 Runtime 内核」转向「建设 Workbench Product」。产品定位升级为 **Personal Agent Workbench / Agent IDE**，核心目标是：把 Agent Workbench 真正变成一个可以承载任何能力的平台。
 
-### v6.10.0-alpha 目标
+v6.10 不是先做 OpenAI / Gemini / Claude，而是先把链路打通：
+
+```text
+GUI
+  ↓
+Chat
+  ↓
+Task
+  ↓
+Capability
+  ↓
+Tool
+  ↓
+Provider
+```
+
+Provider 可以先只有一个（例如 EchoProvider 或一个真实 Provider），但框架必须可扩展。
+
+### v6.10.x 目标
 
 第一梯队（⭐⭐⭐⭐⭐，立即执行）：
 
-- **GUI**：把现有 Workbench UI 跑通、稳定、可交互，成为每天可用的主界面。
-- **Provider**：接入第一个真实 LLM Provider，让 Runtime 真正说话。
-- **Tool Runtime**：让 Tool 能力在 Workbench 中可注册、可执行、可观测。
-- **Skill Registry**：建立 Skill（能力包）的注册、发现、加载机制，让能力可以「安装」。
+- **GUI Platform**：把现有 Workbench UI 跑通、稳定、可交互，成为每天可用的 IDE 主界面。
+- **Provider Framework**：打通 Provider 抽象接口、配置、注册、调用链路；先支持一个 Provider。
+- **Tool Runtime**：Tool 可注册、可执行、可观测；Python / PowerShell / 系统命令等先以 Tool 形式接入。
+- **Skill Framework**：定义 Skill Contract（SkillDefinition / SkillContext / SkillRuntime / SkillRegistry），先不做具体 Skill。
+
+### 现在不做的事
+
+- **Digital Identity / Agent Identity**：只预留接口，不实现 Identity Database。
+- **多 Provider 智能切换**：先支持一个 Provider，框架打通后再扩展。
+- **复杂 Workflow DAG**：只做基础串行任务流 A → B → C。
+- **MCP / Browser / External Service / Marketplace**：第三梯队，v6.12.x 再启动。
+- **Gateway / Distributed / Remote Runtime**：第四梯队，未来再做。
 
 ### 开发约束
 
 1. **Runtime Kernel 不再扩展**：不允许新增 Runtime-level 模块；所有新能力通过 Capability Runtime Contract 接入。
-2. **从 UI 开始逐步完善**：先让 GUI 可用，再反向补齐 Provider / Tool / Skill，避免先做底层再补交互。
-3. **不接 Gateway / Distributed / Remote Runtime**：第四梯队内容全部冻结到未来阶段。
-4. **不接 MCP / Browser / External Service**：第三梯队内容在第二梯队跑通后再启动。
+2. **从 GUI 开始逐步完善**：先让 GUI 可用，再反向补齐 Provider / Tool / Skill，避免先做底层再补交互。
+3. **Contract First**：Provider、Tool、Skill、Workflow 都必须先定义 Contract，再实现具体实例。
+4. **所有实现必须能在 Workbench 中验证**：未完成 Workbench 集成的功能不算完成。
+5. **不接 Gateway / Distributed / Remote Runtime / Digital Identity**：第四梯队内容全部冻结到未来阶段。
+6. **不接 MCP / Browser / External Service / Marketplace**：第三梯队内容在第二梯队跑通后再启动。
 
 ### V6 Runtime Kernel Freeze Roadmap
 
@@ -321,13 +363,14 @@ v6.9.x Runtime Kernel Freeze Series 已收官，`v6.9.6-foundation` 成为长期
 v6.9.5-alpha  Interaction Boundary Layer              ✅
 v6.9.6-alpha  Capability Runtime Contract Freeze      ✅
 v6.9.6-foundation  V6 Runtime Foundation Baseline     ✅ 当前基线
-v6.10.0-alpha  Agent Workbench Ecosystem Bootstrap    当前
+v6.10.0-alpha  GUI Platform                           当前
+v6.10.x        Provider Framework / Tool Runtime / Skill Framework
         ↓
 v6.11.x  Workflow / Memory / Knowledge
         ↓
 v6.12.x  MCP / Browser / External Service / Marketplace
         ↓
-（未来） Gateway / Distributed / Remote Runtime
+（未来） Agent Identity / Gateway / Distributed / Remote Runtime
 ```
 
 ### 最高级设计约束
