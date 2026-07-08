@@ -149,6 +149,37 @@ Run them manually or integrate into CI.
 
 ---
 
+## Agent Collaboration Convention
+
+This repository is maintained by multiple agents. The following conventions ensure that every agent can enter the workspace, understand its state, and leave it cleaner than it was found.
+
+### Before You Start
+
+1. **Read the constitution first** — `repository-governance.md`, `runtime-glossary.md`, and `runtime-kernel-spec.md` define the boundaries.
+2. **Check the baseline** — note the current Git commit and tag (e.g., `v6.9.6-hygiene`).
+3. **Run the audits** — `python -B scripts/audit_repository.py` and `python -B scripts/verify_repository.py` must pass before you claim completion.
+
+### While You Work
+
+1. **One Asset, One Authority** — do not create `README_new.md`, `SPEC_v2.md`, `blueprint_copy.md`, or any duplicate authority document.
+2. **Classify every new file** — each file or directory must belong to **Source**, **Documentation**, **Tests**, **Build Scripts**, **Configuration**, or an environment category (`.dist/`, `.resource/`, `.sandbox/`). If it does not fit, it does not belong.
+3. **No generated files in Git** — `__pycache__/`, `.pytest_cache/`, `build/`, `dist/`, `*.pyc`, `*.bak`, and `*.tmp` must never be committed.
+4. **Temporary work goes to `.sandbox/`** — prototype scripts, downloaded files, experiment outputs, and scratch notes belong in `.sandbox/`. Delete them when the task is done.
+5. **Do not leave orphan files** — if you create a file and later decide it is unnecessary, delete it. Do not rename it to `*_old` or `*_backup`.
+
+### Before You Finish
+
+1. **Run tests** — `pytest` must pass.
+2. **Run audits** — `python -B scripts/audit_repository.py` must score 100/100.
+3. **Inspect Git status** — `git status --short` should show only intentional changes.
+4. **Commit atomically** — one coherent change per commit, with a clear message.
+
+### Handoff Rule
+
+When transferring context to another agent, use the standard handoff flow. Do not rely on chat history or uncommitted files to carry state.
+
+---
+
 ## Local Workspace Layout
 
 Keep the Git repository focused on source. All non-source assets live in sibling environment directories under the same parent:
@@ -164,3 +195,36 @@ F:\Agent/
 ```
 
 The Git repository should never contain release binaries, large models, or temporary downloads.
+
+---
+
+## Environment Directory Usage Conventions
+
+Environment directories live next to the Git repository and are not tracked by Git. Use them consistently so every agent knows where to read and write non-source data.
+
+| Directory | Purpose | Who Writes | Lifetime |
+|---|---|---|---|
+| `.dist/` | Packaged releases (`*.exe`, `*.zip`, `*.msi`) and PyInstaller build cache. | `scripts/rebuild.ps1` only. | Disposable; can be wiped and rebuilt. |
+| `.resource/` | Long-term assets: models, images, icons, examples, datasets. | Agents may add assets here; never commit them. | Persistent; back up externally if valuable. |
+| `.sandbox/` | Temporary experiments, downloads, prototypes, scratch work. | Any agent. | Ephemeral; safe to delete anytime. |
+| `.monitor/` | Local runtime monitoring, logs, and environment state. | Running application. | Local; can be reset. |
+| `.workbuddy/` | Local AI collaboration state and memory. | AI tooling. | Local; already ignored by Git. |
+
+### `.sandbox/` Subdirectory Convention
+
+Organize sandbox work by intent so it is easy to clean later:
+
+```text
+.sandbox/
+├── prototype/      # Feature prototypes and spikes
+├── download/       # Files fetched from the internet for inspection
+├── playground/     # Ad-hoc experiments
+├── test/           # One-off validation scripts
+└── scratch/        # Notes and disposable outputs
+```
+
+When a sandbox experiment graduates into the product, move its files into the proper source tree. When it is abandoned, delete the directory.
+
+### Creating New Environment Directories
+
+Do not create arbitrary directories next to the repository. If a new category of non-source data appears, propose an update to this governance document. Until then, fit it into `.dist/`, `.resource/`, or `.sandbox/`.
