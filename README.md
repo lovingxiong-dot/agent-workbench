@@ -55,6 +55,7 @@ Current status: **575/575 passed**.
 | [`docs/v6/runtime-glossary.md`](./docs/v6/runtime-glossary.md) | Standard vocabulary for the platform | 15 min |
 | [`docs/v6/repository-governance.md`](./docs/v6/repository-governance.md) | Repository structure and cleanliness rules | 10 min |
 | [`docs/v6/repository-map.md`](./docs/v6/repository-map.md) | Auto-generated directory overview | 5 min |
+| [`docs/v6/data-layer-inventory.md`](./docs/v6/data-layer-inventory.md) | Data layer inventory and UI mapping | 15 min |
 | [`PROJECT_BLUEPRINT.md`](./PROJECT_BLUEPRINT.md) | Project lineage, current task, and roadmap | 1 hour |
 | [`PROJECT_LINEAGE.md`](./PROJECT_LINEAGE.md) | V5 / V6 identity map and branch rules | 15 min |
 | [`CHANGELOG.md`](./CHANGELOG.md) | Version-by-version changelog | 20 min |

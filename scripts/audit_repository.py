@@ -82,6 +82,7 @@ OFFICIAL_DOC_PATHS = {
     "runtime-glossary.md": "docs/v6/runtime-glossary.md",
     "repository-governance.md": "docs/v6/repository-governance.md",
     "repository-map.md": "docs/v6/repository-map.md",
+    "data-layer-inventory.md": "docs/v6/data-layer-inventory.md",
     "SPEC.md": "docs/v6/SPEC.md",
     "ROADMAP.md": "docs/v6/ROADMAP.md",
 }

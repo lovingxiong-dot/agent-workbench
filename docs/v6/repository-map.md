@@ -281,6 +281,7 @@ Environment directories (outside Git, same parent):
     📁 assets
         📄 v5_packaged_window.png
     📁 v6
+        📄 data-layer-inventory.md
         📄 repository-governance.md
         📄 repository-map.md
         📄 ROADMAP.md
