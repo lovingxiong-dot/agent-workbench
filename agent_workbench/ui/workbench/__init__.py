@@ -15,12 +15,14 @@ from agent_workbench.ui.workbench.presentation import (
     PropertyPresentation,
     StatisticPresentation,
 )
+from agent_workbench.ui.workbench.command_bar_host import CommandBarHost
+from agent_workbench.ui.workbench.host_base import WorkbenchAreaHost
+from agent_workbench.ui.workbench.inspector_host import InspectorHost
 from agent_workbench.ui.workbench.metadata_adapter import MetadataAdapter
 from agent_workbench.ui.workbench.navigator import Navigator
+from agent_workbench.ui.workbench.navigator_host import NavigatorHost
+from agent_workbench.ui.workbench.status_bar_host import StatusBarHost
 from agent_workbench.ui.workbench.workspace_host import WorkspaceHost
-from agent_workbench.ui.workbench.inspector import Inspector
-from agent_workbench.ui.workbench.status_bar import StatusBar
-from agent_workbench.ui.workbench.command_bar import CommandBar
 from agent_workbench.ui.workbench.workbench import Workbench
 from agent_workbench.ui.workbench.workbench_host import WorkbenchHost
 from agent_workbench.ui.workbench.title_bar import WorkbenchTitleBar
@@ -32,11 +34,13 @@ __all__ = [
     "StatisticPresentation",
     "ActionPresentation",
     "MetadataAdapter",
-    "Navigator",
+    "WorkbenchAreaHost",
+    "NavigatorHost",
     "WorkspaceHost",
-    "Inspector",
-    "StatusBar",
-    "CommandBar",
+    "InspectorHost",
+    "StatusBarHost",
+    "CommandBarHost",
+    "Navigator",
     "Workbench",
     "WorkbenchHost",
     "WorkbenchTitleBar",

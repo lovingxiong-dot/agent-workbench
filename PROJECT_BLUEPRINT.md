@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v6.9.1-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 37 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v6.9.2-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 38 |
 
 ## Current Development Authority
 
@@ -84,6 +84,8 @@ v6-core  ──merge──►  v6-service  ──merge──►  v6-agent
   4. 所有状态收敛到 `RuntimeContext`；ChatMessage、ToolCall、MemoryEntry、Metrics 等仅为 `RuntimeContext` 的资源。
 
 ## 项目概要
+v6.9.2-alpha 完成 **Single Agent Runtime Foundation**：定义稳定的 `Task` 数据模型（`id` / `capability` / `payload` / `metadata` / `created_at`），`submit_task(Task)` 成为 Runtime 唯一入口，`chat()` 降级为 Adapter 包装；新增 `UserRequest` 协议对象与 `Manager` 协议，`AgentManager` 实现 `UserRequest → Task` 解析，Runtime 不再感知 Chat/Prompt 等输入形式；`Orchestrator` 合并 `Task.metadata` 到 `RuntimeContext`；Workbench UI 骨架升级为 `WorkbenchHost → Workbench → NavigatorHost / WorkspaceHost / InspectorHost / StatusBarHost / CommandBarHost`，Host 负责 mount / replace / dispose 生命周期，WorkbenchUIController 与测试均通过 Host 接口交互，不再直接依赖 Qt Widget 内部属性；V6 全量测试 `pytest tests/v6/` 176/176 通过，Workbench 测试 `pytest agent_workbench/tests/` 34/34 通过，合计 210/210 通过。
+
 v6.9.1-alpha 完成 **Runtime Observability Foundation**：将 RuntimeTrace 升级为分层事件模型（Task/Capability/Engine/Provider/Execution/Stream/Request），事件语义不再绑定 LLM Streaming，支持未来多模态扩展；新增 `CapabilityRouter` 作为 Runtime 组件发射 `capability.resolved` 事件；`Orchestrator` 统一发射 `engine.selected` 事件；`WorkbenchLLMEngine` 发射 `execution.started` / `provider.selected` / `request.sent` / `first.token` / `chunk.received` / `stream.finished` / `execution.finished` 结构化事件；`EventBus` Trace Hook 改为 `publish` 阶段同步写入，保证事件顺序与 `task.finish` 不丢失，同时保持订阅者回调异步；新增 `TraceEventRegistry` 与 `TraceWorkspaceItem`，UI 通过事件注册表动态渲染图标/标签/状态，不维护硬编码映射；新增 Trace 事件顺序、父子关系、Workspace 接收等测试；V6 全量测试 `pytest tests/v6/` 176/176 通过，Workbench 测试 `pytest agent_workbench/tests/` 20/20 通过，合计 196/196 通过。
 
 v6.9.0-alpha 完成 **Agent Workbench Single Instance**（V6 框架内第一个真实 Agent 产品实例）：新增 `agent_workbench/` 应用层目录，基于 v6.8.0-alpha Framework Core Foundation Baseline 构建可运行、可配置的单一 Agent 工作 bench；引入 `ConfigStore`（YAML 唯一配置源 + 内存缓存 + namespace 变更通知）、`ProfileManager`（Profile 切换/导入/导出/合并）、`ModuleRegistry`（10 个 RuntimeModule 生命周期管理）与 `AgentWorkbenchRuntime`（组合 ConfigStore/ProfileManager/ModuleRegistry/CoreRuntime，注册 WorkbenchLLMEngine/WorkbenchToolEngine）；定义 10 个 `BaseRuntimeModule`（Runtime/Session/Config/Profile/Prompt/Model/Tool/Memory/Strategy/Trace），每个模块支持 `initialize`/`apply_config`/`dispose`/`to_form`，运行态、配置态、能力态、观测态分层清晰；实现 `WorkbenchController` 作为 Application Layer 唯一入口，UI 不直接持有 Module；实现 `AgentConfigPanel` 配置面板，支持左侧模块列表 + 右侧 JSON 编辑器，满足查看/修改/保存/热更新四件事；扩展 v6 三栏高级 UI：`WorkbenchLeftPanel` 在左下角新增「设置」按钮，`WorkbenchRightPanel` 新增「配置」标签页，`WorkbenchMainWindow` 组装完整三栏，`WorkbenchUIController` 继承 v6 UIController 并复用 Session/Chat 服务，聊天请求转发给 WorkbenchController；提供 CLI/GUI 双入口 `agent_workbench/app.py`；新增 7 个 Workbench 端到端测试，验证聊天生命周期、Tool Engine、PlannerLoop 决策、ConfigStore 读写、CLI 入口；V6 全量测试 `pytest tests/v6/` 175/175 通过，Workbench 测试 `pytest agent_workbench/tests/` 7/7 通过，合计 182/182 通过。
@@ -92,23 +94,22 @@ v6.8.0-alpha 完成 V6 Framework Core Foundation Baseline（共享核心框架�
 
 ## 当前任务
 
-**下一步：v6.9.2-alpha Capability Runtime Foundation**（在 `v6-agent` 分支执行）：
+**下一步：v6.9.3-alpha Multi-Capability Runtime & Manager Routing**（在 `v6-agent` 分支执行）：
 
-v6.9.1-alpha 已完成 **Runtime Observability Foundation**。v6.9.2-alpha 目标是把 Workbench 从「单一 Chat Runtime」升级为「能力驱动的 Single Agent Runtime Foundation」：用户始终面对同一个 Agent 入口，Runtime 根据 Task.capability 路由到不同 Engine。本阶段仍是 Foundation 封板前的最后一步，禁止提前引入 ServiceRegistry、TaskGraph 调度、Workflow Planner 等抽象。
+v6.9.2-alpha 已完成 **Single Agent Runtime Foundation**：Task / UserRequest / Manager / CapabilityRouter / Engine 主链固定，Workbench UI Host 骨架固定。v6.9.3-alpha 目标是在不改变 Runtime 与 Workbench 骨架的前提下，新增第二条 Capability（如 `image_generation`）并完善 Manager 的规则路由，证明「新增 Capability 只需注册 Engine + 扩展 Manager 规则 + 注册 WorkspaceItem」，无需修改 Runtime 或 Workbench 结构。
 
-### v6.9.2-alpha 目标
+### v6.9.3-alpha 目标
 
-- 定义稳定的 `Task` 数据模型（`id` / `capability` / `payload` / `metadata`），为后续扩展 `priority` / `context` / `attachments` / `parent_task` / `workflow_id` 预留接口。
-- `WorkbenchController.chat()` 升级为 `submit_task(Task)`，`chat()` 保留为兼容包装，Runtime 内部只认识 `Task`。
-- 新增规则版 Manager：User Input → Manager → `Task(capability=...)`；先全部输出 `chat`，再逐步增加 `image_generation` / `tool` 等规则。
-- `CapabilityRouter` 改为 Registry 驱动：`capability → registry.lookup(capability) → Engine`；Router 只识别 capability，不解析 prompt。
-- 新增 `ImageEngineStub` 作为第二条 Capability，返回占位 `ImageResult`，证明 Runtime 主流程无需修改即可承载多能力。
-- Trace 验证：发送不同 capability 的任务后，Trace 树展示 `Task → Manager → CapabilityRouter → Engine → Provider → Finish`，两条 Capability 自然分叉。
-- 全部用户路径可验证：打开 Workbench → 输入「生成一张猫」→ 看到 `capability=image_generation` → ImageEngine 执行 → Trace 展示完整链路。
+- 新增 `ImageEngineStub`（或真实 Image Provider）作为 `image_generation` capability 的实现，返回占位结果或调用真实图片生成 API。
+- 扩展 `AgentManager` 规则：根据 `UserRequest.text` 识别「画/生成图片」等意图，输出 `Task(capability="image_generation")`。
+- `WorkbenchController` 新增 `submit_request(UserRequest)` 便捷入口，保持 `chat()` / `chat_with_tool()` 兼容。
+- 在 WorkspaceHost 中注册 `ImageWorkspaceItem`，展示图片生成结果。
+- Trace 验证：不同 capability 的任务在 Trace 树中自然分叉，Inspector / StatusBar 正常观测。
+- 用户路径可验证：打开 Workbench → 输入「生成一张猫」→ Manager 解析为 `image_generation` → Image Engine 执行 → Workspace 展示结果 → Trace 展示完整链路。
 
 ### Foundation 封板标准
 
-当 chat 与 image_generation 两条 Capability 都能跑通，且 Trace / Inspector / StatusBar 正常观测时，Single Agent Runtime Foundation 封板。后续再进入 Service Registry / TaskGraph / Workflow Planner / Multi-Agent 等 Runtime V2 演进。
+当 chat、tool、image_generation 三条 Capability 都能跑通，且 Runtime / Workbench / Host 骨架无需为新 Capability 改动时，Single Agent Runtime Foundation 正式封板。后续再进入 Service Registry、TaskGraph、Workflow Planner、Multi-Agent 等 Runtime V2 演进。
 
 ### V6 Architecture Constitution（架构宪章）
 
@@ -518,11 +519,12 @@ v6.7.0-alpha 完成 Step 5.4 Runtime Orchestration Foundation：新增 `v6/runti
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
-| v6.9.1-alpha | 2026-07-08 | Runtime Observability Foundation：重构RuntimeTrace为分层事件模型Task/Capability/Engine/Provider/Execution/Stream/Request；新增CapabilityRouter发射capability.resolved、Orchestrator发射engine.selected、WorkbenchLLMEngine发射execution/provider/request/stream结构化事件；EventBus Trace Hook改为publish同步写入保证顺序；新增TraceEventRegistry与TraceWorkspaceItem；新增Trace顺序/父子关系/Workspace接收测试；V6 176/176、Workbench 20/20通过 | feat/refactor/test/ui | v6/runtime/enums.py, v6/runtime/event_bus.py, v6/runtime/orchestrator.py, v6/runtime/trace.py, v6/runtime/planner_loop.py, agent_workbench/runtime/capability_router.py, agent_workbench/engines/workbench_llm_engine.py, agent_workbench/ui/workbench/trace_*.py, agent_workbench/ui/workbench_ui_controller.py, tests/v6/test_v6_*.py, agent_workbench/tests/test_agent_workbench.py, PROJECT_BLUEPRINT.md, CHANGELOG.md |
+| v6.9.2-alpha | 2026-07-08 | Single Agent Runtime Foundation：Task模型固定五字段；UserRequest+Manager协议+AgentManager建立UserRequest→Task→submit_task主链；Workbench UI骨架升级为WorkbenchHost→Workbench→五大Host，Host负责mount/replace/dispose生命周期；UI与测试均调整到Host接口层；V6 176/176、Workbench 34/34通过，合计210/210 | feat/refactor/test/ui | v6/runtime/task.py, v6/runtime/user_request.py, v6/runtime/manager.py, v6/runtime/orchestrator.py, agent_workbench/controller.py, agent_workbench/runtime/agent_runtime.py, agent_workbench/services/manager.py, agent_workbench/ui/workbench/*_host.py, agent_workbench/ui/workbench/workbench.py, agent_workbench/ui/workbench/__init__.py, agent_workbench/tests/test_manager.py, tests/v6/test_v6_task.py, tests/v6/test_v6_user_request.py, agent_workbench/tests/test_agent_workbench.py, PROJECT_BLUEPRINT.md, CHANGELOG.md |
 
 ## 历史归档
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v6.9.1-alpha | 2026-07-08 | Runtime Observability Foundation：重构RuntimeTrace为分层事件模型Task/Capability/Engine/Provider/Execution/Stream/Request；新增CapabilityRouter发射capability.resolved、Orchestrator发射engine.selected、WorkbenchLLMEngine发射execution/provider/request/stream结构化事件；EventBus Trace Hook改为publish同步写入保证顺序；新增TraceEventRegistry与TraceWorkspaceItem；新增Trace顺序/父子关系/Workspace接收测试；V6 176/176、Workbench 20/20通过 | feat/refactor/test/ui | v6/runtime/enums.py, v6/runtime/event_bus.py, v6/runtime/orchestrator.py, v6/runtime/trace.py, v6/runtime/planner_loop.py, agent_workbench/runtime/capability_router.py, agent_workbench/engines/workbench_llm_engine.py, agent_workbench/ui/workbench/trace_*.py, agent_workbench/ui/workbench_ui_controller.py, tests/v6/test_v6_*.py, agent_workbench/tests/test_agent_workbench.py, PROJECT_BLUEPRINT.md, CHANGELOG.md |
 | v6.9.0-alpha | 2026-07-08 | Agent Workbench Single Instance：新增agent_workbench/应用层，含ConfigStore/ProfileManager/ModuleRegistry/AgentWorkbenchRuntime/10个RuntimeModule/WorkbenchController/Workbench Engine；扩展v6三栏UI实现AgentConfigPanel配置面板，支持查看/修改/保存/热更新；新增7个Workbench端到端测试；V6+Workbench合计182/182测试通过 | feat/test/ui | agent_workbench/**, v6/runtime/planner_loop.py, PROJECT_BLUEPRINT.md, CHANGELOG.md |
 | v6.5.8-alpha | 2026-07-07 | 八大Engine Runtime骨架：新增engines/base.py及llm/tool/memory/planner/workflow/code/vision/knowledge空壳；EngineManager统一execute(name,ctx)；新增Runtime Kernel集成测试验证Engine发现/生命周期/Trace Timeline/Planner编排；清理旧engines不兼容实现；130/130测试通过 | feat/refactor/test | v6/runtime/engines/base.py, v6/runtime/engines/*.py, v6/runtime/engine_manager.py, tests/v6/test_v6_runtime_kernel.py, tests/v6/test_v6_smoke.py |
 | v6.5.7-alpha | 2026-07-07 | Engine Protocol与EngineManager生命周期：新增EngineState/EngineDescriptor/EngineNotReadyError；Engine接口统一execute(ctx)；RuntimeContext新增request；EngineManager支持load/initialize/health_check/execute/shutdown并自动记录Trace；新增/更新26个Engine测试；144/144测试通过 | feat/refactor/test | v6/runtime/engine_state.py, v6/runtime/engines/protocol.py, v6/runtime/engine_manager.py, v6/runtime/context.py, tests/v6/test_engine_protocol.py, tests/v6/test_v6_engine_manager.py |

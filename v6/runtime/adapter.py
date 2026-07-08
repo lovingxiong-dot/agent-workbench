@@ -74,9 +74,9 @@ class LocalRuntimeAdapter(IRuntimeAdapter):
             payload={"task_id": ctx.task_id, "session_id": ctx.session_id},
         )
         task = Task(
-            task_id=ctx.task_id,
+            id=ctx.task_id,
             session_id=ctx.session_id,
-            type="chat",
+            capability="chat",
             payload={"ctx": ctx},
         )
         return self._runtime.submit(task)

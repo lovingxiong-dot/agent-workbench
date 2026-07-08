@@ -16,6 +16,7 @@ import pytest
 from PySide6.QtCore import Qt
 
 from v6.runtime.enums import RuntimeState, TraceEvent
+from v6.runtime.task import ChatTask, Task
 
 from agent_workbench.controller import WorkbenchController
 
@@ -42,6 +43,28 @@ def test_agent_lifecycle_chat(controller: WorkbenchController) -> None:
     timeline = controller.trace_timeline(ctx.task_id)
     nodes = {step["node"] for step in timeline}
     assert "engine:llm" in nodes
+
+
+def test_submit_task_is_unified_entry(controller: WorkbenchController) -> None:
+    """验证 submit_task(Task) 成为 Runtime 唯一任务入口。"""
+    task = ChatTask(text="hello", session_id="sess-submit")
+    ctx = controller.submit_task(task)
+
+    assert ctx.status == RuntimeState.COMPLETED
+    assert task.id == ctx.task_id
+    assert task.capability == "chat"
+    assert any(m.role == "assistant" for m in ctx.messages)
+
+
+def test_task_capability_is_routing_key(controller: WorkbenchController) -> None:
+    """验证 Task.capability 被 Runtime 用于路由。"""
+    task = Task(capability="chat", payload={"text": "hi"}, session_id="sess-routing")
+    ctx = controller.submit_task(task)
+
+    assert ctx.status == RuntimeState.COMPLETED
+    timeline = controller.trace_timeline(ctx.task_id)
+    actions = [s["action"] for s in timeline]
+    assert TraceEvent.CAPABILITY_RESOLVED.value in actions
 
 
 def test_agent_lifecycle_tool(controller: WorkbenchController) -> None:
@@ -274,7 +297,7 @@ def test_navigator_registers_runtime_modules(qapp, tmp_path) -> None:
     win = WorkbenchMainWindow(ui_controller=ctrl)
     try:
         nav = ctrl._host.workbench.navigator
-        registered = {nav._list.item(i).data(Qt.ItemDataRole.UserRole) for i in range(nav._list.count())}
+        registered = nav.modules()
         assert "runtime" in registered
         assert "model" in registered
         assert "prompt" in registered
@@ -296,8 +319,8 @@ def test_inspector_renders_model_properties(qapp, tmp_path) -> None:
         qapp.processEvents()
 
         inspector = ctrl._host.workbench.inspector
-        assert inspector._object_id == "model"
-        assert inspector._title.text() == "Model"
+        assert inspector.object_id == "model"
+        assert inspector.title == "Model"
         prop_names = {p.name for p in ctrl._presentations["model"].properties}
         assert "default_provider" in prop_names
         assert "sampling.temperature" in prop_names
@@ -340,9 +363,10 @@ def test_status_bar_reflects_runtime_state(qapp, tmp_path) -> None:
     win = WorkbenchMainWindow(ui_controller=ctrl)
     try:
         sb = ctrl._host.workbench.status_bar
-        assert "online" in sb._items["runtime"].text()
-        assert "echo" in sb._items["provider"].text()
-        assert "default" in sb._items["profile"].text()
+        values = sb.values()
+        assert "online" in values["runtime"]
+        assert "echo" in values["provider"]
+        assert "default" in values["profile"]
     finally:
         win.close()
         ctrl.shutdown()

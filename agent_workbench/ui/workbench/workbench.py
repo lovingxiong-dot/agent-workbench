@@ -1,7 +1,7 @@
 """agent_workbench/ui/workbench/workbench.py — Workbench 核心骨架。
 
-组装 Navigator / WorkspaceHost / Inspector / StatusBar / CommandBar。
-Workbench 不持有 Runtime，只持有 UI 组件和 Selection。
+组装 NavigatorHost / WorkspaceHost / InspectorHost / StatusBarHost / CommandBarHost。
+Workbench 不持有 Runtime，只持有 UI 区域 Host 和 Selection。
 外部（WorkbenchUIController）负责：
 - 注册 ModulePresentation
 - 切换 Workspace
@@ -14,10 +14,10 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QSplitter, QVBoxLayout, QWidget
 
 from v6.ui.base import C, install_invisible_handles
-from agent_workbench.ui.workbench.command_bar import CommandBar
-from agent_workbench.ui.workbench.inspector import Inspector
-from agent_workbench.ui.workbench.navigator import Navigator
-from agent_workbench.ui.workbench.status_bar import StatusBar
+from agent_workbench.ui.workbench.command_bar_host import CommandBarHost
+from agent_workbench.ui.workbench.inspector_host import InspectorHost
+from agent_workbench.ui.workbench.navigator_host import NavigatorHost
+from agent_workbench.ui.workbench.status_bar_host import StatusBarHost
 from agent_workbench.ui.workbench.workspace_host import WorkspaceHost
 
 
@@ -35,13 +35,13 @@ class Workbench(QWidget):
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(0)
 
-        # 顶部：三栏（Navigator | WorkspaceHost | Inspector）
+        # 顶部：三栏（NavigatorHost | WorkspaceHost | InspectorHost）
         self._splitter = QSplitter(Qt.Orientation.Horizontal, self)
         self._splitter.setHandleWidth(1)
 
-        self._navigator = Navigator(self)
+        self._navigator = NavigatorHost(self)
         self._workspace = WorkspaceHost(self)
-        self._inspector = Inspector(self)
+        self._inspector = InspectorHost(self)
 
         self._navigator.setMinimumWidth(180)
         self._inspector.setMinimumWidth(260)
@@ -58,9 +58,9 @@ class Workbench(QWidget):
 
         self._layout.addWidget(self._splitter, 1)
 
-        # 底部：StatusBar + CommandBar
-        self._status_bar = StatusBar(self)
-        self._command_bar = CommandBar(self)
+        # 底部：StatusBarHost + CommandBarHost
+        self._status_bar = StatusBarHost(self)
+        self._command_bar = CommandBarHost(self)
         self._layout.addWidget(self._status_bar)
         self._layout.addWidget(self._command_bar)
 
@@ -76,7 +76,7 @@ class Workbench(QWidget):
         self.setStyleSheet(f"background-color: {C['bg_primary']}; border: none;")
 
     @property
-    def navigator(self) -> Navigator:
+    def navigator(self) -> NavigatorHost:
         return self._navigator
 
     @property
@@ -84,13 +84,13 @@ class Workbench(QWidget):
         return self._workspace
 
     @property
-    def inspector(self) -> Inspector:
+    def inspector(self) -> InspectorHost:
         return self._inspector
 
     @property
-    def status_bar(self) -> StatusBar:
+    def status_bar(self) -> StatusBarHost:
         return self._status_bar
 
     @property
-    def command_bar(self) -> CommandBar:
+    def command_bar(self) -> CommandBarHost:
         return self._command_bar

@@ -17,7 +17,7 @@ from v6.runtime.enums import RuntimeState
 from v6.runtime.event_bus import EventBus
 from v6.runtime.orchestrator import Orchestrator
 from v6.runtime.runtime import AgentRuntime as CoreAgentRuntime
-from v6.runtime.task import ChatTask
+from v6.runtime.task import Task
 
 from agent_workbench.engines.workbench_llm_engine import WorkbenchLLMEngine
 from agent_workbench.engines.workbench_tool_engine import WorkbenchToolEngine
@@ -101,17 +101,11 @@ class AgentWorkbenchRuntime:
         self._registry.dispose_all()
         self._core_runtime.stop()
 
-    def chat(
-        self,
-        text: str,
-        session_id: str | None = None,
-        task_id: str | None = None,
-    ) -> RuntimeContext:
-        """提交一条用户消息，等待任务完成，返回最终 RuntimeContext。"""
-        task_kwargs: dict[str, Any] = {}
-        if task_id:
-            task_kwargs["task_id"] = task_id
-        task = ChatTask(text=text, session_id=session_id, **task_kwargs)
+    def submit_task(self, task: Task) -> RuntimeContext:
+        """提交任意 Task，等待任务完成，返回最终 RuntimeContext。
+
+        这是 Runtime 的唯一任务入口；外部调用方应通过 Manager 生成 Task 后调用本方法。
+        """
         task_id = self._core_runtime.orchestrate(task)
 
         # 轮询等待任务完成
@@ -123,15 +117,9 @@ class AgentWorkbenchRuntime:
 
         ctx = self._core_runtime.orchestrator.context(task_id)
         if ctx is None:
-            ctx = RuntimeContext.new(task_id=task_id, session_id=session_id)
+            ctx = RuntimeContext.new(task_id=task_id, session_id=task.session_id)
             ctx.set_status(RuntimeState.FAILED)
         self._current_context = ctx
-
-        # 将用户消息保存到 Memory（如启用）
-        memory_module = self._registry.get("memory")
-        if isinstance(memory_module, MemoryModule) and memory_module.service is not None:
-            memory_module.save(text, namespace="chat_history", task_id=ctx.task_id)
-
         return ctx
 
     def current_context(self) -> RuntimeContext | None:

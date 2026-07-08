@@ -305,6 +305,7 @@ class Orchestrator:
             task_id=task.task_id,
             session_id=task.session_id,
         )
+        ctx.metadata.update(task.metadata or {})
         ctx.metadata["task_type"] = task.type
         text = ""
         if isinstance(task, ChatTask):

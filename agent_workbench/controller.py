@@ -10,9 +10,14 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from v6.runtime.context import RuntimeContext
+from v6.runtime.manager import Manager
+from v6.runtime.task import Task
+from v6.runtime.user_request import UserRequest
 
 from agent_workbench.runtime.agent_runtime import AgentWorkbenchRuntime
 from agent_workbench.runtime.metadata import ModuleMetadata
+from agent_workbench.runtime.modules.memory_module import MemoryModule
+from agent_workbench.services.manager import AgentManager
 
 
 class WorkbenchController:
@@ -22,8 +27,10 @@ class WorkbenchController:
         self,
         runtime: AgentWorkbenchRuntime | None = None,
         config_path: str | None = None,
+        manager: Manager | None = None,
     ) -> None:
         self._runtime = runtime or AgentWorkbenchRuntime(config_path=config_path)
+        self._manager = manager or AgentManager()
 
     def start(self) -> None:
         """启动 Runtime。"""
@@ -43,14 +50,34 @@ class WorkbenchController:
         """暴露 AgentWorkbenchRuntime，供 UI 访问模块注册表等内部能力。"""
         return self._runtime
 
+    def submit_task(self, task: Task) -> RuntimeContext:
+        """提交任意 Task，返回最终 RuntimeContext。"""
+        return self._runtime.submit_task(task)
+
     def chat(
         self,
         text: str,
         session_id: Optional[str] = None,
         task_id: Optional[str] = None,
     ) -> RuntimeContext:
-        """提交一条用户消息，返回最终 RuntimeContext。"""
-        return self._runtime.chat(text, session_id=session_id, task_id=task_id)
+        """提交一条用户消息（chat 兼容包装），返回最终 RuntimeContext。
+
+        内部通过 Manager 将输入转换为 Task，再调用 submit_task()。
+        """
+        request = UserRequest(
+            text=text,
+            session_id=session_id,
+            task_id=task_id,
+        )
+        task = self._manager.resolve(request)
+        ctx = self.submit_task(task)
+
+        # 将用户消息保存到 Memory（如启用）
+        memory_module = self._runtime.module_registry.get("memory")
+        if isinstance(memory_module, MemoryModule) and memory_module.service is not None:
+            memory_module.save(text, namespace="chat_history", task_id=ctx.task_id)
+
+        return ctx
 
     def chat_with_tool(
         self,
@@ -58,33 +85,16 @@ class WorkbenchController:
         args: Dict[str, Any],
         session_id: Optional[str] = None,
     ) -> RuntimeContext:
-        """提交一条工具执行任务。"""
-        # 构造一个带有 tool_request 的 ChatTask
-        ctx = self._runtime.current_context()
-        # 通过底层 Runtime 提交带 metadata 的任务
-        from v6.runtime.context import RuntimeContext as CoreRuntimeContext
-        from v6.runtime.enums import RuntimeState
-        from v6.runtime.task import Task
-
-        new_ctx = CoreRuntimeContext.new(session_id=session_id)
-        new_ctx.metadata["task_type"] = "tool"
-        new_ctx.metadata["tool_request"] = {"tool": tool, "args": args}
-
-        task_id = self._runtime.core_runtime.orchestrate(
-            Task(task_id=new_ctx.task_id, session_id=session_id, type="tool", payload={"ctx": new_ctx})
+        """提交一条工具执行任务（chat 兼容包装）。"""
+        request = UserRequest(
+            session_id=session_id,
+            metadata={
+                "task_type": "tool",
+                "tool_request": {"tool": tool, "args": args},
+            },
         )
-
-        import time
-        for _ in range(200):
-            state = self._runtime.core_runtime.orchestrator.state(task_id)
-            if state in {RuntimeState.COMPLETED, RuntimeState.FAILED}:
-                break
-            time.sleep(0.01)
-
-        final_ctx = self._runtime.core_runtime.orchestrator.context(task_id)
-        if final_ctx is None:
-            final_ctx = new_ctx
-        return final_ctx
+        task = self._manager.resolve(request)
+        return self.submit_task(task)
 
     def get_state(self) -> Dict[str, Any]:
         """返回当前 Runtime 状态。"""

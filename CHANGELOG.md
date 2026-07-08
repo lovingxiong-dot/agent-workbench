@@ -1,5 +1,35 @@
 # Changelog
 
+## v6.9.2-alpha (2026-07-08) — Single Agent Runtime Foundation
+
+> **里程碑语义**：Runtime 从 Chat API 转向 Task API，Workbench UI 从配置工具转向 IDE Host 骨架。Task / UserRequest / Manager / CapabilityRouter / Engine 主链固定；WorkbenchHost → Workbench → NavigatorHost / WorkspaceHost / InspectorHost / StatusBarHost / CommandBarHost 骨架固定。后续新增 Capability 只需扩展 Manager 规则与注册 Engine，无需修改 Runtime 或 Workbench 结构。
+
+### Added
+- 新增 `v6/runtime/user_request.py`：`UserRequest` 协议对象，封装 `text / attachments / metadata / session_id / task_id`，作为 Manager 的统一输入。
+- 新增 `v6/runtime/manager.py`：`Manager` Protocol，定义 `resolve(UserRequest) -> Task` 接口，支持未来替换为 LLMManager / PolicyManager / HumanApprovalManager。
+- 新增 `agent_workbench/services/manager.py`：`AgentManager` 默认实现，当前规则：普通文本 → `chat`，`metadata["task_type"] == "tool"` → `tool`。
+- 新增 `agent_workbench/ui/workbench/host_base.py`：`WorkbenchAreaHost` 基类，提供 `mount / replace / dispose` 生命周期。
+- 新增 `agent_workbench/ui/workbench/navigator_host.py`：`NavigatorHost`，提供 `register_module / clear_modules / set_selection / modules` 稳定接口。
+- 新增 `agent_workbench/ui/workbench/inspector_host.py`：`InspectorHost`，提供 `set_object / clear` 及 `object_id / title` 属性。
+- 新增 `agent_workbench/ui/workbench/status_bar_host.py`：`StatusBarHost`，提供 `set_runtime / set_provider / set_model / ... / values()` 稳定接口。
+- 新增 `agent_workbench/ui/workbench/command_bar_host.py`：`CommandBarHost`，转发 `command_submitted` 信号并提供 `set_enabled / clear / set_placeholder`。
+- 新增 `tests/v6/test_v6_user_request.py`：验证 `UserRequest` 字段与可变默认值隔离。
+- 新增 `agent_workbench/tests/test_manager.py`：验证 `AgentManager` 解析 chat/tool 请求、Controller 通过 Manager 提交任务、完整 `UserRequest → Manager → Task → Engine` 主链。
+
+### Changed
+- `v6/runtime/task.py`：`Task` 固定为 `id / capability / payload / metadata / created_at` 五个核心字段；保留 `task_id` / `type` 旧别名兼容；`ChatTask` / `AnalyzeTask` 自动推导 capability。
+- `v6/runtime/orchestrator.py`：`Orchestrator._ensure_context()` 合并 `Task.metadata` 到 `RuntimeContext.metadata`，保证 Manager 写入的扩展信息流入 Runtime。
+- `agent_workbench/controller.py`：`WorkbenchController` 持有 `Manager`；`chat()` / `chat_with_tool()` 改为 `UserRequest → Manager.resolve() → submit_task()`。
+- `agent_workbench/runtime/agent_runtime.py`：移除 `chat()`，仅保留 `submit_task()`；Runtime 不再感知 Chat/Prompt 输入形式。
+- `agent_workbench/ui/workbench/workbench.py`：五大区域改为 `NavigatorHost / WorkspaceHost / InspectorHost / StatusBarHost / CommandBarHost`。
+- `agent_workbench/ui/workbench/__init__.py`：导出 Host 类与基类。
+- `agent_workbench/tests/test_agent_workbench.py`：UI 测试调整到 Host 接口层（`navigator.modules()` / `inspector.object_id` / `status_bar.values()`）。
+
+### Tests
+- `pytest tests/v6/`：**176/176 passed**。
+- `pytest agent_workbench/tests/`：**34/34 passed**。
+- 合计：**210/210 passed**。
+
 ## v6.9.1-alpha (2026-07-08) — Runtime Observability Foundation
 
 > **里程碑语义**：Runtime 可观测基座成型。Trace 不再是聊天日志，而是结构化执行事件流；事件语义围绕 Task → Capability → Engine → Provider → Execution → Request → Response 分层，避免绑定 LLM Streaming，为未来图片、视频、工作流扩展预留同一套可观测协议。
