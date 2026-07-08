@@ -70,6 +70,7 @@ def test_controller_chat_uses_manager(controller: WorkbenchController) -> None:
         assert ctx.status == RuntimeState.COMPLETED
         assert len(captured) == 1
         assert captured[0].capability == "chat"
+        assert captured[0].metadata["capability_id"] == "chat"
         assert captured[0].payload.get("text") == "hello manager"
     finally:
         controller._manager.resolve = original_resolve

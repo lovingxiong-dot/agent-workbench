@@ -15,6 +15,7 @@ from v6.runtime.task import Task
 from v6.runtime.user_request import UserRequest
 
 from agent_workbench.runtime.agent_runtime import AgentWorkbenchRuntime
+from agent_workbench.runtime.manager.runtime import ManagerRuntime
 from agent_workbench.runtime.metadata import ModuleMetadata
 from agent_workbench.runtime.modules.memory_module import MemoryModule
 from agent_workbench.services.manager import AgentManager
@@ -30,7 +31,10 @@ class WorkbenchController:
         manager: Manager | None = None,
     ) -> None:
         self._runtime = runtime or AgentWorkbenchRuntime(config_path=config_path)
-        self._manager = manager or AgentManager()
+        self._manager = manager or ManagerRuntime(
+            capability_registry=self._runtime.capability_registry,
+            event_bus=self._runtime.core_runtime.event_bus,
+        )
 
     def start(self) -> None:
         """启动 Runtime。"""

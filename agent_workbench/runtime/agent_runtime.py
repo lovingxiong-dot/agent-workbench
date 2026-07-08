@@ -21,6 +21,7 @@ from v6.runtime.task import Task
 
 from agent_workbench.engines.workbench_llm_engine import WorkbenchLLMEngine
 from agent_workbench.engines.workbench_tool_engine import WorkbenchToolEngine
+from agent_workbench.runtime.capability.graph import CapabilityRegistry
 from agent_workbench.runtime.capability_router import CapabilityRouter
 from agent_workbench.runtime.config_store import ConfigStore
 from agent_workbench.runtime.metadata import ModuleMetadata
@@ -45,6 +46,8 @@ class AgentWorkbenchRuntime:
         self._config = ConfigStore(config_path)
         self._profile_manager = ProfileManager(self._config)
         self._event_bus = EventBus()
+        self._capability_registry = CapabilityRegistry()
+        self._capability_registry.load_defaults()
         self._capability_router = CapabilityRouter(default_capability="chat")
         # 使用带 CapabilityRouter 的 Orchestrator，使 CAPABILITY_RESOLVED 事件由 Router 发出。
         self._engine_manager = None
@@ -75,6 +78,10 @@ class AgentWorkbenchRuntime:
     @property
     def module_registry(self) -> ModuleRegistry:
         return self._registry
+
+    @property
+    def capability_registry(self) -> CapabilityRegistry:
+        return self._capability_registry
 
     @property
     def core_runtime(self) -> CoreAgentRuntime:
