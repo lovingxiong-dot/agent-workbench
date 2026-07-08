@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 from agent_workbench.runtime.capability import (
+    CapabilityCategory,
     CapabilityDefinition,
     CapabilityIntent,
     CapabilityMatch,
+    CapabilityMode,
     CapabilityPersona,
 )
 
@@ -22,7 +24,13 @@ def test_capability_definition_full_fields():
     definition = CapabilityDefinition(
         id="coding.python.debugging",
         name="Python Debugging",
+        summary="Debug Python code.",
         description="Debug Python code.",
+        category=CapabilityCategory.CODE,
+        version="1.1.0",
+        provider_type="llm",
+        supported_modes=[CapabilityMode.ACTION],
+        priority=10,
         providers=["echo"],
         engine_capability="code_generation",
         parent_id="coding.python",
@@ -30,6 +38,12 @@ def test_capability_definition_full_fields():
         persona=persona,
     )
     assert definition.name == "Python Debugging"
+    assert definition.summary == "Debug Python code."
+    assert definition.category == CapabilityCategory.CODE
+    assert definition.version == "1.1.0"
+    assert definition.provider_type == "llm"
+    assert definition.supported_modes == [CapabilityMode.ACTION]
+    assert definition.priority == 10
     assert definition.engine_capability == "code_generation"
     assert definition.parent_id == "coding.python"
     assert definition.keywords == ["debug", "python"]
@@ -42,6 +56,11 @@ def test_capability_definition_serialization_roundtrip():
     original = CapabilityDefinition(
         id="coding.python.testing",
         name="Python Testing",
+        summary="Run Python tests.",
+        category=CapabilityCategory.CODE,
+        provider_type="llm",
+        supported_modes=[CapabilityMode.ACTION],
+        priority=5,
         engine_capability="code_generation",
         parent_id="coding.python",
         keywords=["test"],
@@ -52,6 +71,11 @@ def test_capability_definition_serialization_roundtrip():
 
     assert restored.id == original.id
     assert restored.name == original.name
+    assert restored.summary == original.summary
+    assert restored.category == original.category
+    assert restored.provider_type == original.provider_type
+    assert restored.supported_modes == original.supported_modes
+    assert restored.priority == original.priority
     assert restored.engine_capability == original.engine_capability
     assert restored.parent_id == original.parent_id
     assert restored.keywords == original.keywords

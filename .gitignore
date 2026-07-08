@@ -22,3 +22,5 @@ last_pytest.log
 .reference/
 .scripts/
 review/
+.workbuddy/
+.handoff/

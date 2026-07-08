@@ -14,13 +14,13 @@ WorkbenchInteractionLayer 是 UI / MCP / Local Agent 与 Runtime 之间的薄边
 from __future__ import annotations
 
 import threading
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from v6.runtime.context import RuntimeContext
 from v6.runtime.event_bus import RuntimeEvent
 from v6.runtime.enums import RuntimeState
 
-from agent_workbench.runtime.interaction.event import InteractionEvent
+from agent_workbench.runtime.interaction.event import InteractionEvent, InteractionEventType
 from agent_workbench.runtime.interaction.mapper import RuntimeEventMapper
 from agent_workbench.runtime.interaction.renderer import UIEventRenderer
 from agent_workbench.runtime.interaction.request import RuntimeRequest
@@ -43,6 +43,7 @@ class WorkbenchInteractionLayer:
         self._task_to_request: dict[str, str] = {}
         self._lock = threading.Lock()
         self._subscribed = False
+        self._callback: Callable[[RuntimeEvent], None] | None = None
         self._subscribe()
 
     def set_renderer(self, renderer: UIEventRenderer | None) -> None:
@@ -53,8 +54,13 @@ class WorkbenchInteractionLayer:
         """非阻塞提交 RuntimeRequest，返回 request_id。
 
         CHAT 与 ACTION 都返回 request_id，后续通过 Event Stream 区分。
+        Runtime 异常会被捕获并转换为 ERROR InteractionEvent，不会传播给 UI。
         """
-        task_id = self._runtime.submit_request(request)
+        try:
+            task_id = self._runtime.submit_request(request)
+        except Exception as exc:  # pragma: no cover - 防御性边界保护
+            self._render_error(request.request_id, f"Runtime request failed: {exc}")
+            return request.request_id
 
         if task_id is not None:
             with self._lock:
@@ -76,12 +82,24 @@ class WorkbenchInteractionLayer:
         )
         return self._runtime.submit_task(task)
 
+    def close(self) -> None:
+        """关闭 Interaction Layer：取消 EventBus 订阅并释放资源。"""
+        event_bus = self._runtime.core_runtime.event_bus
+        if event_bus is not None and self._callback is not None:
+            event_bus.unsubscribe("*", self._callback)
+        self._callback = None
+        self._subscribed = False
+        self._renderer = None
+        with self._lock:
+            self._task_to_request.clear()
+
     def _subscribe(self) -> None:
         """订阅 Runtime EventBus。"""
         event_bus = self._runtime.core_runtime.event_bus
         if event_bus is None or self._subscribed:
             return
-        event_bus.subscribe("*", self._on_event)
+        self._callback = self._on_event
+        event_bus.subscribe("*", self._callback)
         self._subscribed = True
 
     def _on_event(self, event: RuntimeEvent) -> None:
@@ -98,6 +116,23 @@ class WorkbenchInteractionLayer:
             renderer.render(interaction_event)
         except Exception:  # pragma: no cover - renderer 错误不应影响 Runtime
             # UI 渲染异常不得破坏 Runtime 执行。
+            pass
+
+    def _render_error(self, request_id: str, message: str) -> None:
+        """向 Renderer 输出 ERROR InteractionEvent。"""
+        renderer = self._renderer
+        if renderer is None:
+            return
+        try:
+            renderer.render(
+                InteractionEvent(
+                    type=InteractionEventType.ERROR,
+                    request_id=request_id,
+                    source="interaction_layer",
+                    payload={"message": message},
+                )
+            )
+        except Exception:  # pragma: no cover - renderer 错误不得破坏 Runtime
             pass
 
     def _map_event(self, event: RuntimeEvent) -> InteractionEvent | None:

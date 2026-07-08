@@ -3,7 +3,12 @@ from __future__ import annotations
 
 import pytest
 
-from agent_workbench.runtime.capability import CapabilityDefinition, CapabilityIntent
+from agent_workbench.runtime.capability import (
+    CapabilityCategory,
+    CapabilityDefinition,
+    CapabilityIntent,
+    CapabilityMode,
+)
 from agent_workbench.runtime.capability.graph import CapabilityRegistry
 
 
@@ -142,6 +147,28 @@ def test_resolve_fallback_to_chat_for_unknown_input():
     match = registry.resolve(CapabilityIntent(text="something completely unrelated"))
     assert match.definition.id == "chat"
     assert match.score == 0.0
+
+
+def test_default_graph_has_runtime_contract_fields():
+    registry = CapabilityRegistry()
+    registry.load_defaults()
+
+    chat = registry.get("chat")
+    assert chat is not None
+    assert chat.category == CapabilityCategory.TEXT
+    assert chat.provider_type == "llm"
+    assert chat.supported_modes == [CapabilityMode.CHAT]
+
+    image = registry.get("image_generation")
+    assert image is not None
+    assert image.category == CapabilityCategory.IMAGE
+    assert image.provider_type == "llm"
+    assert image.supported_modes == [CapabilityMode.ACTION]
+
+    tool = registry.get("tool")
+    assert tool is not None
+    assert tool.category == CapabilityCategory.TOOL
+    assert tool.provider_type == "tool"
 
 
 def test_persona_serialization():

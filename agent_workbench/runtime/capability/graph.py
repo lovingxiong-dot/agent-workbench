@@ -4,10 +4,19 @@
 - v6.9.3 只实现 Tree（parent_id + children + lineage），不引入 DAG / 图搜索 / 权重传播。
 - CapabilityRegistry 由 AgentWorkbenchRuntime 单例持有并注入 Manager 与 Router。
 - 所有节点通过 id 索引；父子关系在 register 时自动维护。
+- v6.9.6 扩展运行时索引：state_ref / context_ref / provider_binding_ref，Registry 只做索引。
 """
 from __future__ import annotations
 
-from agent_workbench.runtime.capability.model import CapabilityDefinition, CapabilityIntent, CapabilityMatch
+from agent_workbench.runtime.capability.context import CapabilityContext, CapabilityContextBuilder, DefaultCapabilityContextBuilder
+from agent_workbench.runtime.capability.model import (
+    CapabilityCategory,
+    CapabilityDefinition,
+    CapabilityIntent,
+    CapabilityMatch,
+    CapabilityMode,
+)
+from agent_workbench.runtime.capability.state import CapabilityExecutionState, CapabilityState
 
 
 class CapabilityNode:
@@ -25,17 +34,23 @@ class CapabilityNode:
 
 
 class CapabilityRegistry:
-    """能力注册表：管理 Capability Tree。
+    """能力注册表：管理 Capability Tree 与运行时索引。
 
     核心方法：
     - register / get: 注册与获取能力定义。
     - children / lineage / roots: 树结构查询。
     - load_defaults: 加载默认能力树。
     - find / resolve: Intent 匹配（最后实现，涉及策略）。
+    - set_state / get_state / set_context / get_context / bind_provider / get_provider_binding:
+      运行时索引，不保存执行历史/统计/Trace 等重数据。
     """
 
     def __init__(self) -> None:
         self._nodes: dict[str, CapabilityNode] = {}
+        self._state_refs: dict[str, CapabilityExecutionState] = {}
+        self._context_refs: dict[str, CapabilityContext] = {}
+        self._provider_binding_refs: dict[str, str] = {}
+        self._context_builder: CapabilityContextBuilder = DefaultCapabilityContextBuilder()
 
     def register(self, definition: CapabilityDefinition) -> None:
         """注册能力定义，并自动维护父子关系。"""
@@ -60,6 +75,57 @@ class CapabilityRegistry:
         """按 id 获取能力定义。"""
         node = self._nodes.get(capability_id)
         return node.definition if node is not None else None
+
+    # ------------------------------------------------------------------
+    # Runtime Contract Index（v6.9.6 Capability Runtime Contract Freeze）
+    # ------------------------------------------------------------------
+
+    def set_state(self, capability_id: str, state: CapabilityExecutionState) -> None:
+        """设置能力运行时状态引用。"""
+        self._state_refs[capability_id] = state
+
+    def get_state(self, capability_id: str) -> CapabilityExecutionState | None:
+        """获取能力运行时状态引用。"""
+        return self._state_refs.get(capability_id)
+
+    def set_context(self, capability_id: str, context: CapabilityContext) -> None:
+        """设置能力运行时上下文引用。"""
+        self._context_refs[capability_id] = context
+
+    def get_context(self, capability_id: str) -> CapabilityContext | None:
+        """获取能力运行时上下文引用。"""
+        return self._context_refs.get(capability_id)
+
+    def bind_provider(self, capability_id: str, provider_id: str) -> None:
+        """绑定能力到 Provider（仅索引，不涉及 Provider 选择策略）。"""
+        self._provider_binding_refs[capability_id] = provider_id
+
+    def get_provider_binding(self, capability_id: str) -> str | None:
+        """获取能力当前绑定的 Provider id。"""
+        return self._provider_binding_refs.get(capability_id)
+
+    def clear_runtime(self, capability_id: str) -> None:
+        """清理能力的运行时索引（不删除 Definition）。"""
+        self._state_refs.pop(capability_id, None)
+        self._context_refs.pop(capability_id, None)
+        self._provider_binding_refs.pop(capability_id, None)
+
+    def set_context_builder(self, builder: CapabilityContextBuilder) -> None:
+        """设置 Registry 级默认 CapabilityContextBuilder。"""
+        self._context_builder = builder
+
+    def build_context(
+        self,
+        capability_id: str,
+        request: Any,
+    ) -> CapabilityContext | None:
+        """使用当前 Builder 为指定能力构建 CapabilityContext。"""
+        definition = self.get(capability_id)
+        if definition is None:
+            return None
+        return self._context_builder.build(definition, request)
+
+    # ------------------------------------------------------------------
 
     def lineage(self, capability_id: str) -> list[str]:
         """返回从根节点到该节点的路径 id 列表（含自身）。"""
@@ -180,14 +246,15 @@ class CapabilityRegistry:
         raise RuntimeError("CapabilityRegistry has no fallback capability.")
 
     def load_defaults(self) -> None:
-        """加载 v6.9.3-alpha 默认能力树。
+        """加载 v6.9.6-alpha 默认能力树。
 
         默认树：
         assistant
           ├── chat (text_generation)
           ├── analyze (text_generation)
           ├── tool (tool_execution)
-          └── coding
+          ├── image_generation (image)
+          └── coding (code)
                 ├── python
                 │     ├── analysis (code_generation)
                 │     ├── debugging (code_generation)
@@ -198,12 +265,19 @@ class CapabilityRegistry:
             CapabilityDefinition(
                 id="assistant",
                 name="Assistant",
+                summary="Root assistant capability.",
                 description="Root assistant capability.",
+                category=CapabilityCategory.TEXT,
+                supported_modes=[CapabilityMode.CHAT, CapabilityMode.ACTION],
             ),
             CapabilityDefinition(
                 id="chat",
                 name="Chat",
+                summary="General chat capability.",
                 description="General chat capability.",
+                category=CapabilityCategory.TEXT,
+                provider_type="llm",
+                supported_modes=[CapabilityMode.CHAT],
                 parent_id="assistant",
                 keywords=["chat", "talk", "ask"],
                 engine_capability="text_generation",
@@ -211,7 +285,11 @@ class CapabilityRegistry:
             CapabilityDefinition(
                 id="analyze",
                 name="Analyze",
+                summary="Analyze a project or code.",
                 description="Analyze a project or code.",
+                category=CapabilityCategory.CODE,
+                provider_type="llm",
+                supported_modes=[CapabilityMode.ACTION],
                 parent_id="assistant",
                 keywords=["analyze", "analysis", "review"],
                 engine_capability="text_generation",
@@ -219,7 +297,11 @@ class CapabilityRegistry:
             CapabilityDefinition(
                 id="tool",
                 name="Tool",
+                summary="Execute a tool.",
                 description="Execute a tool.",
+                category=CapabilityCategory.TOOL,
+                provider_type="tool",
+                supported_modes=[CapabilityMode.ACTION],
                 parent_id="assistant",
                 keywords=["tool", "execute"],
                 engine_capability="tool_execution",
@@ -227,21 +309,31 @@ class CapabilityRegistry:
             CapabilityDefinition(
                 id="coding",
                 name="Coding",
+                summary="Software development tasks.",
                 description="Software development tasks.",
+                category=CapabilityCategory.CODE,
+                supported_modes=[CapabilityMode.ACTION],
                 parent_id="assistant",
                 keywords=["code", "coding", "program"],
             ),
             CapabilityDefinition(
                 id="coding.python",
                 name="Python",
+                summary="Python development.",
                 description="Python development.",
+                category=CapabilityCategory.CODE,
+                supported_modes=[CapabilityMode.ACTION],
                 parent_id="coding",
                 keywords=["python", "py"],
             ),
             CapabilityDefinition(
                 id="coding.python.analysis",
                 name="Python Analysis",
+                summary="Analyze Python code or project.",
                 description="Analyze Python code or project.",
+                category=CapabilityCategory.CODE,
+                provider_type="llm",
+                supported_modes=[CapabilityMode.ACTION],
                 parent_id="coding.python",
                 keywords=["analyze", "analysis", "review", "project"],
                 engine_capability="code_generation",
@@ -249,7 +341,11 @@ class CapabilityRegistry:
             CapabilityDefinition(
                 id="coding.python.debugging",
                 name="Python Debugging",
+                summary="Debug Python code.",
                 description="Debug Python code.",
+                category=CapabilityCategory.CODE,
+                provider_type="llm",
+                supported_modes=[CapabilityMode.ACTION],
                 parent_id="coding.python",
                 keywords=["debug", "fix", "bug"],
                 engine_capability="code_generation",
@@ -257,7 +353,11 @@ class CapabilityRegistry:
             CapabilityDefinition(
                 id="coding.python.testing",
                 name="Python Testing",
+                summary="Write or run Python tests.",
                 description="Write or run Python tests.",
+                category=CapabilityCategory.CODE,
+                provider_type="llm",
+                supported_modes=[CapabilityMode.ACTION],
                 parent_id="coding.python",
                 keywords=["test", "pytest", "unittest"],
                 engine_capability="code_generation",
@@ -265,7 +365,11 @@ class CapabilityRegistry:
             CapabilityDefinition(
                 id="coding.code_editor",
                 name="Code Editor",
+                summary="Edit code files.",
                 description="Edit code files.",
+                category=CapabilityCategory.CODE,
+                provider_type="local_agent",
+                supported_modes=[CapabilityMode.ACTION],
                 parent_id="coding",
                 keywords=["edit", "refactor"],
                 engine_capability="code_generation",
@@ -273,7 +377,11 @@ class CapabilityRegistry:
             CapabilityDefinition(
                 id="image_generation",
                 name="Image Generation",
+                summary="Generate images from text prompts.",
                 description="Generate images from text prompts.",
+                category=CapabilityCategory.IMAGE,
+                provider_type="llm",
+                supported_modes=[CapabilityMode.ACTION],
                 parent_id="assistant",
                 keywords=["image", "picture", "photo", "generate image"],
                 engine_capability="image_generation",

@@ -37,6 +37,43 @@
 - `pytest tests/v6/runtime`：**63/63 passed**（含 Contract Freeze 新增 6 个测试）。
 - `pytest`：**520/520 passed**。
 
+## v6.9.6-alpha (2026-07-09) — Capability Runtime Contract Freeze
+
+> **里程碑语义**：不是新增业务功能，而是冻结 Runtime 对 Capability 的契约。任何未来新增能力（图片、视频、浏览器、MCP、本地 Agent、远程 Agent）都必须通过注册 `CapabilityDefinition` 和实现 `CapabilityContext` 接入，不允许为单个能力增加专用 Runtime 流程。
+
+### Added
+- 升级 `agent_workbench/runtime/capability/model.py`：`CapabilityDefinition` 补全静态契约字段 `category` / `summary` / `version` / `provider_type` / `supported_modes` / `priority`，成为 Runtime 对能力的唯一静态描述；新增 `CapabilityCategory` / `CapabilityMode` 枚举。
+- 新增 `agent_workbench/runtime/capability/context.py`：定义 `CapabilityContext` 及类型化子上下文 `WorkspaceContext` / `AttachmentContext` / `SelectionContext` / `ExecutionContext`；新增 `CapabilityContextBuilder` Protocol 与 `DefaultCapabilityContextBuilder`，`RuntimeRequest.source` 仅映射为 `CapabilityContext.origin`，不参与 Capability 路由。
+- 新增 `agent_workbench/runtime/capability/state.py`：定义 `CapabilityState`（含 `PENDING` / `RESOLVED` / `SCHEDULED` / `RUNNING` / `COMPLETED` / `FAILED` / `CANCELLED` / `TIMEOUT` / `SKIPPED`）与 `CapabilityExecutionState`。
+- 升级 `agent_workbench/runtime/capability/graph.py`：在现有 `CapabilityRegistry` 上扩展运行时索引 `state_ref` / `context_ref` / `provider_binding_ref`，提供 `set_state` / `get_state` / `set_context` / `get_context` / `bind_provider` / `get_provider_binding` / `clear_runtime` / `build_context`；Registry 只做索引，不保存执行历史/统计/Trace 等重数据。
+- 升级 `agent_workbench/runtime/capability/__init__.py`：导出 Capability Runtime Contract 全部新类型。
+- 升级 `agent_workbench/runtime/capability/graph.py` 默认能力树：为 `assistant` / `chat` / `analyze` / `tool` / `coding` / `image_generation` 等节点填充 `category` / `provider_type` / `supported_modes`。
+- 新增 `tests/v6/runtime/test_capability_context.py`：8 个测试覆盖子上下文默认、类型化组合、DefaultCapabilityContextBuilder 从 RuntimeRequest / metadata 提取 origin。
+- 新增 `tests/v6/runtime/test_capability_state.py`：3 个测试覆盖生命周期枚举与 `CapabilityExecutionState`。
+- 新增 `tests/v6/runtime/test_capability_registry_runtime.py`：7 个测试覆盖 Registry 运行时索引与 `build_context`。
+- 升级 `tests/v6/runtime/test_capability_model.py` / `test_capability_registry.py`：验证新静态契约字段与默认能力树契约字段。
+
+### Changed
+- 更新 `PROJECT_BLUEPRINT.md`：当前任务改为 v6.9.6-alpha Capability Runtime Contract Freeze，新增 V6 Runtime Kernel Freeze Roadmap，真实 LLM 集成整体后移到 v6.10.0-alpha。
+
+### Constraints
+- 不新增 `CapabilityDescriptor`，不新增 `CapabilityRuntimeRegistry`；只扩展现有 `CapabilityDefinition` 和 `CapabilityRegistry`。
+- `CapabilityDefinition` 保持纯数据，不携带 Runtime 状态。
+- Capability Context 必须是类型化子上下文，禁止做成万能 Dict。
+- Registry 只保存 State / Context / Provider Binding 的引用/索引。
+- `RuntimeRequest.source` 只表示 Origin，不进入 Decision / Capability 路由。
+- Runtime 内部禁止出现任何 UI 概念（`QtSelection`、`QtWorkspace` 等）。
+- 不接真实 LLM、不改 Orchestrator 执行模型、不做 UI。
+
+### Tests
+- `pytest tests/v6/runtime`：**76/76 passed**。
+- `pytest`：**575/575 passed**。
+
+### History Note
+> **v6.9.x collectively forms the Runtime Kernel Freeze Series.**
+>
+> The primary objective of this series is to stabilize execution contracts, architectural boundaries, and runtime responsibilities before integrating production Providers, LLMs, MCP, and Workflow Runtime in v6.10 and beyond. Each v6.9.x release freezes one layer of the Runtime Kernel: Task (v6.9.2), Manager / Capability Tree (v6.9.3), Decision Layer (v6.9.4), Interaction Boundary (v6.9.5), and Capability Runtime Contract (v6.9.6).
+
 ## v6.9.5-alpha (2026-07-08) — Workbench Interaction Boundary Layer
 
 > **里程碑语义**：Workbench 从 Runtime Owner 进化为 Runtime Client。新增 Interaction Boundary Layer，统一外部入口协议 `RuntimeRequest` 和 UI 事件协议 `InteractionEvent`；任何 UI / MCP / Local Agent / Remote Agent 都可通过同一边界接入 Runtime，而 Runtime 内部无需修改。
@@ -63,10 +100,16 @@
 - CHAT 路径不伪造 `TASK_STARTED` / `TASK_FINISHED`；使用 `MESSAGE_USER` / `MESSAGE_DELTA` / `MESSAGE_COMPLETE` 事件流。
 - 不改 Orchestrator、不改 Capability、不改 PlannerLoop、不接 Qt Renderer、不删除旧 `chat()`。
 
+### Reliability Hardening (v6.9.5.1)
+- 升级 `agent_workbench/runtime/interaction/layer.py`：新增 `WorkbenchInteractionLayer.close()` 生命周期方法，取消 EventBus 订阅、释放 renderer、清理 task→request 映射。
+- 升级 `WorkbenchInteractionLayer.submit_request()`：捕获 Runtime 异常并转换为 `InteractionEventType.ERROR`，避免异常穿透边界影响 UI。
+- 升级 `agent_workbench/runtime/interaction/mapper.py`：`payload=None` 时按空 dict 处理；`source` 缺失时回退为 `"unknown"`；未知事件返回 `None`。
+- 新增 `tests/interaction/test_request_mapping.py`：完整验证 `request_id` / `source` / `session_id` / `text` / `attachments` / `action_id` / `metadata` / `task_id` 的 RuntimeRequest → UserRequest 映射。
+
 ### Tests
-- `pytest tests/interaction`：**16/16 passed**。
+- `pytest tests/interaction`：**31/31 passed**。
 - `pytest tests/v6/runtime`：**63/63 passed**。
-- `pytest`：**541/541 passed**。
+- `pytest`：**556/556 passed**。
 
 ## v6.9.3-alpha (2026-07-08) — Multi-Capability Runtime & Manager Routing (Planning Approved)
 

@@ -8,7 +8,32 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any
+
+
+class CapabilityCategory(str, Enum):
+    """能力类别：Runtime 对能力的静态分类。"""
+
+    TEXT = "text"
+    IMAGE = "image"
+    VIDEO = "video"
+    AUDIO = "audio"
+    CODE = "code"
+    BROWSER = "browser"
+    FILESYSTEM = "filesystem"
+    TERMINAL = "terminal"
+    TOOL = "tool"
+    MCP = "mcp"
+    UNKNOWN = "unknown"
+
+
+class CapabilityMode(str, Enum):
+    """能力支持的 Runtime 模式。"""
+
+    CHAT = "chat"
+    ACTION = "action"
+    WORKFLOW = "workflow"
 
 
 @dataclass
@@ -43,12 +68,18 @@ class CapabilityPersona:
 
 @dataclass
 class CapabilityDefinition:
-    """能力定义：Runtime 一级对象。
+    """能力定义：Runtime 对能力的唯一静态描述。
 
     字段说明：
     - id: 全局唯一能力标识，建议使用点分命名空间（如 coding.python.debugging）。
     - name: 人类可读名称。
+    - summary: 一句话能力摘要。
     - description: 能力描述。
+    - category: 能力类别（text/image/video/code/...）。
+    - version: 能力版本。
+    - provider_type: 推荐 Provider 类型（llm/tool/local_agent/mcp）。
+    - supported_modes: 支持的 Runtime 模式（chat/action/workflow）。
+    - priority: 同类别下选择优先级。
     - providers: 该能力可选的 Provider 列表（仅声明，不控制执行）。
     - input_schema / output_schema: 输入输出 JSON Schema 声明。
     - permissions: 能力所需权限标签。
@@ -61,7 +92,13 @@ class CapabilityDefinition:
 
     id: str
     name: str = ""
+    summary: str = ""
     description: str = ""
+    category: CapabilityCategory = CapabilityCategory.UNKNOWN
+    version: str = "1.0.0"
+    provider_type: str = ""
+    supported_modes: list[CapabilityMode] = field(default_factory=list)
+    priority: int = 0
     providers: list[str] = field(default_factory=list)
     input_schema: dict[str, Any] = field(default_factory=dict)
     output_schema: dict[str, Any] = field(default_factory=dict)
@@ -78,7 +115,13 @@ class CapabilityDefinition:
         return {
             "id": self.id,
             "name": self.name,
+            "summary": self.summary,
             "description": self.description,
+            "category": self.category.value,
+            "version": self.version,
+            "provider_type": self.provider_type,
+            "supported_modes": [mode.value for mode in self.supported_modes],
+            "priority": self.priority,
             "providers": list(self.providers),
             "input_schema": dict(self.input_schema),
             "output_schema": dict(self.output_schema),
@@ -99,7 +142,13 @@ class CapabilityDefinition:
         return cls(
             id=data["id"],
             name=data.get("name", ""),
+            summary=data.get("summary", ""),
             description=data.get("description", ""),
+            category=CapabilityCategory(data.get("category", CapabilityCategory.UNKNOWN.value)),
+            version=data.get("version", "1.0.0"),
+            provider_type=data.get("provider_type", ""),
+            supported_modes=[CapabilityMode(m) for m in data.get("supported_modes", [])],
+            priority=data.get("priority", 0),
             providers=list(data.get("providers", [])),
             input_schema=dict(data.get("input_schema", {})),
             output_schema=dict(data.get("output_schema", {})),

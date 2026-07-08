@@ -19,9 +19,11 @@ class RuntimeEventMapper:
         """将 RuntimeEvent 转换为 InteractionEvent。
 
         无法识别或不关心的事件返回 None。
+        payload 为 None 时按空 dict 处理；source 缺失时回退为 "unknown"。
         """
+        payload = event.payload if isinstance(event.payload, dict) else {}
         request_id = self._extract_request_id(event)
-        source = event.payload.get("source") if isinstance(event.payload, dict) else None
+        source = payload.get("source") or "unknown"
 
         match event.type:
             case RuntimeEventType.USER_MESSAGE:
@@ -30,7 +32,7 @@ class RuntimeEventMapper:
                     request_id=request_id,
                     source=source,
                     task_id=event.task_id,
-                    payload={"text": event.payload.get("text", "")},
+                    payload={"text": payload.get("text", "")},
                 )
             case RuntimeEventType.AI_CHUNK:
                 return InteractionEvent(
@@ -38,7 +40,7 @@ class RuntimeEventMapper:
                     request_id=request_id,
                     source=source,
                     task_id=event.task_id,
-                    payload={"text": event.payload.get("text", "")},
+                    payload={"text": payload.get("text", "")},
                 )
             case RuntimeEventType.AI_END:
                 return InteractionEvent(
@@ -47,8 +49,8 @@ class RuntimeEventMapper:
                     source=source,
                     task_id=event.task_id,
                     payload={
-                        "text": event.payload.get("text"),
-                        "status": event.payload.get("status", "completed"),
+                        "text": payload.get("text"),
+                        "status": payload.get("status", "completed"),
                     },
                 )
             case RuntimeEventType.TASK_STARTED:
@@ -57,7 +59,7 @@ class RuntimeEventMapper:
                     request_id=request_id,
                     source=source,
                     task_id=event.task_id,
-                    payload={"task_type": event.payload.get("task_type")},
+                    payload={"task_type": payload.get("task_type")},
                 )
             case RuntimeEventType.TASK_COMPLETED | RuntimeEventType.TASK_FAILED:
                 return InteractionEvent(
@@ -74,9 +76,9 @@ class RuntimeEventMapper:
                     source=source,
                     task_id=event.task_id,
                     payload={
-                        "index": event.payload.get("step_index", 0),
-                        "capability_id": event.payload.get("capability_id"),
-                        "total": event.payload.get("total_steps", 1),
+                        "index": payload.get("step_index", 0),
+                        "capability_id": payload.get("capability_id"),
+                        "total": payload.get("total_steps", 1),
                     },
                 )
             case RuntimeEventType.ENGINE_SELECTED | RuntimeEventType.PROVIDER_SELECTED | RuntimeEventType.EXECUTION_STARTED:
@@ -94,8 +96,8 @@ class RuntimeEventMapper:
                     source=source,
                     task_id=event.task_id,
                     payload={
-                        "name": event.payload.get("tool") or event.payload.get("name"),
-                        "args": event.payload.get("args", {}),
+                        "name": payload.get("tool") or payload.get("name"),
+                        "args": payload.get("args", {}),
                     },
                 )
             case RuntimeEventType.TOOL_COMPLETED:
@@ -105,9 +107,9 @@ class RuntimeEventMapper:
                     source=source,
                     task_id=event.task_id,
                     payload={
-                        "name": event.payload.get("tool") or event.payload.get("name"),
-                        "result": event.payload.get("result", {}),
-                        "status": event.payload.get("status", "ok"),
+                        "name": payload.get("tool") or payload.get("name"),
+                        "result": payload.get("result", {}),
+                        "status": payload.get("status", "ok"),
                     },
                 )
             case RuntimeEventType.ENGINE_FAILED | RuntimeEventType.TOOL_FAILED | RuntimeEventType.ERROR:
@@ -131,24 +133,26 @@ class RuntimeEventMapper:
     @staticmethod
     def _build_status_payload(event: RuntimeEvent) -> dict:
         """为 STATUS_UPDATE 构造可读的 title/details。"""
+        payload = event.payload if isinstance(event.payload, dict) else {}
         if event.type == RuntimeEventType.ENGINE_SELECTED:
             return {
                 "title": "选择执行引擎",
-                "details": f"engine={event.payload.get('engine')}, capability={event.payload.get('capability')}",
+                "details": f"engine={payload.get('engine')}, capability={payload.get('capability')}",
             }
         if event.type == RuntimeEventType.PROVIDER_SELECTED:
             return {
                 "title": "选择 Provider",
-                "details": str(event.payload.get("provider")),
+                "details": str(payload.get("provider")),
             }
         return {
             "title": "开始执行",
-            "details": str(event.payload),
+            "details": str(payload),
         }
 
     @staticmethod
     def _extract_error_message(event: RuntimeEvent) -> str:
         """从失败事件中提取错误信息。"""
-        if not isinstance(event.payload, dict):
-            return str(event.payload)
-        return event.payload.get("error") or event.payload.get("message") or event.payload.get("reason") or str(event.payload)
+        payload = event.payload if isinstance(event.payload, dict) else {}
+        if not payload:
+            return str(event.payload) if event.payload is not None else "unknown error"
+        return payload.get("error") or payload.get("message") or payload.get("reason") or str(payload)

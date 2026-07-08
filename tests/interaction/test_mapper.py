@@ -78,3 +78,39 @@ def test_mapper_maps_error_events(mapper: RuntimeEventMapper) -> None:
     assert mapped is not None
     assert mapped.type == InteractionEventType.ERROR
     assert mapped.payload["message"] == "engine crashed"
+
+
+def test_mapper_handles_empty_payload(mapper: RuntimeEventMapper) -> None:
+    event = RuntimeEvent(
+        type=RuntimeEventType.TASK_STARTED.value,
+        payload=None,  # type: ignore[arg-type]
+        task_id="task-1",
+        source="orchestrator",
+    )
+    mapped = mapper.map(event)
+    assert mapped is not None
+    assert mapped.type == InteractionEventType.TASK_STARTED
+    # payload 为 None 时按空 dict 处理，字段回退为默认值（如 task_type=None）。
+    assert mapped.payload == {"task_type": None}
+
+
+def test_mapper_defaults_source_to_unknown(mapper: RuntimeEventMapper) -> None:
+    event = RuntimeEvent(
+        type=RuntimeEventType.TASK_STARTED.value,
+        payload={"task_type": "action"},
+        task_id="task-1",
+        source="orchestrator",
+    )
+    mapped = mapper.map(event)
+    assert mapped is not None
+    assert mapped.source == "unknown"
+
+
+def test_mapper_unknown_event_returns_none(mapper: RuntimeEventMapper) -> None:
+    event = RuntimeEvent(
+        type="unknown.custom.event",
+        payload={},
+        task_id="task-1",
+        source="orchestrator",
+    )
+    assert mapper.map(event) is None

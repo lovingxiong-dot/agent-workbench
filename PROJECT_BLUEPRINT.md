@@ -176,6 +176,52 @@ v6-core  ──merge──►  v6-service  ──merge──►  v6-agent
 - `v6-service` 的能力向下合并到 `v6-agent`。
 - **禁止反向合并**：`v6-agent`、`v6-service` 不得反向合并入 `v6-core`；`v6-agent` 不得反向合并入 `v6-service`。
 
+## V6 Runtime Kernel Freeze Series
+
+> **v6.9.x collectively forms the V6 Runtime Kernel Freeze Series.**
+
+这一系列版本的目标不是提供新能力，而是在集成生产级 Provider、真实 LLM、MCP、Workflow Runtime 之前，把 Runtime 内核的**协议、边界和职责彻底冻结**。进入 v6.10 及以后，所有 AI 能力都将建立在这套已经稳定的 Runtime Kernel 之上，而不是一边扩展功能、一边反复修改底层协议。
+
+### 六层 Runtime Kernel
+
+```text
+Request
+    ↓
+Planning
+    ↓
+Task
+    ↓
+Capability
+    ↓
+Engine
+    ↓
+Provider
+```
+
+层级说明见 [`docs/v6/runtime-kernel-spec.md`](./docs/v6/runtime-kernel-spec.md)。
+
+### v6.9.x 历史定位
+
+| 版本 | 冻结的契约 |
+|---|---|
+| v6.9.2-alpha | Task Contract — `Task` 五字段固定，`submit_task(Task)` 成为唯一入口。 |
+| v6.9.3-alpha | Manager / Capability Tree Boundary — Capability 从 metadata 提升为 Runtime 一级对象。 |
+| v6.9.4-alpha | Runtime Decision Layer Contract — `RuntimeDecision` 成为 Runtime Control Plane 稳定 ABI。 |
+| v6.9.5-alpha | Interaction Boundary Layer Contract — `RuntimeRequest` / `InteractionEvent` 统一入口与输出协议。 |
+| v6.9.6-alpha | Capability Runtime Contract — `CapabilityDefinition` / `CapabilityContext` / `CapabilityState` / `CapabilityRegistry` 运行时索引冻结。 |
+
+### 后续路线
+
+```text
+v6.9.x  Runtime Kernel Freeze Series
+   ↓
+v6.10.x UI Runtime / Real LLM Production Loop
+   ↓
+v6.11.x Runtime Capability Expansion (MCP / Browser / Multi-Agent)
+   ↓
+v6.12.x Distributed Runtime / Workspace Identity
+```
+
 ## V6 全新主线声明
 
 > **V6.0.0-alpha marks the beginning of the independent V6 Runtime architecture line.**
@@ -205,35 +251,53 @@ v6.8.0-alpha 完成 V6 Framework Core Foundation Baseline（共享核心框架�
 
 ## 当前任务
 
-**v6.9.3-alpha Multi-Capability Runtime & Manager Routing**（在 `v6-agent` 分支执行）：
+**v6.9.6-alpha Capability Runtime Contract Freeze**（在 `v6-agent` 分支执行）：
 
-v6.9.2-alpha 已完成 **Single Agent Runtime Foundation**。v6.9.3-alpha 目标是把 Capability 从 metadata 提升为 Runtime 一级对象，建立以 `assistant` 为根的能力树，让 Manager 成为真正的能力路由层，Orchestrator 支持静态 Capability Chain 顺序执行，同时保持 Task 五字段、Runtime 骨架与 Workbench Host 骨架不变。
+v6.9.5-alpha 已完成 **Workbench Interaction Boundary Layer**。v6.9.6-alpha 目标不是新增业务功能，而是冻结 Runtime 对 Capability 的契约：任何未来新增能力（图片、视频、浏览器、MCP、本地 Agent、远程 Agent）都必须通过注册 `CapabilityDefinition` 和实现 `CapabilityContext` 接入，不允许为单个能力增加专用 Runtime 流程。
 
-### v6.9.3-alpha 目标
+### v6.9.6-alpha 目标
 
-- **Commit 0 Runtime Contract**：定义 `CapabilityDefinition` / `CapabilityMatch` / `CapabilityIntent` / `CapabilityStep` 模型，新增 Manager 级 Event 类型，建立空壳 `CapabilityRegistry` / `ManagerRuntime`。
-- **Commit 1 Capability Runtime**：实现 `agent_workbench/runtime/capability/graph.py` 能力树（Tree，非 Graph），支持 `register / get / lineage / children / roots / find / resolve`，默认树为 `assistant → chat/analyze/tool/coding → ...`。
-- **Commit 2 Manager Routing**：实现 `agent_workbench/runtime/manager/runtime.py`，`ManagerRuntime` 完成 `UserRequest → CapabilityMatch → Task`，保持 `AgentManager` 作为 Legacy Adapter；`WorkbenchController` 默认注入 `ManagerRuntime`。
-- **Commit 3 Capability Resolution**：升级 `agent_workbench/runtime/capability_router.py`，按 `Task.metadata["capability_id"]` 解析 engine_capability，事件 payload 携带 `capability_id` / `capability_path`。
-- **Commit 4 Capability Chain**：Orchestrator 支持 `metadata["capability_chain"]` 静态链顺序执行；Chain 只控制 Capability 顺序，不控制 Engine / Provider / Policy / Retry。
-- **Commit 5 Workbench Runtime Bridge**：新增只读 `WorkbenchRuntimeBridge`，`Runtime → UI` 事件流驱动 Navigator / StatusBar / TraceWorkspace；默认可通过开关关闭。
+- **CapabilityDefinition 补全静态契约**：新增 `category` / `summary` / `version` / `provider_type` / `supported_modes` / `priority`，使其成为 Runtime 对能力的唯一静态描述。
+- **CapabilityContext 独立**：定义 `CapabilityContext` 及其子上下文 `WorkspaceContext` / `AttachmentContext` / `SelectionContext` / `ExecutionContext`，能力执行环境不再塞进 `RuntimeRequest.payload`。
+- **CapabilityState 生命周期冻结**：定义 `CapabilityState`（含 `PENDING` / `RESOLVED` / `SCHEDULED` / `RUNNING` / `COMPLETED` / `FAILED` / `CANCELLED` / `TIMEOUT` / `SKIPPED`）与 `CapabilityExecutionState`。
+- **CapabilityRegistry 扩展运行时索引**：在现有 Registry 上增加 `state_ref` / `context_ref` / `provider_binding_ref` 索引，Registry 只做索引，不做数据库。
+- **CapabilityContextBuilder 协议**：从 `RuntimeRequest` 构建 `CapabilityContext`，`RuntimeRequest.source` 仅作为 `CapabilityContext.origin`，不参与 Capability 路由决策。
 
-### Foundation 封板标准
+### Contract Freeze 封板标准
 
-当 `UserRequest → ManagerRuntime → CapabilityRegistry → CapabilityRouter → Task → Orchestrator → Engine` 主链稳定，且「分析这个 Python 项目并修复 bug」能生成 coding 能力链并顺序执行时，Multi-Capability Runtime Foundation 封板。后续再进入 Service Registry、TaskGraph、Workflow Planner、Multi-Agent 等 Runtime V2 演进。
+当任何新增 Capability 都能回答以下四个问题时，Capability Runtime Contract 封板：
+
+1. 它的 `CapabilityDefinition` 是什么？
+2. 它的 `CapabilityContext` 需要哪些上下文？
+3. 它的 `CapabilityState` 生命周期如何表达？
+4. Runtime 如何通过 `CapabilityRegistry` 查询和管理这些运行时信息？
 
 ### 开发约束
 
-1. `CapabilityDefinition` 纯数据，禁止携带 Runtime 状态。
-2. `CapabilityRegistry` 由 `AgentWorkbenchRuntime` 单例持有并注入 Manager 与 Router。
-3. Capability Chain 第一版仅静态链，禁止根据中间结果动态扩展。
-4. `ManagerRuntime` 不调用 Engine，只生成 Task。
-5. UI Bridge 第一版只读。
-6. 能力树根节点使用 `assistant`，避免与 Manager 调度器混淆。
+1. 不新增 `CapabilityDescriptor`，不新增 `CapabilityRuntimeRegistry`；只扩展现有 `CapabilityDefinition` 和 `CapabilityRegistry`。
+2. `CapabilityDefinition` 保持纯数据，不携带 Runtime 状态。
+3. Capability Context 必须是类型化子上下文，禁止做成万能 Dict。
+4. Registry 只保存 State / Context / Provider Binding 的引用/索引，不保存执行历史、统计、Trace 等重数据。
+5. `RuntimeRequest.source` 只表示 Origin，不进入 Decision / Capability 路由。
+6. Runtime 内部禁止出现任何 UI 概念（`QtSelection`、`QtWorkspace` 等）。
+7. 不接真实 LLM、不改 Orchestrator 执行模型、不做 UI。
 
-### 实施计划文件
+### V6 Runtime Kernel Freeze Roadmap
 
-详见 `.trae/documents/v6.9.3_multi_capability_runtime_plan.md`。
+```text
+v6.9.5-alpha  Interaction Boundary Layer              ✅
+v6.9.6-alpha  Capability Runtime Contract Freeze      当前
+v6.9.7-alpha  Provider Runtime Foundation
+v6.9.8-alpha  Workspace Runtime Foundation
+v6.9.9-alpha  Archive Runtime Foundation
+v6.10.0-alpha UI Runtime / Real LLM Production Loop
+```
+
+注意：真实 LLM 集成整体后移到 v6.10.0-alpha。在 Capability / Provider / Workspace / Archive Runtime 契约冻结之前接入真实 LLM，会导致 Provider 接口反复返工。
+
+### 最高级设计约束
+
+> **Capability Runtime Contract Freeze 只定义 Runtime 对 Capability 的契约，不定义任何具体能力行为。任何图片、视频、浏览器、MCP、本地 Agent、远程 Agent 等新增能力，都必须通过注册 `CapabilityDefinition` 和实现 `CapabilityContext` 来接入，不允许为单个能力增加专用 Runtime 流程。**
 
 ### V6 Architecture Constitution（架构宪章）
 

@@ -88,3 +88,40 @@ def test_layer_renderer_errors_do_not_propagate() -> None:
         source="orchestrator",
     )
     callback(event)  # 不应抛出异常
+
+
+def test_layer_close_unsubscribes_from_event_bus() -> None:
+    runtime = _runtime()
+    layer = WorkbenchInteractionLayer(runtime=runtime)
+    layer.close()
+
+    callback = runtime.core_runtime.event_bus.subscribe.call_args[0][1]
+    runtime.core_runtime.event_bus.unsubscribe.assert_called_once_with("*", callback)
+    assert layer._renderer is None
+    assert layer._subscribed is False
+
+
+def test_layer_close_clears_task_mapping() -> None:
+    runtime = _runtime(task_id="task-1")
+    layer = WorkbenchInteractionLayer(runtime=runtime)
+    request = RuntimeRequest(text="hello")
+    layer.submit_request(request)
+
+    layer.close()
+    assert layer._task_to_request == {}
+
+
+def test_layer_submit_request_failure_renders_error() -> None:
+    runtime = _runtime()
+    runtime.submit_request.side_effect = RuntimeError("runtime down")
+    renderer = FakeRenderer()
+    layer = WorkbenchInteractionLayer(runtime=runtime, renderer=renderer)
+
+    request = RuntimeRequest(text="hello")
+    returned_id = layer.submit_request(request)
+
+    assert returned_id == request.request_id
+    assert len(renderer.events) == 1
+    assert renderer.events[0].type == InteractionEventType.ERROR
+    assert renderer.events[0].request_id == request.request_id
+    assert "runtime down" in renderer.events[0].payload["message"]
