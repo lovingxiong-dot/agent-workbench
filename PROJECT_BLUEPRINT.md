@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v6.9.4-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 39 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v6.9.5-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 39 |
 
 ## Current Development Authority
 
@@ -81,6 +81,68 @@ User / UI / MCP / Local Agent / Remote Agent
 - LLM 直接选择 Tool（由 `Interpreter` 拒绝 tool/function calling）。
 - `decision` 包反向依赖 `capability` / `planner` / `service` / `orchestrator` 实现。
 - 任何入口绕过 `RuntimeDecision` 直接操作 `Task` 内部状态。
+
+## Workbench Interaction Boundary Layer (v6.9.5-alpha)
+
+> **v6.9.5-alpha introduces the Workbench Interaction Boundary Layer.**
+
+### Goal
+
+将 Workbench 从 Runtime Owner 改造为 Runtime Client。所有外部入口统一通过 `RuntimeRequest` 进入 Runtime，Runtime 通过 `InteractionEvent` 流输出状态。
+
+```
+User / UI / MCP / Local Agent / Remote Agent
+                |
+                ↓
+        RuntimeRequest  (external input protocol)
+                |
+                ↓
+    WorkbenchInteractionLayer  (boundary, no business logic)
+                |
+                ↓
+        AgentWorkbenchRuntime
+                |
+                +---- DecisionManager  (Runtime internal)
+                |           |
+                |           ↓
+                |   RuntimeDecision  (frozen ABI)
+                |           |
+                |           ↓
+                +---- Orchestrator / Execution Layer
+                |
+                ↓
+        RuntimeEvent Stream
+                |
+                ↓
+        RuntimeEventMapper  (Runtime language → UI language)
+                |
+                ↓
+        InteractionEvent
+                |
+                ↓
+        UIEventRenderer  (protocol)
+                |
+                ↓
+        Qt / Web / CLI
+```
+
+### Key Contracts
+
+| Contract | Location | Responsibility |
+|---|---|---|
+| `RuntimeRequest` | `agent_workbench/runtime/interaction/request.py` | 外部输入协议；不表达 capability 路由意图 |
+| `InteractionEvent` | `agent_workbench/runtime/interaction/event.py` | UI 事件协议；含 `source` 字段追踪多入口 |
+| `RuntimeEventMapper` | `agent_workbench/runtime/interaction/mapper.py` | `RuntimeEvent → InteractionEvent`，不依赖 Renderer |
+| `UIEventRenderer` | `agent_workbench/runtime/interaction/renderer.py` | 消费 `InteractionEvent` 的协议 |
+| `WorkbenchInteractionLayer` | `agent_workbench/runtime/interaction/layer.py` | 边界层；不持有 `DecisionManager` |
+
+### Rules
+
+- `RuntimeRequest.source` 是环境上下文边界（`global_chat` / `workspace_session` / `command_bar` / `mcp` 等），不是 capability 路由指令。
+- `RuntimeRequest.action_id` 表示用户动作（如 `"format_current_file"`），不是 Runtime capability。
+- `WorkbenchInteractionLayer` 只调用 `AgentWorkbenchRuntime.submit_request()`；`DecisionManager` 保持在 Runtime 内部。
+- `AgentWorkbenchRuntime.submit_request()` 是纯入口，不增加 session / identity / memory / queue / remote agent 等业务判断。
+- CHAT 路径不伪造 `TASK_STARTED` / `TASK_FINISHED`。
 
 ## V6 Framework Core Foundation Baseline
 

@@ -17,6 +17,7 @@ from v6.runtime.user_request import UserRequest
 from agent_workbench.runtime.capability import CapabilityRegistry, CapabilityStep
 from agent_workbench.runtime.decision import (
     CapabilityResolver,
+    Intent,
     Interpreter,
     ManagerAI,
     Policy,
@@ -49,6 +50,22 @@ class DecisionManager(Manager):
 
     def decide(self, request: UserRequest) -> RuntimeDecision:
         """将 UserRequest 解析为 RuntimeDecision（供控制平面直接调度）。"""
+        explicit_tool = self._extract_explicit_tool_request(request)
+        if explicit_tool is not None:
+            from agent_workbench.runtime.decision import IntentType
+
+            return RuntimeDecision(
+                mode=RuntimeMode.ACTION,
+                intent=Intent(
+                    mode=RuntimeMode.ACTION,
+                    type=IntentType.EXECUTE_ACTION,
+                    entities={"action": "tool", "tool": explicit_tool["tool"]},
+                    raw_input=request.text or "",
+                ),
+                route="capability://tool",
+                payload={"tool_request": explicit_tool},
+            )
+
         intent = self._manager_ai.understand(request)
         route, chain = self._resolver.resolve(intent)
 
@@ -70,6 +87,17 @@ class DecisionManager(Manager):
         4. 构造 RuntimeDecision 并转换为 Task。
         """
         decision = self.decide(request)
+        return self.resolve_from_decision(request, decision)
+
+    def resolve_from_decision(
+        self,
+        request: UserRequest,
+        decision: RuntimeDecision,
+    ) -> Task:
+        """将已有的 RuntimeDecision 转换为 Task。
+
+        用于 Interaction Layer 等入口，避免对同一条请求重复调用 ManagerAI。
+        """
         policy_result = self._policy.check(decision)
         if not policy_result.allowed:
             return self._build_blocked_task(request, decision, policy_result.reason)
@@ -80,6 +108,16 @@ class DecisionManager(Manager):
             chain = [CapabilityStep.from_dict(item) for item in chain_data]
 
         return self._build_task(request, decision, chain)
+
+    def _extract_explicit_tool_request(self, request: UserRequest) -> dict[str, Any] | None:
+        """提取 UI / CommandBar 显式提交的工具请求，不是 LLM 选择的 Tool。"""
+        if not isinstance(request.metadata, dict):
+            return None
+        if request.metadata.get("task_type") == "tool":
+            tool_request = request.metadata.get("tool_request")
+            if isinstance(tool_request, dict) and "tool" in tool_request:
+                return tool_request
+        return None
 
     def _build_task(
         self,
@@ -100,11 +138,16 @@ class DecisionManager(Manager):
 
             metadata.update(CapabilityChain.to_metadata(chain))
 
+        # 合并 decision.payload 到 Task.payload，保留显式工具请求等上下文。
+        payload: dict[str, Any] = {"text": request.text or ""}
+        if decision.payload:
+            payload.update(decision.payload)
+
         return Task(
             id=request.task_id,
             session_id=request.session_id,
             capability=capability,
-            payload={"text": request.text or ""},
+            payload=payload,
             metadata=metadata,
         )
 

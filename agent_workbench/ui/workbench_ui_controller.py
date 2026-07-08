@@ -93,6 +93,11 @@ class WorkbenchUIController(UIController):
         """暴露给 UI 使用的 Workbench 控制器。"""
         return self._workbench
 
+    @property
+    def interaction_layer(self):
+        """暴露 Interaction Boundary Layer，供未来 UI 组件非阻塞提交请求。"""
+        return self._workbench.interaction_layer
+
     def startup(self) -> None:
         """启动 Workbench Runtime、初始化 Workbench UI、复用 v6 UI 初始化流程。"""
         self._workbench.start()

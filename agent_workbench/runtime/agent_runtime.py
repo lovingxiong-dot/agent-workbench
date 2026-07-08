@@ -24,6 +24,9 @@ from agent_workbench.engines.workbench_tool_engine import WorkbenchToolEngine
 from agent_workbench.runtime.capability.graph import CapabilityRegistry
 from agent_workbench.runtime.capability_router import CapabilityRouter
 from agent_workbench.runtime.config_store import ConfigStore
+from agent_workbench.runtime.decision import RuntimeMode
+from agent_workbench.runtime.interaction.request import RuntimeRequest
+from agent_workbench.runtime.manager.decision_manager import DecisionManager
 from agent_workbench.runtime.metadata import ModuleMetadata
 from agent_workbench.runtime.module_registry import ModuleRegistry
 from agent_workbench.runtime.modules.config_module import ConfigModule
@@ -62,6 +65,11 @@ class AgentWorkbenchRuntime:
             event_bus=self._event_bus,
             orchestrator=self._orchestrator,
         )
+        # DecisionManager 属于 Runtime Kernel Control Plane，保持在 Runtime 内部。
+        self._decision_manager = DecisionManager(
+            capability_registry=self._capability_registry,
+            event_bus=self._event_bus,
+        )
         self._registry = ModuleRegistry()
         self._current_context: RuntimeContext | None = None
         self._running = False
@@ -85,6 +93,11 @@ class AgentWorkbenchRuntime:
     @property
     def capability_registry(self) -> CapabilityRegistry:
         return self._capability_registry
+
+    @property
+    def decision_manager(self) -> DecisionManager:
+        """Runtime Kernel Control Plane 组件，外部不应直接调用（除兼容层外）。"""
+        return self._decision_manager
 
     @property
     def core_runtime(self) -> CoreAgentRuntime:
@@ -114,7 +127,7 @@ class AgentWorkbenchRuntime:
     def submit_task(self, task: Task) -> RuntimeContext:
         """提交任意 Task，等待任务完成，返回最终 RuntimeContext。
 
-        这是 Runtime 的唯一任务入口；外部调用方应通过 Manager 生成 Task 后调用本方法。
+        这是 Runtime 的传统同步任务入口；外部调用方应通过 Manager 生成 Task 后调用本方法。
         """
         task_id = self._core_runtime.orchestrate(task)
 
@@ -130,6 +143,56 @@ class AgentWorkbenchRuntime:
             ctx = RuntimeContext.new(task_id=task_id, session_id=task.session_id)
             ctx.set_status(RuntimeState.FAILED)
         self._current_context = ctx
+        return ctx
+
+    def submit_request(self, request: RuntimeRequest) -> str:
+        """Runtime 外部入口点：非阻塞提交 RuntimeRequest，返回 request_id。
+
+        约束：
+        - 只负责把请求转给 DecisionManager 和 Orchestrator，不增加业务判断。
+        - CHAT 模式不创建 Task，只发布 USER_MESSAGE 事件。
+        - ACTION / WORKFLOW 模式生成 Task 并通过 Orchestrator 提交。
+        """
+        user_request = request.to_user_request()
+        decision = self._decision_manager.decide(user_request)
+
+        if decision.mode == RuntimeMode.CHAT:
+            self._event_bus.publish(
+                "user_message",
+                {
+                    "text": request.text or "",
+                    "request_id": request.request_id,
+                    "source": request.source.value,
+                    "session_id": request.session_id,
+                },
+                source="interaction",
+            )
+            return request.request_id
+
+        task = self._decision_manager.resolve_from_decision(user_request, decision)
+        # 把 request_id 带入 Task metadata，便于事件追踪。
+        task.metadata.setdefault("request_id", request.request_id)
+        task.metadata.setdefault("source", request.source.value)
+        self._core_runtime.orchestrator.submit(task)
+        return request.request_id
+
+    def build_chat_context(
+        self,
+        request: UserRequest,
+        decision,
+    ) -> RuntimeContext:
+        """为 CHAT 模式构造不进入 Runtime 的完成上下文。"""
+        from v6.runtime.types import ChatMessage
+
+        ctx = RuntimeContext.new(
+            task_id=request.task_id,
+            session_id=request.session_id,
+        )
+        ctx.status = RuntimeState.COMPLETED
+        ctx.metadata["decision"] = decision.to_dict()
+        ctx.metadata["skipped_runtime"] = True
+        if request.text:
+            ctx.messages.append(ChatMessage(role="user", content=request.text))
         return ctx
 
     def current_context(self) -> RuntimeContext | None:

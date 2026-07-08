@@ -37,6 +37,37 @@
 - `pytest tests/v6/runtime`：**63/63 passed**（含 Contract Freeze 新增 6 个测试）。
 - `pytest`：**520/520 passed**。
 
+## v6.9.5-alpha (2026-07-08) — Workbench Interaction Boundary Layer
+
+> **里程碑语义**：Workbench 从 Runtime Owner 进化为 Runtime Client。新增 Interaction Boundary Layer，统一外部入口协议 `RuntimeRequest` 和 UI 事件协议 `InteractionEvent`；任何 UI / MCP / Local Agent / Remote Agent 都可通过同一边界接入 Runtime，而 Runtime 内部无需修改。
+
+### Added
+- 新增 `agent_workbench/runtime/interaction/request.py`：外部输入协议 `RuntimeRequest` / `RuntimeRequestSource`，区分 Global Chat 与 Workspace Session，禁止 capability 路由意图。
+- 新增 `agent_workbench/runtime/interaction/event.py`：UI 事件协议 `InteractionEvent` / `InteractionEventType`，含 `source` 字段以追踪多入口来源。
+- 新增 `agent_workbench/runtime/interaction/mapper.py`：`RuntimeEventMapper` 将 `RuntimeEvent` 翻译为 `InteractionEvent`，不依赖 Renderer。
+- 新增 `agent_workbench/runtime/interaction/renderer.py`：`UIEventRenderer` Protocol，消费 `InteractionEvent`。
+- 新增 `agent_workbench/runtime/interaction/layer.py`：`WorkbenchInteractionLayer` 作为 UI 与 Runtime 的边界，不持有 `DecisionManager`，只调用 `AgentWorkbenchRuntime.submit_request()`。
+- 新增 `tests/interaction/`：16 个测试覆盖 `RuntimeRequest`、`InteractionEvent`、`RuntimeEventMapper`、`WorkbenchInteractionLayer`。
+- 新增 `tests/test_controller_interaction.py`：5 个测试覆盖 `WorkbenchController.interaction_layer`、`submit_request`、chat 兼容、显式 tool 请求。
+
+### Changed
+- 升级 `agent_workbench/runtime/agent_runtime.py`：内部持有 `DecisionManager`；新增 `submit_request(request: RuntimeRequest) -> str` 作为纯外部入口；新增 `build_chat_context()`；CHAT 模式不创建 Task，只发布 `user_message` 事件。
+- 升级 `agent_workbench/runtime/manager/decision_manager.py`：新增 `resolve_from_decision()` 避免重复调用 ManagerAI；识别 UI / CommandBar 显式 tool 请求（非 LLM 选 Tool）；合并 `decision.payload` 到 `Task.payload`。
+- 升级 `agent_workbench/controller.py`：拥有 `WorkbenchInteractionLayer`；新增 `submit_request()`；`chat()` / `chat_with_tool()` 包装为 `RuntimeRequest`；保留 `_build_chat_context()` 不提前迁移。
+- 升级 `agent_workbench/ui/workbench_ui_controller.py`：暴露 `interaction_layer` 属性，`on_send_msg()` 保持不变。
+
+### Constraints
+- `RuntimeRequest` 不允许表达 Capability 路由意图；`action_id` 是用户动作，不是 capability_id。
+- `WorkbenchInteractionLayer` 不持有 `DecisionManager`，`DecisionManager` 保持在 Runtime 内部。
+- `AgentWorkbenchRuntime.submit_request()` 只作为入口，不增加 session / identity / memory / queue / remote agent 等业务判断。
+- CHAT 路径不伪造 `TASK_STARTED` / `TASK_FINISHED`；使用 `MESSAGE_USER` / `MESSAGE_DELTA` / `MESSAGE_COMPLETE` 事件流。
+- 不改 Orchestrator、不改 Capability、不改 PlannerLoop、不接 Qt Renderer、不删除旧 `chat()`。
+
+### Tests
+- `pytest tests/interaction`：**16/16 passed**。
+- `pytest tests/v6/runtime`：**63/63 passed**。
+- `pytest`：**541/541 passed**。
+
 ## v6.9.3-alpha (2026-07-08) — Multi-Capability Runtime & Manager Routing (Planning Approved)
 
 > **里程碑语义**：Capability 从 metadata 提升为 Runtime 一级公民。单一 Agent 实例进化为能力操作系统：以 `assistant` 为根的能力树（Tree）、`ManagerRuntime` 作为能力路由层、静态 Capability Chain 顺序执行、只读 Runtime UI Bridge。Task 五字段保持不变，所有扩展写入 metadata/payload。不进入 Multi-Agent / Agent Memory / MCP 大规模接入。

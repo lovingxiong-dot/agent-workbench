@@ -18,6 +18,7 @@ from v6.runtime.user_request import UserRequest
 
 from agent_workbench.runtime.agent_runtime import AgentWorkbenchRuntime
 from agent_workbench.runtime.decision import RuntimeMode
+from agent_workbench.runtime.interaction import RuntimeRequest, RuntimeRequestSource, WorkbenchInteractionLayer
 from agent_workbench.runtime.manager.decision_manager import DecisionManager
 from agent_workbench.runtime.metadata import ModuleMetadata
 from agent_workbench.runtime.modules.memory_module import MemoryModule
@@ -34,10 +35,9 @@ class WorkbenchController:
         manager: Manager | None = None,
     ) -> None:
         self._runtime = runtime or AgentWorkbenchRuntime(config_path=config_path)
-        self._manager = manager or DecisionManager(
-            capability_registry=self._runtime.capability_registry,
-            event_bus=self._runtime.core_runtime.event_bus,
-        )
+        # 兼容外部注入的 Manager；缺省使用 Runtime 内部的 DecisionManager。
+        self._manager = manager or self._runtime.decision_manager
+        self._interaction = WorkbenchInteractionLayer(runtime=self._runtime)
 
     def start(self) -> None:
         """启动 Runtime。"""
@@ -57,6 +57,15 @@ class WorkbenchController:
         """暴露 AgentWorkbenchRuntime，供 UI 访问模块注册表等内部能力。"""
         return self._runtime
 
+    @property
+    def interaction_layer(self) -> WorkbenchInteractionLayer:
+        """暴露 Interaction Boundary Layer，供 UI 非阻塞提交请求。"""
+        return self._interaction
+
+    def submit_request(self, request: RuntimeRequest) -> str:
+        """非阻塞提交 RuntimeRequest，返回 request_id。"""
+        return self._interaction.submit_request(request)
+
     def submit_task(self, task: Task) -> RuntimeContext:
         """提交任意 Task，返回最终 RuntimeContext。"""
         return self._runtime.submit_task(task)
@@ -69,30 +78,24 @@ class WorkbenchController:
     ) -> RuntimeContext:
         """提交一条用户消息（chat 兼容包装），返回最终 RuntimeContext。
 
-        Commit 5：优先通过 Decision Layer 判断模式。
+        Commit 6：通过 RuntimeRequest 进入 Interaction Layer。
         - CHAT 模式不进入 Runtime 执行层，直接返回完成上下文。
         - ACTION / WORKFLOW 模式生成 Task 并调用 submit_task()。
         """
-        request = UserRequest(
+        request = RuntimeRequest(
+            source=RuntimeRequestSource.GLOBAL_CHAT,
             text=text,
             session_id=session_id,
             task_id=task_id,
         )
 
         if hasattr(self._manager, "decide"):
-            decision = self._manager.decide(request)
+            decision = self._manager.decide(request.to_user_request())
             if decision.mode == RuntimeMode.CHAT:
-                return self._build_chat_context(request, decision)
+                # _build_chat_context 仍保留在 Controller，不提前迁移。
+                return self._build_chat_context(request.to_user_request(), decision)
 
-        task = self._manager.resolve(request)
-        ctx = self.submit_task(task)
-
-        # 将用户消息保存到 Memory（如启用）
-        memory_module = self._runtime.module_registry.get("memory")
-        if isinstance(memory_module, MemoryModule) and memory_module.service is not None:
-            memory_module.save(text, namespace="chat_history", task_id=ctx.task_id)
-
-        return ctx
+        return self._interaction.execute_request(request)
 
     def _build_chat_context(
         self,
@@ -118,15 +121,15 @@ class WorkbenchController:
         session_id: Optional[str] = None,
     ) -> RuntimeContext:
         """提交一条工具执行任务（chat 兼容包装）。"""
-        request = UserRequest(
+        request = RuntimeRequest(
+            source=RuntimeRequestSource.COMMAND_BAR,
             session_id=session_id,
             metadata={
                 "task_type": "tool",
                 "tool_request": {"tool": tool, "args": args},
             },
         )
-        task = self._manager.resolve(request)
-        return self.submit_task(task)
+        return self._interaction.execute_request(request)
 
     def get_state(self) -> Dict[str, Any]:
         """返回当前 Runtime 状态。"""
