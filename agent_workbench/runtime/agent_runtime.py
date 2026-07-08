@@ -48,7 +48,10 @@ class AgentWorkbenchRuntime:
         self._event_bus = EventBus()
         self._capability_registry = CapabilityRegistry()
         self._capability_registry.load_defaults()
-        self._capability_router = CapabilityRouter(default_capability="chat")
+        self._capability_router = CapabilityRouter(
+            default_capability="chat",
+            capability_registry=self._capability_registry,
+        )
         # 使用带 CapabilityRouter 的 Orchestrator，使 CAPABILITY_RESOLVED 事件由 Router 发出。
         self._engine_manager = None
         self._orchestrator = Orchestrator(
