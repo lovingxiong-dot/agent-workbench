@@ -1,5 +1,32 @@
 # Changelog
 
+## v6.9.6-foundation (2026-07-09) — V6 Runtime Foundation Baseline Frozen
+
+> **里程碑语义**：v6.9.x Runtime Kernel Freeze Series 正式收官。Repository Hygiene、Runtime Glossary、Repository Map、Audit / Verify 自动化、环境目录布局全部落地，形成可长期演进的工程基线。从此所有 Provider、MCP、Gateway、Workflow 集成均从该基线出发，不再扩展 Runtime Kernel。
+
+### Frozen
+- **Runtime Kernel**：Request → Planning → Task → Capability → Engine → Provider 六层架构与依赖规则冻结。
+- **Capability Runtime Contract**：`CapabilityDefinition`、`CapabilityContext`、`CapabilityState`、`CapabilityRegistry` 契约冻结。
+- **Interaction Boundary**：`RuntimeRequest` / `InteractionEvent` 协议冻结。
+- **Decision Layer Control Plane**：`RuntimeDecision` ABI 冻结。
+- **Repository Governance**：Git as Archive、Workspace Contains Only Current Truth、One Asset One Authority、Generated Files Disposable、Repository Self-Explanatory、Environment Directories Are Not Source 六大原则冻结。
+
+### Established
+- `docs/v6/runtime-kernel-spec.md` — Runtime Kernel 规范。
+- `docs/v6/runtime-glossary.md` — 平台术语表。
+- `docs/v6/repository-governance.md` — 仓库治理宪章 + Agent 协作公约 + 环境目录使用约定。
+- `docs/v6/repository-map.md` — 仓库地图。
+- `scripts/audit_repository.py` — 仓库健康审计。
+- `scripts/verify_repository.py` — 提交前验证。
+- `scripts/generate_repository_map.py` — 自动地图生成。
+- `F:\Agent/` 环境目录布局：`.dist/`、`.resource/`、`.sandbox/`、`.monitor/`、`.workbuddy/`。
+
+### Baseline Tags
+- `v6.9.6-hygiene` — Repository Hygiene 完成，V6 Runtime Foundation Baseline 起点。
+- `v6.9.6-foundation` — V6 Runtime Foundation Baseline 最终冻结点。
+
+---
+
 ## v6.9.4-alpha (2026-07-08) — Runtime Decision Layer
 
 > **里程碑语义**：Runtime 从"有能力"进化为"有控制权"。引入 Runtime Decision Layer 作为 Runtime Kernel Control Plane，将 LLM 降级为 Intent Interpreter；Runtime 通过 Intent → Decision → Route → Capability Chain 控制执行路径，禁止 LLM 直接选择 Tool。Decision Layer 属于 Runtime Kernel 扩展，不是第 11 个 Capability Module，不违反 Feature Freeze。

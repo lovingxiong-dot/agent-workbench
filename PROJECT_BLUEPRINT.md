@@ -1,13 +1,14 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v6.9.5-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 39 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v6.9.6-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 39 |
 
 ## Current Development Authority
 
 > **The active development line is `v6-agent` based on `v6.8.0-alpha` (V6 Framework Core Foundation Baseline).**
 > **Public baseline: `v6.0.0-alpha`.**
 > **Framework Core baseline: `v6.8.0-alpha`.**
+> **V6 Runtime Foundation Baseline: `v6.9.6-foundation` — frozen at 2026-07-09. All future Provider, MCP, Gateway, and Workflow work starts from here.**
 
 | Item | Value |
 |---|---|
@@ -21,6 +22,29 @@
 | Rule | Do not modify `v5-dev`. Framework Core (`v6-core`) only accepts bug fixes. Service work goes to `v6-service`. Agent work goes to `v6-agent`. |
 
 See also [`PROJECT_LINEAGE.md`](./PROJECT_LINEAGE.md) for the complete V5 / V6 identity map.
+
+## V6 Runtime Foundation Baseline (Frozen)
+
+> **Status: `v6.9.6-foundation` — V6 Runtime Foundation Baseline Frozen.**
+
+The v6.9.x series is complete. The following layers of the Runtime Kernel are now frozen:
+
+| Layer | Freeze Commit | Contract Document |
+|---|---|---|
+| Task | v6.9.2-alpha | `docs/v6/runtime-kernel-spec.md` |
+| Manager / Capability Tree | v6.9.3-alpha | `docs/v6/runtime-kernel-spec.md` |
+| Decision Layer | v6.9.4-alpha | `docs/v6/runtime-kernel-spec.md` |
+| Interaction Boundary | v6.9.5-alpha | `docs/v6/runtime-kernel-spec.md` |
+| Capability Runtime Contract | v6.9.6-alpha | `docs/v6/runtime-kernel-spec.md` |
+| Repository Governance | v6.9.6-hygiene | `docs/v6/repository-governance.md` |
+| Foundation Baseline | v6.9.6-foundation | This document + `CHANGELOG.md` |
+
+From this point forward:
+
+- **No new Runtime-level modules** may be added without architecture review.
+- **All new capabilities** must enter through the frozen Capability Runtime Contract.
+- **All Provider, MCP, Gateway, and Workflow work** branches from `v6.9.6-foundation`.
+- **Repository hygiene** is enforced by `scripts/audit_repository.py` and `scripts/verify_repository.py`.
 
 ## Agent Workbench 定位
 
