@@ -1,8 +1,0 @@
-﻿chore(v6.9.6): Establish environment directory layout
-
-- Add .dist/, .resource/, .sandbox/ to .gitignore
-- Update rebuild.ps1 to output releases to F:\Agent\.dist
-- Update audit_repository.py to skip environment directories
-- Update repository-governance.md with Environment Directory Rule
-- Update README.md build release instructions
-- Update repository-map.md generator to include environment layout
