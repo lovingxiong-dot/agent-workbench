@@ -19,6 +19,8 @@ from agent_workbench.ui.workbench.inspector_host import InspectorHost
 from agent_workbench.ui.workbench.navigator_host import NavigatorHost
 from agent_workbench.ui.workbench.status_bar_host import StatusBarHost
 from agent_workbench.ui.workbench.workspace_host import WorkspaceHost
+from agent_workbench.ui.workspace_registry import WorkspaceRegistry
+from agent_workbench.ui.workspace_router import WorkspaceRouter
 
 
 class Workbench(QWidget):
@@ -64,6 +66,10 @@ class Workbench(QWidget):
         self._layout.addWidget(self._status_bar)
         self._layout.addWidget(self._command_bar)
 
+        # Workspace 注册表与路由器
+        self._workspace_registry = WorkspaceRegistry()
+        self._workspace_router = WorkspaceRouter(self._workspace_registry, self._workspace)
+
         # 转发信号
         self._navigator.selection_changed.connect(self.selection_changed.emit)
         self._inspector.property_changed.connect(self.property_changed.emit)
@@ -94,3 +100,11 @@ class Workbench(QWidget):
     @property
     def command_bar(self) -> CommandBarHost:
         return self._command_bar
+
+    @property
+    def workspace_registry(self) -> WorkspaceRegistry:
+        return self._workspace_registry
+
+    @property
+    def workspace_router(self) -> WorkspaceRouter:
+        return self._workspace_router
