@@ -1,5 +1,37 @@
 # Changelog
 
+## v6.9.4-alpha (2026-07-08) — Runtime Decision Layer
+
+> **里程碑语义**：Runtime 从"有能力"进化为"有控制权"。引入 Runtime Decision Layer 作为 Runtime Kernel Control Plane，将 LLM 降级为 Intent Interpreter；Runtime 通过 Intent → Decision → Route → Capability Chain 控制执行路径，禁止 LLM 直接选择 Tool。Decision Layer 属于 Runtime Kernel 扩展，不是第 11 个 Capability Module，不违反 Feature Freeze。
+
+### Added
+- 新增 `agent_workbench/runtime/decision/schema.py`：纯协议层，定义 `RuntimeMode` / `IntentType` / `Intent` / `RuntimeDecision` / `IntentError`，不依赖 capability / planner / service。
+- 新增 `agent_workbench/runtime/decision/interpreter.py`：`Interpreter` 负责 LLM Output → Intent，拒绝 tool / function / tool_calls / function_call 等传统 calling 格式。
+- 新增 `agent_workbench/runtime/decision/resolver.py`：`CapabilityResolver` 负责 Intent → Capability Chain，确定性查询 `CapabilityRegistry` 并复用 Commit 4 的 leaves() 链生成逻辑。
+- 新增 `agent_workbench/runtime/decision/policy.py`：`Policy` / `PolicyResult` 执行前策略接口，第一版默认放行。
+- 新增 `agent_workbench/runtime/decision/manager_ai.py`：`ManagerAI` 负责 UserRequest → Intent；当前阶段使用规则映射，未来可替换为 LLM。
+- 新增 `agent_workbench/runtime/manager/decision_manager.py`：`DecisionManager` 实现 `Manager` 协议，内部整合 `ManagerAI → Interpreter → Resolver → Policy → RuntimeDecision → Task`。
+- 新增 `tests/v6/runtime/test_decision_layer.py`：覆盖 CHAT 不进入 Runtime、ACTION 图片能力、Python 分析链、旧任务兼容、拒绝 Tool Calling 污染等 5 个核心场景。
+
+### Changed
+- 升级 `v6/runtime/orchestrator.py`：保留 `execute(task)` 兼容入口，新增 `dispatch(decision)`；CHAT 模式不创建 Task，ACTION 模式生成 Task 并携带 `capability_chain`。
+- 升级 `agent_workbench/controller.py`：默认 Manager 切换为 `DecisionManager`；`chat()` 优先通过 Decision Layer 判断模式，CHAT 直接返回完成上下文而不进入 Runtime。
+- 升级 `agent_workbench/runtime/capability/graph.py`：默认能力树新增 `image_generation` 叶子能力，engine_capability 为 `image_generation`。
+- 升级 `agent_workbench/engines/workbench_llm_engine.py`：`capabilities` 增加 `image_generation`，支持 Decision Layer 路由闭环。
+- 升级 `agent_workbench/runtime/capability/__init__.py`：导出 `CapabilityRegistry`。
+- 升级 `tests/v6/runtime/test_capability_registry.py`：`assistant` 子节点断言包含 `image_generation`。
+- 升级 `tests/v6/runtime/test_orchestrator_chain.py`：显式使用 `ManagerRuntime`，保证 Commit 4 chain 执行测试不受默认 manager 变更影响。
+
+### Constraints
+- Decision Layer 属于 Runtime Kernel Control Plane，不是 Capability Module，不违反 10 模块 Feature Freeze。
+- `schema.py` 只定义协议对象，禁止反向依赖 capability / planner / service / orchestrator。
+- 不修改 PlannerLoop、不接 UI、不增加动态规划、retry、parallel、memory 调度。
+- LLM 不能直接选择 Tool；任何 tool/function calling 格式都会被 Interpreter 拒绝。
+
+### Tests
+- `pytest tests/v6/runtime`：**57/57 passed**。
+- `pytest`：**514/514 passed**。
+
 ## v6.9.3-alpha (2026-07-08) — Multi-Capability Runtime & Manager Routing (Planning Approved)
 
 > **里程碑语义**：Capability 从 metadata 提升为 Runtime 一级公民。单一 Agent 实例进化为能力操作系统：以 `assistant` 为根的能力树（Tree）、`ManagerRuntime` 作为能力路由层、静态 Capability Chain 顺序执行、只读 Runtime UI Bridge。Task 五字段保持不变，所有扩展写入 metadata/payload。不进入 Multi-Agent / Agent Memory / MCP 大规模接入。

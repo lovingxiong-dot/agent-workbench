@@ -25,7 +25,7 @@ class WorkbenchLLMEngine(BaseEngine):
     """Workbench 专用 LLM Engine。"""
 
     name = "llm"
-    capabilities = ["text_generation"]
+    capabilities = ["text_generation", "image_generation"]
 
     def __init__(self, model_module: "ModelModule") -> None:
         super().__init__()

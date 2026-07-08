@@ -8,10 +8,16 @@ from v6.runtime.task import Task
 from v6.runtime.user_request import UserRequest
 
 from agent_workbench.controller import WorkbenchController
+from agent_workbench.runtime.manager.runtime import ManagerRuntime
 
 
 def _controller() -> WorkbenchController:
     controller = WorkbenchController()
+    # Commit 4 的 chain 执行测试不依赖 Decision Layer，显式使用旧的 ManagerRuntime。
+    controller._manager = ManagerRuntime(
+        capability_registry=controller._runtime.capability_registry,
+        event_bus=controller._runtime.core_runtime.event_bus,
+    )
     controller.start()
     return controller
 

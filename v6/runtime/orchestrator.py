@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING, Any, Dict, Optional
 from v6.runtime.context import RuntimeContext
 from v6.runtime.decision import Decision, DecisionAction
 from v6.runtime.enums import RuntimeState
+
+from agent_workbench.runtime.decision import RuntimeDecision, RuntimeMode
 from v6.runtime.event_bus import RuntimeEvent, RuntimeEventType
 from v6.runtime.state_machine import RuntimeStateMachine, RuntimeStateTransitionError
 from v6.runtime.task import ChatTask, Task
@@ -92,6 +94,45 @@ class Orchestrator:
             source="orchestrator",
         )
         return task_id
+
+    def execute(self, task: Task) -> str:
+        """兼容入口：保留旧版 execute(task) 调用，等价于 submit。"""
+        return self.submit(task)
+
+    def dispatch(self, decision: RuntimeDecision) -> str | None:
+        """Runtime Decision Layer 新入口。
+
+        Commit 5 约束：
+        - CHAT 模式不创建 Task，不进入 Runtime 执行层。
+        - ACTION 模式生成 Task 并携带 capability_chain。
+        - WORKFLOW 模式生成 Task 并携带 execution_plan，由现有 PlannerLoop 处理。
+        """
+        if decision.mode == RuntimeMode.CHAT:
+            return None
+
+        task = self._decision_to_task(decision)
+        return self.submit(task)
+
+    def _decision_to_task(self, decision: RuntimeDecision) -> Task:
+        """将 RuntimeDecision 转换为 Task，保持与旧 execute(task) 路径兼容。"""
+        route = decision.route
+        if route.startswith("capability://"):
+            capability = route[len("capability://") :]
+        else:
+            capability = route
+
+        metadata: dict[str, Any] = {"decision": decision.to_dict()}
+        if decision.capability_chain is not None:
+            metadata["capability_chain"] = decision.capability_chain
+        if decision.execution_plan is not None:
+            metadata["execution_plan"] = decision.execution_plan
+
+        return Task(
+            capability=capability,
+            payload={"text": decision.intent.raw_input},
+            metadata=metadata,
+            session_id=None,
+        )
 
     def state(self, task_id: str) -> Optional[RuntimeState]:
         """返回指定 Task 的当前生命周期状态。"""

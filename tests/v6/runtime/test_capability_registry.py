@@ -38,7 +38,7 @@ def test_children_query():
     registry.load_defaults()
 
     assistant_children = [child.id for child in registry.children("assistant")]
-    assert set(assistant_children) == {"chat", "analyze", "tool", "coding"}
+    assert set(assistant_children) == {"chat", "analyze", "tool", "coding", "image_generation"}
 
     coding_children = [child.id for child in registry.children("coding")]
     assert set(coding_children) == {"coding.python", "coding.code_editor"}

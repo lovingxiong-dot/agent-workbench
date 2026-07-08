@@ -10,12 +10,15 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from v6.runtime.context import RuntimeContext
+from v6.runtime.enums import RuntimeState
 from v6.runtime.manager import Manager
 from v6.runtime.task import Task
+from v6.runtime.types import ChatMessage
 from v6.runtime.user_request import UserRequest
 
 from agent_workbench.runtime.agent_runtime import AgentWorkbenchRuntime
-from agent_workbench.runtime.manager.runtime import ManagerRuntime
+from agent_workbench.runtime.decision import RuntimeMode
+from agent_workbench.runtime.manager.decision_manager import DecisionManager
 from agent_workbench.runtime.metadata import ModuleMetadata
 from agent_workbench.runtime.modules.memory_module import MemoryModule
 from agent_workbench.services.manager import AgentManager
@@ -31,7 +34,7 @@ class WorkbenchController:
         manager: Manager | None = None,
     ) -> None:
         self._runtime = runtime or AgentWorkbenchRuntime(config_path=config_path)
-        self._manager = manager or ManagerRuntime(
+        self._manager = manager or DecisionManager(
             capability_registry=self._runtime.capability_registry,
             event_bus=self._runtime.core_runtime.event_bus,
         )
@@ -66,13 +69,21 @@ class WorkbenchController:
     ) -> RuntimeContext:
         """提交一条用户消息（chat 兼容包装），返回最终 RuntimeContext。
 
-        内部通过 Manager 将输入转换为 Task，再调用 submit_task()。
+        Commit 5：优先通过 Decision Layer 判断模式。
+        - CHAT 模式不进入 Runtime 执行层，直接返回完成上下文。
+        - ACTION / WORKFLOW 模式生成 Task 并调用 submit_task()。
         """
         request = UserRequest(
             text=text,
             session_id=session_id,
             task_id=task_id,
         )
+
+        if hasattr(self._manager, "decide"):
+            decision = self._manager.decide(request)
+            if decision.mode == RuntimeMode.CHAT:
+                return self._build_chat_context(request, decision)
+
         task = self._manager.resolve(request)
         ctx = self.submit_task(task)
 
@@ -81,6 +92,23 @@ class WorkbenchController:
         if isinstance(memory_module, MemoryModule) and memory_module.service is not None:
             memory_module.save(text, namespace="chat_history", task_id=ctx.task_id)
 
+        return ctx
+
+    def _build_chat_context(
+        self,
+        request: UserRequest,
+        decision,
+    ) -> RuntimeContext:
+        """为 CHAT 模式构造不进入 Runtime 的完成上下文。"""
+        ctx = RuntimeContext.new(
+            task_id=request.task_id,
+            session_id=request.session_id,
+        )
+        ctx.status = RuntimeState.COMPLETED
+        ctx.metadata["decision"] = decision.to_dict()
+        ctx.metadata["skipped_runtime"] = True
+        if request.text:
+            ctx.messages.append(ChatMessage(role="user", content=request.text))
         return ctx
 
     def chat_with_tool(

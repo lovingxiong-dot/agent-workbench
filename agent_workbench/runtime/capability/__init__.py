@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 from agent_workbench.runtime.capability.chain import CapabilityChain, CapabilityStep
+from agent_workbench.runtime.capability.graph import CapabilityRegistry
 from agent_workbench.runtime.capability.model import (
     CapabilityDefinition,
     CapabilityIntent,
@@ -25,5 +26,6 @@ __all__ = [
     "CapabilityIntent",
     "CapabilityMatch",
     "CapabilityPersona",
+    "CapabilityRegistry",
     "CapabilityStep",
 ]

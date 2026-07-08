@@ -270,6 +270,14 @@ class CapabilityRegistry:
                 keywords=["edit", "refactor"],
                 engine_capability="code_generation",
             ),
+            CapabilityDefinition(
+                id="image_generation",
+                name="Image Generation",
+                description="Generate images from text prompts.",
+                parent_id="assistant",
+                keywords=["image", "picture", "photo", "generate image"],
+                engine_capability="image_generation",
+            ),
         ]
         for definition in definitions:
             self.register(definition)
