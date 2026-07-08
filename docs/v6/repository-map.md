@@ -21,6 +21,8 @@ docs/                     # Documentation
         runtime-glossary.md
         repository-governance.md
         repository-map.md
+        data-layer-inventory.md
+        v6.10-task-list.md
         SPEC.md
         ROADMAP.md
     archive/              # Historical documents worth keeping

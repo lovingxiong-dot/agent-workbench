@@ -309,27 +309,25 @@ v6.8.0-alpha 完成 V6 Framework Core Foundation Baseline（共享核心框架�
 
 ## 当前任务
 
-**v6.10.0-alpha Workbench Product — GUI Platform**（在 `v6-agent` 分支执行）：
+**v6.10.0-alpha：打造真正可用的 Autonomous Agent Workbench**（在 `v6-agent` 分支执行）：
 
-v6.9.x Runtime Kernel Freeze Series 已收官，`v6.9.6-foundation` 成为长期基线。v6.10.0-alpha 开始，项目从「打磨 Runtime 内核」转向「建设 Workbench Product」。产品定位升级为 **Personal Agent Workbench / Agent IDE**，核心目标是：把 Agent Workbench 真正变成一个可以承载任何能力的平台。
+v6.9.x Runtime Kernel Freeze Series 已收官，`v6.9.6-foundation` 成为长期基线。v6.10 的目标不再是「平台建设」或「未来架构预留」，而是**打造一个今天能用的 Autonomous Agent Workbench**。
 
-v6.10 不是先做 OpenAI / Gemini / Claude，而是先把链路打通：
+每一阶段只回答一个问题：
+
+> **Agent 今天比昨天多会了一件什么事情？**
+
+v6.10.0 先固定 IDE 骨架并打通最小可用闭环：
 
 ```text
-GUI
-  ↓
-Chat
-  ↓
-Task
-  ↓
-Capability
-  ↓
-Tool
-  ↓
-Provider
+Workbench UI Framework
+        ↓
+Presentation Layer
+        ↓
+Chat Workspace          ← Agent 能聊天
 ```
 
-Provider 可以先只有一个（例如 EchoProvider 或一个真实 Provider），但框架必须可扩展。
+之后再逐步让 Agent 学会：安装能力（Skill Registry）、执行工具（Tool Runtime）、调用 LLM（Provider Framework）。
 
 ### v6.10.x 目标
 
@@ -363,14 +361,12 @@ Provider 可以先只有一个（例如 EchoProvider 或一个真实 Provider）
 v6.9.5-alpha  Interaction Boundary Layer              ✅
 v6.9.6-alpha  Capability Runtime Contract Freeze      ✅
 v6.9.6-foundation  V6 Runtime Foundation Baseline     ✅ 当前基线
-v6.10.0-alpha  GUI Platform                           当前
-v6.10.x        Provider Framework / Tool Runtime / Skill Framework
+v6.10.0-alpha  Workbench UI Framework + Presentation + Chat  当前
+v6.10.x        Skill Registry / Tool Runtime / Provider Framework
         ↓
 v6.11.x  Workflow / Memory / Knowledge
         ↓
-v6.12.x  MCP / Browser / External Service / Marketplace
-        ↓
-（未来） Agent Identity / Gateway / Distributed / Remote Runtime
+（未来） MCP / Browser / External Service / Marketplace / Gateway
 ```
 
 ### 最高级设计约束

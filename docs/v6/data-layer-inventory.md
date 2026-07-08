@@ -140,26 +140,33 @@
 
 ---
 
-## 数据层 → UI 映射关系（初稿）
+## 数据层 → Presentation → UI 映射关系（开发看板）
 
-| UI 区域 | 依赖的数据层 | 主要服务/模型 |
-|---|---|---|
-| 左侧会话列表 | Session 数据 | `SessionManager` / `SessionService` |
-| 聊天消息区 | Session + Runtime Facts | `ChatService` / `RuntimeContext.messages` |
-| 输入区 / 模式选择 | Config 数据 | `ConfigManager` / `ConfigService` |
-| 工具栏 / 工具面板 | Tool 注册数据 | `ToolRegistry` |
-| 模型选择 / Provider 设置 | Provider 注册数据 | `ModelProvider` 子类 |
-| 能力市场 / Skill 面板 | Capability Contract | `CapabilityRegistry`, `CapabilityDefinition` |
-| 终端 / 文件浏览器 | Workspace 数据 | `project_path`, `PathResolver` |
-| 状态栏 / 运行指示 | Runtime Facts + Trace | `RuntimeContext.status`, `RuntimeTrace` |
+| Service / Runtime | PresentationModel | UI Workspace | Status |
+|---|---|---|---|
+| `SessionService` / `ChatService` | `SessionPresentation` | Chat Workspace | 🚧 v6.10.0 |
+| `RuntimeContext` / `RuntimeTrace` | `RuntimePresentation` | Status Bar / Trace Workspace | 🚧 v6.10.0 |
+| `CapabilityRegistry` / `CapabilityDefinition` | `CapabilityPresentation` | Skill Panel / Inspector | 🚧 v6.10.x |
+| `ToolRegistry` | `ToolPresentation` | Tool Workspace | ❌ v6.10.x |
+| `ProviderRegistry`（待建） | `ProviderPresentation` | Provider Workspace | ❌ v6.10.x |
+| `ConfigManager` / `ConfigService` | `ConfigPresentation` | Settings Workspace | 🚧 v6.10.0 |
+| `ProjectService` / `PathResolver` | `WorkspacePresentation` | Project Explorer | ❌ v6.11.x |
+| `SkillRegistry`（待建） | `SkillPresentation` | Skill Workspace | ❌ v6.10.x |
+| `WorkflowService`（待建） | `WorkflowPresentation` | Workflow Workspace | ❌ v6.11.x |
+| `MemoryService` / `KnowledgeService` | `MemoryPresentation` / `KnowledgePresentation` | Memory / Knowledge Workspace | ❌ v6.11.x |
+
+Status 图例：✅ 已完成 / 🚧 进行中 / ❌ 未开始
+
+**核心规则**：UI 永远只认识 `PresentationModel`，不直接调用 Service。
 
 ---
 
 ## 当前风险点
 
-1. **Workspace 数据尚未统一**：项目路径、文件选择、终端状态分散在各处，UI 接入前建议先抽象出 `WorkspaceService`。
-2. **Skill Registry 缺失**：第一梯队包含 Skill Registry，但目前只有 CapabilityRegistry + ToolRegistry，需要明确 Skill 的实体定义。
-3. **Provider 配置未持久化**：`ModelProvider` 配置目前停留在内存或环境变量，尚未接入 `ConfigManager`。
-4. **V5 数据层仍在使用**：`v5/` 目录为适配保留，长期应逐步迁移到 V6 服务。
-5. **UI 直接依赖部分数据服务**：需确保 UI 只通过 `InteractionEvent` / `RuntimeRequest` 与 Runtime 通信，不直接操作数据服务。
+1. **Workspace 数据尚未统一**：项目路径、文件选择、终端状态分散在各处，UI 接入前建议先抽象出 `WorkspaceService`。→ 放 v6.11.x Project Workspace。
+2. **Presentation Layer 缺失**：目前 UI 直接依赖 Service，需建立 `Service → PresentationModel → UI` 中间层。→ v6.10.0 Commit 2。
+3. **Skill Registry 缺失**：Skill 将成为 Workbench 最核心的注册层，但目前只有 CapabilityRegistry + ToolRegistry。→ v6.10.x Commit 4。
+4. **Provider Registry 缺失**：Provider 配置停留在内存或环境变量，需建立 ProviderDefinition / ProviderRegistry / ProviderConfig。→ v6.10.x Commit 6。
+5. **Workbench UI Framework 缺失**：尚无统一的 IDE 骨架（Navigator / Workspace / Inspector / StatusBar / CommandBar）。→ v6.10.0 Commit 1。
+6. **V5 数据层仍在使用**：`v5/` 目录为适配保留，长期应逐步迁移到 V6 服务。
 
