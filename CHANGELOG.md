@@ -1,5 +1,33 @@
 # Changelog
 
+## v6.12.0-beta.8 (2026-07-10) — Starter Agent Runtime（Commit 12.4）
+
+> **里程碑语义**：Package Agent 的 Execute Action 第一次形成完整闭环。点击 Starter Agent 的 Execute 后，`WorkbenchUIController` 识别 Package Agent 动作，调用 `WorkbenchController.execute_agent_action()`，由 `PackageExecutor` 执行并更新 `execution_count` 统计；UI 通过重新构建 `ModulePresentation` 刷新 Inspector / StatusBar，实现 `Execute Action → Controller/Runtime → Binding → Status` 闭环。
+
+### Added
+- `agent_workbench/package/executor.py`：新增 `PackageExecutor`。
+  - `execute(package, action_id)`：执行 Package action，自动创建/递增 `execution_count` 统计。
+  - 对缺失 Package、空 action_id 等异常返回结构化失败结果。
+- `agent_workbench/controller.py`：
+  - `WorkbenchController` 新增可选 `package_registry` 构造参数，与 UI 层共享同一个 `PackageRegistry` 实例。
+  - 新增 `execute_agent_action(package_id, action_id)`：查询 Package、调用 `PackageExecutor`，并向 EventBus 发布 `TASK_STARTED` / `TASK_COMPLETED` 事件，使 Trace Workspace 可观测。
+- `agent_workbench/ui/workbench_ui_controller.py`：
+  - `_on_action_triggered()` 识别 Package Agent action，调用 `WorkbenchController.execute_agent_action()`。
+  - action 执行后清除本地 `_presentations` 缓存，触发 `_on_selection_changed()` 重新构建 `ModulePresentation`，使 Inspector / StatusBar 显示更新后的 `execution_count`。
+- `tests/package/test_package_executor.py`：10 个测试，覆盖 `PackageExecutor`、Controller 执行入口、UI action 触发与 Presentation 刷新。
+
+### Design Notes
+- 当前 Package Action 在 Application Layer（Controller）直接执行并发布 Runtime 事件；未来可在此入口扩展为 `RuntimeRequest → Orchestrator → Tool Engine` 的完整链路，而 UI 侧调用方式保持不变。
+- Package 统计保存在内存中的 `PackageInfo.metadata.statistics`，不持久化到磁盘，符合 Package 作为一次性运行时对象的定位。
+
+### Tests
+- `pytest tests/`：**791/791 passed**（新增 12 个 Starter Agent Runtime 与生命周期测试；收尾 Qt 退出码 `3221226505` 与 `QThread: Destroyed while thread is still running` 为 Windows 已知现象，不影响断言结果）。
+
+### Next Phase
+- **v6.12.0-rc.1**：PyInstaller 打包验证，发布首个 Runtime Baseline。
+
+---
+
 ## v6.12.0-beta.7 (2026-07-10) — Workbench Integration（Commit 12.3）
 
 > **里程碑语义**：Package 第一次真正接入 Workbench UI。`WorkbenchUIController` 启动时通过 `PackageRegistry.discover()` / `load()` 扫描 `packages/` 目录，将合法 Package 的 `ViewSchema` 注册到 `ViewSchemaRegistry`，并把 Package 转换成的 `ModulePresentation` 加入 Navigator。点击 Package Agent 后，`ViewSchemaRenderer` 按 Package 自声明的 Schema 驱动 Workspace / Inspector / ToolBar / StatusBar，实现 `Package → Metadata → PresentationModel → ViewSchema → UI` 的完整数据流。

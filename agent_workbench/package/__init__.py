@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from agent_workbench.package.exceptions import PackageValidationError
+from agent_workbench.package.executor import PackageExecutor
 from agent_workbench.package.integration import PackageIntegration
 from agent_workbench.package.loader import PackageLoader
 from agent_workbench.package.manifest import PackageManifest
@@ -16,6 +17,7 @@ from agent_workbench.package.registry import PackageRegistry
 
 
 __all__ = [
+    "PackageExecutor",
     "PackageInfo",
     "PackageIntegration",
     "PackageLoader",

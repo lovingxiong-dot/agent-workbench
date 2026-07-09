@@ -112,6 +112,10 @@ class WorkbenchUIController(UIController):
         self._packages_dir = self._resolve_packages_dir(packages_dir, config_path)
         self._package_registry = PackageRegistry(self._packages_dir)
         self._package_integration = PackageIntegration(self._metadata_adapter)
+        self._workbench = workbench or WorkbenchController(
+            config_path=config_path,
+            package_registry=self._package_registry,
+        )
         super().__init__(
             parent=parent,
             config_service=config_service,
@@ -230,11 +234,21 @@ class WorkbenchUIController(UIController):
         self._workbench.stop()
 
     def _load_packages(self) -> None:
-        """发现、加载并注册所有 Agent Packages 及其 ViewSchema。"""
+        """发现、加载并注册所有 Agent Packages 及其 ViewSchema。
+
+        已加载但本次扫描未发现的 Package 会被自动卸载，使删除包后 Navigator
+        可自动刷新。
+        """
         try:
             manifests = self._package_registry.discover()
         except Exception:  # pragma: no cover - defensive
             return
+
+        loaded_ids = {p.manifest.id for p in self._package_registry.list()}
+        discovered_ids = {m.id for m in manifests}
+        for package_id in loaded_ids - discovered_ids:
+            self._package_registry.unload(package_id)
+
         for manifest in manifests:
             try:
                 package = self._package_registry.load(manifest)
@@ -485,7 +499,7 @@ class WorkbenchUIController(UIController):
         return str(value)
 
     def _on_action_triggered(self, module_id: str, action_name: str) -> None:
-        """Inspector 操作按钮 → Runtime 动作。"""
+        """Inspector 操作按钮 → Runtime / Package 动作。"""
         if module_id == "runtime":
             if action_name == "start":
                 self._workbench.start()
@@ -507,6 +521,10 @@ class WorkbenchUIController(UIController):
                             self._workbench.runtime.config.replace(data)
                     except yaml.YAMLError:
                         pass
+        elif self._package_registry.get(module_id) is not None:
+            self._workbench.execute_agent_action(module_id, action_name)
+            # 移除缓存的 Presentation，使下次重新构建时读取最新 statistics。
+            self._presentations.pop(module_id, None)
         self._refresh_status_bar()
         self._on_selection_changed(module_id)
 

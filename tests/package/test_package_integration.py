@@ -263,3 +263,20 @@ class TestWorkbenchUIControllerPackageIntegration:
 
             controller._on_selection_changed("starter_agent")
             assert "starter_agent" in controller._presentations
+
+    def test_load_packages_unloads_removed_packages(self, qt_app) -> None:
+        with tempfile.TemporaryDirectory() as packages_dir:
+            _make_starter_agent_package(packages_dir)
+            controller = WorkbenchUIController(packages_dir=packages_dir)
+            controller._load_packages()
+            assert controller._package_registry.get("starter_agent") is not None
+
+            import shutil
+
+            shutil.rmtree(os.path.join(packages_dir, "starter_agent"))
+            controller._load_packages()
+
+            assert controller._package_registry.get("starter_agent") is None
+            assert "starter_agent" not in [
+                p.id for p in controller._build_navigator_presentations()
+            ]

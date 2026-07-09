@@ -16,6 +16,7 @@ from v6.runtime.task import Task
 from v6.runtime.types import ChatMessage
 from v6.runtime.user_request import UserRequest
 
+from agent_workbench.package import PackageExecutor, PackageRegistry
 from agent_workbench.runtime.agent_runtime import AgentWorkbenchRuntime
 from agent_workbench.runtime.decision import RuntimeMode
 from agent_workbench.runtime.interaction import RuntimeRequest, RuntimeRequestSource, WorkbenchInteractionLayer
@@ -33,11 +34,14 @@ class WorkbenchController:
         runtime: AgentWorkbenchRuntime | None = None,
         config_path: str | None = None,
         manager: Manager | None = None,
+        package_registry: PackageRegistry | None = None,
     ) -> None:
         self._runtime = runtime or AgentWorkbenchRuntime(config_path=config_path)
         # 兼容外部注入的 Manager；缺省使用 Runtime 内部的 DecisionManager。
         self._manager = manager or self._runtime.decision_manager
         self._interaction = WorkbenchInteractionLayer(runtime=self._runtime)
+        self._package_registry = package_registry
+        self._package_executor = PackageExecutor()
 
     def start(self) -> None:
         """启动 Runtime。"""
@@ -164,3 +168,38 @@ class WorkbenchController:
         if ctx is None:
             return []
         return ctx.trace.snapshot().get("steps", [])
+
+    def execute_agent_action(self, package_id: str, action_id: str) -> Dict[str, Any]:
+        """执行指定 Package Agent 的 action。
+
+        这是 Commit 12.4 的入口：UI / CommandBar / MCP 触发 Package Action 后，
+        统一交给 Controller，由 PackageExecutor 更新运行时统计并返回结果。
+        当前实现为 Application Layer 直接执行；后续可在此方法内扩展为
+        RuntimeRequest → Orchestrator → Tool Engine 的完整链路。
+        """
+        if self._package_registry is None:
+            return {"status": "failed", "error": "package registry not configured"}
+
+        package = self._package_registry.get(package_id)
+        if package is None:
+            return {"status": "failed", "error": f"package not found: {package_id}"}
+
+        result = self._package_executor.execute(package, action_id)
+
+        # 发布 TASK_STARTED / TASK_COMPLETED 事件，使 Trace Workspace 可观测。
+        event_bus = self._runtime.core_runtime.event_bus
+        if event_bus is not None:
+            from v6.runtime.event_bus import RuntimeEventType
+
+            event_bus.publish(
+                RuntimeEventType.TASK_STARTED,
+                {"package_id": package_id, "action_id": action_id},
+                source="package_executor",
+            )
+            event_bus.publish(
+                RuntimeEventType.TASK_COMPLETED,
+                {"result": result},
+                source="package_executor",
+            )
+
+        return result
