@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from agent_workbench.ui.workbench.presentation import ModulePresentation
 from agent_workbench.ui.workbench.view_schema import (
+    BindingSource,
     DockSchema,
     InspectorSchema,
     InspectorTabSchema,
@@ -95,9 +96,10 @@ def _build_chat_workspace() -> ViewSchema:
             ),
             status=StatusSchema(
                 items=[
-                    StatusItemSchema(name="runtime", source="runtime"),
-                    StatusItemSchema(name="model", source="runtime"),
-                    StatusItemSchema(name="session", source="runtime"),
+                    StatusItemSchema(name="runtime", source="binding", binding=BindingSource(path="runtime.status")),
+                    StatusItemSchema(name="provider", source="binding", binding=BindingSource(path="runtime.provider")),
+                    StatusItemSchema(name="model", source="binding", binding=BindingSource(path="runtime.model")),
+                    StatusItemSchema(name="session", source="binding", binding=BindingSource(path="runtime.session")),
                 ]
             ),
         ),
@@ -124,7 +126,7 @@ def _build_settings_workspace() -> ViewSchema:
             ),
             status=StatusSchema(
                 items=[
-                    StatusItemSchema(name="runtime", source="runtime"),
+                    StatusItemSchema(name="runtime", source="binding", binding=BindingSource(path="runtime.status")),
                 ]
             ),
         ),
@@ -147,8 +149,8 @@ def _build_trace_workspace() -> ViewSchema:
             ),
             status=StatusSchema(
                 items=[
-                    StatusItemSchema(name="runtime", source="runtime"),
-                    StatusItemSchema(name="latency", source="runtime"),
+                    StatusItemSchema(name="runtime", source="binding", binding=BindingSource(path="runtime.status")),
+                    StatusItemSchema(name="latency", source="binding", binding=BindingSource(path="runtime.latency", format="{:.2f} ms")),
                 ]
             ),
             docks=[
@@ -179,7 +181,7 @@ def _build_config_workspace() -> ViewSchema:
             ),
             status=StatusSchema(
                 items=[
-                    StatusItemSchema(name="runtime", source="runtime"),
+                    StatusItemSchema(name="runtime", source="binding", binding=BindingSource(path="runtime.status")),
                 ]
             ),
         ),
@@ -207,7 +209,7 @@ def _build_skill_workspace() -> ViewSchema:
             ),
             status=StatusSchema(
                 items=[
-                    StatusItemSchema(name="runtime", source="runtime"),
+                    StatusItemSchema(name="runtime", source="binding", binding=BindingSource(path="runtime.status")),
                 ]
             ),
         ),
@@ -235,7 +237,7 @@ def _build_tool_workspace() -> ViewSchema:
             ),
             status=StatusSchema(
                 items=[
-                    StatusItemSchema(name="runtime", source="runtime"),
+                    StatusItemSchema(name="runtime", source="binding", binding=BindingSource(path="runtime.status")),
                 ]
             ),
         ),
@@ -259,7 +261,9 @@ def _build_generic_workspace() -> ViewSchema:
             ),
             status=StatusSchema(
                 items=[
-                    StatusItemSchema(name="runtime", source="runtime"),
+                    StatusItemSchema(name="runtime", source="binding", binding=BindingSource(path="runtime.status")),
+                    StatusItemSchema(name="provider", source="binding", binding=BindingSource(path="runtime.provider")),
+                    StatusItemSchema(name="model", source="binding", binding=BindingSource(path="runtime.model")),
                 ]
             ),
         ),

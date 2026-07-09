@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 import threading
 import uuid
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from PySide6.QtWidgets import QDialog, QWidget
 
@@ -36,6 +36,7 @@ from agent_workbench.ui.dialogs import (
 )
 from agent_workbench.runtime.modules.model_module import ModelModule
 from agent_workbench.ui.workbench import WorkbenchHost
+from agent_workbench.ui.workbench.binding_context import BindingContext, BindingProvider
 from agent_workbench.ui.workbench.chat_workspace import ChatWorkspaceItem
 from agent_workbench.ui.workbench.generic_workspace import GenericWorkspaceItem
 from agent_workbench.ui.workbench.metadata_adapter import PresentationMetadataAdapter
@@ -98,6 +99,8 @@ class WorkbenchUIController(UIController):
         self._generic_workspace: GenericWorkspaceItem | None = None
         self._metadata_adapter = PresentationMetadataAdapter()
         self._view_schema_registry = ViewSchemaRegistry()
+        self._binding_context = BindingContext()
+        self._register_runtime_binding_provider()
         self._view_schema_renderer: ViewSchemaRenderer | None = None
         self._current_module_id: str | None = None
         self._presentations: dict[str, ModulePresentation] = {}
@@ -112,6 +115,15 @@ class WorkbenchUIController(UIController):
             data_dir=data_dir,
         )
         self._conversation_service = ConversationService(self._session, self._chat)
+
+    def _register_runtime_binding_provider(self) -> None:
+        """将 Workbench Runtime 核心状态注册为 BindingProvider。"""
+
+        def runtime_getter(path: str) -> Any:
+            status = self._runtime_status()
+            return status.get(path)
+
+        self._binding_context.registry.register(BindingProvider(namespace="runtime", getter=runtime_getter))
 
     @property
     def workbench_controller(self) -> WorkbenchController:
@@ -226,7 +238,7 @@ class WorkbenchUIController(UIController):
         self._host.workbench.workspace.register_workspace("generic", self._generic_workspace)
 
         # ViewSchema Renderer：统一驱动 ToolBar / StatusBar / Inspector / Workspace
-        self._view_schema_renderer = ViewSchemaRenderer(self._host.workbench)
+        self._view_schema_renderer = ViewSchemaRenderer(self._host.workbench, self._binding_context)
 
         # ToolBar → Inspector 同一条 action 通道
         self._host.workbench.tool_bar_action_triggered.connect(self._on_tool_bar_action_triggered)
@@ -341,7 +353,7 @@ class WorkbenchUIController(UIController):
                 self._presentations[module_id] = pres
         if pres is not None and self._host is not None and self._view_schema_renderer is not None:
             schema = self._view_schema_registry.resolve(pres)
-            self._view_schema_renderer.render(schema, pres, runtime_status=self._runtime_status())
+            self._view_schema_renderer.render(schema, pres)
             # 兜底：generic workspace 需要额外传入模块信息
             workspace_id = self._resolve_workspace_id(pres)
             if workspace_id == "generic" and self._generic_workspace is not None:
@@ -466,7 +478,7 @@ class WorkbenchUIController(UIController):
             type="workbench",
             name="Workbench",
         )
-        self._view_schema_renderer.render(schema, workbench_presentation, runtime_status=self._runtime_status())
+        self._view_schema_renderer.render(schema, workbench_presentation)
 
     def _on_config_changed(self, path: str, value: object) -> None:
         """ConfigStore 通用变更信号 → 刷新 Navigator 与 StatusBar。"""

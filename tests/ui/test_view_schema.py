@@ -16,6 +16,7 @@ from agent_workbench.ui.workbench.presentation import (
     StatisticPresentation,
 )
 from agent_workbench.ui.workbench.view_schema import (
+    BindingSource,
     InspectorSchema,
     InspectorTabSchema,
     StatusItemSchema,
@@ -178,17 +179,21 @@ class TestViewSchemaRenderer:
         assert names == ["save", "run"]
 
     def test_renderer_status_bar_selects_by_schema(self, qt_app):
+        from agent_workbench.ui.workbench.binding_context import BindingContext, BindingProvider
         from agent_workbench.ui.workbench.view_schema_renderer import ViewSchemaRenderer
 
         ui = self._make_fake_ui()
-        renderer = ViewSchemaRenderer(ui)
+        runtime_data = {"runtime": "online"}
+        binding = BindingContext()
+        binding.registry.register(BindingProvider(namespace="runtime", getter=runtime_data.get))
+        renderer = ViewSchemaRenderer(ui, binding_context=binding)
         schema = ViewSchema(
             schema_id="test",
             name="Test",
             workspace=WorkspaceSchema(
                 status=StatusSchema(
                     items=[
-                        StatusItemSchema(name="runtime", source="runtime"),
+                        StatusItemSchema(name="runtime", source="binding", binding=BindingSource(path="runtime.runtime")),
                         StatusItemSchema(name="hits", source="statistics"),
                     ]
                 )
@@ -203,7 +208,7 @@ class TestViewSchemaRenderer:
                 StatisticPresentation(name="misses", label="Misses", value=3),
             ],
         )
-        renderer.render(schema, pres, runtime_status={"runtime": "online"})
+        renderer.render(schema, pres)
         values = {s.name: s.value for s in ui.status_bar.statistics}
         assert values["runtime"] == "online"
         assert values["hits"] == 42

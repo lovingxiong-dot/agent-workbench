@@ -1,5 +1,58 @@
 # Changelog
 
+## v6.12.0-beta.3 (2026-07-10) — Dynamic UI Binding Layer
+
+> **里程碑语义**：Commit 9 在 ViewSchema 与 Qt Renderer 之间增加 Dynamic UI Binding Layer，实现 Metadata → PresentationModel → ViewSchema → BindingContext → Qt Renderer 的完整数据流。Runtime 状态（status / provider / model / session 等）通过 `BindingProvider` 按 namespace 注册到 `BindingContext`，ViewSchema 以声明式 `BindingSource` 路径引用，Renderer 在渲染时动态解析。UI 不再直接访问 Runtime，新增状态项只需在 Schema 中声明绑定路径，无需修改 Renderer。
+
+### Added
+- `agent_workbench/ui/workbench/binding_context.py`：新增 Binding Layer。
+  - `BindingProvider`：按 namespace 提供动态数据 getter。
+  - `BindingRegistry`：Provider 注册表。
+  - `BindingContext`：按 `namespace.key1.key2` 路径解析 `BindingSource`，支持静态值、Provider 动态值、format 格式化与异常回退。
+- `agent_workbench/ui/workbench/view_schema.py`：
+  - 新增 `BindingSource` 与 `PropertyBinding`，支持 `path` + `format` 声明动态数据来源。
+  - `StatusItemSchema` 增加 `source="binding"` 与 `binding` 字段。
+- `agent_workbench/ui/workbench/view_schema_renderer.py`：
+  - 构造函数接收 `BindingContext`。
+  - `_resolve_status_item()` 支持 `statistics` / `binding` / `runtime`（兼容旧 schema）三种来源。
+  - `_apply_property_bindings()` 为 `editable=False` 且带 `binding` 的 PropertyPresentation 注入 Runtime 当前值。
+  - 新增 `refresh()` 方法，仅刷新 StatusBar 与 Inspector 中受 Binding 影响的区域。
+- `agent_workbench/ui/workbench/presentation.py`：`PropertyPresentation` 增加 `binding` 字段。
+- `agent_workbench/ui/workbench/view_schema_registry.py`：所有默认 Workspace Schema 的 StatusBar 项改为 `source="binding"`，通过 `BindingSource` 引用 `runtime.status` / `runtime.provider` / `runtime.model` / `runtime.session` / `runtime.latency`。
+- `agent_workbench/ui/workbench_ui_controller.py`：
+  - 初始化 `BindingContext` 并注册 `runtime` Provider，将 `_runtime_status()` 核心状态暴露给 Binding Layer。
+  - `_on_selection_changed()` 与 `_refresh_status_bar()` 改为调用 `ViewSchemaRenderer.render(schema, pres)`（移除旧的 `runtime_status=` 参数）。
+- `tests/ui/test_binding_context.py`：15 个非 GUI 单元测试，覆盖 BindingRegistry、BindingContext 路径解析、format、静态值、Provider 异常回退、优先级等。
+
+### Changed
+- `agent_workbench/ui/workbench/status_bar_host.py`：恢复 `set_statistics()` 接口并委托给 `StatusBar.set_statistics()`，修复 Renderer 调用缺失。
+- `tests/ui/test_view_schema.py`：更新 `test_renderer_status_bar_selects_by_schema` 为 BindingContext 驱动。
+
+### Tests
+- `pytest tests/`：**741/741 passed**（新增 15 个 Binding 测试；收尾 Qt 退出码 `3221226505` 为 Windows 已知现象，不影响断言结果）。
+
+### Architecture
+```text
+Runtime / Task / Provider
+         │
+         ▼
+BindingProvider (namespace)
+         │
+         ▼
+BindingContext
+         │
+         ▼
+ViewSchemaRenderer
+         │
+         ▼
+Qt Widgets
+```
+
+### Next Phase
+- **Commit 10**：UI Extension Registry（只建立扩展契约，不实现 Layout Persistence）。
+
+---
+
 ## v6.12.0-beta.2 (2026-07-10) — ViewSchema 布局协议层
 
 > **里程碑语义**：Commit 8.5 在 PresentationModel 与 Qt Renderer 之间增加 ViewSchema 布局协议层。ViewSchema 不依赖 Qt，只描述「Module 的 PresentationModel 应该如何摆放在 Workbench 的 Toolbar / Inspector / StatusBar / Workspace / Dock 中」。至此，Workbench 形成完整数据驱动链：`Metadata → PresentationModel → ViewSchema → Qt Renderer`。新增一个 Agent（如律师 AI、Trading Agent）只需注册 Metadata、配置 view_schema_id，Qt 自动渲染导航、工具栏、工作区、属性面板，无需再写 `if module.id == ...`。

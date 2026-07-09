@@ -12,7 +12,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List
+
+if TYPE_CHECKING:
+    from agent_workbench.ui.workbench.view_schema import PropertyBinding
 
 
 @dataclass
@@ -31,6 +34,7 @@ class PropertyPresentation:
     sensitive: bool = False
     placeholder: str = ""
     required: bool = False
+    binding: "PropertyBinding | None" = None  # 动态绑定 Runtime 数据
 
 
 @dataclass

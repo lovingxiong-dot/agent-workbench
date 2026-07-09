@@ -58,11 +58,29 @@ class InspectorSchema:
 
 
 @dataclass
+class BindingSource:
+    """动态数据来源定义。
+
+    path 使用点分路径，例如：
+    - "runtime.llm.tokens"
+    - "task.status"
+    - "agent.state"
+    - "session.messages.count"
+
+    format 可选，用于将原始值格式化为显示字符串（例如 "{:.2f} ms"）。
+    """
+
+    path: str
+    format: str | None = None
+
+
+@dataclass
 class StatusItemSchema:
     """StatusBar 中一个统计项的引用。"""
 
     name: str
-    source: str = "statistics"  # statistics | runtime
+    source: str = "statistics"  # statistics | runtime | binding
+    binding: BindingSource | None = None  # source == "binding" 时使用
 
 
 @dataclass
@@ -70,6 +88,14 @@ class StatusSchema:
     """StatusBar 布局。"""
 
     items: list[StatusItemSchema] = field(default_factory=list)
+
+
+@dataclass
+class PropertyBinding:
+    """Property 的动态绑定定义：当 editable=False 时，值从 Runtime 读取。"""
+
+    path: str
+    format: str | None = None
 
 
 @dataclass
