@@ -4,14 +4,14 @@
 - initialize：模块初始化，可获取 Runtime 引用。
 - apply_config：配置变更时热更新。
 - dispose：资源释放。
-- metadata：返回 Capability Metadata（模块唯一对外暴露的能力描述）。
+- metadata：返回 Cross-layer MetadataDefinition（模块唯一对外暴露的能力描述）。
 """
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
-from agent_workbench.runtime.metadata import ModuleMetadata
+from agent_workbench.metadata import MetadataDefinition
 
 if TYPE_CHECKING:
     from agent_workbench.runtime.agent_runtime import AgentRuntime
@@ -41,9 +41,11 @@ class BaseRuntimeModule(ABC):
         pass
 
     @abstractmethod
-    def metadata(self) -> ModuleMetadata:
-        """返回模块 Capability Metadata（不含 UI 概念）。
+    def metadata(self) -> MetadataDefinition:
+        """返回模块 Cross-layer MetadataDefinition（不含 UI 概念）。
 
-        UI 通过 MetadataAdapter 将 Metadata 翻译为 PresentationModel。
+        Workbench 通过 MetadataAdapter 将 MetadataDefinition 翻译为
+        PresentationModel。Runtime 子类可以暂时返回旧 ModuleMetadata；
+        后续 Commit 逐步迁移为 MetadataDefinition。
         """
         ...

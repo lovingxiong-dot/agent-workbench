@@ -6,7 +6,18 @@
 """
 from __future__ import annotations
 
-from agent_workbench.runtime.metadata import ModuleMetadata
+from agent_workbench.metadata import (
+    MetadataAction,
+    MetadataDefinition,
+    MetadataProperty,
+    MetadataStatistics,
+)
+from agent_workbench.runtime.metadata import (
+    ActionMetadata,
+    ModuleMetadata,
+    PropertyMetadata,
+    StatisticMetadata,
+)
 from agent_workbench.ui.workbench.presentation import (
     ActionPresentation,
     ModulePresentation,
@@ -16,9 +27,13 @@ from agent_workbench.ui.workbench.presentation import (
 
 
 class MetadataAdapter:
-    """将 Runtime Capability Metadata 转换为 UI PresentationModel。"""
+    """将 Runtime Capability Metadata 转换为 UI PresentationModel。
 
-    def adapt(self, metadata: ModuleMetadata) -> ModulePresentation:
+    同时兼容旧 ModuleMetadata（v6.10.x）与新 MetadataDefinition（v6.11.x），
+    让 Runtime 模块可以逐步迁移。
+    """
+
+    def adapt(self, metadata: ModuleMetadata | MetadataDefinition) -> ModulePresentation:
         return ModulePresentation(
             id=metadata.id,
             type=metadata.type,
@@ -30,8 +45,18 @@ class MetadataAdapter:
             actions=[self._adapt_action(a) for a in metadata.actions],
         )
 
-    @staticmethod
-    def _adapt_property(prop) -> PropertyPresentation:
+    def _adapt_property(self, prop) -> PropertyPresentation:
+        if isinstance(prop, MetadataProperty):
+            return PropertyPresentation(
+                name=prop.id,
+                label=prop.name,
+                type=prop.value_type if isinstance(prop.value_type, str) else prop.value_type.value,
+                value=prop.current_value,
+                options=list(prop.options or []),
+                editable=prop.editable,
+                description=prop.description,
+            )
+        # Legacy PropertyMetadata
         return PropertyPresentation(
             name=prop.name,
             label=prop.label,
@@ -42,8 +67,16 @@ class MetadataAdapter:
             description=prop.description,
         )
 
-    @staticmethod
-    def _adapt_statistic(stat) -> StatisticPresentation:
+    def _adapt_statistic(self, stat) -> StatisticPresentation:
+        if isinstance(stat, MetadataStatistics):
+            return StatisticPresentation(
+                name=stat.id,
+                label=stat.name,
+                value=stat.value,
+                format=stat.unit or "text",
+                description="",
+            )
+        # Legacy StatisticMetadata
         return StatisticPresentation(
             name=stat.name,
             label=stat.label,
@@ -52,8 +85,15 @@ class MetadataAdapter:
             description=stat.description,
         )
 
-    @staticmethod
-    def _adapt_action(action) -> ActionPresentation:
+    def _adapt_action(self, action) -> ActionPresentation:
+        if isinstance(action, MetadataAction):
+            return ActionPresentation(
+                name=action.id,
+                label=action.label,
+                icon=action.icon,
+                description=action.description,
+            )
+        # Legacy ActionMetadata
         return ActionPresentation(
             name=action.name,
             label=action.label,

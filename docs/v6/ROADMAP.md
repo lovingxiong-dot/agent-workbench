@@ -39,14 +39,23 @@ Marketplace / Digital Identity / Gateway  ← 未来
 
 ## 时序原则
 
+v6.11 起拆分为两条并行线：
+
+- **A 线（架构线）**：Metadata → Schema → Resource → Plugin，确保平台可扩展。
+- **B 线（产品线）**：单一真实 LLM 接入 → 对话体验打磨 → 真实任务执行验证，确保 Workbench 真正可用。
+
+两条线互不阻塞。Commit 1（Metadata Contract 冻结）完成后，B 线立即启动。
+
 | 梯队 | 优先级 | 内容 | 版本 |
 |---|---|---|---|
 | 第一梯队 | ⭐⭐⭐⭐⭐ | Workbench UI Framework、Configuration-Driven Loop | v6.10.0 ✅ |
-| 第一梯队 | ⭐⭐⭐⭐⭐ | Metadata Contract、MetadataAdapter、UI 去硬编码 | v6.11.x |
-| 第二梯队 | ⭐⭐⭐⭐ | Schema Foundation：Schema Model / Registry / Validator / Auto Dialog / Auto Inspector | v6.12.x |
-| 第三梯队 | ⭐⭐⭐ | Runtime Executors：ProviderRuntime / ToolRuntime / SkillRuntime | v6.13.x 之前 |
-| 第四梯队 | ⭐⭐⭐ | Real Provider Adapters：Claude / Gemini / OpenAI / Kimi / Qwen / DeepSeek | UI 成熟后 |
-| 第五梯队 | ⭐⭐ | Resource Layer：System / Python Env / IDE / CLI / Agent CLI | v6.12.x 后 |
+| 第一梯队 | ⭐⭐⭐⭐⭐ | **A 线**：Metadata Contract、MetadataRegistry、MetadataAdapter | v6.11.x Commit 1 |
+| 第一梯队 | ⭐⭐⭐⭐⭐ | **B 线**：单一真实 LLM 接入（OpenAIProvider）、Streaming 对话闭环 | v6.11.x Commit 2 |
+| 第二梯队 | ⭐⭐⭐⭐⭐ | **B 线**：对话体验打磨（Cancel / Retry / Token 统计 / Context 管理 / UI 刷新） | v6.11.x |
+| 第二梯队 | ⭐⭐⭐⭐ | **A 线**：Schema Foundation：Schema Model / Registry / Validator / Auto Dialog / Auto Inspector | v6.12.x |
+| 第三梯队 | ⭐⭐⭐ | **A 线**：Runtime Executors：ProviderRuntime / ToolRuntime / SkillRuntime | v6.13.x 之前 |
+| 第四梯队 | ⭐⭐⭐ | **B 线**：真实 Provider 扩展：Claude / Gemini / Kimi / Qwen / DeepSeek | 单一 LLM 跑通后 |
+| 第五梯队 | ⭐⭐ | **A 线**：Resource Layer：System / Python Env / IDE / CLI / Agent CLI | v6.12.x 后 |
 | 第六梯队 | ⭐⭐ | Workflow 体验闭环、Memory / Knowledge、MCP Client、Browser、Marketplace、Gateway | 更晚 |
 
 ## v6.10.0-alpha：Configuration-Driven Workbench Loop ✅
@@ -67,23 +76,45 @@ Marketplace / Digital Identity / Gateway  ← 未来
 - [x] ConfigStore 持久化并发出通用 `changed(path, value)` 信号
 - [x] Navigator / StatusBar / Inspector 自动刷新
 
-## v6.11.x：Metadata-driven Workbench
+## v6.11.x：Metadata-driven Workbench + 真实 LLM 产品验证
 
-### Commit 3：Metadata Contract & Base Model
+### A 线 Commit 1：Metadata Contract & Base Model
 
-- [ ] 定义 `ModuleMetadata`、`PropertyMetadata`、`StatisticMetadata`、`ActionMetadata`
-- [ ] 更新 `BaseRuntimeModule.metadata()` 返回严格类型化的 Metadata
-- [ ] 非 GUI 测试覆盖
+- [ ] 冻结 `agent_workbench/metadata/` 目录：`types.py`, `errors.py`, `model.py`, `registry.py`, `adapter.py`。
+- [ ] 定义 `MetadataDefinition`、`MetadataProperty`、`MetadataAction`、`MetadataStatistics`。
+- [ ] 实现 `MetadataRegistry`：`register()` / `get()` / `all()`。
+- [ ] 实现 `MetadataAdapter` 骨架：`adapt(MetadataDefinition) -> ModulePresentation`。
+- [ ] 更新 `BaseRuntimeModule.metadata()` 返回 `MetadataDefinition`。
+- [ ] 非 GUI 测试覆盖。
 
-### Commit 4：MetadataAdapter & PresentationModel
+### A 线 Commit 2：MetadataAdapter & PresentationModel
 
-- [ ] `ModuleMetadata → ModulePresentation`
+- [ ] `MetadataDefinition → ModulePresentation`
 - [ ] UI 只依赖 PresentationModel
 
-### Commit 5-7：Runtime Module Metadata 补齐 + Navigator / Inspector / StatusBar 去硬编码
+### A 线 Commit 3-5：Runtime Module Metadata 补齐 + Navigator / Inspector / StatusBar 去硬编码
 
 - [ ] Provider / MCP / Skill / Workflow / Prompt / Memory 返回统一 Metadata
 - [ ] Navigator / Inspector / StatusBar 通过 PresentationModel 渲染
+
+### B 线 Commit 1：单一真实 LLM 接入
+
+- [ ] 打通 `OpenAIProvider`：从 Workbench Provider 配置 → ConfigStore → ProviderRegistry → LLM 调用。
+- [ ] 实现非流式对话：`User Input → Manager → Capability → Provider → LLM → Response → UI`。
+- [ ] 非 GUI 集成测试覆盖一条完整对话链路。
+
+### B 线 Commit 2：Streaming 与对话体验
+
+- [ ] `OpenAIProvider` 支持 Streaming 输出。
+- [ ] Workbench Chat Workspace 实时显示 Streaming Token。
+- [ ] Trace 记录完整请求/响应/Token 统计。
+- [ ] StatusBar 显示当前 Provider 与 Token 消耗。
+
+### B 线 Commit 3：对话鲁棒性
+
+- [ ] Cancel 中断、Retry 重试、Timeout 超时处理。
+- [ ] Provider 切换时的 Context 保持与清理。
+- [ ] 错误状态在 UI 中可视化。
 
 ## v6.12.x+ 预告：Resource Layer
 

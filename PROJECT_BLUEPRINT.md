@@ -60,21 +60,51 @@ Workbench 不是 Demo，不是临时演示程序，不是「先放这里之后�
 ```text
 Runtime
    │
-   │ exposes
+   │ exposes via metadata()
    ▼
-Metadata Contract
+Metadata Contract  ←  agent_workbench/metadata/
    │
-   │ adapts
+   │ adapts via MetadataAdapter
    ▼
 Workbench
 ```
 
 - Runtime 不拥有 Metadata；Workbench 也不拥有 Metadata。
-- 双方只是共同遵守同一套 `ModuleMetadata` 契约。
-- 未来 Remote Agent、Gateway、Plugin、Marketplace 都可以直接读取 Metadata，而无需依赖 Runtime 或 UI 的具体实现。
+- 双方只是共同遵守同一套 `MetadataDefinition` 契约。
+- 未来 Remote Agent、Gateway、Plugin、Marketplace、CLI、Web 都可以直接读取 Metadata，而无需依赖 Runtime 或 UI 的具体实现。
 - Metadata 必须平台无关：不包含 Qt 控件、Web 组件、CLI 命令等任何具体消费端的假设。
+- **铁律：Metadata 永远不能依赖 Runtime。依赖方向只能是 `Runtime → Metadata`，绝不能反向。**
 
 这一契约是 v6.11 之后所有模块的默认假设。任何 Runtime Module 暴露给 Workbench 的对象，都必须通过 Metadata 描述；任何 UI 消费 Runtime 对象，都必须通过 `MetadataAdapter` 翻译为 `PresentationModel`。
+
+### Description-Driven Development
+
+> **Everything is described before it is implemented.**
+
+新增任何能力的标准顺序：
+
+```text
+Identity → Metadata → Schema → Runtime → Execution
+```
+
+1. **Identity**：它是什么（AI / Agent / Persona）。
+2. **Metadata**：描述它（Definition / Property / Action / Statistics）。
+3. **Schema**：如何配置它（字段类型、验证、默认值）。
+4. **Runtime**：如何执行它（Engine / Provider / Resource binding）。
+5. **Execution**：真正运行。
+
+从 v6.11 开始，Workbench 从「代码驱动」转向「描述驱动」。
+
+### Capability vs Resource
+
+| 维度 | Capability | Resource |
+|---|---|---|
+| 问题 | **What I can do**（我会什么） | **What I can use**（我可以支配什么） |
+| 示例 | Coding、Research、Trading、Vision、Planning | Python Env、Chrome、VS Code、Cursor、Claude Code、Docker、WSL |
+| 语义 | 能力类型 | 执行目标或工具库存 |
+| 配置位置 | Capability Registry | Resource Registry |
+
+**Capability 永远是能力类型，Resource 永远是可使用的工具或环境。** Python、Chrome、VS Code、Claude Code 都是 Resource，不是 Capability。
 
 ## V6 Runtime Foundation Baseline (Frozen)
 

@@ -27,7 +27,7 @@ from agent_workbench.runtime.config_store import ConfigStore
 from agent_workbench.runtime.decision import RuntimeMode
 from agent_workbench.runtime.interaction.request import RuntimeRequest
 from agent_workbench.runtime.manager.decision_manager import DecisionManager
-from agent_workbench.runtime.metadata import ModuleMetadata
+from agent_workbench.metadata import MetadataDefinition
 from agent_workbench.runtime.module_registry import ModuleRegistry
 from agent_workbench.runtime.modules.config_module import ConfigModule
 from agent_workbench.runtime.modules.memory_module import MemoryModule
@@ -216,7 +216,7 @@ class AgentWorkbenchRuntime:
         if module is not None:
             module.apply_config(self._config)
 
-    def get_module_metadata(self, namespace: str) -> ModuleMetadata | None:
+    def get_module_metadata(self, namespace: str) -> MetadataDefinition | None:
         """获取某个模块的 Capability Metadata。"""
         module = self._registry.get(namespace)
         if module is None:

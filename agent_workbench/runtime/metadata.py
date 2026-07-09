@@ -1,20 +1,34 @@
-"""agent_workbench/runtime/metadata.py — Runtime Capability Metadata。
+"""agent_workbench/runtime/metadata.py — Compatibility re-export layer.
 
-这些 dataclass 只描述 Runtime Module 的能力与状态，不包含任何 UI 概念
-（如 QWidget、Inspector、Editor、PropertyEditor、Dock、RuntimeObject）。
+DEPRECATED: This module exists only for backward compatibility with modules
+that still import `ModuleMetadata`, `PropertyMetadata`, `StatisticMetadata`, or
+`ActionMetadata` from `agent_workbench.runtime.metadata`.
 
-UI 通过 MetadataAdapter 将 Capability Metadata 翻译为自己的 PresentationModel，
-Runtime 完全不依赖 UI。
+New code MUST import from `agent_workbench.metadata` directly. The canonical
+Metadata Contract lives in `agent_workbench/metadata/` and is owned by neither
+Runtime nor UI.
+
+Dependency direction: Runtime → Metadata.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, List
 
+# Re-export the new Cross-layer Contract so consumers can migrate gradually.
+from agent_workbench.metadata import (  # noqa: F401
+    MetadataAction,
+    MetadataDefinition,
+    MetadataProperty,
+    MetadataStatistics,
+)
 
+
+# Legacy dataclasses preserved for existing Runtime module implementations.
+# New code should use the classes from agent_workbench.metadata.
 @dataclass
 class PropertyMetadata:
-    """模块可配置属性。"""
+    """Legacy property metadata. Use MetadataProperty from agent_workbench.metadata."""
 
     name: str
     label: str
@@ -27,7 +41,7 @@ class PropertyMetadata:
 
 @dataclass
 class StatisticMetadata:
-    """模块运行时统计。"""
+    """Legacy statistic metadata. Use MetadataStatistics from agent_workbench.metadata."""
 
     name: str
     label: str
@@ -38,7 +52,7 @@ class StatisticMetadata:
 
 @dataclass
 class ActionMetadata:
-    """模块可执行操作。"""
+    """Legacy action metadata. Use MetadataAction from agent_workbench.metadata."""
 
     name: str
     label: str
@@ -48,7 +62,7 @@ class ActionMetadata:
 
 @dataclass
 class ModuleMetadata:
-    """模块 Capability Metadata，供 UI Adapter 消费。"""
+    """Legacy module metadata. Use MetadataDefinition from agent_workbench.metadata."""
 
     id: str
     type: str  # runtime, session, model, tool, memory, ...

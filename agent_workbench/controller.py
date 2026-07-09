@@ -20,7 +20,7 @@ from agent_workbench.runtime.agent_runtime import AgentWorkbenchRuntime
 from agent_workbench.runtime.decision import RuntimeMode
 from agent_workbench.runtime.interaction import RuntimeRequest, RuntimeRequestSource, WorkbenchInteractionLayer
 from agent_workbench.runtime.manager.decision_manager import DecisionManager
-from agent_workbench.runtime.metadata import ModuleMetadata
+from agent_workbench.metadata import MetadataDefinition
 from agent_workbench.runtime.modules.memory_module import MemoryModule
 from agent_workbench.services.manager import AgentManager
 
@@ -142,7 +142,7 @@ class WorkbenchController:
         """返回 Overview 面板数据。"""
         return self._runtime.get_overview()
 
-    def get_module_metadata(self, namespace: str) -> ModuleMetadata | None:
+    def get_module_metadata(self, namespace: str) -> MetadataDefinition | None:
         """获取指定模块的 Capability Metadata。"""
         return self._runtime.get_module_metadata(namespace)
 

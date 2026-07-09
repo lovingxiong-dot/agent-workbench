@@ -1,5 +1,39 @@
 # Changelog
 
+## v6.11.0-alpha.2 (2026-07-09) — Metadata Contract Frozen
+
+> **里程碑语义**：Metadata Cross-layer Contract 首次落地实现。`agent_workbench/metadata/` 目录结构一次性冻结：`types.py`、`errors.py`、`model.py`、`registry.py`、`adapter.py`。定义 `MetadataDefinition`、`MetadataProperty`、`MetadataAction`、`MetadataStatistics` 四个核心对象；`MetadataRegistry` 提供 `register()` / `get()` / `all()`；`MetadataAdapter` 协议就位。`BaseRuntimeModule.metadata()` 返回类型迁移为 `MetadataDefinition`。旧 `agent_workbench/runtime/metadata.py` 保留为兼容层，现有 Runtime 模块可逐步迁移。ROADMAP 正式拆分 A 线（架构）与 B 线（产品）：Commit 1 完成后立即启动单一真实 LLM 接入与对话体验验证。
+
+### Added
+- 新增 `agent_workbench/metadata/` 跨层契约包：
+  - `types.py`：`ValueType`、`MetadataType` 枚举与兼容别名。
+  - `errors.py`：`MetadataError`、`MetadataValidationError`、`MetadataNotFoundError`、`MetadataAdapterError`。
+  - `model.py`：`MetadataDefinition`、`MetadataProperty`、`MetadataAction`、`MetadataStatistics`。
+  - `registry.py`：`MetadataRegistry`（`register` / `get` / `require` / `all` / `unregister` / `clear`）。
+  - `adapter.py`：`MetadataAdapter` Protocol 与 `IdentityMetadataAdapter`。
+- 新增 `tests/metadata/` 非 GUI 测试：model、registry、adapter 全覆盖。
+
+### Changed
+- `BaseRuntimeModule.metadata()` 返回类型从 `ModuleMetadata` 更新为 `MetadataDefinition`。
+- `agent_workbench/runtime/metadata.py` 改为兼容层：保留旧类，并重新导出新的 `MetadataDefinition` 等类。
+- `agent_workbench/ui/workbench/metadata_adapter.py` 同时兼容新旧 Metadata，支持逐步迁移。
+- `WorkbenchController.get_module_metadata()` 与 `AgentRuntime.get_module_metadata()` 返回类型更新为 `MetadataDefinition | None`。
+- 更新 [PROJECT_BLUEPRINT.md](PROJECT_BLUEPRINT.md)：
+  - 增加 **Description-Driven Development** 小节：新增能力标准顺序 `Identity → Metadata → Schema → Runtime → Execution`。
+  - 增加 **Capability vs Resource** 对照表：明确 Capability 是 "What I can do"，Resource 是 "What I can use"。
+  - 强化 Metadata 铁律：依赖方向只能是 `Runtime → Metadata`，绝不能反向。
+- 更新 [docs/v6/v6.11-task-list.md](docs/v6/v6.11-task-list.md)：Commit 1 明确冻结 `agent_workbench/metadata/` 目录与四个核心对象，Registry 与 Adapter 现在就位。
+- 更新 [docs/v6/ROADMAP.md](docs/v6/ROADMAP.md)：拆分 A 线（Metadata / Schema / Resource / Plugin）与 B 线（单一真实 LLM / Streaming / 对话体验 / Provider 扩展）。
+
+### Tests
+- `pytest tests/`：**629/629 passed**（新增 15 个 Metadata 包测试；收尾 QApplication 销毁阶段出现 Windows 已知退出码 `3221226505`，不影响断言结果）。
+
+### Next Phase
+- **A 线 Commit 2**：实现 `MetadataAdapter` 到 `ModulePresentation` 的完整映射，补齐 Runtime 模块 Metadata。
+- **B 线 Commit 1**：接入单一真实 LLM（OpenAIProvider），打通 `User → Workbench → Manager → Capability → Provider → LLM → UI` 非流式对话闭环。
+
+---
+
 ## v6.11.0-alpha.1 (2026-07-09) — Workbench-First Doctrine & Resource Layer Design
 
 > **里程碑语义**：v6.11 战略转向落地。Runtime 被正式定位为稳定基础设施，Workbench Layer 成为后续主要演进目标；Metadata 被定义为跨层契约（Cross-layer Contract），不隶属于 Runtime 或 UI；Resource Layer 设计完成，将 System / Python Env / IDE / CLI / Agent CLI 与 Capability 分离，形成 `Digital Identity → Capability → Resource → Provider → Target` 的完整执行链。
