@@ -7,6 +7,7 @@ from agent_workbench.ui.dialogs.add_prompt_dialog import AddPromptDialog
 from agent_workbench.ui.dialogs.add_provider_dialog import AddProviderDialog
 from agent_workbench.ui.dialogs.add_skill_dialog import AddSkillDialog
 from agent_workbench.ui.dialogs.add_workflow_dialog import AddWorkflowDialog
+from agent_workbench.ui.dialogs.feedback_dialog import FeedbackDialog
 
 __all__ = [
     "AddProviderDialog",
@@ -15,4 +16,5 @@ __all__ = [
     "AddWorkflowDialog",
     "AddPromptDialog",
     "AddMemoryDialog",
+    "FeedbackDialog",
 ]

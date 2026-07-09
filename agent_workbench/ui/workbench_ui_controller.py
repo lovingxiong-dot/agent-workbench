@@ -26,6 +26,7 @@ from v6.ui_controller import UIController
 
 from agent_workbench.controller import WorkbenchController
 from agent_workbench.conversation import ConversationService
+from agent_workbench.feedback import FeedbackService
 from agent_workbench.package import PackageIntegration, PackageRegistry
 from agent_workbench.ui.configuration import ConfigCategory, ConfigurationManager
 from agent_workbench.ui.dialogs import (
@@ -35,6 +36,7 @@ from agent_workbench.ui.dialogs import (
     AddProviderDialog,
     AddSkillDialog,
     AddWorkflowDialog,
+    FeedbackDialog,
 )
 from agent_workbench.runtime.modules.model_module import ModelModule
 from agent_workbench.ui.workbench import WorkbenchHost
@@ -127,6 +129,7 @@ class WorkbenchUIController(UIController):
             data_dir=data_dir,
         )
         self._conversation_service = ConversationService(self._session, self._chat)
+        self._feedback_service: FeedbackService | None = None
 
     def _register_runtime_binding_provider(self) -> None:
         """将 Workbench Runtime 核心状态注册为 BindingProvider。"""
@@ -216,6 +219,7 @@ class WorkbenchUIController(UIController):
         """启动 Workbench Runtime、初始化 Workbench UI、复用 v6 UI 初始化流程。"""
         self._workbench.start()
         self._load_packages()
+        self._init_feedback_service()
         super().startup()
         self._setup_workbench_ui()
         self._wire_workbench_signals()
@@ -263,6 +267,30 @@ class WorkbenchUIController(UIController):
             view_schema = self._package_integration.to_view_schema(package)
             if view_schema is not None:
                 self._view_schema_registry.register(view_schema)
+
+    def _init_feedback_service(self) -> None:
+        """初始化 Feedback 服务，反馈文件保存于当前项目目录 feedback/ 下。"""
+        feedback_dir = Path(self._project_path or os.getcwd()) / "feedback"
+        self._feedback_service = FeedbackService(feedback_dir)
+
+    def _on_feedback_requested(self) -> None:
+        """标题栏点击 💡 Feedback → 弹出对话框并保存。"""
+        if self._host is None:
+            return
+        dialog = FeedbackDialog(self._host)
+        if dialog.exec() != FeedbackDialog.DialogCode.Accepted:
+            return
+        title, content = dialog.feedback()
+        if self._feedback_service is None:
+            self._init_feedback_service()
+        version = ""
+        try:
+            import importlib.metadata
+
+            version = importlib.metadata.version("agent_workbench")
+        except Exception:  # pragma: no cover - packaging may be absent
+            pass
+        self._feedback_service.save(title, content, version=version)
 
     def _show_welcome(self) -> None:
         """显示 Welcome / Home Workspace。"""
@@ -361,6 +389,9 @@ class WorkbenchUIController(UIController):
 
         # Runtime 状态 → TitleBar
         self._host.set_status(True)
+
+        # TitleBar Feedback → 保存反馈
+        self._host.feedback_requested.connect(self._on_feedback_requested)
 
         # UIController 聊天信号 → ChatWorkspaceItem
         self.sign_chat_user.connect(self._chat_workspace.append_user)

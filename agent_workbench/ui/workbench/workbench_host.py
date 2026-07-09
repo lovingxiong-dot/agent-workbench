@@ -21,6 +21,7 @@ class WorkbenchHost(QWidget):
     minimize_requested = Signal()
     maximize_requested = Signal()
     close_requested = Signal()
+    feedback_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -32,6 +33,7 @@ class WorkbenchHost(QWidget):
         self._title_bar.minimize_requested.connect(self.minimize_requested.emit)
         self._title_bar.maximize_requested.connect(self.maximize_requested.emit)
         self._title_bar.close_requested.connect(self.close_requested.emit)
+        self._title_bar.feedback_requested.connect(self.feedback_requested.emit)
         self._layout.addWidget(self._title_bar)
 
         self._workbench = Workbench(self)

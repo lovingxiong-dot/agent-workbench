@@ -1,5 +1,33 @@
 # Changelog
 
+## v6.12.0-beta.12 (2026-07-10) — Feedback：产品迭代系统
+
+> **里程碑语义**：Workbench 标题栏新增 💡 Feedback 入口，用户可一键提交反馈并自动生成 `feedback/YYYY-MM-DD-NNN.md`。这不是普通功能，而是未来产品迭代工作流的基础设施：真实使用 → 点 Feedback → Trae 次日读取、分类、分析、修改 → 生成新版本。
+
+### Added
+- `agent_workbench/feedback/feedback_service.py`：
+  - `FeedbackService.save(title, content, version)` → `feedback/YYYY-MM-DD-NNN.md`。
+  - 自动按日期递增序号，头部包含 Title、Time、Version 结构化元数据。
+  - `list_all()` 返回所有反馈文件，便于 Trae 批量读取。
+- `agent_workbench/ui/dialogs/feedback_dialog.py`：
+  - 轻量对话框：标题、正文、Save/Cancel。
+  - 空标题或空内容时禁止提交。
+- `agent_workbench/ui/workbench/title_bar.py`：右上角新增 💡 Feedback 按钮，点击发出 `feedback_requested` 信号。
+- `agent_workbench/ui/workbench/workbench_host.py`：转发 `feedback_requested` 信号。
+- `agent_workbench/ui/workbench_ui_controller.py`：
+  - 初始化 `FeedbackService`（反馈目录位于当前项目 `feedback/`）。
+  - 处理 `feedback_requested` → 弹出 `FeedbackDialog` → 保存为 markdown。
+  - 自动写入当前 `agent_workbench` 包版本号。
+- `tests/feedback/test_feedback_service.py`：4 个单元测试覆盖保存、递增编号、版本号、列表排序。
+
+### Tests
+- `pytest tests/`：**813/813 passed**（新增 4 个 Feedback 测试；收尾 Qt 退出码 `3221226505` 为 Windows 已知现象，不影响断言结果）。
+
+### Next Phase
+- **Workbench Polish 第 4 项：Empty State 统一**。
+
+---
+
 ## v6.12.0-beta.11 (2026-07-10) — Conversation 完整化
 
 > **里程碑语义**：Conversation 元数据与 Product Contract 对齐。Session 持久化层正式支持 `summary`、`icon`、`last_activity`、`workspace_id`、`pinned`，Navigator 会话列表可直接展示 icon、summary、置顶状态等完整信息，为后续 Conversation 搜索、筛选、排序和长期记忆打下基础。

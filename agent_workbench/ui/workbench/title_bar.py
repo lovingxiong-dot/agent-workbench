@@ -22,6 +22,7 @@ class WorkbenchTitleBar(QWidget):
     minimize_requested = Signal()
     maximize_requested = Signal()
     close_requested = Signal()
+    feedback_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -56,7 +57,12 @@ class WorkbenchTitleBar(QWidget):
         self._status_text.setFont(font(10))
         layout.addWidget(self._status_text)
 
-        # 右侧：窗口按钮
+        # 右侧：Feedback + 窗口按钮
+        self._btn_feedback = self._window_btn("💡 Feedback", "提交反馈")
+        self._btn_feedback.setFixedWidth(90)
+        self._btn_feedback.clicked.connect(self.feedback_requested.emit)
+        layout.addWidget(self._btn_feedback)
+
         self._btn_min = self._window_btn("−", "最小化")
         self._btn_max = self._window_btn("□", "最大化/还原")
         self._btn_close = self._window_btn("×", "关闭")
