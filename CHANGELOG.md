@@ -1,5 +1,32 @@
 # Changelog
 
+## v6.12.0-beta.1 (2026-07-10) — StatusBar + ToolBar + Workspace 聚合 PresentationModel
+
+> **里程碑语义**：Commit 8 完成 Metadata → PresentationModel → Workbench UI 数据流的最后一段。StatusBar 不再直接读取 Runtime，改为聚合所有 ModulePresentation.statistics；ToolBar 根据当前选中 ModulePresentation.actions 动态生成快捷按钮；Workspace 根据 Presentation 类型自动切换（chat / trace / generic），移除硬编码模块 ID 分支。至此，Workbench 所有主 Host（Navigator / Inspector / StatusBar / ToolBar / Workspace）都只消费 PresentationModel，UI 与 Runtime 的解耦达到稳定状态。
+
+### Added
+- `agent_workbench/ui/workbench/tool_bar.py` + `tool_bar_host.py`：新增 ToolBar，根据 `ActionPresentation` 列表动态生成按钮，支持 `enabled` / `danger` / `order`，并通过 `action_triggered` 信号复用 Inspector Action 处理通道。
+- `agent_workbench/ui/workbench/generic_workspace.py`：新增 GenericWorkspaceItem，作为无专属 Workspace 的选中项的默认视图。
+- `agent_workbench/ui/workbench/status_bar.py`：新增 `set_statistics(statistics)`，从 `StatisticPresentation` 列表动态重建状态项，支持 `bytes` / `percent` / `duration` 格式化。
+- `tests/ui/test_status_bar_presentation.py`：13 个非 GUI 单元测试，覆盖 StatusBar 统计聚合、ToolBar 按钮渲染与信号、Workspace ID 解析、GenericWorkspace 内容更新。
+
+### Changed
+- `agent_workbench/ui/workbench/status_bar_host.py`：精简为 `set_statistics()` 单一入口，移除对 Runtime 具体字段的依赖。
+- `agent_workbench/ui/workbench/workbench.py`：新增 ToolBarHost 到 Workbench 骨架，并转发 `tool_bar_action_triggered` 信号。
+- `agent_workbench/ui/workbench_ui_controller.py`：
+  - `_refresh_status_bar()` 改为聚合 `_build_navigator_presentations()` 中所有 ModulePresentation 的 statistics。
+  - `_on_selection_changed()` 同步更新 Inspector、ToolBar 与 Workspace。
+  - 新增 `_resolve_workspace_id()` 与 `_switch_workspace()`，根据 Presentation.type 自动映射 Workspace，移除硬编码分支。
+- `docs/v6/v6.12-task-list.md`：Commit 8 阶段标记为 `v6.12.0-beta.1` 并勾选所有任务。
+
+### Tests
+- `pytest tests/`：**713/713 passed**（新增 13 个 StatusBar / ToolBar / Workspace Presentation 测试；收尾 Qt 退出码 `3221226505` 为 Windows 已知现象，不影响断言结果）。
+
+### Next Phase
+- **Commit 9**：Task 闭环（User → Manager → Planning → Capability → Provider → Streaming → Task → Trace → History）。
+
+---
+
 ## v6.12.0-alpha.3 (2026-07-09) — Navigator + Inspector 读取 PresentationModel
 
 > **里程碑语义**：Commit 6 完成了 `MetadataDefinition → PresentationModel` 的映射；Commit 7 让 Navigator 与 Inspector 真正消费 PresentationModel，移除 Workbench 左侧导航与右侧属性检查器的硬编码。现在，新增一个 Runtime Module 或 Settings 分类后，Workbench 启动即可在 Navigator 看到，Inspector 会自动按 category 分组、识别敏感字段与只读字段、禁用不可用的 Action。UI 与 Runtime 的解耦进入可运行阶段。

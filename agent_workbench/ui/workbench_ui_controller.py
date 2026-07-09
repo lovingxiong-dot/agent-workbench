@@ -37,8 +37,14 @@ from agent_workbench.ui.dialogs import (
 from agent_workbench.runtime.modules.model_module import ModelModule
 from agent_workbench.ui.workbench import WorkbenchHost
 from agent_workbench.ui.workbench.chat_workspace import ChatWorkspaceItem
+from agent_workbench.ui.workbench.generic_workspace import GenericWorkspaceItem
 from agent_workbench.ui.workbench.metadata_adapter import PresentationMetadataAdapter
-from agent_workbench.ui.workbench.presentation import ModulePresentation, PropertyPresentation
+from agent_workbench.ui.workbench.presentation import (
+    ActionPresentation,
+    ModulePresentation,
+    PropertyPresentation,
+    StatisticPresentation,
+)
 from agent_workbench.ui.workbench.trace_workspace import TraceWorkspaceItem
 
 if TYPE_CHECKING:
@@ -204,14 +210,18 @@ class WorkbenchUIController(UIController):
         if self._host is None:
             return
 
-        # 注册 Chat Workspace
+        # 注册 Workspace；切换逻辑由 PresentationModel 驱动
         self._chat_workspace = ChatWorkspaceItem()
         self._host.workbench.workspace.register_workspace("chat", self._chat_workspace)
-        self._host.workbench.workspace.switch_to("chat")
 
-        # 注册 Trace Workspace
         self._trace_workspace = TraceWorkspaceItem()
         self._host.workbench.workspace.register_workspace("trace", self._trace_workspace)
+
+        self._generic_workspace = GenericWorkspaceItem()
+        self._host.workbench.workspace.register_workspace("generic", self._generic_workspace)
+
+        # ToolBar → Inspector 同一条 action 通道
+        self._host.workbench.tool_bar_action_triggered.connect(self._on_tool_bar_action_triggered)
 
         # CommandBar → 发送消息
         self._host.workbench.command_submitted.connect(self.on_send_msg)
@@ -313,7 +323,7 @@ class WorkbenchUIController(UIController):
         self._workbench.set_config_value(category.config_path, current)
 
     def _on_selection_changed(self, module_id: str) -> None:
-        """Navigator 选中变化 → Inspector 渲染对应模块。"""
+        """Navigator 选中变化 → Inspector / ToolBar / Workspace 同步渲染。"""
         self._current_module_id = module_id
         pres = self._presentations.get(module_id)
         if pres is None:
@@ -323,6 +333,37 @@ class WorkbenchUIController(UIController):
                 self._presentations[module_id] = pres
         if pres is not None and self._host is not None:
             self._host.workbench.inspector.set_object(pres)
+            self._host.workbench.tool_bar.set_actions(pres.actions)
+            self._switch_workspace(pres)
+
+    def _switch_workspace(self, pres: ModulePresentation) -> None:
+        """根据 ModulePresentation 类型切换到对应 Workspace，不再硬编码模块 ID 分支。"""
+        if self._host is None:
+            return
+        workspace_id = self._resolve_workspace_id(pres)
+        self._host.workbench.workspace.switch_to(workspace_id)
+        if workspace_id == "generic" and self._generic_workspace is not None:
+            self._generic_workspace.set_module(pres.name, pres.description)
+
+    @staticmethod
+    def _resolve_workspace_id(pres: ModulePresentation) -> str:
+        """将 ModulePresentation 映射为 Workspace ID。
+
+        - workspace 类型按 id 切换（chat / skill / tool）。
+        - settings / config 类型统一进入 generic（未来可扩展为 ConfigWorkspace）。
+        - trace 类型进入 trace。
+        - 其他进入 generic。
+        """
+        if pres.type == "trace":
+            return "trace"
+        if pres.type == "workspace":
+            return pres.id if pres.id in ("chat", "skill", "tool") else "generic"
+        return "generic"
+
+    def _on_tool_bar_action_triggered(self, action_name: str) -> None:
+        """ToolBar 按钮触发与 Inspector Action 同一条处理通道。"""
+        if self._current_module_id is not None:
+            self._on_action_triggered(self._current_module_id, action_name)
 
     def _on_property_changed(self, module_id: str, prop_name: str, value: object) -> None:
         """Inspector 属性变化 → ConfigStore 热更新 → Module 生效。"""
@@ -385,15 +426,18 @@ class WorkbenchUIController(UIController):
         self._on_selection_changed(module_id)
 
     def _refresh_status_bar(self) -> None:
-        """将 Runtime 状态刷新到 StatusBar。"""
+        """聚合所有 ModulePresentation.statistics 刷新 StatusBar。"""
         if self._host is None:
             return
-        sb = self._host.workbench.status_bar
+        statistics = self._build_status_statistics()
+        self._host.workbench.status_bar.set_statistics(statistics)
+
+    def _build_status_statistics(self) -> list[StatisticPresentation]:
+        """构造 StatusBar 所需的聚合 StatisticPresentation 列表。
+
+        包含 Runtime 核心状态 + 所有 Navigator ModulePresentation.statistics。
+        """
         overview = self._workbench.get_overview()
-
-        sb.set_runtime("online" if self._workbench.core_runtime.running else "stopped")
-        sb.set_provider(overview.get("default_provider", "—"))
-
         providers = self._workbench.get_config_value("model.providers", [])
         default_provider = overview.get("default_provider", "—")
         model_name = "—"
@@ -401,10 +445,44 @@ class WorkbenchUIController(UIController):
             if p.get("name") == default_provider:
                 model_name = p.get("config", {}).get("model", "—")
                 break
-        sb.set_model(model_name)
-        sb.set_profile(overview.get("current_profile", "—"))
-        sb.set_session(self._active_sid or "—")
-        sb.set_memory(f"{overview.get('memory_count', 0)} records")
+
+        statistics: list[StatisticPresentation] = [
+            StatisticPresentation(
+                name="runtime",
+                label="Runtime",
+                value="online" if self._workbench.core_runtime.running else "stopped",
+            ),
+            StatisticPresentation(
+                name="provider",
+                label="Provider",
+                value=default_provider,
+            ),
+            StatisticPresentation(
+                name="model",
+                label="Model",
+                value=model_name,
+            ),
+            StatisticPresentation(
+                name="profile",
+                label="Profile",
+                value=overview.get("current_profile", "—"),
+            ),
+            StatisticPresentation(
+                name="session",
+                label="Session",
+                value=self._active_sid or "—",
+            ),
+            StatisticPresentation(
+                name="memory",
+                label="Memory",
+                value=f"{overview.get('memory_count', 0)} records",
+            ),
+        ]
+
+        for pres in self._build_navigator_presentations():
+            statistics.extend(pres.statistics)
+
+        return statistics
 
     def _on_config_changed(self, path: str, value: object) -> None:
         """ConfigStore 通用变更信号 → 刷新 Navigator 与 StatusBar。"""

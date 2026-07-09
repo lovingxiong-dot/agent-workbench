@@ -18,6 +18,7 @@ from agent_workbench.ui.workbench.command_bar_host import CommandBarHost
 from agent_workbench.ui.workbench.inspector_host import InspectorHost
 from agent_workbench.ui.workbench.navigator_host import NavigatorHost
 from agent_workbench.ui.workbench.status_bar_host import StatusBarHost
+from agent_workbench.ui.workbench.tool_bar_host import ToolBarHost
 from agent_workbench.ui.workbench.workspace_host import WorkspaceHost
 from agent_workbench.ui.workspace_registry import WorkspaceRegistry
 from agent_workbench.ui.workspace_router import WorkspaceRouter
@@ -30,6 +31,7 @@ class Workbench(QWidget):
     action_triggered = Signal(str, str)  # object_id, action_name
     command_submitted = Signal(str)
     selection_changed = Signal(str)  # object_id
+    tool_bar_action_triggered = Signal(str)  # action_name
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -60,6 +62,10 @@ class Workbench(QWidget):
 
         self._layout.addWidget(self._splitter, 1)
 
+        # 工具栏（根据选中 ModulePresentation.actions 动态生成）
+        self._tool_bar = ToolBarHost(self)
+        self._layout.addWidget(self._tool_bar)
+
         # 底部：StatusBarHost + CommandBarHost
         self._status_bar = StatusBarHost(self)
         self._command_bar = CommandBarHost(self)
@@ -74,6 +80,7 @@ class Workbench(QWidget):
         self._navigator.selection_changed.connect(self.selection_changed.emit)
         self._inspector.property_changed.connect(self.property_changed.emit)
         self._inspector.action_triggered.connect(self.action_triggered.emit)
+        self._tool_bar.action_triggered.connect(self.tool_bar_action_triggered.emit)
         self._command_bar.command_submitted.connect(self.command_submitted.emit)
 
         self._style()
@@ -92,6 +99,10 @@ class Workbench(QWidget):
     @property
     def inspector(self) -> InspectorHost:
         return self._inspector
+
+    @property
+    def tool_bar(self) -> ToolBarHost:
+        return self._tool_bar
 
     @property
     def status_bar(self) -> StatusBarHost:
