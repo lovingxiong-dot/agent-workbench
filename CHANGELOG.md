@@ -1,5 +1,31 @@
 # Changelog
 
+## v6.12.0-alpha.2 (2026-07-09) — Conversation 自动标题
+
+> **里程碑语义**：会话标题被正式纳入 Conversation Domain，UI 只读取 `conversation.title`。新会话默认显示 `New Conversation`，第一轮 Assistant 回复完成后自动根据首条用户消息生成标题；手动重命名后自动标题不再覆盖。该功能作为 Commit 6 的附属小功能，验证了「Domain 持有唯一真相」的架构原则，并为后续 summary / 标签 / 搜索索引 / 长期记忆扩展打下基础。
+
+### Added
+- `agent_workbench/conversation/` Domain 层：
+  - `title_generator.py`：定义 `TitleGenerator` Protocol 与 `AbstractTitleGenerator`，提供 `RuleTitleGenerator`（基于首条用户消息截断生成标题）。
+  - `title_service.py`：`ConversationTitleService` 负责生成标题并在标题为空时自动更新会话。
+  - `conversation_service.py`：`ConversationService` 统一封装 Session / Chat / Title 生命周期，提供 `create_conversation`、`store_user_message`、`store_assistant_message`、`rename_conversation`、`load_messages` 等语义化 API。
+- `agent_workbench/ui/workbench_ui_controller.py`：
+  - 集成 `ConversationService`。
+  - 新建会话时创建空标题会话，标题栏与左侧列表显示 `New Conversation`。
+  - Assistant 第一轮回复完成后自动触发标题生成，并刷新会话列表与标题栏。
+  - 覆盖 `_load_session_view()`，空标题时显示默认占位。
+- `v6/ui/session_item.py`：空标题会话在左侧列表显示 `New Conversation`。
+- `tests/conversation/test_title_generator.py`：7 个规则标题生成测试。
+- `tests/conversation/test_conversation_service.py`：10 个 ConversationService 生命周期与自动标题测试。
+
+### Changed
+- `docs/v6/v6.12-task-list.md`：Conversation 自动标题阶段标记为 `v6.12.0-alpha.2`。
+
+### Tests
+- `pytest tests/`：**686/686 passed**（新增 17 个 Conversation 测试；收尾 Qt 退出码 `3221226505` 为 Windows 已知现象，不影响断言结果）。
+
+---
+
 ## v6.12.0-alpha.1 (2026-07-09) — Metadata → PresentationModel 完整映射
 
 > **里程碑语义**：v6.11 完成了 Metadata Contract 与 Provider Registry；v6.12 开始让 UI 真正独立于 Runtime。本次提交完整打通 `MetadataDefinition → PresentationModel → Qt` 的第一段：Adapter 现在能无损失地转换 Capability Metadata、Resource Metadata 以及旧版 Legacy Metadata，并为 PresentationModel 补齐所有常用字段。同时，`PROJECT_BLUEPRINT.md` 正式宣布 Metadata Contract 长期冻结（Additive Only），为 v6.12 及以后的 UI / CLI / Remote / Plugin 扩展提供稳定契约基础。

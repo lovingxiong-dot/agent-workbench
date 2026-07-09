@@ -24,6 +24,7 @@ from v6.runtime.event_bus import RuntimeEvent, RuntimeEventType
 from v6.ui_controller import UIController
 
 from agent_workbench.controller import WorkbenchController
+from agent_workbench.conversation import ConversationService
 from agent_workbench.ui.configuration import ConfigCategory, ConfigurationManager
 from agent_workbench.ui.dialogs import (
     AddMcpDialog,
@@ -99,6 +100,7 @@ class WorkbenchUIController(UIController):
             adapter=NoopRuntimeAdapter(),
             data_dir=data_dir,
         )
+        self._conversation_service = ConversationService(self._session, self._chat)
 
     @property
     def workbench_controller(self) -> WorkbenchController:
@@ -418,6 +420,16 @@ class WorkbenchUIController(UIController):
             elif msg.role == "assistant":
                 self._chat_workspace.append_ai(msg.content, "")
 
+    def _load_session_view(self, sid: str) -> None:
+        """加载会话标题与历史；空标题时显示默认占位。"""
+        session = self._session.manager.get(sid)
+        title = session.get("title") if session else ""
+        if not title:
+            title = self._conversation_service.DEFAULT_TITLE
+        self.sign_set_title.emit(title, self._project_path)
+
+        self._load_session_history_to_workspace(sid)
+
     def on_session_selected(self, sid: str) -> None:
         """切换会话：更新激活会话并刷新 Chat Workspace。"""
         super().on_session_selected(sid)
@@ -426,8 +438,12 @@ class WorkbenchUIController(UIController):
             self._load_session_history_to_workspace(sid)
 
     def on_new_session(self) -> None:
-        """新建会话：清空 Chat Workspace。"""
-        super().on_new_session()
+        """新建会话：通过 ConversationService 创建空标题会话，并清空 Chat Workspace。"""
+        sid = self._conversation_service.create_conversation()
+        self._active_sid = sid
+        self._reload_sessions()
+        self.sign_set_active_session.emit(sid)
+        self.sign_set_title.emit(self._conversation_service.DEFAULT_TITLE, self._project_path)
         if self._chat_workspace is not None:
             self._chat_workspace.clear_chat()
 
@@ -488,9 +504,7 @@ class WorkbenchUIController(UIController):
         if sid is None:
             return
 
-        ctx = self._new_ctx(sid)
-        ctx.add_message("user", text)
-        self._chat.store(ctx)
+        self._conversation_service.store_user_message(sid, text)
 
         task_id = uuid.uuid4().hex
         with self._lock:
@@ -515,9 +529,10 @@ class WorkbenchUIController(UIController):
                 if final_ctx.status.value == "failed" or not response:
                     error_message = "[生成失败]"
                 else:
-                    store_ctx = self._new_ctx(sid)
-                    store_ctx.add_message("assistant", response)
-                    self._chat.store(store_ctx)
+                    generated_title = self._conversation_service.store_assistant_message(sid, response)
+                    if generated_title:
+                        self.sign_set_title.emit(generated_title, self._project_path)
+                        self._reload_sessions()
                     with self._lock:
                         finalized = self._stream_finalized
                     if not finalized:

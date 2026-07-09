@@ -13,6 +13,8 @@ from v6.ui.base import C, font, theme
 class SessionItem(QWidget):
     """会话列表项：标题/预览/时间，支持 active/hover 状态，右键菜单请求信号。"""
 
+    DEFAULT_TITLE: str = "New Conversation"
+
     selected = Signal(str)                       # sid
     action_requested = Signal(str, str)          # action, sid
     context_menu_requested = Signal(str, QPoint) # sid, global_pos
@@ -39,6 +41,10 @@ class SessionItem(QWidget):
         self._style()
         theme.changed.connect(self._style)
 
+    def _display_title(self) -> str:
+        """空标题时显示默认占位，UI 不拥有标题生成逻辑。"""
+        return self._title.strip() or self.DEFAULT_TITLE
+
     def _build(self) -> None:
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 6, 10, 6)
@@ -46,7 +52,7 @@ class SessionItem(QWidget):
 
         text_layout = QVBoxLayout()
         text_layout.setSpacing(2)
-        self._title_label = QLabel(self._title)
+        self._title_label = QLabel(self._display_title())
         self._title_label.setFont(font(13, bold=True))
         self._title_label.setObjectName("title")
         self._preview_label = QLabel(self._preview)
