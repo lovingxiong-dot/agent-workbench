@@ -51,6 +51,7 @@ from agent_workbench.ui.workbench.presentation import (
 from agent_workbench.ui.workbench.trace_workspace import TraceWorkspaceItem
 from agent_workbench.ui.workbench.view_schema_registry import ViewSchemaRegistry
 from agent_workbench.ui.workbench.view_schema_renderer import ViewSchemaRenderer
+from agent_workbench.ui.workbench.welcome_workspace import WelcomeWorkspaceItem
 
 if TYPE_CHECKING:
     from v6.services.chat_service import ChatService
@@ -100,6 +101,7 @@ class WorkbenchUIController(UIController):
         self._chat_workspace: ChatWorkspaceItem | None = None
         self._trace_workspace: TraceWorkspaceItem | None = None
         self._generic_workspace: GenericWorkspaceItem | None = None
+        self._welcome_workspace: WelcomeWorkspaceItem | None = None
         self._metadata_adapter = PresentationMetadataAdapter()
         self._view_schema_registry = ViewSchemaRegistry()
         self._binding_context = BindingContext()
@@ -228,6 +230,10 @@ class WorkbenchUIController(UIController):
         event_bus.subscribe(RuntimeEventType.AI_END, self._on_ai_end)
         event_bus.subscribe(RuntimeEventType.ENGINE_FAILED, self._on_engine_failed)
 
+        # 没有激活会话时进入 Welcome / Home Workspace
+        if not self._active_sid:
+            self._show_welcome()
+
     def shutdown(self) -> None:
         """停止 Workbench Runtime，然后停止 v6 Adapter 占位。"""
         super().shutdown()
@@ -258,6 +264,59 @@ class WorkbenchUIController(UIController):
             if view_schema is not None:
                 self._view_schema_registry.register(view_schema)
 
+    def _show_welcome(self) -> None:
+        """显示 Welcome / Home Workspace。"""
+        if self._host is None or self._welcome_workspace is None:
+            return
+        self._refresh_welcome()
+        self._host.workbench.workspace.switch_to("welcome")
+        self._host.workbench.inspector.set_schema(None)
+        self._host.workbench.inspector.set_object(None)
+        self._host.workbench.tool_bar.set_actions([])
+        self._refresh_status_bar()
+
+    def _refresh_welcome(self) -> None:
+        """刷新 Welcome 页面上的动态内容。"""
+        if self._welcome_workspace is None:
+            return
+        agents = [
+            (p.manifest.id, p.metadata.get("name", p.manifest.id))
+            for p in self._package_registry.list()
+        ]
+        self._welcome_workspace.set_installed_agents(agents)
+
+        recent: list[str] = []
+        for _gid, _title, sessions in self._conversation_service.list_groups():
+            for session in sessions:
+                recent.append(session.get("title") or session.get("sid", "Untitled"))
+        self._welcome_workspace.set_recent_projects(recent[:10])
+
+        project_path = self._project_path or ""
+        project_name = os.path.basename(project_path) if project_path else "—"
+        parent_dir = str(Path(project_path).parent) + os.sep if project_path else "—"
+        self._welcome_workspace.set_project(project_name, parent_dir)
+
+    def _on_welcome_new_agent(self) -> None:
+        """Welcome 页面点击 + New Agent → 创建新会话并切换到 Chat Workspace。"""
+        self.on_new_session()
+        if self._host is not None and self._chat_workspace is not None:
+            self._host.workbench.workspace.switch_to("chat")
+
+    def _on_welcome_install_agent(self) -> None:
+        """Welcome 页面点击 + Install Agent → 打开 packages 目录（占位）。"""
+        import subprocess
+
+        packages_dir = self._packages_dir
+        try:
+            subprocess.Popen(f'explorer "{packages_dir}"')
+        except Exception:  # pragma: no cover - defensive
+            pass
+
+    def _on_welcome_documentation(self, key: str) -> None:
+        """Welcome 页面点击文档链接（占位）。"""
+        # 未来可打开对应文档页面或外部浏览器
+        pass
+
     @staticmethod
     def _resolve_packages_dir(
         packages_dir: str | os.PathLike | None, config_path: str | None
@@ -284,6 +343,12 @@ class WorkbenchUIController(UIController):
 
         self._generic_workspace = GenericWorkspaceItem()
         self._host.workbench.workspace.register_workspace("generic", self._generic_workspace)
+
+        self._welcome_workspace = WelcomeWorkspaceItem()
+        self._host.workbench.workspace.register_workspace("welcome", self._welcome_workspace)
+        self._welcome_workspace.new_agent_requested.connect(self._on_welcome_new_agent)
+        self._welcome_workspace.install_agent_requested.connect(self._on_welcome_install_agent)
+        self._welcome_workspace.documentation_requested.connect(self._on_welcome_documentation)
 
         # ViewSchema Renderer：统一驱动 ToolBar / StatusBar / Inspector / Workspace
         self._view_schema_renderer = ViewSchemaRenderer(self._host.workbench, self._binding_context)
@@ -348,6 +413,7 @@ class WorkbenchUIController(UIController):
 
         presentations = self._build_navigator_presentations()
         nav.load_presentations(presentations)
+        self._refresh_welcome()
 
     def _build_navigator_presentations(self) -> list[ModulePresentation]:
         """构造 Navigator 所需的 ModulePresentation 列表。
@@ -527,6 +593,12 @@ class WorkbenchUIController(UIController):
             self._presentations.pop(module_id, None)
         self._refresh_status_bar()
         self._on_selection_changed(module_id)
+
+    def on_session_action(self, action: str, sid: str) -> None:
+        """重写 v6 UIController：删除最后一个会话后自动回到 Welcome。"""
+        super().on_session_action(action, sid)
+        if action == "delete" and not self._active_sid:
+            self._show_welcome()
 
     def _refresh_status_bar(self) -> None:
         """通过 ViewSchemaRenderer 刷新 StatusBar（无选中项时使用全局 Workbench Schema）。"""

@@ -1,5 +1,34 @@
 # Changelog
 
+## v6.12.0-beta.10 (2026-07-10) — Welcome Home Workspace Polish
+
+> **里程碑语义**：将 Welcome 从「空 Workspace」提升为 Workbench OS 的 Home（主页）。用户首次打开应在 3 秒内理解产品定位：Workbench OS 是安装、管理、运行 Agent 的桌面操作系统。UI 统一使用「Agent」面向普通用户，底层开发者概念仍使用「Package」，与已冻结的 Product Contract 保持一致。
+
+### Added
+- `agent_workbench/ui/workbench/welcome_workspace.py`：Welcome / Home Workspace。
+  - 标题区：Workbench OS 1.0 / Install · Manage · Run Agents / An operating system for AI Agents.
+  - 快捷入口：+ New Agent、+ Install Agent（用户视角术语）。
+  - Recent：直接列出最近 Conversation 标题；无内容时显示 No recent projects.
+  - Documentation：Getting Started、Create your first Agent、Package Development Guide、GitHub。
+  - Installed Agents：从 `PackageRegistry.list()` 读取并实时刷新，体现「Agent 是安装对象」。
+  - Current Project：拆分为项目名与父目录，避免显示冗长完整路径。
+- `tests/ui/test_welcome_workspace.py`：10 个单元测试，覆盖初始状态、动态内容更新、按钮信号与文档链接。
+
+### Changed
+- `agent_workbench/ui/workbench_ui_controller.py`：
+  - `_refresh_welcome()` 从 `ConversationService.list_groups()` 加载 Recent 列表，从 `PackageRegistry.list()` 加载 Installed Agents，并格式化 Current Project 为「项目名 + 父目录」。
+  - `on_session_action()` 重写：删除最后一个会话后 `_active_sid` 为空时自动回到 Welcome Home。
+  - `startup()` 无激活会话时自动进入 Welcome Home。
+- `PROJECT_BLUEPRINT.md`：版本号更新为 `v6.12.0-beta.10`。
+
+### Tests
+- `pytest tests/`：**801/801 passed**（新增 10 个 Welcome Workspace 测试；收尾 Qt 退出码 `3221226505` 与 `QThread: Destroyed while thread is still running` 为 Windows 已知现象，不影响断言结果）。
+
+### Next Phase
+- **Workbench Polish 第 3 项：Conversation 完整化**。
+
+---
+
 ## v6.12.0-beta.9 (2026-07-10) — Product Contract Freeze
 
 > **里程碑语义**：Workbench OS 1.0 的产品契约正式冻结。新增 `docs/v6/product-contract.md`，以产品词典风格定义 Workbench OS、Project、Conversation、Package、Workspace、Navigator、Inspector、CommandBar、StatusBar、Agent、Capability、Runtime、Metadata、Presentation、ViewSchema、Workbench、About、Settings 等核心概念，明确每个概念是什么、保存什么、职责边界、不属于什么。本契约是 Qt / Web / CLI / Remote 所有前端与后端必须共同遵守的产品定义，与 Runtime Contract 同等重要。
