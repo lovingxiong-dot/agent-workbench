@@ -22,6 +22,8 @@ from PySide6.QtWidgets import (
 
 from v6.ui.base import C, font
 
+from agent_workbench.ui.workbench.presentation import ModulePresentation
+
 
 class _SettingsCategoryWidget(QWidget):
     """Settings 分类行：左侧标题/图标，右侧 "+" 按钮。"""
@@ -176,6 +178,24 @@ class Navigator(QWidget):
         self._settings_widgets.clear()
         self._functional_list.clear()
         self._settings_list.clear()
+
+    def load_presentations(self, presentations: list[ModulePresentation]) -> None:
+        """从 ModulePresentation 列表重建 Navigator，按 category 分组。
+
+        - category == "settings" 或 type == "settings"：进入 Settings 区，带 "+" 按钮。
+        - 其他：进入顶部功能 Tab 区。
+        """
+        self.clear_modules()
+        for pres in presentations:
+            if self._is_settings_presentation(pres):
+                self.register_settings_category(pres.id, pres.name, pres.icon)
+            else:
+                self.register_functional_tab(pres.id, pres.name, pres.icon)
+
+    @staticmethod
+    def _is_settings_presentation(pres: ModulePresentation) -> bool:
+        """判断 PresentationModel 是否应渲染为 Settings 分类。"""
+        return pres.category == "settings" or pres.type == "settings"
 
     def set_selection(self, item_id: str) -> None:
         """设置当前选中项（功能 Tab 或 Settings 分类）。"""

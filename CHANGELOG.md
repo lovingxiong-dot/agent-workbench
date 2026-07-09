@@ -1,5 +1,36 @@
 # Changelog
 
+## v6.12.0-alpha.3 (2026-07-09) — Navigator + Inspector 读取 PresentationModel
+
+> **里程碑语义**：Commit 6 完成了 `MetadataDefinition → PresentationModel` 的映射；Commit 7 让 Navigator 与 Inspector 真正消费 PresentationModel，移除 Workbench 左侧导航与右侧属性检查器的硬编码。现在，新增一个 Runtime Module 或 Settings 分类后，Workbench 启动即可在 Navigator 看到，Inspector 会自动按 category 分组、识别敏感字段与只读字段、禁用不可用的 Action。UI 与 Runtime 的解耦进入可运行阶段。
+
+### Added
+- `agent_workbench/ui/workbench/navigator.py`：
+  - 新增 `load_presentations(presentations)`，从 `list[ModulePresentation]` 重建导航。
+  - 新增 `_is_settings_presentation()`，按 `category == "settings"` 或 `type == "settings"` 将 PresentationModel 分到 Settings 区（带 "+" 按钮），其余分到顶部功能 Tab 区。
+- `agent_workbench/ui/workbench/navigator_host.py`：新增 `load_presentations()` 代理方法。
+- `agent_workbench/ui/workbench/inspector.py`：
+  - Properties 按 `category` 分组渲染，空 category 归入 `General`。
+  - `sensitive=True` 的 Property 统一使用密码输入框（`QLineEdit.EchoMode.Password`）。
+  - `editable=False` 的 Property 统一禁用编辑并应用只读样式（string / textarea / select / boolean 均生效）。
+  - Actions 根据 `enabled` 禁用/启用按钮。
+- `tests/ui/test_navigator_inspector_presentation.py`：14 个非 GUI 单元测试，覆盖 Navigator 分组、选择、"+" 按钮，以及 Inspector 分类分组、password、readonly、boolean/select/textarea/action enabled 等。
+
+### Changed
+- `agent_workbench/ui/workbench_ui_controller.py`：
+  - `_refresh_navigator()` 改为调用 `_build_navigator_presentations()` 构造 `list[ModulePresentation]`，再调用 `Navigator.load_presentations()`，移除 Navigator 中的硬编码 tab 注册。
+  - 功能 Workspace（Chat / Skills / Tools）与 Settings 分类统一以 ModulePresentation 表达。
+- `docs/v6/v6.12-task-list.md`：Commit 7 阶段标记为 `v6.12.0-alpha.3` 并勾选所有任务。
+
+### Tests
+- `pytest tests/`：**700/700 passed**（新增 14 个 Navigator / Inspector PresentationModel 测试；收尾 Qt 退出码 `3221226505` 为 Windows 已知现象，不影响断言结果）。
+
+### Next Phase
+- **Commit 8**：StatusBar + ToolBar + Workspace 通过 `PresentationModel` 聚合（v6.12.0-beta.1）。
+- **Commit 9**：Task 闭环（User → Manager → Planning → Capability → Provider → Streaming → Task → Trace → History）。
+
+---
+
 ## v6.12.0-alpha.2 (2026-07-09) — Conversation 自动标题
 
 > **里程碑语义**：会话标题被正式纳入 Conversation Domain，UI 只读取 `conversation.title`。新会话默认显示 `New Conversation`，第一轮 Assistant 回复完成后自动根据首条用户消息生成标题；手动重命名后自动标题不再覆盖。该功能作为 Commit 6 的附属小功能，验证了「Domain 持有唯一真相」的架构原则，并为后续 summary / 标签 / 搜索索引 / 长期记忆扩展打下基础。

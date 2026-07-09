@@ -35,6 +35,17 @@ from agent_workbench.ui.workbench.presentation import (
 )
 
 
+_READONLY_STYLE = (
+    f"background-color: {C['bg_input']}; color: {C['text_muted']}; "
+    f"border: 1px solid {C['border']}; border-radius: 4px; padding: 4px;"
+)
+
+_EDITABLE_STYLE = (
+    f"background-color: {C['bg_input']}; color: {C['text_primary']}; "
+    f"border: 1px solid {C['border']}; border-radius: 4px; padding: 4px;"
+)
+
+
 class Inspector(QWidget):
     """Workbench 属性检查器。"""
 
@@ -80,7 +91,7 @@ class Inspector(QWidget):
             if item.widget():
                 item.widget().setParent(None)
 
-        self._add_section("Properties", presentation.properties, self._create_property)
+        self._add_property_sections(presentation.properties)
         self._add_section("Statistics", presentation.statistics, self._create_statistic)
         self._add_section("Actions", presentation.actions, self._create_action)
 
@@ -95,6 +106,18 @@ class Inspector(QWidget):
             widget = factory(item)
             self._content_layout.insertWidget(self._content_layout.count() - 1, widget)
 
+    def _add_property_sections(self, properties: list[PropertyPresentation]) -> None:
+        """按 category 分组渲染 Properties；空 category 归入 General。"""
+        if not properties:
+            return
+        groups: dict[str, list[PropertyPresentation]] = {}
+        for prop in properties:
+            category = (prop.category or "").strip() or "General"
+            groups.setdefault(category, []).append(prop)
+
+        for category in sorted(groups.keys()):
+            self._add_section(category, groups[category], self._create_property)
+
     def _create_property(self, prop: PropertyPresentation) -> QWidget:
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -106,43 +129,75 @@ class Inspector(QWidget):
         label.setStyleSheet(f"color: {C['text_muted']};")
         layout.addWidget(label)
 
-        editor: QWidget
-        if prop.type == "boolean":
-            chk = QCheckBox(self)
-            chk.setChecked(bool(prop.value))
-            chk.setEnabled(prop.editable)
-            chk.stateChanged.connect(lambda state, name=prop.name: self.property_changed.emit(self._object_id, name, bool(state)))
-            editor = chk
-        elif prop.type == "select":
-            cmb = QComboBox(self)
-            cmb.addItems(prop.options)
-            idx = cmb.findText(str(prop.value))
-            if idx >= 0:
-                cmb.setCurrentIndex(idx)
-            cmb.setEnabled(prop.editable)
-            cmb.currentTextChanged.connect(lambda text, name=prop.name: self.property_changed.emit(self._object_id, name, text))
-            editor = cmb
-        elif prop.type in ("textarea", "json"):
-            txt = QTextEdit(self)
-            txt.setPlainText(str(prop.value))
-            txt.setReadOnly(not prop.editable)
-            txt.setMaximumHeight(200)
-            txt.textChanged.connect(lambda name=prop.name, widget=txt: self.property_changed.emit(self._object_id, name, widget.toPlainText()))
-            editor = txt
-        else:
-            ln = QLineEdit(str(prop.value), self)
-            ln.setReadOnly(not prop.editable)
-            if prop.editable:
-                ln.editingFinished.connect(
-                    lambda name=prop.name, widget=ln: self.property_changed.emit(self._object_id, name, widget.text())
-                )
-            editor = ln
-
-        editor.setStyleSheet(
-            f"background-color: {C['bg_input']}; color: {C['text_primary']}; border: 1px solid {C['border']}; border-radius: 4px; padding: 4px;"
-        )
+        editor = self._create_property_editor(prop)
         layout.addWidget(editor)
         return container
+
+    def _create_property_editor(self, prop: PropertyPresentation) -> QWidget:
+        """根据 PropertyPresentation 创建合适的编辑器，并统一处理 editable / sensitive。"""
+        if prop.sensitive:
+            return self._create_password_editor(prop)
+        if prop.type == "boolean":
+            return self._create_boolean_editor(prop)
+        if prop.type == "select":
+            return self._create_select_editor(prop)
+        if prop.type in ("textarea", "json"):
+            return self._create_textarea_editor(prop)
+        return self._create_string_editor(prop)
+
+    def _create_password_editor(self, prop: PropertyPresentation) -> QLineEdit:
+        """敏感字段统一使用密码输入框，只读时禁用编辑。"""
+        ln = QLineEdit(str(prop.value), self)
+        ln.setEchoMode(QLineEdit.EchoMode.Password)
+        ln.setReadOnly(not prop.editable)
+        ln.setEnabled(prop.editable)
+        ln.setStyleSheet(_EDITABLE_STYLE if prop.editable else _READONLY_STYLE)
+        if prop.editable:
+            ln.editingFinished.connect(
+                lambda name=prop.name, widget=ln: self.property_changed.emit(self._object_id, name, widget.text())
+            )
+        return ln
+
+    def _create_boolean_editor(self, prop: PropertyPresentation) -> QCheckBox:
+        chk = QCheckBox(self)
+        chk.setChecked(bool(prop.value))
+        chk.setEnabled(prop.editable)
+        if prop.editable:
+            chk.stateChanged.connect(lambda state, name=prop.name: self.property_changed.emit(self._object_id, name, bool(state)))
+        return chk
+
+    def _create_select_editor(self, prop: PropertyPresentation) -> QComboBox:
+        cmb = QComboBox(self)
+        cmb.addItems(prop.options)
+        idx = cmb.findText(str(prop.value))
+        if idx >= 0:
+            cmb.setCurrentIndex(idx)
+        cmb.setEnabled(prop.editable)
+        if prop.editable:
+            cmb.currentTextChanged.connect(lambda text, name=prop.name: self.property_changed.emit(self._object_id, name, text))
+        return cmb
+
+    def _create_textarea_editor(self, prop: PropertyPresentation) -> QTextEdit:
+        txt = QTextEdit(self)
+        txt.setPlainText(str(prop.value))
+        txt.setReadOnly(not prop.editable)
+        txt.setEnabled(prop.editable)
+        txt.setMaximumHeight(200)
+        txt.setStyleSheet(_EDITABLE_STYLE if prop.editable else _READONLY_STYLE)
+        if prop.editable:
+            txt.textChanged.connect(lambda name=prop.name, widget=txt: self.property_changed.emit(self._object_id, name, widget.toPlainText()))
+        return txt
+
+    def _create_string_editor(self, prop: PropertyPresentation) -> QLineEdit:
+        ln = QLineEdit(str(prop.value), self)
+        ln.setReadOnly(not prop.editable)
+        ln.setEnabled(prop.editable)
+        ln.setStyleSheet(_EDITABLE_STYLE if prop.editable else _READONLY_STYLE)
+        if prop.editable:
+            ln.editingFinished.connect(
+                lambda name=prop.name, widget=ln: self.property_changed.emit(self._object_id, name, widget.text())
+            )
+        return ln
 
     def _create_statistic(self, stat: StatisticPresentation) -> QWidget:
         container = QWidget()
@@ -170,9 +225,12 @@ class Inspector(QWidget):
         btn = QPushButton(f"{action.icon} {action.label}")
         btn.setFont(font(10))
         btn.setToolTip(action.description)
-        btn.clicked.connect(lambda _checked, name=action.name: self.action_triggered.emit(self._object_id, name))
+        btn.setEnabled(action.enabled)
+        if action.enabled:
+            btn.clicked.connect(lambda _checked, name=action.name: self.action_triggered.emit(self._object_id, name))
         btn.setStyleSheet(
             f"QPushButton {{ background-color: {C['btn_bg']}; color: {C['text_primary']}; border: 1px solid {C['border']}; border-radius: 4px; padding: 6px 12px; }}"
             f"QPushButton:hover {{ background-color: {C['btn_hover']}; }}"
+            f"QPushButton:disabled {{ background-color: {C['bg_input']}; color: {C['text_muted']}; border: 1px solid {C['border']}; }}"
         )
         return btn

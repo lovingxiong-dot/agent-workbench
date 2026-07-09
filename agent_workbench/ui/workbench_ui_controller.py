@@ -262,21 +262,37 @@ class WorkbenchUIController(UIController):
         workbench.navigator.add_requested.connect(self._on_add_requested)
 
     def _refresh_navigator(self) -> None:
-        """注册固定功能 Tab 与 Settings 分类到 Navigator。"""
+        """从 ModulePresentation 列表重建 Navigator，移除硬编码 tab 注册。"""
         if self._host is None:
             return
         nav = self._host.workbench.navigator
-        nav.clear_modules()
         self._presentations.clear()
 
-        nav.register_functional_tab("chat", "Chat", "💬")
-        nav.register_functional_tab("skill", "Skills", "🛠")
-        nav.register_functional_tab("tool", "Tools", "🔧")
+        presentations = self._build_navigator_presentations()
+        nav.load_presentations(presentations)
 
+    def _build_navigator_presentations(self) -> list[ModulePresentation]:
+        """构造 Navigator 所需的 ModulePresentation 列表。
+
+        包含固定功能 Workspace 与 Settings 配置分类；新增 Workspace 或分类时
+        只需修改此列表，无需改动 Navigator。
+        """
+        presentations: list[ModulePresentation] = [
+            ModulePresentation(id="chat", type="workspace", name="Chat", icon="💬", category="workspace"),
+            ModulePresentation(id="skill", type="workspace", name="Skills", icon="🛠", category="workspace"),
+            ModulePresentation(id="tool", type="workspace", name="Tools", icon="🔧", category="workspace"),
+        ]
         for category in self._config_manager.list_categories():
-            nav.register_settings_category(
-                category.category_id, category.title, category.icon
+            presentations.append(
+                ModulePresentation(
+                    id=category.category_id,
+                    type="settings",
+                    name=category.title,
+                    icon=category.icon,
+                    category="settings",
+                )
             )
+        return presentations
 
     def _on_add_requested(self, category_id: str) -> None:
         """Settings 分类 '+' 按钮 → 弹出配置对话框并追加到对应配置路径。"""

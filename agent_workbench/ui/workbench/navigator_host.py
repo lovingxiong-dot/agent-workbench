@@ -45,6 +45,12 @@ class NavigatorHost(WorkbenchAreaHost):
         if isinstance(content, Navigator):
             content.register_module(presentation)
 
+    def load_presentations(self, presentations: list[ModulePresentation]) -> None:
+        """从 ModulePresentation 列表重建导航。"""
+        content = self.content
+        if isinstance(content, Navigator):
+            content.load_presentations(presentations)
+
     def clear_modules(self) -> None:
         """清空所有模块。"""
         content = self.content
