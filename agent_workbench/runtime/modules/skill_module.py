@@ -9,13 +9,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Dict, List
 
-from agent_workbench.runtime.config_store import ConfigStore
-from agent_workbench.runtime.metadata import (
-    ActionMetadata,
-    ModuleMetadata,
-    PropertyMetadata,
-    StatisticMetadata,
+from agent_workbench.metadata import (
+    MetadataAction,
+    MetadataDefinition,
+    MetadataProperty,
+    MetadataStatistics,
+    ValueType,
 )
+from agent_workbench.runtime.config_store import ConfigStore
 from agent_workbench.runtime.modules.base import BaseRuntimeModule
 
 if TYPE_CHECKING:
@@ -49,28 +50,29 @@ class SkillModule(BaseRuntimeModule):
         """按名称获取 skill 配置。"""
         return self._skills.get(name)
 
-    def metadata(self) -> ModuleMetadata:
+    def metadata(self) -> MetadataDefinition:
         """返回 Skill Capability Metadata。"""
         enabled_count = sum(1 for s in self._skills.values() if s.get("enabled", True))
-        return ModuleMetadata(
+        return MetadataDefinition(
             id="skill",
             type="skill",
             name="Skill",
             description="管理 Skill 注册表。",
             icon="puzzle-piece",
             properties=[
-                PropertyMetadata(
-                    name="registry",
-                    label="Registry",
-                    type="json",
-                    value=self.list_skills(),
+                MetadataProperty(
+                    id="registry",
+                    name="Registry",
+                    description="已注册的 Skill 列表。",
+                    value_type=ValueType.LIST,
+                    current_value=self.list_skills(),
                 ),
             ],
             statistics=[
-                StatisticMetadata(name="total", label="Total Skills", value=len(self._skills)),
-                StatisticMetadata(name="enabled", label="Enabled", value=enabled_count),
+                MetadataStatistics(id="total", name="Total Skills", value=len(self._skills), unit="count"),
+                MetadataStatistics(id="enabled", name="Enabled", value=enabled_count, unit="count"),
             ],
             actions=[
-                ActionMetadata(name="reload", label="Reload Skills", icon="refresh"),
+                MetadataAction(id="reload", label="Reload Skills", icon="refresh"),
             ],
         )

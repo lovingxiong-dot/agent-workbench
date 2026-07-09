@@ -21,6 +21,11 @@ from agent_workbench.metadata.model import (
     MetadataProperty,
     MetadataStatistics,
 )
+from agent_workbench.metadata.resource import (
+    ResourceConnection,
+    ResourceDefinition,
+    ResourceType,
+)
 from agent_workbench.metadata.types import MetadataType, ValueType
 
 __all__ = [
@@ -30,4 +35,7 @@ __all__ = [
     "MetadataStatistics",
     "ValueType",
     "MetadataType",
+    "ResourceDefinition",
+    "ResourceConnection",
+    "ResourceType",
 ]

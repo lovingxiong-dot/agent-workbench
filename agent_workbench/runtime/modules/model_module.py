@@ -9,13 +9,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Dict, List
 
-from agent_workbench.runtime.config_store import ConfigStore
-from agent_workbench.runtime.metadata import (
-    ActionMetadata,
-    ModuleMetadata,
-    PropertyMetadata,
-    StatisticMetadata,
+from agent_workbench.metadata import (
+    MetadataAction,
+    MetadataDefinition,
+    MetadataProperty,
+    MetadataStatistics,
+    ValueType,
 )
+from agent_workbench.runtime.config_store import ConfigStore
 from agent_workbench.runtime.modules.base import BaseRuntimeModule
 from agent_workbench.services.echo_provider import EchoProvider
 from agent_workbench.services.model_provider import ModelProvider
@@ -102,41 +103,44 @@ class ModelModule(BaseRuntimeModule):
             return OpenAIProvider()
         return None
 
-    def metadata(self) -> ModuleMetadata:
+    def metadata(self) -> MetadataDefinition:
         """返回 Model Capability Metadata。"""
         provider_names = list(self._providers.keys())
-        return ModuleMetadata(
+        return MetadataDefinition(
             id="model",
             type="model",
             name="Model",
             description="管理模型 Provider 与采样参数。",
             icon="cpu-chip",
             properties=[
-                PropertyMetadata(
-                    name="default_provider",
-                    label="Default Provider",
-                    type="select",
-                    value=self._default_provider,
+                MetadataProperty(
+                    id="default_provider",
+                    name="Default Provider",
+                    description="当前默认使用的模型 Provider。",
+                    value_type=ValueType.ENUM,
+                    current_value=self._default_provider,
                     options=provider_names,
                 ),
-                PropertyMetadata(
-                    name="sampling.temperature",
-                    label="Temperature",
-                    type="number",
-                    value=self._sampling.get("temperature", 0.7),
+                MetadataProperty(
+                    id="sampling.temperature",
+                    name="Temperature",
+                    description="采样温度，控制输出随机性。",
+                    value_type=ValueType.FLOAT,
+                    current_value=self._sampling.get("temperature", 0.7),
                 ),
-                PropertyMetadata(
-                    name="sampling.max_tokens",
-                    label="Max Tokens",
-                    type="number",
-                    value=self._sampling.get("max_tokens", 2048),
+                MetadataProperty(
+                    id="sampling.max_tokens",
+                    name="Max Tokens",
+                    description="单次生成最大 Token 数。",
+                    value_type=ValueType.INT,
+                    current_value=self._sampling.get("max_tokens", 2048),
                 ),
             ],
             statistics=[
-                StatisticMetadata(name="providers", label="Providers", value=len(provider_names)),
-                StatisticMetadata(name="active_provider", label="Active", value=self._default_provider),
+                MetadataStatistics(id="providers", name="Providers", value=len(provider_names), unit="count"),
+                MetadataStatistics(id="active_provider", name="Active", value=self._default_provider, unit="name"),
             ],
             actions=[
-                ActionMetadata(name="validate", label="Validate Provider", icon="check"),
+                MetadataAction(id="validate", label="Validate Provider", icon="check"),
             ],
         )

@@ -8,13 +8,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Dict, List
 
-from agent_workbench.runtime.config_store import ConfigStore
-from agent_workbench.runtime.metadata import (
-    ActionMetadata,
-    ModuleMetadata,
-    PropertyMetadata,
-    StatisticMetadata,
+from agent_workbench.metadata import (
+    MetadataAction,
+    MetadataDefinition,
+    MetadataProperty,
+    MetadataStatistics,
+    ValueType,
 )
+from agent_workbench.runtime.config_store import ConfigStore
 from agent_workbench.runtime.modules.base import BaseRuntimeModule
 
 if TYPE_CHECKING:
@@ -48,28 +49,29 @@ class WorkflowModule(BaseRuntimeModule):
         """按名称获取 workflow 模板。"""
         return self._templates.get(name)
 
-    def metadata(self) -> ModuleMetadata:
+    def metadata(self) -> MetadataDefinition:
         """返回 Workflow Capability Metadata。"""
         enabled_count = sum(1 for t in self._templates.values() if t.get("enabled", True))
-        return ModuleMetadata(
+        return MetadataDefinition(
             id="workflow",
             type="workflow",
             name="Workflow",
             description="管理 Workflow 模板。",
             icon="arrows-right-left",
             properties=[
-                PropertyMetadata(
-                    name="templates",
-                    label="Templates",
-                    type="json",
-                    value=self.list_templates(),
+                MetadataProperty(
+                    id="templates",
+                    name="Templates",
+                    description="已注册的 Workflow 模板列表。",
+                    value_type=ValueType.LIST,
+                    current_value=self.list_templates(),
                 ),
             ],
             statistics=[
-                StatisticMetadata(name="total", label="Total Workflows", value=len(self._templates)),
-                StatisticMetadata(name="enabled", label="Enabled", value=enabled_count),
+                MetadataStatistics(id="total", name="Total Workflows", value=len(self._templates), unit="count"),
+                MetadataStatistics(id="enabled", name="Enabled", value=enabled_count, unit="count"),
             ],
             actions=[
-                ActionMetadata(name="reload", label="Reload Workflows", icon="refresh"),
+                MetadataAction(id="reload", label="Reload Workflows", icon="refresh"),
             ],
         )

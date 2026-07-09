@@ -8,13 +8,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Dict, List
 
-from agent_workbench.runtime.config_store import ConfigStore
-from agent_workbench.runtime.metadata import (
-    ActionMetadata,
-    ModuleMetadata,
-    PropertyMetadata,
-    StatisticMetadata,
+from agent_workbench.metadata import (
+    MetadataAction,
+    MetadataDefinition,
+    MetadataProperty,
+    MetadataStatistics,
+    ValueType,
 )
+from agent_workbench.runtime.config_store import ConfigStore
 from agent_workbench.runtime.modules.base import BaseRuntimeModule
 
 if TYPE_CHECKING:
@@ -43,28 +44,29 @@ class McpModule(BaseRuntimeModule):
         """返回当前 MCP server 配置列表。"""
         return list(self._servers)
 
-    def metadata(self) -> ModuleMetadata:
+    def metadata(self) -> MetadataDefinition:
         """返回 MCP Capability Metadata。"""
         enabled_count = sum(1 for s in self._servers if s.get("enabled", True))
-        return ModuleMetadata(
+        return MetadataDefinition(
             id="mcp",
             type="mcp",
             name="MCP",
             description="管理 MCP Server 配置。",
             icon="plug",
             properties=[
-                PropertyMetadata(
-                    name="servers",
-                    label="Servers",
-                    type="json",
-                    value=self._servers,
+                MetadataProperty(
+                    id="servers",
+                    name="Servers",
+                    description="已注册的 MCP Server 列表。",
+                    value_type=ValueType.LIST,
+                    current_value=self._servers,
                 ),
             ],
             statistics=[
-                StatisticMetadata(name="total", label="Total Servers", value=len(self._servers)),
-                StatisticMetadata(name="enabled", label="Enabled", value=enabled_count),
+                MetadataStatistics(id="total", name="Total Servers", value=len(self._servers), unit="count"),
+                MetadataStatistics(id="enabled", name="Enabled", value=enabled_count, unit="count"),
             ],
             actions=[
-                ActionMetadata(name="reload", label="Reload Servers", icon="refresh"),
+                MetadataAction(id="reload", label="Reload Servers", icon="refresh"),
             ],
         )

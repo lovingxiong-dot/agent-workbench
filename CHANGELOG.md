@@ -1,5 +1,33 @@
 # Changelog
 
+## v6.11.0-beta.3 (2026-07-09) — Resource Metadata
+
+> **里程碑语义**：A 线冻结式推进。将 Model / MCP / Skill / Prompt / Memory / Workflow 六个 Runtime Module 的 `metadata()` 统一迁移到 `MetadataDefinition`，使用 `ValueType` 描述属性类型，消除旧 `ModuleMetadata` 在核心资源模块中的使用。新增 `agent_workbench/metadata/resource.py`，定义 `ResourceType`、`ResourceConnection`、`ResourceDefinition`，建立 Resource（System / Python Env / IDE / CLI / Agent CLI）的跨层描述契约，明确 Capability（What I can do）与 Resource（What I can use）的语义边界。
+
+### Added
+- 新增 `agent_workbench/metadata/resource.py`：
+  - `ResourceType` 枚举：SYSTEM / PYTHON_ENV / IDE / CLI / AGENT_CLI。
+  - `ResourceConnection`：描述 Resource 的连接或定位信息（target / command / args / env / working_dir）。
+  - `ResourceDefinition`：Resource 的静态描述，复用 `MetadataProperty` / `MetadataStatistics` / `MetadataAction` 原语。
+- 新增 `tests/runtime/modules/test_module_metadata.py`：覆盖 Model / MCP / Skill / Prompt / Memory / Workflow 六个模块的 `MetadataDefinition` 返回类型、属性类型、统计字段、操作字段，以及 Resource Metadata 基础创建。
+
+### Changed
+- `agent_workbench/runtime/modules/model_module.py`：`metadata()` 返回 `MetadataDefinition`；属性使用 `ValueType.ENUM / FLOAT / INT`。
+- `agent_workbench/runtime/modules/mcp_module.py`：`metadata()` 返回 `MetadataDefinition`；`servers` 属性使用 `ValueType.LIST`。
+- `agent_workbench/runtime/modules/skill_module.py`：`metadata()` 返回 `MetadataDefinition`；`registry` 属性使用 `ValueType.LIST`。
+- `agent_workbench/runtime/modules/prompt_module.py`：`metadata()` 返回 `MetadataDefinition`；`renderer` 属性使用 `ValueType.ENUM`。
+- `agent_workbench/runtime/modules/memory_module.py`：`metadata()` 返回 `MetadataDefinition`；属性使用 `ValueType.BOOL / ENUM / PATH / INT`。
+- `agent_workbench/runtime/modules/workflow_module.py`：`metadata()` 返回 `MetadataDefinition`；`templates` 属性使用 `ValueType.LIST`。
+- `agent_workbench/metadata/__init__.py`：导出 `ResourceDefinition`、`ResourceConnection`、`ResourceType`。
+
+### Tests
+- `pytest tests/`：**648/648 passed**（新增 8 个模块 Metadata 测试；收尾 QApplication 销毁阶段出现 Windows 已知退出码 `3221226505`，不影响断言结果）。
+
+### Next Phase
+- **Commit 5**：Provider Registry + 多模型接入（OpenAI / Claude / Gemini / Kimi / Qwen / DeepSeek）。
+
+---
+
 ## v6.11.0-beta.2 (2026-07-09) — Streaming UI 对话闭环
 
 > **里程碑语义**：第一条真实 LLM 链路升级为流式输出，Workbench Chat Workspace 可实时显示 Token；修复流式输出结束后重复生成完整 AI 消息的问题，建立 `AI_CHUNK → sign_stream_chunk`、`AI_END / ENGINE_FAILED → sign_stream_end` 的确定性事件映射。新增 `tests/ui/test_streaming_chat_loop.py` 覆盖流式事件映射、非流式路径回退、错误状态唯一传播。

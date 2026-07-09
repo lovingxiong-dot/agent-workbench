@@ -9,13 +9,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Dict, List
 
-from agent_workbench.runtime.config_store import ConfigStore
-from agent_workbench.runtime.metadata import (
-    ActionMetadata,
-    ModuleMetadata,
-    PropertyMetadata,
-    StatisticMetadata,
+from agent_workbench.metadata import (
+    MetadataAction,
+    MetadataDefinition,
+    MetadataProperty,
+    MetadataStatistics,
+    ValueType,
 )
+from agent_workbench.runtime.config_store import ConfigStore
 from agent_workbench.runtime.modules.base import BaseRuntimeModule
 from agent_workbench.services.prompt_renderer import PromptRenderer
 from agent_workbench.services.python_renderer import PythonRenderer
@@ -61,28 +62,29 @@ class PromptModule(BaseRuntimeModule):
         """返回所有模板。"""
         return list(self._templates.values())
 
-    def metadata(self) -> ModuleMetadata:
+    def metadata(self) -> MetadataDefinition:
         """返回 Prompt Capability Metadata。"""
         templates = self.list_templates()
-        return ModuleMetadata(
+        return MetadataDefinition(
             id="prompt",
             type="prompt",
             name="Prompt",
             description="管理 Prompt 模板与渲染器。",
             icon="document-text",
             properties=[
-                PropertyMetadata(
-                    name="renderer",
-                    label="Renderer",
-                    type="select",
-                    value="python",
+                MetadataProperty(
+                    id="renderer",
+                    name="Renderer",
+                    description="当前使用的 Prompt 渲染器。",
+                    value_type=ValueType.ENUM,
+                    current_value="python",
                     options=["python"],
                 ),
             ],
             statistics=[
-                StatisticMetadata(name="templates_count", label="Templates", value=len(templates)),
+                MetadataStatistics(id="templates_count", name="Templates", value=len(templates), unit="count"),
             ],
             actions=[
-                ActionMetadata(name="reload", label="Reload Templates", icon="refresh"),
+                MetadataAction(id="reload", label="Reload Templates", icon="refresh"),
             ],
         )

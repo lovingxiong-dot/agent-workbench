@@ -9,13 +9,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Dict
 
-from agent_workbench.runtime.config_store import ConfigStore
-from agent_workbench.runtime.metadata import (
-    ActionMetadata,
-    ModuleMetadata,
-    PropertyMetadata,
-    StatisticMetadata,
+from agent_workbench.metadata import (
+    MetadataAction,
+    MetadataDefinition,
+    MetadataProperty,
+    MetadataStatistics,
+    ValueType,
 )
+from agent_workbench.runtime.config_store import ConfigStore
 from agent_workbench.runtime.modules.base import BaseRuntimeModule
 from agent_workbench.services.memory_service import MemoryService
 
@@ -97,7 +98,7 @@ class MemoryModule(BaseRuntimeModule):
             self._service.close()
             self._service = None
 
-    def metadata(self) -> ModuleMetadata:
+    def metadata(self) -> MetadataDefinition:
         """返回 Memory Capability Metadata。"""
         db_path = self._config.get("sqlite", {}).get("path", "")
         records = 0
@@ -105,46 +106,50 @@ class MemoryModule(BaseRuntimeModule):
         if self._service is not None:
             records = self._service.count()
             namespaces = self._service.namespaces()
-        return ModuleMetadata(
+        return MetadataDefinition(
             id="memory",
             type="memory",
             name="Memory",
             description="管理 Memory Provider 与命名空间。",
             icon="database",
             properties=[
-                PropertyMetadata(
-                    name="enabled",
-                    label="Memory Enabled",
-                    type="boolean",
-                    value=self._enabled,
+                MetadataProperty(
+                    id="enabled",
+                    name="Memory Enabled",
+                    description="是否启用 Memory。",
+                    value_type=ValueType.BOOL,
+                    current_value=self._enabled,
                 ),
-                PropertyMetadata(
-                    name="provider",
-                    label="Provider",
-                    type="select",
-                    value=self._config.get("provider", "sqlite"),
+                MetadataProperty(
+                    id="provider",
+                    name="Provider",
+                    description="Memory Provider 类型。",
+                    value_type=ValueType.ENUM,
+                    current_value=self._config.get("provider", "sqlite"),
                     options=["sqlite"],
                 ),
-                PropertyMetadata(
-                    name="sqlite.path",
-                    label="SQLite Path",
-                    type="string",
-                    value=db_path,
+                MetadataProperty(
+                    id="sqlite.path",
+                    name="SQLite Path",
+                    description="SQLite 数据库路径。",
+                    value_type=ValueType.PATH,
+                    current_value=db_path,
                 ),
-                PropertyMetadata(
-                    name="max_records",
-                    label="Max Records",
-                    type="number",
-                    value=self._config.get("max_records", 10000),
+                MetadataProperty(
+                    id="max_records",
+                    name="Max Records",
+                    description="最大记录数限制。",
+                    value_type=ValueType.INT,
+                    current_value=self._config.get("max_records", 10000),
                 ),
             ],
             statistics=[
-                StatisticMetadata(name="records", label="Records", value=records),
-                StatisticMetadata(name="namespaces", label="Namespaces", value=namespaces),
-                StatisticMetadata(name="status", label="Status", value="active" if self._enabled and self._service else "inactive"),
+                MetadataStatistics(id="records", name="Records", value=records, unit="count"),
+                MetadataStatistics(id="namespaces", name="Namespaces", value=namespaces, unit="list"),
+                MetadataStatistics(id="status", name="Status", value="active" if self._enabled and self._service else "inactive", unit="state"),
             ],
             actions=[
-                ActionMetadata(name="clear", label="Clear Memory", icon="trash"),
-                ActionMetadata(name="reload", label="Reload", icon="refresh"),
+                MetadataAction(id="clear", label="Clear Memory", icon="trash"),
+                MetadataAction(id="reload", label="Reload", icon="refresh"),
             ],
         )
