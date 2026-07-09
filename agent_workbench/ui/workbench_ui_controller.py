@@ -442,15 +442,33 @@ class WorkbenchUIController(UIController):
             self._ai_parts.append(text)
         self.sign_stream_chunk.emit(text)
 
+    def _finalize_stream(self, error: str | None = None) -> None:
+        """原子化结束当前流式输出；确保 UI 终止信号只发射一次。"""
+        with self._lock:
+            if not self._streaming or getattr(self, "_stream_finalized", False):
+                return
+            self._stream_finalized = True
+            self._streaming = False
+            self._current_task_id = None
+            self._current_session_id = None
+            self._ai_parts = []
+        if error:
+            self.sign_chat_ai.emit(error, "error")
+        self.sign_stream_end.emit()
+        self.sign_set_streaming.emit(False)
+
     def _on_ai_end(self, event: RuntimeEvent) -> None:
-        """Runtime AI_END 事件占位；最终清理由发送线程完成。"""
+        """Runtime AI_END 事件 → 结束当前流式输出。"""
         if event.task_id != self._current_task_id:
             return
+        self._finalize_stream()
 
     def _on_engine_failed(self, event: RuntimeEvent) -> None:
-        """Runtime ENGINE_FAILED 事件占位；发送线程会统一处理失败状态。"""
+        """Runtime ENGINE_FAILED 事件 → 显示错误并结束流式输出。"""
         if event.task_id != self._current_task_id:
             return
+        error = event.payload.get("error", "生成失败")
+        self._finalize_stream(f"[错误: {error}]")
 
     def on_send_msg(self, text: str) -> None:
         """用户发送消息：持久化用户消息并提交到 WorkbenchController 在后台线程执行。"""
@@ -470,11 +488,13 @@ class WorkbenchUIController(UIController):
             self._current_task_id = task_id
             self._current_session_id = sid
             self._ai_parts = []
+            self._stream_finalized = False
 
         self.sign_chat_user.emit(text)
         self.sign_set_streaming.emit(True)
 
         def _run() -> None:
+            error_message: str | None = None
             try:
                 final_ctx = self._workbench.chat(text, session_id=sid, task_id=task_id)
                 response = ""
@@ -483,21 +503,20 @@ class WorkbenchUIController(UIController):
                         response = msg.content
                         break
                 if final_ctx.status.value == "failed" or not response:
-                    self.sign_chat_ai.emit("[生成失败]", "error")
+                    error_message = "[生成失败]"
                 else:
                     store_ctx = self._new_ctx(sid)
                     store_ctx.add_message("assistant", response)
                     self._chat.store(store_ctx)
+                    with self._lock:
+                        finalized = self._stream_finalized
+                    if not finalized:
+                        # 非流式路径（如 CHAT 模式）直接显示完整回复
+                        self.sign_chat_ai.emit(response, "")
             except Exception as exc:
-                self.sign_chat_ai.emit(f"[错误: {exc}]", "error")
+                error_message = f"[错误: {exc}]"
             finally:
-                self.sign_stream_end.emit()
-                self.sign_set_streaming.emit(False)
-                with self._lock:
-                    self._streaming = False
-                    self._current_task_id = None
-                    self._current_session_id = None
-                    self._ai_parts = []
+                self._finalize_stream(error_message)
 
         self._workbench_thread = threading.Thread(target=_run, daemon=True)
         self._workbench_thread.start()

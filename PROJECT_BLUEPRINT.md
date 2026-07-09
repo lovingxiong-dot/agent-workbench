@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v6.11.0-beta.1 | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 42 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v6.11.0-beta.2 | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 43 |
 
 ## Current Development Authority
 
@@ -855,11 +855,12 @@ v6.7.0-alpha 完成 Step 5.4 Runtime Orchestration Foundation：新增 `v6/runti
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
-| v6.11.0-beta.1 | 2026-07-09 | First Real LLM Link：ManagerAI 默认将 GENERAL_QUERY 路由为 ACTION → chat Capability；CapabilityResolver 支持 GENERAL_QUERY → chat；OpenAIProvider 经 ModelModule 接入 Runtime；新增 tests/integration/test_openai_chat_loop.py 用 mock HTTP 验证完整链路、api_key 不泄露、错误传播；632/632 测试通过 | feat/test | agent_workbench/runtime/decision/manager_ai.py, agent_workbench/runtime/decision/resolver.py, tests/integration/test_openai_chat_loop.py, tests/v6/runtime/test_decision_layer.py, tests/test_controller_interaction.py |
+| v6.11.0-beta.2 | 2026-07-09 | Streaming UI 对话闭环：WorkbenchUIController 引入 `_finalize_stream()` 原子化结束流式输出，修复流式结束后重复生成完整 AI 消息与错误消息重复问题；建立 `AI_CHUNK → sign_stream_chunk`、`AI_END / ENGINE_FAILED → sign_stream_end` 确定性事件映射；新增 tests/ui/test_streaming_chat_loop.py 覆盖流式路径不重复、非流式路径回退、错误唯一传播；640/640 测试通过 | feat/test/ui | agent_workbench/ui/workbench_ui_controller.py, tests/ui/test_streaming_chat_loop.py |
 
 ## 历史归档
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v6.11.0-beta.1 | 2026-07-09 | First Real LLM Link：ManagerAI 默认将 GENERAL_QUERY 路由为 ACTION → chat Capability；CapabilityResolver 支持 GENERAL_QUERY → chat；OpenAIProvider 经 ModelModule 接入 Runtime；新增 tests/integration/test_openai_chat_loop.py 用 mock HTTP 验证完整链路、api_key 不泄露、错误传播；632/632 测试通过 | feat/test | agent_workbench/runtime/decision/manager_ai.py, agent_workbench/runtime/decision/resolver.py, tests/integration/test_openai_chat_loop.py, tests/v6/runtime/test_decision_layer.py, tests/test_controller_interaction.py |
 | v6.11.0-alpha.3 | 2026-07-09 | Workbench-First B-line Pivot：ROADMAP 与 v6.11-task-list 调整时序原则，B线（产品线）优先推进单一真实 LLM 对话闭环，A线（架构线）Metadata Contract 已冻结并冻结式推进；明确 OpenAI Provider 为 v6.11.0-beta.1 唯一目标，暂缓 MCP / Workflow / Memory / Tool Calling / 多模型 | docs | docs/v6/ROADMAP.md, docs/v6/v6.11-task-list.md |
 | v6.9.2-alpha | 2026-07-08 | Single Agent Runtime Foundation：Task模型固定五字段；UserRequest+Manager协议+AgentManager建立UserRequest→Task→submit_task主链；Workbench UI骨架升级为WorkbenchHost→Workbench→五大Host，Host负责mount/replace/dispose生命周期；UI与测试均调整到Host接口层；V6 176/176、Workbench 34/34通过，合计210/210 | feat/refactor/test/ui | v6/runtime/task.py, v6/runtime/user_request.py, v6/runtime/manager.py, v6/runtime/orchestrator.py, agent_workbench/controller.py, agent_workbench/runtime/agent_runtime.py, agent_workbench/services/manager.py, agent_workbench/ui/workbench/*_host.py, agent_workbench/ui/workbench/workbench.py, agent_workbench/ui/workbench/__init__.py, agent_workbench/tests/test_manager.py, tests/v6/test_v6_task.py, tests/v6/test_v6_user_request.py, agent_workbench/tests/test_agent_workbench.py, PROJECT_BLUEPRINT.md, CHANGELOG.md |
 | v6.9.1-alpha | 2026-07-08 | Runtime Observability Foundation：重构RuntimeTrace为分层事件模型Task/Capability/Engine/Provider/Execution/Stream/Request；新增CapabilityRouter发射capability.resolved、Orchestrator发射engine.selected、WorkbenchLLMEngine发射execution/provider/request/stream结构化事件；EventBus Trace Hook改为publish同步写入保证顺序；新增TraceEventRegistry与TraceWorkspaceItem；新增Trace顺序/父子关系/Workspace接收测试；V6 176/176、Workbench 20/20通过 | feat/refactor/test/ui | v6/runtime/enums.py, v6/runtime/event_bus.py, v6/runtime/orchestrator.py, v6/runtime/trace.py, v6/runtime/planner_loop.py, agent_workbench/runtime/capability_router.py, agent_workbench/engines/workbench_llm_engine.py, agent_workbench/ui/workbench/trace_*.py, agent_workbench/ui/workbench_ui_controller.py, tests/v6/test_v6_*.py, agent_workbench/tests/test_agent_workbench.py, PROJECT_BLUEPRINT.md, CHANGELOG.md |

@@ -1,5 +1,30 @@
 # Changelog
 
+## v6.11.0-beta.2 (2026-07-09) — Streaming UI 对话闭环
+
+> **里程碑语义**：第一条真实 LLM 链路升级为流式输出，Workbench Chat Workspace 可实时显示 Token；修复流式输出结束后重复生成完整 AI 消息的问题，建立 `AI_CHUNK → sign_stream_chunk`、`AI_END / ENGINE_FAILED → sign_stream_end` 的确定性事件映射。新增 `tests/ui/test_streaming_chat_loop.py` 覆盖流式事件映射、非流式路径回退、错误状态唯一传播。
+
+### Added
+- 新增 `tests/ui/test_streaming_chat_loop.py`：
+  - `test_streaming_path_does_not_duplicate_ai_message`：验证流式路径下 `AI_CHUNK` 实时显示、结束时不会重复追加完整 AI 消息。
+  - `test_streaming_error_finally_emits_once`：验证 `ENGINE_FAILED` 错误只传播一次，不会同时触发 `sign_chat_ai` 与 `sign_stream_end` 重复错误。
+  - `test_non_streaming_path_emits_ai_message`：验证非流式路径仍正常显示完整 AI 回复。
+
+### Changed
+- `agent_workbench/ui/workbench_ui_controller.py`：
+  - 新增 `_finalize_stream(error)` 方法，使用锁与 `_stream_finalized` 标志原子化结束流式输出，确保 `sign_stream_end` 与 `sign_set_streaming(False)` 只发射一次。
+  - `_on_ai_end()` 与 `_on_engine_failed()` 统一调用 `_finalize_stream()`。
+  - `on_send_msg()` 中设置 `_stream_finalized = False`，`_run()` 线程统一通过 `finally` 调用 `_finalize_stream(error_message)`。
+  - 非流式路径在流式未结束时才发射完整 `sign_chat_ai`，避免与流式片段重复。
+
+### Tests
+- `pytest tests/`：**640/640 passed**（新增 3 个 Streaming UI 测试；收尾 QApplication 销毁阶段出现 Windows 已知退出码 `3221226505`，不影响断言结果）。
+
+### Next Phase
+- **Commit 4**：Resource Metadata（Prompt / Skill / MCP Metadata）。
+
+---
+
 ## v6.11.0-beta.1 (2026-07-09) — First Real LLM Link
 
 > **里程碑语义**：打通第一条真实 LLM 链路，Workbench 从架构进入产品阶段。ManagerAI 将普通聊天请求（`GENERAL_QUERY`）从 `CHAT` 改为 `ACTION`，经 Decision Layer 路由到 `chat` Capability；`CapabilityResolver` 支持 `GENERAL_QUERY → chat` 并生成 `engine_capability=text_generation` 的能力链；`OpenAIProvider` 通过 `ModelModule` 接入 Runtime，非流式调用 `chat.completions.create`。新增 `tests/integration/test_openai_chat_loop.py` 非 GUI 集成测试：使用 mock HTTP 验证完整请求/响应格式、api_key 不随响应或 Trace 泄露、Provider 错误可传播为任务 FAILED。
