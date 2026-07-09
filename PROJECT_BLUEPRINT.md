@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v6.12.0-beta.8 | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 56 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v6.12.0-beta.9 | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 57 |
 
 ## Current Development Authority
 
@@ -24,6 +24,14 @@
 | Rule | Do not modify `v5-dev`. Framework Core (`v6-core`) only accepts bug fixes. Service work goes to `v6-service`. Agent work goes to `v6-agent`. |
 
 See also [`PROJECT_LINEAGE.md`](./PROJECT_LINEAGE.md) for the complete V5 / V6 identity map.
+
+## Product Contract — Workbench OS 1.0
+
+> 产品契约已冻结于 [`docs/v6/product-contract.md`](./docs/v6/product-contract.md)。
+>
+> 该文档以产品词典风格定义 Workbench OS 1.0 的核心概念，是 Qt / Web / CLI / Remote 所有前端与后端必须共同遵守的产品定义。
+>
+> 新增概念或更改核心命名前，必须先更新 Product Contract 并通过架构评审。
 
 ## 产品定位
 

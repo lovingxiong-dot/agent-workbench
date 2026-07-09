@@ -1,5 +1,23 @@
 # Changelog
 
+## v6.12.0-beta.9 (2026-07-10) — Product Contract Freeze
+
+> **里程碑语义**：Workbench OS 1.0 的产品契约正式冻结。新增 `docs/v6/product-contract.md`，以产品词典风格定义 Workbench OS、Project、Conversation、Package、Workspace、Navigator、Inspector、CommandBar、StatusBar、Agent、Capability、Runtime、Metadata、Presentation、ViewSchema、Workbench、About、Settings 等核心概念，明确每个概念是什么、保存什么、职责边界、不属于什么。本契约是 Qt / Web / CLI / Remote 所有前端与后端必须共同遵守的产品定义，与 Runtime Contract 同等重要。
+
+### Added
+- `docs/v6/product-contract.md`：Workbench OS 1.0 Product Contract。
+  - 产品契约，不是实现文档。
+  - 每个概念包含「是什么」「保存什么」「职责边界」「不属于什么」。
+  - 明确 Product Contract 在 `v6.12.0-rc.1` 之前冻结，核心字段只增不减，概念名称不再更改。
+
+### Changed
+- `PROJECT_BLUEPRINT.md`：增加 Product Contract 引用，版本号更新为 `v6.12.0-beta.9`。
+
+### Next Phase
+- **Workbench Polish 第 2 项：Welcome 首页**。
+
+---
+
 ## v6.12.0-beta.8 (2026-07-10) — Starter Agent Runtime（Commit 12.4）
 
 > **里程碑语义**：Package Agent 的 Execute Action 第一次形成完整闭环。点击 Starter Agent 的 Execute 后，`WorkbenchUIController` 识别 Package Agent 动作，调用 `WorkbenchController.execute_agent_action()`，由 `PackageExecutor` 执行并更新 `execution_count` 统计；UI 通过重新构建 `ModulePresentation` 刷新 Inspector / StatusBar，实现 `Execute Action → Controller/Runtime → Binding → Status` 闭环。
