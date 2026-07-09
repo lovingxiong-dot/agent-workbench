@@ -1,5 +1,40 @@
 # Changelog
 
+## v6.12.0-beta.4 (2026-07-10) — ViewComponentRegistry 契约层
+
+> **里程碑语义**：Commit 10 建立 View 层组件注册与查找的最小契约。`ViewComponentRegistry` 只负责「找得到」`ViewComponentDefinition`，不负责创建任何 Qt 控件；`ViewSchemaRenderer` 改为以 `render(component_id)` 为入口，按 `toolbar` / `status_bar` / `inspector` / `workspace` 分发渲染。Terminal / Editor / Monaco / Chart / Graph / Dock / Tree / Split 等明确禁止进入 Registry，它们属于 Builtin Component。这一层是 Commit 12 Agent Package 的基础设施铺垫。
+
+### Added
+- `agent_workbench/ui/workbench/view_component.py`：定义 `ViewComponentDefinition`，仅含 `id`、`renderer`、`supported_schema`、`supported_binding`、`default_size` 五个字段。
+- `agent_workbench/ui/workbench/view_component_registry.py`：实现 `ViewComponentRegistry`，仅暴露 `register` / `unregister` / `resolve` / `list` 四个接口。
+- `agent_workbench/ui/workbench/view_schema_renderer.py`：
+  - 构造函数新增 `component_registry` 参数。
+  - 新增 `render_component(component_id, schema, presentation)` 入口，按组件 ID 分发到现有四个区域渲染方法。
+  - `render(schema, presentation)` 内部改为遍历内置组件 ID 逐个分发。
+- `tests/ui/test_view_component_registry.py`：6 个非 GUI 单元测试，覆盖 Registry 四个接口与 Renderer 组件分发。
+
+### Tests
+- `pytest tests/`：**747/747 passed**（新增 6 个 ViewComponent 测试；收尾 Qt 退出码 `3221226505` 为 Windows 已知现象，不影响断言结果）。
+
+### Architecture
+```text
+ViewComponentRegistry
+         │
+         ▼
+ViewComponentDefinition  (id + renderer + schema/binding/size)
+         │
+         ▼
+ViewSchemaRenderer.render_component(component_id)
+         │
+         ▼
+_builtin toolbar / status_bar / inspector / workspace
+```
+
+### Next Phase
+- **Commit 12**：Agent Package + Echo Agent（分水岭：Agent 成为可放置对象）。
+
+---
+
 ## v6.12.0-beta.3 (2026-07-10) — Dynamic UI Binding Layer
 
 > **里程碑语义**：Commit 9 在 ViewSchema 与 Qt Renderer 之间增加 Dynamic UI Binding Layer，实现 Metadata → PresentationModel → ViewSchema → BindingContext → Qt Renderer 的完整数据流。Runtime 状态（status / provider / model / session 等）通过 `BindingProvider` 按 namespace 注册到 `BindingContext`，ViewSchema 以声明式 `BindingSource` 路径引用，Renderer 在渲染时动态解析。UI 不再直接访问 Runtime，新增状态项只需在 Schema 中声明绑定路径，无需修改 Renderer。

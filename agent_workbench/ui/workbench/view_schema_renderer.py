@@ -1,12 +1,13 @@
 """agent_workbench/ui/workbench/view_schema_renderer.py — ViewSchema Qt 渲染器。
 
 职责：
-- 接收 ViewSchema + ModulePresentation + BindingContext。
-- 驱动 Workbench 各 Host（ToolBar / StatusBar / Inspector / Workspace）按 Schema 布局。
+- 接收 ViewSchema + ModulePresentation + BindingContext + ViewComponentRegistry。
+- 按组件 ID（toolbar / status_bar / inspector / workspace）分发渲染。
 - 通过 BindingContext 解析 Runtime 数据，Renderer 不直接访问 Runtime 对象。
+- ViewComponentRegistry 只用于「找得到」组件定义，Renderer 负责根据 renderer 标识执行。
 
-注意：Renderer 依赖 Qt，但 ViewSchema / BindingContext 本身不依赖 Qt。未来可为 Web / CLI
-提供不同 Renderer，共用同一套 ViewSchema + Binding。
+注意：Renderer 依赖 Qt，但 ViewSchema / BindingContext / ViewComponent 本身不依赖 Qt。
+未来可为 Web / CLI 提供不同 Renderer，共用同一套 ViewSchema + Binding + Component。
 """
 from __future__ import annotations
 
@@ -17,34 +18,59 @@ from agent_workbench.ui.workbench.presentation import (
     PropertyPresentation,
     StatisticPresentation,
 )
+from agent_workbench.ui.workbench.view_component_registry import ViewComponentRegistry
 from agent_workbench.ui.workbench.view_schema import StatusItemSchema, ToolbarGroupSchema, ViewSchema
 
 
 class ViewSchemaRenderer:
     """将 ViewSchema + ModulePresentation + BindingContext 应用到 Workbench Qt Host。"""
 
-    def __init__(self, workbench_ui, binding_context: BindingContext | None = None) -> None:
+    BUILTIN_COMPONENTS = ("toolbar", "status_bar", "inspector", "workspace")
+
+    def __init__(
+        self,
+        workbench_ui,
+        binding_context: BindingContext | None = None,
+        component_registry: ViewComponentRegistry | None = None,
+    ) -> None:
         """Args:
             workbench_ui: Workbench widget 实例（含 tool_bar / status_bar / inspector / workspace）。
             binding_context: 动态数据绑定上下文；为空时自动创建空上下文。
+            component_registry: ViewComponentRegistry，用于按 ID 查找组件定义。
         """
         self._ui = workbench_ui
         self._binding = binding_context or BindingContext()
+        self._components = component_registry or ViewComponentRegistry()
 
     @property
     def binding_context(self) -> BindingContext:
         return self._binding
 
+    @property
+    def component_registry(self) -> ViewComponentRegistry:
+        return self._components
+
     def render(self, schema: ViewSchema, presentation: ModulePresentation) -> None:
-        """按 Schema 渲染完整 Workbench 布局。"""
-        self._render_toolbar(schema, presentation)
-        self._render_status_bar(schema, presentation)
-        self._render_inspector(schema, presentation)
-        self._render_workspace(schema, presentation)
+        """按 Schema 渲染完整 Workbench 布局（遍历内置组件 ID 分发）。"""
+        for component_id in self.BUILTIN_COMPONENTS:
+            self.render_component(component_id, schema, presentation)
+
+    def render_component(self, component_id: str, schema: ViewSchema, presentation: ModulePresentation) -> None:
+        """按 component_id 渲染单个 Workbench 区域。"""
+        # 未来可通过 component_registry.resolve(component_id) 支持扩展组件。
+        # 当前仅分发内置组件，保持最小改动。
+        if component_id == "toolbar":
+            self._render_toolbar(schema, presentation)
+        elif component_id == "status_bar":
+            self._render_status_bar(schema, presentation)
+        elif component_id == "inspector":
+            self._render_inspector(schema, presentation)
+        elif component_id == "workspace":
+            self._render_workspace(schema, presentation)
 
     def refresh(self, schema: ViewSchema, presentation: ModulePresentation) -> None:
         """仅刷新受 Binding 影响的 UI 区域（StatusBar / Inspector properties）。"""
-        self._render_status_bar(schema, presentation)
+        self.render_component("status_bar", schema, presentation)
         self._render_inspector_values(schema, presentation)
 
     def _render_toolbar(self, schema: ViewSchema, presentation: ModulePresentation) -> None:
