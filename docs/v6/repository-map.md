@@ -147,12 +147,21 @@ Environment directories (outside Git, same parent):
             📄 workbench.py
             📄 workbench_host.py
             📄 workspace_host.py
+        📁 workspaces
+            📄 __init__.py
+            📄 chat_workspace.py
+            📄 provider_workspace.py
+            📄 skill_workspace.py
+            📄 tool_workspace.py
         📄 __init__.py
         📄 config_panel.py
         📄 left_panel.py
         📄 main_window.py
         📄 right_panel.py
         📄 workbench_ui_controller.py
+        📄 workspace.py
+        📄 workspace_registry.py
+        📄 workspace_router.py
     📄 __init__.py
     📄 adapter.py
     📄 app.py
@@ -306,6 +315,9 @@ Environment directories (outside Git, same parent):
         📄 test_mapper.py
         📄 test_request.py
         📄 test_request_mapping.py
+    📁 ui
+        📄 test_navigator.py
+        📄 test_workspace_framework.py
     📁 v6
         📁 runtime
             📄 test_capability_chain.py
