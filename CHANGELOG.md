@@ -1,5 +1,39 @@
 # Changelog
 
+## v6.12.0-beta.6 (2026-07-10) — Package Registry Lifecycle + Workbench OS Branding
+
+> **里程碑语义**：Commit 12.2 冻结 Package 生命周期接口：`discover()` / `load()` / `unload()` / `reload()` / `list()`。`reload()` 先抛出 `NotImplementedError`，但接口已经锁定。同时确立产品品牌：完成 UI 最终打包后的第一个产品命名定为 **Workbench OS 1.0**，并生成对应应用图标（PNG/ICO）。
+
+### Added
+- `agent_workbench/package/package_info.py`：`PackageInfo` 运行时包信息。
+- `agent_workbench/package/registry.py`：`PackageRegistry` 生命周期注册表。
+  - `discover(packages_dir)`：扫描并返回合法 manifest 列表。
+  - `load(manifest)`：加载 manifest 指向的 metadata / capabilities / view_schema / runtime 文件。
+  - `unload(package_id)`：卸载指定包。
+  - `reload(package_id)`：接口已冻结，当前 `NotImplementedError`。
+  - `list()` / `get(package_id)`：查询已加载包。
+- `agent_workbench/package/__init__.py`：导出 `PackageInfo` / `PackageRegistry`。
+- `tests/package/test_package_registry.py`：8 个非 GUI 单元测试，覆盖 Registry 全生命周期。
+- `agent_workbench/resources/`：
+  - `app_icon.png` / `app_icon.ico`：Workbench OS 应用图标（黑色背景 + 三层白色嵌套圆角矩形）。
+  - `__init__.py`：导出 `APP_ICON_PNG` / `APP_ICON_ICO`。
+- `agent_workbench/__init__.py`：
+  - 更新 `__version__` 为 `v6.12.0-beta.5`。
+  - 新增 `PRODUCT_NAME = "Workbench OS"`，`PRODUCT_VERSION = "1.0"`，`DISPLAY_NAME = "Workbench OS 1.0"`。
+
+### Design Constraints
+- Package Registry 不依赖 Qt。
+- Package 无权注册 Renderer。
+- `reload()` 接口先冻结，允许后续无缝实现。
+
+### Tests
+- `pytest tests/`：**769/769 passed**（新增 8 个 Registry 测试；收尾 Qt 退出码 `3221226505` 与 `QThread: Destroyed while thread is still running` 为 Windows 已知现象，不影响断言结果）。
+
+### Next Phase
+- **Commit 12.3**：Workbench Integration（Package → Metadata → Navigator / Workspace）。
+
+---
+
 ## v6.12.0-beta.5 (2026-07-10) — Package Contract Freeze（Commit 12.1）
 
 > **里程碑语义**：Commit 12 拆分为 12.1-12.4 四个子提交，12.1 只冻结 Package 契约，不加载任何 Agent。Package 以 `manifest.json` 为唯一入口，`PackageLoader.scan()` 仅读取含 `manifest.json` 的子目录，无 manifest 的目录直接忽略。非法 manifest 被校验并跳过，不影响其他包。Package 层明确禁止依赖 Qt 和注册 Renderer。
