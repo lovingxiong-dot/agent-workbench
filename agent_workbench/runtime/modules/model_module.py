@@ -18,9 +18,8 @@ from agent_workbench.metadata import (
 )
 from agent_workbench.runtime.config_store import ConfigStore
 from agent_workbench.runtime.modules.base import BaseRuntimeModule
-from agent_workbench.services.echo_provider import EchoProvider
+from agent_workbench.runtime.provider_registry import create_default_provider_registry
 from agent_workbench.services.model_provider import ModelProvider
-from agent_workbench.services.openai_provider import OpenAIProvider
 
 if TYPE_CHECKING:
     from agent_workbench.runtime.agent_runtime import AgentRuntime
@@ -31,6 +30,7 @@ class ModelModule(BaseRuntimeModule):
 
     def __init__(self) -> None:
         self._runtime: "AgentRuntime | None" = None
+        self._registry = create_default_provider_registry()
         self._providers: Dict[str, ModelProvider] = {}
         self._default_provider: str = "echo"
         self._sampling: Dict[str, Any] = {}
@@ -82,6 +82,10 @@ class ModelModule(BaseRuntimeModule):
         """返回当前可用 provider 列表。"""
         return [{"name": name, "type": p.name} for name, p in self._providers.items()]
 
+    def provider_types(self) -> list[str]:
+        """返回注册表中所有支持的 Provider 类型名称。"""
+        return self._registry.list_names()
+
     def get_active_provider_info(self) -> Dict[str, Any]:
         """返回当前默认 provider 的摘要信息（供 Trace 使用）。"""
         provider = self._providers.get(self._default_provider)
@@ -94,14 +98,9 @@ class ModelModule(BaseRuntimeModule):
             info["endpoint"] = config.get("base_url", "—")
         return info
 
-    @staticmethod
-    def _create_provider(ptype: str) -> ModelProvider | None:
-        """根据类型创建 provider 实例。"""
-        if ptype == "echo":
-            return EchoProvider()
-        if ptype == "openai":
-            return OpenAIProvider()
-        return None
+    def _create_provider(self, ptype: str) -> ModelProvider | None:
+        """根据类型从注册表创建 provider 实例。"""
+        return self._registry.get(ptype)
 
     def metadata(self) -> MetadataDefinition:
         """返回 Model Capability Metadata。"""

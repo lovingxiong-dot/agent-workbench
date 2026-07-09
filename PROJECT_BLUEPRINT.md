@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v6.11.0-beta.3 | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 44 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v6.11.0-beta.4 | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 45 |
 
 ## Current Development Authority
 
@@ -402,7 +402,6 @@ v6.11.0 先让所有已支持对象具备统一的 **Metadata** 描述能力，�
 - **Schema-driven UI**：v6.12.x 再做。当前阶段只统一 Metadata 描述，不自动生成配置控件。
 - **Runtime Executors**（ProviderRuntime / ToolRuntime / SkillRuntime）：放到 Schema Foundation 之后，避免每新增一个 Runtime 就要重写一套配置页面。
 - **新增 Runtime 类型**：Knowledge / Persona / Browser / Plugin / Gateway / Digital Identity 暂时不接。
-- **真实 Provider 接入**（Claude / Gemini / OpenAI / Kimi / Qwen / DeepSeek）：等 UI 成熟后再做。
 
 ### 开发约束
 
@@ -441,7 +440,7 @@ v6.13.x        Plugin-driven Workbench
 |--------|------|------|------|
 | 1 | v6.12.x | Schema Foundation | 没有 Schema，每新增 Runtime 都要重写配置 UI |
 | 2 | v6.13.x 之前 | Runtime Executors | ProviderRuntime / ToolRuntime / SkillRuntime |
-| 3 | UI 成熟后 | Real Provider Adapters | Claude / Gemini / OpenAI / Kimi / Qwen / DeepSeek |
+| 3 | 当前 | Workbench UI 去硬编码 | Navigator / Inspector / StatusBar 通过 PresentationModel 渲染 |
 
 ### 最高级设计约束
 
@@ -855,11 +854,12 @@ v6.7.0-alpha 完成 Step 5.4 Runtime Orchestration Foundation：新增 `v6/runti
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
-| v6.11.0-beta.3 | 2026-07-09 | Resource Metadata：迁移 Model / MCP / Skill / Prompt / Memory / Workflow 六个 Runtime Module 的 metadata() 到 MetadataDefinition，统一使用 ValueType 描述属性类型；新增 agent_workbench/metadata/resource.py 定义 ResourceType / ResourceConnection / ResourceDefinition，建立 Resource 跨层描述契约；新增 tests/runtime/modules/test_module_metadata.py 覆盖模块 Metadata 与 Resource Metadata；648/648 测试通过 | feat/test | agent_workbench/metadata/__init__.py, agent_workbench/metadata/resource.py, agent_workbench/runtime/modules/model_module.py, agent_workbench/runtime/modules/mcp_module.py, agent_workbench/runtime/modules/skill_module.py, agent_workbench/runtime/modules/prompt_module.py, agent_workbench/runtime/modules/memory_module.py, agent_workbench/runtime/modules/workflow_module.py, tests/runtime/modules/test_module_metadata.py |
+| v6.11.0-beta.4 | 2026-07-09 | Provider Registry + 多模型接入：新增 ProviderRegistry 统一注册与发现模型 Provider；新增 Claude / Gemini / Kimi / Qwen / DeepSeek 五个 OpenAI 兼容 Provider；ModelModule 通过注册表动态实例化 Provider；AddProviderDialog 从 ModelModule 动态读取可用 Provider 类型；新增 tests/runtime/test_provider_registry.py 与 UI 集成测试；662/662 测试通过 | feat/test | agent_workbench/runtime/provider_registry.py, agent_workbench/services/claude_provider.py, agent_workbench/services/gemini_provider.py, agent_workbench/services/kimi_provider.py, agent_workbench/services/qwen_provider.py, agent_workbench/services/deepseek_provider.py, agent_workbench/runtime/modules/model_module.py, agent_workbench/ui/dialogs/add_provider_dialog.py, agent_workbench/ui/workbench_ui_controller.py, tests/runtime/test_provider_registry.py, tests/ui/test_provider_config_loop.py |
 
 ## 历史归档
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v6.11.0-beta.3 | 2026-07-09 | Resource Metadata：迁移 Model / MCP / Skill / Prompt / Memory / Workflow 六个 Runtime Module 的 metadata() 到 MetadataDefinition，统一使用 ValueType 描述属性类型；新增 agent_workbench/metadata/resource.py 定义 ResourceType / ResourceConnection / ResourceDefinition，建立 Resource 跨层描述契约；新增 tests/runtime/modules/test_module_metadata.py 覆盖模块 Metadata 与 Resource Metadata；648/648 测试通过 | feat/test | agent_workbench/metadata/__init__.py, agent_workbench/metadata/resource.py, agent_workbench/runtime/modules/model_module.py, agent_workbench/runtime/modules/mcp_module.py, agent_workbench/runtime/modules/skill_module.py, agent_workbench/runtime/modules/prompt_module.py, agent_workbench/runtime/modules/memory_module.py, agent_workbench/runtime/modules/workflow_module.py, tests/runtime/modules/test_module_metadata.py |
 | v6.11.0-beta.2 | 2026-07-09 | Streaming UI 对话闭环：WorkbenchUIController 引入 `_finalize_stream()` 原子化结束流式输出，修复流式结束后重复生成完整 AI 消息与错误消息重复问题；建立 `AI_CHUNK → sign_stream_chunk`、`AI_END / ENGINE_FAILED → sign_stream_end` 确定性事件映射；新增 tests/ui/test_streaming_chat_loop.py 覆盖流式路径不重复、非流式路径回退、错误唯一传播；640/640 测试通过 | feat/test/ui | agent_workbench/ui/workbench_ui_controller.py, tests/ui/test_streaming_chat_loop.py |
 | v6.11.0-beta.1 | 2026-07-09 | First Real LLM Link：ManagerAI 默认将 GENERAL_QUERY 路由为 ACTION → chat Capability；CapabilityResolver 支持 GENERAL_QUERY → chat；OpenAIProvider 经 ModelModule 接入 Runtime；新增 tests/integration/test_openai_chat_loop.py 用 mock HTTP 验证完整链路、api_key 不泄露、错误传播；632/632 测试通过 | feat/test | agent_workbench/runtime/decision/manager_ai.py, agent_workbench/runtime/decision/resolver.py, tests/integration/test_openai_chat_loop.py, tests/v6/runtime/test_decision_layer.py, tests/test_controller_interaction.py |
 | v6.11.0-alpha.3 | 2026-07-09 | Workbench-First B-line Pivot：ROADMAP 与 v6.11-task-list 调整时序原则，B线（产品线）优先推进单一真实 LLM 对话闭环，A线（架构线）Metadata Contract 已冻结并冻结式推进；明确 OpenAI Provider 为 v6.11.0-beta.1 唯一目标，暂缓 MCP / Workflow / Memory / Tool Calling / 多模型 | docs | docs/v6/ROADMAP.md, docs/v6/v6.11-task-list.md |

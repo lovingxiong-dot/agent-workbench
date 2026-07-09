@@ -33,6 +33,7 @@ from agent_workbench.ui.dialogs import (
     AddSkillDialog,
     AddWorkflowDialog,
 )
+from agent_workbench.runtime.modules.model_module import ModelModule
 from agent_workbench.ui.workbench import WorkbenchHost
 from agent_workbench.ui.workbench.chat_workspace import ChatWorkspaceItem
 from agent_workbench.ui.workbench.metadata_adapter import MetadataAdapter
@@ -109,6 +110,13 @@ class WorkbenchUIController(UIController):
         """暴露 Interaction Boundary Layer，供未来 UI 组件非阻塞提交请求。"""
         return self._workbench.interaction_layer
 
+    def _provider_types(self) -> list[str]:
+        """从 ModelModule 注册表获取当前支持的所有 Provider 类型。"""
+        model_module = self._workbench.runtime.module_registry.get("model")
+        if isinstance(model_module, ModelModule):
+            return model_module.provider_types()
+        return ["echo", "openai"]
+
     def _register_configuration_categories(self) -> None:
         """注册所有 Settings 配置分类并绑定新增对话框。"""
         categories = [
@@ -117,7 +125,9 @@ class WorkbenchUIController(UIController):
                 title="AI Models",
                 icon="🤖",
                 config_path="model.providers",
-                dialog_factory=lambda: AddProviderDialog(self),
+                dialog_factory=lambda: AddProviderDialog(
+                    self._host, provider_types=self._provider_types()
+                ),
             ),
             ConfigCategory(
                 category_id="mcp",

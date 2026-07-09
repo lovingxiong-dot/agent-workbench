@@ -22,14 +22,18 @@ from agent_workbench.ui.dialogs.base import AddConfigItemDialog
 class AddProviderDialog(AddConfigItemDialog):
     """用于新增 AI Provider 的表单对话框。"""
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        provider_types: list[str] | None = None,
+    ) -> None:
         super().__init__("Add AI Provider", parent)
 
         self._name_edit = self._line_edit("openai-gpt4")
         self._form.addRow("Name:", self._name_edit)
 
         self._type_combo = QComboBox(self)
-        self._type_combo.addItems(["echo", "openai"])
+        self._type_combo.addItems(provider_types or ["echo", "openai"])
         self._form.addRow("Type:", self._type_combo)
 
         self._model_edit = self._line_edit("gpt-4o")

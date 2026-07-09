@@ -1,5 +1,39 @@
 # Changelog
 
+## v6.11.0-beta.4 (2026-07-09) — Provider Registry + 多模型接入
+
+> **里程碑语义**：在 OpenAI 跑通后，引入 `ProviderRegistry` 统一注册与发现模型 Provider；新增 Claude / Gemini / Kimi / Qwen / DeepSeek 五个 OpenAI 兼容 Provider，均通过统一 `ModelProvider` 协议接入 `ModelModule`。`AddProviderDialog` 从 `ModelModule` 动态读取可用 Provider 类型，Workbench 用户可在 UI 中按需配置并切换不同云模型，无需修改源码。
+
+### Added
+- 新增 `agent_workbench/runtime/provider_registry.py`：
+  - `ProviderRegistry.register(provider_class)` / `get(name)` / `has(name)` / `list_names()` / `list_providers()`。
+  - `create_default_provider_registry()` 注册所有内置 Provider（echo / openai / claude / gemini / kimi / qwen / deepseek）。
+  - 每个已注册 Provider 返回平台无关的 `MetadataDefinition`，供 UI 与外部系统消费。
+- 新增 OpenAI 兼容 Provider 实现：
+  - `agent_workbench/services/claude_provider.py` — 默认 `https://api.anthropic.com/v1`。
+  - `agent_workbench/services/gemini_provider.py` — 默认 `https://generativelanguage.googleapis.com/v1beta/openai`。
+  - `agent_workbench/services/kimi_provider.py` — 默认 `https://api.moonshot.cn/v1`。
+  - `agent_workbench/services/qwen_provider.py` — 默认 `https://dashscope.aliyuncs.com/compatible-mode/v1`。
+  - `agent_workbench/services/deepseek_provider.py` — 默认 `https://api.deepseek.com/v1`。
+- 新增 `tests/runtime/test_provider_registry.py`：覆盖默认注册表包含全部 7 个 Provider、`get` 实例化、`has` 查询、`list_providers` 返回 Metadata、`ModelModule.provider_types()` 暴露注册表类型。
+
+### Changed
+- `agent_workbench/runtime/modules/model_module.py`：
+  - 使用 `create_default_provider_registry()` 替代硬编码的 `EchoProvider / OpenAIProvider` 分支。
+  - 新增 `provider_types()`，暴露注册表中所有支持的 Provider 类型名称。
+- `agent_workbench/ui/dialogs/add_provider_dialog.py`：构造函数新增 `provider_types` 参数，下拉框动态填充可用类型。
+- `agent_workbench/ui/workbench_ui_controller.py`：
+  - 新增 `_provider_types()`，从 `ModelModule` 注册表读取可用 Provider 类型。
+  - `AddProviderDialog` 工厂改为传入 `provider_types=self._provider_types()`，并将父窗口修正为 `WorkbenchHost`。
+
+### Tests
+- `pytest tests/`：**662/662 passed**（新增 14 个 Provider Registry / UI 集成测试；收尾 QApplication 销毁阶段出现 Windows 已知退出码 `3221226505`，不影响断言结果）。
+
+### Next Phase
+- **Commit 6**：Workbench UI 去硬编码（MetadataAdapter 完整映射、Navigator / Inspector / StatusBar 通过 PresentationModel 渲染）。
+
+---
+
 ## v6.11.0-beta.3 (2026-07-09) — Resource Metadata
 
 > **里程碑语义**：A 线冻结式推进。将 Model / MCP / Skill / Prompt / Memory / Workflow 六个 Runtime Module 的 `metadata()` 统一迁移到 `MetadataDefinition`，使用 `ValueType` 描述属性类型，消除旧 `ModuleMetadata` 在核心资源模块中的使用。新增 `agent_workbench/metadata/resource.py`，定义 `ResourceType`、`ResourceConnection`、`ResourceDefinition`，建立 Resource（System / Python Env / IDE / CLI / Agent CLI）的跨层描述契约，明确 Capability（What I can do）与 Resource（What I can use）的语义边界。

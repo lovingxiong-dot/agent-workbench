@@ -147,6 +147,21 @@ class TestWorkbenchUIControllerProviderLoop:
         assert providers[0]["name"] == "fake-echo"
         assert providers[0]["type"] == "echo"
 
+    def test_provider_dialog_factory_exposes_registry_types(self, controller):
+        category = controller._config_manager.get("model")
+        dialog = category.dialog_factory()
+        combo = dialog._type_combo
+        types = {combo.itemText(i) for i in range(combo.count())}
+        assert types == {
+            "claude",
+            "deepseek",
+            "echo",
+            "gemini",
+            "kimi",
+            "openai",
+            "qwen",
+        }
+
     def test_model_providers_update_triggers_navigator_refresh(
         self, qt_app, tmp_path
     ):
