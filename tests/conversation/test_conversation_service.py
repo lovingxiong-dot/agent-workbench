@@ -33,12 +33,29 @@ class TestConversationServiceCreate:
         session = session_service.manager.get(sid)
         assert session is not None
         assert session["title"] == ""
+        assert session["summary"] == ""
+        assert session["icon"] == ""
+        assert session["workspace_id"] == ""
 
     def test_create_conversation_with_custom_title(self, services):
         conversation_service, session_service, _ = services
         sid = conversation_service.create_conversation("Custom Title")
         session = session_service.manager.get(sid)
         assert session["title"] == "Custom Title"
+
+    def test_create_conversation_with_full_metadata(self, services):
+        conversation_service, session_service, _ = services
+        sid = conversation_service.create_conversation(
+            "Agent Setup",
+            summary="Configure the trading agent",
+            icon="🤖",
+            workspace_id="chat",
+        )
+        session = session_service.manager.get(sid)
+        assert session["title"] == "Agent Setup"
+        assert session["summary"] == "Configure the trading agent"
+        assert session["icon"] == "🤖"
+        assert session["workspace_id"] == "chat"
 
 
 class TestConversationServiceMessagesAndTitle:
@@ -99,6 +116,27 @@ class TestConversationServiceLifecycle:
         assert conversation_service.pin_conversation(sid) is True
         assert session_service.manager.get(sid)["is_pinned"] is True
         assert conversation_service.pin_conversation(sid) is False
+
+    def test_update_conversation_metadata(self, services):
+        conversation_service, session_service, _ = services
+        sid = conversation_service.create_conversation("Initial")
+        conversation_service.update_conversation_metadata(
+            sid,
+            summary="Summary updated",
+            icon="📊",
+            workspace_id="trace",
+        )
+        session = session_service.manager.get(sid)
+        assert session["summary"] == "Summary updated"
+        assert session["icon"] == "📊"
+        assert session["workspace_id"] == "trace"
+        assert session["title"] == "Initial"
+
+    def test_update_last_activity(self, services):
+        conversation_service, session_service, _ = services
+        sid = conversation_service.create_conversation()
+        conversation_service.update_last_activity(sid, "User sent a message")
+        assert session_service.manager.get(sid)["last_activity"] == "User sent a message"
 
     def test_list_groups_after_create(self, services):
         conversation_service, _, _ = services

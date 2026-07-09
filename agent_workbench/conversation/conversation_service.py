@@ -9,12 +9,30 @@ UI 层（Qt / Web / CLI）只与本服务交互，不直接依赖 SessionService
 """
 from __future__ import annotations
 
+from typing import TypedDict
+
 from v6.runtime.context import RuntimeContext
 from v6.runtime.types import ChatMessage
 from v6.services.chat_service import ChatService
 from v6.services.session_service import SessionService
 
 from agent_workbench.conversation.title_service import ConversationTitleService
+
+
+class ConversationMetadata(TypedDict, total=False):
+    """Conversation 完整元数据结构（Product Contract 定义）。"""
+
+    sid: str
+    title: str
+    summary: str
+    icon: str
+    created_at: float
+    updated_at: float
+    last_activity: str
+    workspace_id: str
+    pinned: bool
+    is_active: bool
+    preview: str
 
 
 class ConversationService:
@@ -32,10 +50,20 @@ class ConversationService:
         self._chat = chat_service
         self._title = title_service or ConversationTitleService()
 
-    def create_conversation(self, title: str = "") -> str:
+    def create_conversation(
+        self,
+        title: str = "",
+        *,
+        summary: str = "",
+        icon: str = "",
+        workspace_id: str = "",
+    ) -> str:
         """创建新会话；若 title 为空，则 Navigator 会显示默认占位标题。"""
         ctx = RuntimeContext.new()
         ctx.metadata["session_title"] = title
+        ctx.metadata["session_summary"] = summary
+        ctx.metadata["session_icon"] = icon
+        ctx.metadata["session_workspace_id"] = workspace_id
         self._session.create(ctx)
         return ctx.session_id
 
@@ -70,6 +98,34 @@ class ConversationService:
         ctx.metadata["session_title"] = title
         self._session.rename(ctx)
 
+    def update_conversation_metadata(
+        self,
+        sid: str,
+        *,
+        title: str | None = None,
+        summary: str | None = None,
+        icon: str | None = None,
+        workspace_id: str | None = None,
+        last_activity: str | None = None,
+    ) -> None:
+        """更新会话元数据；None 表示不修改该字段。"""
+        ctx = RuntimeContext.new(session_id=sid)
+        if title is not None:
+            ctx.metadata["session_title"] = title
+        if summary is not None:
+            ctx.metadata["session_summary"] = summary
+        if icon is not None:
+            ctx.metadata["session_icon"] = icon
+        if workspace_id is not None:
+            ctx.metadata["session_workspace_id"] = workspace_id
+        if last_activity is not None:
+            ctx.metadata["session_last_activity"] = last_activity
+        self._session.update_metadata(ctx)
+
+    def update_last_activity(self, sid: str, activity: str) -> None:
+        """更新会话最近活动描述（如 'User asked about Python'）。"""
+        self.update_conversation_metadata(sid, last_activity=activity)
+
     def delete_conversation(self, sid: str) -> None:
         """删除会话。"""
         ctx = RuntimeContext.new(session_id=sid)
@@ -80,7 +136,7 @@ class ConversationService:
         ctx = RuntimeContext.new(session_id=sid)
         return self._session.pin(ctx)
 
-    def list_groups(self) -> list[tuple[str, str, list[dict]]]:
+    def list_groups(self) -> list[tuple[str, str, list[ConversationMetadata]]]:
         """返回按时间分组的会话列表，供 Navigator 渲染。"""
         ctx = RuntimeContext.new()
         self._session.load(ctx)
@@ -97,6 +153,9 @@ class ConversationService:
         ctx = RuntimeContext.new(session_id=sid)
         self._session.set_active(ctx)
 
-    def get_conversation(self, sid: str) -> dict | None:
-        """返回单个会话的元数据。"""
-        return self._session.manager.get(sid)
+    def get_conversation(self, sid: str) -> ConversationMetadata | None:
+        """返回单个会话的完整元数据。"""
+        result = self._session.manager.get(sid)
+        if result is None:
+            return None
+        return result

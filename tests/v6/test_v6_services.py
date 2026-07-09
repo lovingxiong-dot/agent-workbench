@@ -113,6 +113,29 @@ def test_session_service_pin_and_rename(tmp_path, qapp):
     assert svc.manager.get(sid)["title"] == "renamed"
 
 
+def test_session_service_update_metadata(tmp_path, qapp):
+    from v6.services.session_service import SessionService
+
+    svc = SessionService(data_dir=tmp_path)
+    ctx = RuntimeContext.new()
+    ctx.metadata["session_title"] = "meta"
+    ctx.metadata["session_summary"] = "summary"
+    ctx.metadata["session_icon"] = "🤖"
+    ctx.metadata["session_workspace_id"] = "chat"
+    ctx.metadata["session_last_activity"] = "typing"
+    svc.create(ctx)
+    sid = ctx.session_id
+
+    ctx.session_id = sid
+    ctx.metadata["session_summary"] = "updated"
+    svc.update_metadata(ctx)
+    session = svc.manager.get(sid)
+    assert session["summary"] == "updated"
+    assert session["icon"] == "🤖"
+    assert session["workspace_id"] == "chat"
+    assert session["last_activity"] == "typing"
+
+
 def test_session_service_search(tmp_path, qapp):
     from v6.services.session_service import SessionService
 

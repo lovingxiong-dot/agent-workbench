@@ -38,7 +38,10 @@ class SessionService:
     def create(self, ctx: RuntimeContext) -> None:
         """创建新会话，写回 ctx.session_id 与 ctx.metadata['session_title']。"""
         title = ctx.metadata.get("session_title", "新会话")
-        sid = self._sm.create(title)
+        summary = ctx.metadata.get("session_summary", "")
+        icon = ctx.metadata.get("session_icon", "")
+        workspace_id = ctx.metadata.get("session_workspace_id", "")
+        sid = self._sm.create(title, summary=summary, icon=icon, workspace_id=workspace_id)
         self._sm.set_active(sid)
         ctx.session_id = sid
         ctx.metadata["session_title"] = title
@@ -65,6 +68,20 @@ class SessionService:
         if sid:
             return self._sm.pin(sid)
         return False
+
+    def update_metadata(self, ctx: RuntimeContext) -> None:
+        """更新 ctx.session_id 指定会话的元数据字段。"""
+        sid = ctx.session_id
+        if sid is None:
+            return
+        self._sm.update_metadata(
+            sid,
+            title=ctx.metadata.get("session_title"),
+            summary=ctx.metadata.get("session_summary"),
+            icon=ctx.metadata.get("session_icon"),
+            workspace_id=ctx.metadata.get("session_workspace_id"),
+            last_activity=ctx.metadata.get("session_last_activity"),
+        )
 
     def set_active(self, ctx: RuntimeContext) -> None:
         """将 ctx.session_id 设为激活会话。"""

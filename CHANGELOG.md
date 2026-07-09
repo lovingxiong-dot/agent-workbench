@@ -1,5 +1,37 @@
 # Changelog
 
+## v6.12.0-beta.11 (2026-07-10) — Conversation 完整化
+
+> **里程碑语义**：Conversation 元数据与 Product Contract 对齐。Session 持久化层正式支持 `summary`、`icon`、`last_activity`、`workspace_id`、`pinned`，Navigator 会话列表可直接展示 icon、summary、置顶状态等完整信息，为后续 Conversation 搜索、筛选、排序和长期记忆打下基础。
+
+### Added
+- `v6/session_manager.py`：
+  - 扩展 `sessions` 表字段：`summary`、`icon`、`workspace_id`、`last_activity`。
+  - 新增 `_migrate_db()`：旧数据库自动 ALTER TABLE 追加字段，保证向后兼容。
+  - 新增 `update_metadata()`：按需更新单个或多个元数据字段。
+  - `create()` 支持传入 `summary`、`icon`、`workspace_id`。
+  - `_row_to_dict()` 返回完整字段，包括 `pinned` 别名。
+- `v6/services/session_service.py`：
+  - `create()` 从 `RuntimeContext.metadata` 读取 `session_summary`、`session_icon`、`session_workspace_id`。
+  - 新增 `update_metadata()` 方法。
+- `agent_workbench/conversation/conversation_service.py`：
+  - 新增 `ConversationMetadata` TypedDict，与 Product Contract 字段一一对应。
+  - `create_conversation()` 支持 `summary`、`icon`、`workspace_id`。
+  - 新增 `update_conversation_metadata()` 与 `update_last_activity()`。
+- `v6/ui/session_item.py`：会话列表项支持 `icon`、`summary`、`pinned` 渲染。
+- `v6/ui/session_group.py`：将完整 Conversation 元数据传给 `SessionItem`。
+
+### Tests
+- `tests/v6/test_v6_session_manager.py`：新增创建带元数据、`update_metadata`、旧数据库迁移等 4 个测试。
+- `tests/v6/test_v6_services.py`：新增 `SessionService.update_metadata` 测试。
+- `tests/conversation/test_conversation_service.py`：新增完整元数据创建、更新、`update_last_activity` 测试。
+- `pytest tests/`：**809/809 passed**（新增 8 个 Conversation 完整化测试；收尾 Qt 退出码 `3221226505` 为 Windows 已知现象，不影响断言结果）。
+
+### Next Phase
+- **Workbench Polish 第 4 项：Empty State 统一**。
+
+---
+
 ## v6.12.0-beta.10 (2026-07-10) — Welcome Home Workspace Polish
 
 > **里程碑语义**：将 Welcome 从「空 Workspace」提升为 Workbench OS 的 Home（主页）。用户首次打开应在 3 秒内理解产品定位：Workbench OS 是安装、管理、运行 Agent 的桌面操作系统。UI 统一使用「Agent」面向普通用户，底层开发者概念仍使用「Package」，与已冻结的 Product Contract 保持一致。

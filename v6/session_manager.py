@@ -54,7 +54,11 @@ class SessionManager:
                 CREATE TABLE IF NOT EXISTS sessions (
                     id TEXT PRIMARY KEY,
                     title TEXT NOT NULL,
+                    summary TEXT DEFAULT '',
+                    icon TEXT DEFAULT '',
                     preview TEXT DEFAULT '',
+                    workspace_id TEXT DEFAULT '',
+                    last_activity TEXT DEFAULT '',
                     updated_at REAL NOT NULL,
                     created_at REAL NOT NULL,
                     is_active INTEGER DEFAULT 0,
@@ -62,30 +66,51 @@ class SessionManager:
                 )
                 """
             )
+            self._migrate_db(conn)
             conn.commit()
+
+    @staticmethod
+    def _migrate_db(conn: sqlite3.Connection) -> None:
+        """为旧版数据库追加 Conversation 完整化所需字段。"""
+        existing = {row[1] for row in conn.execute("PRAGMA table_info(sessions)")}
+        additions = [
+            ("summary", "TEXT DEFAULT ''"),
+            ("icon", "TEXT DEFAULT ''"),
+            ("workspace_id", "TEXT DEFAULT ''"),
+            ("last_activity", "TEXT DEFAULT ''"),
+        ]
+        for column, dtype in additions:
+            if column not in existing:
+                conn.execute(f"ALTER TABLE sessions ADD COLUMN {column} {dtype}")
 
     def _row_to_dict(self, row: sqlite3.Row) -> dict[str, Any]:
         return {
             "sid": row["id"],
             "title": row["title"],
+            "summary": row["summary"] or "",
+            "icon": row["icon"] or "",
             "preview": row["preview"] or "",
+            "workspace_id": row["workspace_id"] or "",
+            "last_activity": row["last_activity"] or "",
             "updated_at": row["updated_at"],
             "created_at": row["created_at"],
             "is_active": bool(row["is_active"]),
             "is_pinned": bool(row["is_pinned"]),
+            "pinned": bool(row["is_pinned"]),
             "time": _format_time(row["updated_at"]),
         }
 
-    def create(self, title: str) -> str:
+    def create(self, title: str, summary: str = "", icon: str = "", workspace_id: str = "") -> str:
         """创建新会话并返回 sid。"""
         sid = uuid.uuid4().hex[:12]
         now = time.time()
         with sqlite3.connect(str(self._db)) as conn:
             conn.row_factory = sqlite3.Row
             conn.execute(
-                "INSERT INTO sessions (id, title, preview, updated_at, created_at, is_active) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (sid, title, "", now, now, 0),
+                "INSERT INTO sessions (id, title, summary, icon, preview, workspace_id, "
+                "last_activity, updated_at, created_at, is_active) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (sid, title, summary, icon, "", workspace_id, "", now, now, 0),
             )
             conn.commit()
         return sid
@@ -103,6 +128,46 @@ class SessionManager:
             conn.execute(
                 "UPDATE sessions SET title = ?, updated_at = ? WHERE id = ?",
                 (title, now, sid),
+            )
+            conn.commit()
+
+    def update_metadata(
+        self,
+        sid: str,
+        *,
+        title: str | None = None,
+        summary: str | None = None,
+        icon: str | None = None,
+        workspace_id: str | None = None,
+        last_activity: str | None = None,
+    ) -> None:
+        """更新会话元数据；仅更新传入的非 None 字段。"""
+        fields: list[str] = []
+        values: list[Any] = []
+        if title is not None:
+            fields.append("title = ?")
+            values.append(title)
+        if summary is not None:
+            fields.append("summary = ?")
+            values.append(summary)
+        if icon is not None:
+            fields.append("icon = ?")
+            values.append(icon)
+        if workspace_id is not None:
+            fields.append("workspace_id = ?")
+            values.append(workspace_id)
+        if last_activity is not None:
+            fields.append("last_activity = ?")
+            values.append(last_activity)
+        if not fields:
+            return
+        fields.append("updated_at = ?")
+        values.append(time.time())
+        values.append(sid)
+        with sqlite3.connect(str(self._db)) as conn:
+            conn.execute(
+                f"UPDATE sessions SET {', '.join(fields)} WHERE id = ?",
+                values,
             )
             conn.commit()
 

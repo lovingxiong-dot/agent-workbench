@@ -19,9 +19,14 @@ def test_create_and_get(sm):
     assert sid and isinstance(sid, str)
     session = sm.get(sid)
     assert session["title"] == "hello"
+    assert session["summary"] == ""
+    assert session["icon"] == ""
+    assert session["workspace_id"] == ""
+    assert session["last_activity"] == ""
     assert session["preview"] == ""
     assert session["is_active"] is False
     assert session["is_pinned"] is False
+    assert session["pinned"] is False
 
 
 def test_list_order(sm):
@@ -60,10 +65,79 @@ def test_delete(sm):
     assert sm.get_active() is None
 
 
+def test_create_with_metadata(sm):
+    sid = sm.create("meta", summary="s", icon="🤖", workspace_id="chat")
+    session = sm.get(sid)
+    assert session["title"] == "meta"
+    assert session["summary"] == "s"
+    assert session["icon"] == "🤖"
+    assert session["workspace_id"] == "chat"
+
+
 def test_rename(sm):
     sid = sm.create("old")
     sm.rename(sid, "new")
     assert sm.get(sid)["title"] == "new"
+
+
+def test_update_metadata(sm):
+    sid = sm.create("x")
+    sm.update_metadata(
+        sid,
+        title="new title",
+        summary="new summary",
+        icon="📊",
+        workspace_id="trace",
+        last_activity="typing",
+    )
+    session = sm.get(sid)
+    assert session["title"] == "new title"
+    assert session["summary"] == "new summary"
+    assert session["icon"] == "📊"
+    assert session["workspace_id"] == "trace"
+    assert session["last_activity"] == "typing"
+
+
+def test_update_metadata_partial(sm):
+    sid = sm.create("x")
+    sm.update_metadata(sid, summary="only summary")
+    session = sm.get(sid)
+    assert session["summary"] == "only summary"
+    assert session["title"] == "x"
+
+
+def test_migrate_old_database(tmp_path):
+    """旧数据库应自动追加 Conversation 完整化所需字段。"""
+    from v6.session_manager import SessionManager
+
+    db_path = tmp_path / "sessions.db"
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.execute(
+            """
+            CREATE TABLE sessions (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                preview TEXT DEFAULT '',
+                updated_at REAL NOT NULL,
+                created_at REAL NOT NULL,
+                is_active INTEGER DEFAULT 0,
+                is_pinned INTEGER DEFAULT 0
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO sessions (id, title, preview, updated_at, created_at) VALUES (?, ?, ?, ?, ?)",
+            ("old", "legacy", "", time.time(), time.time()),
+        )
+        conn.commit()
+
+    sm = SessionManager(data_dir=tmp_path)
+    session = sm.get("old")
+    assert session is not None
+    assert session["summary"] == ""
+    assert session["icon"] == ""
+    assert session["workspace_id"] == ""
+    assert session["last_activity"] == ""
 
 
 def test_touch_and_preview(sm):

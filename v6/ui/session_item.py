@@ -25,13 +25,19 @@ class SessionItem(QWidget):
         title: str,
         preview: str,
         time: str,
+        icon: str = "",
+        summary: str = "",
+        pinned: bool = False,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._sid = sid
         self._title = title
         self._preview = preview
+        self._summary = summary
         self._time = time
+        self._icon = icon.strip()
+        self._pinned = pinned
         self._active = False
         self._hover = False
         self.setMouseTracking(True)
@@ -52,10 +58,18 @@ class SessionItem(QWidget):
 
         text_layout = QVBoxLayout()
         text_layout.setSpacing(2)
-        self._title_label = QLabel(self._display_title())
+
+        title_text = self._display_title()
+        if self._icon:
+            title_text = f"{self._icon} {title_text}"
+        if self._pinned:
+            title_text = f"{title_text} 📌"
+        self._title_label = QLabel(title_text)
         self._title_label.setFont(font(13, bold=True))
         self._title_label.setObjectName("title")
-        self._preview_label = QLabel(self._preview)
+
+        subtitle = self._summary.strip() or self._preview
+        self._preview_label = QLabel(subtitle)
         self._preview_label.setFont(font(11))
         self._preview_label.setObjectName("preview")
         text_layout.addWidget(self._title_label)
@@ -65,6 +79,7 @@ class SessionItem(QWidget):
         self._time_label = QLabel(self._time)
         self._time_label.setFont(font(10))
         self._time_label.setObjectName("time")
+        self._time_label.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.addWidget(self._time_label)
 
     def _style(self) -> None:

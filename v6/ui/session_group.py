@@ -73,7 +73,15 @@ class SessionGroup(QWidget):
         list_layout.setContentsMargins(0, 0, 0, 0)
         list_layout.setSpacing(4)
         for s in sessions:
-            item = SessionItem(s["sid"], s["title"], s["preview"], s["time"])
+            item = SessionItem(
+                s["sid"],
+                s["title"],
+                s.get("preview", ""),
+                s["time"],
+                icon=s.get("icon", ""),
+                summary=s.get("summary", ""),
+                pinned=s.get("pinned", False),
+            )
             item.selected.connect(self.session_selected.emit)
             item.context_menu_requested.connect(self.context_menu_requested.emit)
             self._items.append(item)
