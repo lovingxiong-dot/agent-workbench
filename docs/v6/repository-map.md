@@ -24,6 +24,7 @@ docs/                     # Documentation
         data-layer-inventory.md
         v6.10-task-list.md
         v6.11-task-list.md
+        resource-layer-spec.md
         SPEC.md
         ROADMAP.md
     archive/              # Historical documents worth keeping
@@ -64,6 +65,13 @@ Environment directories (outside Git, same parent):
     📁 persistence
         📄 __init__.py
     📁 profiles
+    📁 metadata
+        📄 __init__.py
+        📄 model.py
+        📄 factory.py
+        📄 adapter.py
+        📄 schema.py
+        📄 registry.py
     📁 runtime
         📁 capability
             📄 __init__.py
@@ -107,10 +115,6 @@ Environment directories (outside Git, same parent):
         📄 agent_runtime.py
         📄 capability_router.py
         📄 config_store.py
-        📁 metadata
-            📄 __init__.py
-            📄 model.py
-            📄 factory.py
         📄 module_registry.py
         📄 profile_manager.py
     📁 services
@@ -142,7 +146,6 @@ Environment directories (outside Git, same parent):
             📄 inspector_host.py
             📁 presentation
                 📄 __init__.py
-                📄 adapter.py
                 📄 model.py
         📄 navigator.py
         📄 navigator_host.py

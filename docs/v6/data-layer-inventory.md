@@ -165,10 +165,12 @@ Status 图例：✅ 已完成 / 🚧 进行中 / ❌ 未开始
 
 | 文件 | 类型 | 存储 | 说明 | 测试 |
 |---|---|---|---|---|
-| `agent_workbench/runtime/metadata/model.py` | `ModuleMetadata`, `PropertyMetadata`, `StatisticMetadata`, `ActionMetadata` | 内存 | Runtime Module 的统一描述契约 | `agent_workbench/tests/test_metadata_model.py`（待建） |
-| `agent_workbench/runtime/metadata/factory.py` | `MetadataFactory` | 内存 | 从 dict / dataclass 构造 Metadata | `agent_workbench/tests/test_metadata_factory.py`（待建） |
+| `agent_workbench/metadata/model.py` | `ModuleMetadata`, `PropertyMetadata`, `StatisticMetadata`, `ActionMetadata` | 内存 | 跨层 Metadata 契约 | `agent_workbench/tests/test_metadata_model.py`（待建） |
+| `agent_workbench/metadata/factory.py` | `MetadataFactory` | 内存 | 从 dict / dataclass 构造 Metadata | `agent_workbench/tests/test_metadata_factory.py`（待建） |
+| `agent_workbench/metadata/adapter.py` | `MetadataAdapter` | 内存 | `ModuleMetadata → ModulePresentation` 跨层适配 | `agent_workbench/tests/test_metadata_adapter.py`（待建） |
+| `agent_workbench/metadata/schema.py` | Schema 模型 | 内存 | v6.12.x 配置 Schema 契约 | `agent_workbench/tests/test_metadata_schema.py`（待建） |
+| `agent_workbench/metadata/registry.py` | `MetadataRegistry` | 内存 | v6.12.x Metadata 注册表 | `agent_workbench/tests/test_metadata_registry.py`（待建） |
 | `agent_workbench/ui/presentation/model.py` | `ModulePresentation`, `PropertyPresentation`, `StatisticPresentation`, `ActionPresentation` | 内存 | UI 消费 PresentationModel | `agent_workbench/tests/test_presentation_model.py`（待建） |
-| `agent_workbench/ui/presentation/adapter.py` | `MetadataAdapter` | 内存 | `ModuleMetadata → ModulePresentation` | `agent_workbench/tests/test_metadata_adapter.py`（待建） |
 
 ---
 

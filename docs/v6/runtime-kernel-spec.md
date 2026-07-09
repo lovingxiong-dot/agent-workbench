@@ -186,14 +186,27 @@ Everything else (UI rendering, Provider implementations, specific Planners, Arch
 
 ## 8. Workbench Layer Relationship
 
-The Workbench Layer sits above the Runtime Kernel and is the product boundary:
+The Workbench Layer sits above the Runtime Kernel and is the product boundary. However, `Metadata` is not owned by either layer — it is a **Cross-layer Contract**:
 
-- Runtime objects expose `Metadata` to Workbench.
+```text
+Runtime Kernel
+      │
+      │ exposes via metadata()
+      ▼
+Metadata Contract  ←  located at agent_workbench/metadata/
+      │
+      │ adapts via MetadataAdapter
+      ▼
+Workbench Layer
+```
+
+- Runtime objects expose `Metadata` upward through `BaseRuntimeModule.metadata()`.
 - Workbench translates `Metadata` into `PresentationModel` via `MetadataAdapter`.
 - UI consumes `PresentationModel`, not Metadata directly.
-- Schema (v6.12.x) will describe how to configure objects; it lives in Workbench Layer, not Runtime Kernel.
+- Schema (v6.12.x) will describe how to configure objects; it lives alongside Metadata as another Cross-layer Contract, not inside Runtime Kernel.
+- Remote Agent, Gateway, Plugin, and Marketplace may all read Metadata directly without depending on Runtime internals or UI code.
 
-This preserves Runtime Kernel stability while allowing Workbench to evolve independently.
+This preserves Runtime Kernel stability while allowing Workbench and external consumers to evolve independently.
 
 ## 9. Relationship to Other Documents
 

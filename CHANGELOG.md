@@ -1,5 +1,30 @@
 # Changelog
 
+## v6.11.0-alpha.1 (2026-07-09) — Workbench-First Doctrine & Resource Layer Design
+
+> **里程碑语义**：v6.11 战略转向落地。Runtime 被正式定位为稳定基础设施，Workbench Layer 成为后续主要演进目标；Metadata 被定义为跨层契约（Cross-layer Contract），不隶属于 Runtime 或 UI；Resource Layer 设计完成，将 System / Python Env / IDE / CLI / Agent CLI 与 Capability 分离，形成 `Digital Identity → Capability → Resource → Provider → Target` 的完整执行链。
+
+### Added
+- 新增 `docs/v6/resource-layer-spec.md`：Resource Layer 规范，定义 System / Python Env / IDE / CLI / Agent CLI 五层资源及其与 Capability / Provider / Target 的关系。
+- 在 [PROJECT_BLUEPRINT.md](PROJECT_BLUEPRINT.md) 顶部增加 **Workbench-First Doctrine**：自 v6.11 起 Runtime 视为稳定基础设施，Workbench Layer 成为产品长期演进方向。
+- 在 [PROJECT_BLUEPRINT.md](PROJECT_BLUEPRINT.md) 增加 **Cross-Layer Contract — Metadata First** 章节：明确 Metadata 不属于任何单一 Layer，Runtime 与 Workbench 仅共同遵守契约。
+
+### Changed
+- 更新 [docs/v6/v6.11-task-list.md](docs/v6/v6.11-task-list.md)：Metadata 目录从 `agent_workbench/runtime/metadata/` 调整为 `agent_workbench/metadata/`，adapter 由 Metadata 契约拥有。
+- 更新 [docs/v6/data-layer-inventory.md](docs/v6/data-layer-inventory.md)：反映 Metadata / Presentation / Schema / Registry 的新路径与职责。
+- 更新 [docs/v6/repository-map.md](docs/v6/repository-map.md)：增加 `agent_workbench/metadata/` 与 `resource-layer-spec.md`。
+- 更新 [docs/v6/runtime-kernel-spec.md](docs/v6/runtime-kernel-spec.md)：明确 Metadata 为 Cross-layer Contract，增加 Runtime Kernel ↔ Metadata Contract ↔ Workbench Layer 关系图。
+- 更新 [docs/v6/runtime-glossary.md](docs/v6/runtime-glossary.md)：增加 **Resource**、**Target**、调整 **Metadata** / **Schema** / **PresentationModel** / **Plugin** 定义。
+- 更新 [docs/v6/ROADMAP.md](docs/v6/ROADMAP.md)：增加 Resource Layer 梯队与预告，调整未来阶段优先级。
+
+### Tests
+- `pytest tests/`：**614/614 passed**（收尾 QApplication 销毁阶段出现 Windows 已知退出码 `3221226505`，不影响断言结果）。
+
+### Next Phase
+- 继续执行 [docs/v6/v6.11-task-list.md](docs/v6/v6.11-task-list.md)：在 `agent_workbench/metadata/model.py` 中实现 `ModuleMetadata` / `PropertyMetadata` / `StatisticMetadata` / `ActionMetadata` 跨层契约。
+
+---
+
 ## v6.10.0-alpha (2026-07-09) — Configuration-Driven Workbench Loop
 
 > **里程碑语义**：v6.10 以「打通完整配置闭环」为第一站。以 Provider 为样板，将 No-Code Registration Principle 扩展到 MCP、Skill、Workflow、Prompt、Memory：用户通过 Workbench UI 点击「+」即可注册扩展对象，ConfigStore 持久化后对应 Registry 自动 Reload，Navigator 与 StatusBar 实时刷新，Agent 立即可见新配置。这一闭环标志着 Agent Workbench 开始具备真正的平台特征：统一的配置注册、持久化、通知与刷新链路，不再依赖为每个对象单独编写的 UI 和配置流程。

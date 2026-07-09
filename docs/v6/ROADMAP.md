@@ -46,7 +46,8 @@ Marketplace / Digital Identity / Gateway  ← 未来
 | 第二梯队 | ⭐⭐⭐⭐ | Schema Foundation：Schema Model / Registry / Validator / Auto Dialog / Auto Inspector | v6.12.x |
 | 第三梯队 | ⭐⭐⭐ | Runtime Executors：ProviderRuntime / ToolRuntime / SkillRuntime | v6.13.x 之前 |
 | 第四梯队 | ⭐⭐⭐ | Real Provider Adapters：Claude / Gemini / OpenAI / Kimi / Qwen / DeepSeek | UI 成熟后 |
-| 第五梯队 | ⭐⭐ | Workflow 体验闭环、Memory / Knowledge、MCP Client、Browser、Marketplace、Gateway | 更晚 |
+| 第五梯队 | ⭐⭐ | Resource Layer：System / Python Env / IDE / CLI / Agent CLI | v6.12.x 后 |
+| 第六梯队 | ⭐⭐ | Workflow 体验闭环、Memory / Knowledge、MCP Client、Browser、Marketplace、Gateway | 更晚 |
 
 ## v6.10.0-alpha：Configuration-Driven Workbench Loop ✅
 
@@ -84,10 +85,33 @@ Marketplace / Digital Identity / Gateway  ← 未来
 - [ ] Provider / MCP / Skill / Workflow / Prompt / Memory 返回统一 Metadata
 - [ ] Navigator / Inspector / StatusBar 通过 PresentationModel 渲染
 
+## v6.12.x+ 预告：Resource Layer
+
+当 Schema-driven UI 完成后，Workbench 将引入 **Resource Layer**，把系统环境、Python 虚拟环境、IDE、CLI、Agent CLI 建模为独立于 Capability 的配置对象：
+
+```text
+Digital Identity（AI）
+        │
+        ▼
+Capability（我会什么）
+        │
+        ▼
+Resource（我可以使用什么）
+        │
+        ▼
+Provider（调用哪个模型）
+        │
+        ▼
+Target（在哪个环境执行）
+```
+
+详见 [`resource-layer-spec.md`](./resource-layer-spec.md)。
+
 ## 现在不做的事
 
 - Schema-driven UI（v6.12.x 再做）
 - Runtime Executors（ProviderRuntime / ToolRuntime / SkillRuntime，Schema 之后）
+- Resource Layer 实现（设计已完成，见 `resource-layer-spec.md`，Schema 之后落地）
 - 新增 Runtime 类型：Knowledge / Persona / Browser / Plugin / Gateway / Digital Identity
 - 真实 Provider 接入：Claude / Gemini / OpenAI / Kimi / Qwen / DeepSeek
 - 复杂 Workflow DAG

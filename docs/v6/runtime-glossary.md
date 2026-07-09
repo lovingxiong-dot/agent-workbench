@@ -26,6 +26,8 @@
 | **Metadata** | A platform-agnostic description of a Runtime object: `id`, `type`, `name`, `icon`, `properties`, `statistics`, `actions`. Runtime uses it to expose objects to Workbench without UI coupling. |
 | **Schema** | A declarative description of how to configure a Runtime object. Drives Dialog / Inspector / JSON Editor / Validator / Import / Export generation. |
 | **PresentationModel** | The UI-facing translation of Metadata. Navigator / Inspector / StatusBar consume PresentationModel, never Metadata directly. |
+| **Resource** | An external execution target or tool inventory available to the Agent: System, PythonEnv, IDE, CLI, AgentCLI, MCP, FileSystem, Browser, etc. Not a Capability. |
+| **Target** | The resolved execution environment for a Task: a specific System + PythonEnv + IDE/CLI combination identified by `id`. |
 | **Orchestrator** | The Runtime component that executes Tasks by selecting Engines and managing their lifecycle. |
 | **EventBus** | The Runtime communication backbone. Components publish and subscribe to `RuntimeEvent`s. |
 | **RuntimeTrace** | The structured execution record: Task → Capability → Engine → Provider → Execution → Request → Response. |

@@ -9,6 +9,8 @@
 > **Public baseline: `v6.0.0-alpha`.**
 > **Framework Core baseline: `v6.8.0-alpha`.**
 > **V6 Runtime Foundation Baseline: `v6.9.6-foundation` — frozen at 2026-07-09. The Runtime Kernel is complete. The next era is the Agent Workbench Ecosystem.**
+> **From v6.11 onward, Runtime is considered stable infrastructure. The primary evolution target becomes the Workbench Layer, where Metadata, Schema, Plugins, and Digital Identity form the long-term product differentiation.**
+> **自 v6.11 起，Runtime 视为稳定基础设施，后续主要演进对象转为 Workbench Layer；Metadata、Schema、Plugin 与 Digital Identity 将成为产品长期演进方向。**
 
 | Item | Value |
 |---|---|
@@ -50,6 +52,29 @@ See also [`PROJECT_LINEAGE.md`](./PROJECT_LINEAGE.md) for the complete V5 / V6 i
 - **任何 Memory / Knowledge / Agent Identity**，只有能在 Workbench 中验证体验，才算完成。
 
 Workbench 不是 Demo，不是临时演示程序，不是「先放这里之后重构」的妥协。它是所有新能力的集成验证平台与产品化门槛。任何在 Workbench 中无法以 Composable 方式集成的新能力，都不应进入框架核心。
+
+## Cross-Layer Contract — Metadata First
+
+> **Metadata 不属于任何单一 Layer，它是跨层契约（Cross-layer Contract）。**
+
+```text
+Runtime
+   │
+   │ exposes
+   ▼
+Metadata Contract
+   │
+   │ adapts
+   ▼
+Workbench
+```
+
+- Runtime 不拥有 Metadata；Workbench 也不拥有 Metadata。
+- 双方只是共同遵守同一套 `ModuleMetadata` 契约。
+- 未来 Remote Agent、Gateway、Plugin、Marketplace 都可以直接读取 Metadata，而无需依赖 Runtime 或 UI 的具体实现。
+- Metadata 必须平台无关：不包含 Qt 控件、Web 组件、CLI 命令等任何具体消费端的假设。
+
+这一契约是 v6.11 之后所有模块的默认假设。任何 Runtime Module 暴露给 Workbench 的对象，都必须通过 Metadata 描述；任何 UI 消费 Runtime 对象，都必须通过 `MetadataAdapter` 翻译为 `PresentationModel`。
 
 ## V6 Runtime Foundation Baseline (Frozen)
 
