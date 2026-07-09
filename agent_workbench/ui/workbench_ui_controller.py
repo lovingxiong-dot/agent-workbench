@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import threading
 import uuid
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from PySide6.QtWidgets import QDialog, QWidget
@@ -25,6 +26,7 @@ from v6.ui_controller import UIController
 
 from agent_workbench.controller import WorkbenchController
 from agent_workbench.conversation import ConversationService
+from agent_workbench.package import PackageIntegration, PackageRegistry
 from agent_workbench.ui.configuration import ConfigCategory, ConfigurationManager
 from agent_workbench.ui.dialogs import (
     AddMcpDialog,
@@ -91,6 +93,7 @@ class WorkbenchUIController(UIController):
         data_dir: str | os.PathLike | None = None,
         workbench_host: WorkbenchHost | None = None,
         config_path: str | None = None,
+        packages_dir: str | os.PathLike | None = None,
     ) -> None:
         self._workbench = workbench or WorkbenchController(config_path=config_path)
         self._host = workbench_host
@@ -106,6 +109,9 @@ class WorkbenchUIController(UIController):
         self._presentations: dict[str, ModulePresentation] = {}
         self._config_manager = ConfigurationManager()
         self._register_configuration_categories()
+        self._packages_dir = self._resolve_packages_dir(packages_dir, config_path)
+        self._package_registry = PackageRegistry(self._packages_dir)
+        self._package_integration = PackageIntegration(self._metadata_adapter)
         super().__init__(
             parent=parent,
             config_service=config_service,
@@ -203,6 +209,7 @@ class WorkbenchUIController(UIController):
     def startup(self) -> None:
         """启动 Workbench Runtime、初始化 Workbench UI、复用 v6 UI 初始化流程。"""
         self._workbench.start()
+        self._load_packages()
         super().startup()
         self._setup_workbench_ui()
         self._wire_workbench_signals()
@@ -221,6 +228,33 @@ class WorkbenchUIController(UIController):
         """停止 Workbench Runtime，然后停止 v6 Adapter 占位。"""
         super().shutdown()
         self._workbench.stop()
+
+    def _load_packages(self) -> None:
+        """发现、加载并注册所有 Agent Packages 及其 ViewSchema。"""
+        try:
+            manifests = self._package_registry.discover()
+        except Exception:  # pragma: no cover - defensive
+            return
+        for manifest in manifests:
+            try:
+                package = self._package_registry.load(manifest)
+            except Exception:  # pragma: no cover - defensive
+                continue
+            view_schema = self._package_integration.to_view_schema(package)
+            if view_schema is not None:
+                self._view_schema_registry.register(view_schema)
+
+    @staticmethod
+    def _resolve_packages_dir(
+        packages_dir: str | os.PathLike | None, config_path: str | None
+    ) -> str:
+        """解析 packages 目录：优先使用显式传入，其次从 config_path 推导，最后使用默认位置。"""
+        if packages_dir is not None:
+            return str(packages_dir)
+        if config_path is not None:
+            return str(Path(config_path).resolve().parent.parent / "packages")
+        here = Path(__file__).resolve().parent.parent.parent
+        return str(here / "packages")
 
     def _setup_workbench_ui(self) -> None:
         """装配 Workbench UI：Workspace、信号连接、状态栏初始化。"""
@@ -304,14 +338,18 @@ class WorkbenchUIController(UIController):
     def _build_navigator_presentations(self) -> list[ModulePresentation]:
         """构造 Navigator 所需的 ModulePresentation 列表。
 
-        包含固定功能 Workspace 与 Settings 配置分类；新增 Workspace 或分类时
-        只需修改此列表，无需改动 Navigator。
+        包含固定功能 Workspace、已加载的 Agent Packages 与 Settings 配置分类；
+        新增 Workspace 或 Package 时只需修改数据源，无需改动 Navigator。
         """
         presentations: list[ModulePresentation] = [
             ModulePresentation(id="chat", type="workspace", name="Chat", icon="💬", category="workspace"),
             ModulePresentation(id="skill", type="workspace", name="Skills", icon="🛠", category="workspace"),
             ModulePresentation(id="tool", type="workspace", name="Tools", icon="🔧", category="workspace"),
         ]
+        for package in self._package_registry.list():
+            pres = self._package_integration.to_module_presentation(package)
+            pres.category = "agent"
+            presentations.append(pres)
         for category in self._config_manager.list_categories():
             presentations.append(
                 ModulePresentation(
@@ -350,6 +388,12 @@ class WorkbenchUIController(UIController):
             meta = self._workbench.get_module_metadata(module_id)
             if meta is not None:
                 pres = self._metadata_adapter.adapt(meta)
+                self._presentations[module_id] = pres
+        if pres is None:
+            package = self._package_registry.get(module_id)
+            if package is not None:
+                pres = self._package_integration.to_module_presentation(package)
+                pres.category = "agent"
                 self._presentations[module_id] = pres
         if pres is not None and self._host is not None and self._view_schema_renderer is not None:
             schema = self._view_schema_registry.resolve(pres)

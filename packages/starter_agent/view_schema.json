@@ -1,0 +1,45 @@
+{
+  "schema_id": "starter_agent_workspace",
+  "name": "Starter Agent Workspace",
+  "description": "Minimal workspace for the Starter Agent sample package.",
+  "workspace": {
+    "toolbar": {
+      "items": ["execute"]
+    },
+    "inspector": {
+      "tabs": [
+        {
+          "id": "properties",
+          "title": "Properties",
+          "source": "properties"
+        },
+        {
+          "id": "statistics",
+          "title": "Statistics",
+          "source": "statistics"
+        },
+        {
+          "id": "actions",
+          "title": "Actions",
+          "source": "actions"
+        }
+      ],
+      "default_tab": "actions"
+    },
+    "status": {
+      "items": [
+        {
+          "name": "runtime",
+          "source": "binding",
+          "binding": {
+            "path": "runtime.status"
+          }
+        },
+        {
+          "name": "execution_count",
+          "source": "statistics"
+        }
+      ]
+    }
+  }
+}

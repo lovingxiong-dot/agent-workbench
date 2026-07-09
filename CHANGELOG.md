@@ -1,5 +1,37 @@
 # Changelog
 
+## v6.12.0-beta.7 (2026-07-10) — Workbench Integration（Commit 12.3）
+
+> **里程碑语义**：Package 第一次真正接入 Workbench UI。`WorkbenchUIController` 启动时通过 `PackageRegistry.discover()` / `load()` 扫描 `packages/` 目录，将合法 Package 的 `ViewSchema` 注册到 `ViewSchemaRegistry`，并把 Package 转换成的 `ModulePresentation` 加入 Navigator。点击 Package Agent 后，`ViewSchemaRenderer` 按 Package 自声明的 Schema 驱动 Workspace / Inspector / ToolBar / StatusBar，实现 `Package → Metadata → PresentationModel → ViewSchema → UI` 的完整数据流。
+
+### Added
+- `agent_workbench/package/integration.py`：新增 `PackageIntegration` 桥接器。
+  - `to_metadata_definition(package)`：将 `PackageInfo.metadata` 转换为 `MetadataDefinition`。
+  - `to_module_presentation(package)`：将 Package 转换为 `ModulePresentation`，并从 `view_schema.json` 提取 `view_schema_id`。
+  - `to_view_schema(package)`：将 `view_schema.json` 解析为 `ViewSchema` 对象。
+  - 对 UI 层的导入全部延迟到方法内部，避免 package 子模块触发 UI 初始化导致循环导入。
+- `agent_workbench/ui/workbench_ui_controller.py`：
+  - 新增 `packages_dir` 构造参数，默认从项目根目录 `packages/` 自动解析。
+  - 初始化 `PackageRegistry` 与 `PackageIntegration`。
+  - `startup()` 启动流程中调用 `_load_packages()`：discover → load → 注册 ViewSchema。
+  - `_build_navigator_presentations()` 将已加载 Package 作为 `category="agent"` 加入 Navigator。
+  - `_on_selection_changed()` 在本地 `_presentations` 与 Workbench Metadata 均未命中时，回退到 `PackageRegistry` 构建 PresentationModel。
+- `tests/package/test_package_integration.py`：10 个非 GUI 单元测试，覆盖 Package → ModulePresentation / ViewSchema 转换、默认 packages 目录解析、Navigator 集成、ViewSchema 注册、选中 Package 后的 Renderer 调用。
+- `packages/starter_agent/`：补齐 `metadata.json` / `view_schema.json` / `capabilities.json` / `runtime.json` / `README.md`，作为 Commit 12.3 的集成验证模板。
+
+### Design Constraints
+- Package 不允许直接依赖 Qt。
+- Package 无权注册 Renderer；Renderer 永远属于 Workbench。
+- Package 只能通过配置文件声明 `view_schema_id`，由宿主 Workbench 决定渲染方式。
+
+### Tests
+- `pytest tests/`：**779/779 passed**（新增 10 个 Workbench Integration 测试；收尾 Qt 退出码 `3221226505` 与 `QThread: Destroyed while thread is still running` 为 Windows 已知现象，不影响断言结果）。
+
+### Next Phase
+- **Commit 12.4**：Starter Agent Runtime（Execute → Runtime → Binding → Status 完整闭环）。
+
+---
+
 ## v6.12.0-beta.6 (2026-07-10) — Package Registry Lifecycle + Workbench OS Branding
 
 > **里程碑语义**：Commit 12.2 冻结 Package 生命周期接口：`discover()` / `load()` / `unload()` / `reload()` / `list()`。`reload()` 先抛出 `NotImplementedError`，但接口已经锁定。同时确立产品品牌：完成 UI 最终打包后的第一个产品命名定为 **Workbench OS 1.0**，并生成对应应用图标（PNG/ICO）。

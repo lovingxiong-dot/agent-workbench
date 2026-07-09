@@ -1,0 +1,43 @@
+{
+  "id": "starter_agent",
+  "type": "agent",
+  "name": "Starter Agent",
+  "description": "A minimal sample agent to validate the Agent Package lifecycle.",
+  "icon": "🚀",
+  "properties": [
+    {
+      "id": "version",
+      "name": "Version",
+      "description": "Package version.",
+      "value_type": "string",
+      "current_value": "1.0.0",
+      "editable": false
+    },
+    {
+      "id": "author",
+      "name": "Author",
+      "description": "Package author.",
+      "value_type": "string",
+      "current_value": "Workbench OS",
+      "editable": false
+    }
+  ],
+  "statistics": [
+    {
+      "id": "execution_count",
+      "name": "Executions",
+      "value": 0,
+      "unit": "times"
+    }
+  ],
+  "actions": [
+    {
+      "id": "execute",
+      "label": "Execute",
+      "description": "Run the starter agent action.",
+      "icon": "▶️",
+      "enabled": true
+    }
+  ],
+  "tags": ["sample", "builtin"]
+}

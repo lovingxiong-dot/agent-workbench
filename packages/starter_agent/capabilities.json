@@ -1,0 +1,9 @@
+{
+  "capabilities": [
+    {
+      "id": "execute",
+      "name": "Execute",
+      "description": "Execute the starter agent sample action."
+    }
+  ]
+}
