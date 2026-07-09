@@ -17,16 +17,30 @@ from agent_workbench.ui.workbench.presentation import ModulePresentation
 class NavigatorHost(WorkbenchAreaHost):
     """Workbench 左侧导航 Host。"""
 
-    selection_changed = Signal(str)  # module_id
+    selection_changed = Signal(str)  # workspace_id or category_id
+    add_requested = Signal(str)  # category_id
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         navigator = Navigator(self)
         self.mount(navigator)
         navigator.selection_changed.connect(self.selection_changed.emit)
+        navigator.add_requested.connect(self.add_requested.emit)
+
+    def register_functional_tab(self, workspace_id: str, title: str, icon: str) -> None:
+        """注册一个顶部功能 Tab。"""
+        content = self.content
+        if isinstance(content, Navigator):
+            content.register_functional_tab(workspace_id, title, icon)
+
+    def register_settings_category(self, category_id: str, title: str, icon: str) -> None:
+        """注册一个 Settings 配置分类。"""
+        content = self.content
+        if isinstance(content, Navigator):
+            content.register_settings_category(category_id, title, icon)
 
     def register_module(self, presentation: ModulePresentation) -> None:
-        """注册一个模块到导航。"""
+        """注册一个模块到导航（兼容旧接口）。"""
         content = self.content
         if isinstance(content, Navigator):
             content.register_module(presentation)
@@ -37,17 +51,23 @@ class NavigatorHost(WorkbenchAreaHost):
         if isinstance(content, Navigator):
             content.clear_modules()
 
-    def set_selection(self, module_id: str) -> None:
+    def set_selection(self, item_id: str) -> None:
         """设置当前选中项。"""
         content = self.content
         if isinstance(content, Navigator):
-            content.set_selection(module_id)
+            content.set_selection(item_id)
+
+    def set_settings_expanded(self, expanded: bool) -> None:
+        """展开或折叠 Settings 区。"""
+        content = self.content
+        if isinstance(content, Navigator):
+            content.set_settings_expanded(expanded)
 
     def modules(self) -> set[str]:
         """返回已注册模块的 id 集合。"""
         content = self.content
         if isinstance(content, Navigator):
-            return set(content._modules.keys())
+            return set(content._functional_items.keys())
         return set()
 
     def dispose(self) -> None:

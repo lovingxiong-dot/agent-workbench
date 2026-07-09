@@ -228,3 +228,21 @@ When a sandbox experiment graduates into the product, move its files into the pr
 ### Creating New Environment Directories
 
 Do not create arbitrary directories next to the repository. If a new category of non-source data appears, propose an update to this governance document. Until then, fit it into `.dist/`, `.resource/`, or `.sandbox/`.
+
+---
+
+## 6. Workbench Constitution: No-Code Registration
+
+除 Runtime Kernel 和内置核心能力外，所有 Provider、LLM、MCP、Skill、Tool、Workflow、Prompt、Memory 等扩展对象，都应支持通过 Workbench UI 注册、配置和管理。开发者不应为了新增一个实例而修改源码。
+
+新增实例的正确路径：
+1. 在 Workbench UI 中打开对应面板（Provider / Skill / Tool / MCP 等）。
+2. 点击 "+" 或 "Add"。
+3. 填写配置表单。
+4. ConfigManager 持久化。
+5. Registry 自动 Reload。
+6. Capability 更新，Agent 立即可用。
+
+反模式：
+- 直接修改源码文件来新增 Provider、Skill 或 Tool。
+- 为了换一个模型地址而重新编译或重启应用。

@@ -23,9 +23,23 @@
 
 See also [`PROJECT_LINEAGE.md`](./PROJECT_LINEAGE.md) for the complete V5 / V6 identity map.
 
-## Agent Workbench 是 Runtime 的官方产品化验证平台
+## 产品定位
 
-> **Agent Workbench is the Official Product Validation Platform of the V6 Runtime.**
+**Agent Workbench is the Official Product Validation Platform of the V6 Runtime.**
+
+**Workbench Constitution — No-Code Registration Principle**
+
+除 Runtime Kernel 和内置核心能力外，所有 Provider、LLM、MCP、Skill、Tool、Workflow、Prompt、Memory 等扩展对象，都应支持通过 Workbench UI 注册、配置和管理。开发者不应为了新增一个实例而修改源码。
+
+流程：UI → ConfigManager → Registry Reload → Capability Update → Agent Ready
+
+反模式：UI → 修改代码 → 重新编译 → 重新启动
+
+这意味着：
+- 新增一个 OpenAI 兼容模型 → 点 "AI Models → +"
+- 接入一个 MCP Server → 点 "MCP → +"
+- 写了一个 Python 技能 → 点 "Skills → +"，选择脚本即可
+- 换模型、改 API 地址、调整权限、禁用某个工具 → 全部在 Workbench 完成
 
 这句话决定以后所有开发行为：
 

@@ -179,21 +179,31 @@ class WorkbenchUIController(UIController):
         workbench.selection_changed.connect(self._on_selection_changed)
         workbench.property_changed.connect(self._on_property_changed)
         workbench.action_triggered.connect(self._on_action_triggered)
+        workbench.navigator.add_requested.connect(self._on_add_requested)
 
     def _refresh_navigator(self) -> None:
-        """将 Runtime 所有 Module 注册到 Navigator。"""
+        """注册固定功能 Tab 与 Settings 分类到 Navigator。"""
         if self._host is None:
             return
         nav = self._host.workbench.navigator
         nav.clear_modules()
         self._presentations.clear()
-        for ns in self._workbench.runtime.module_registry.namespaces():
-            meta = self._workbench.get_module_metadata(ns)
-            if meta is None:
-                continue
-            pres = self._metadata_adapter.adapt(meta)
-            self._presentations[ns] = pres
-            nav.register_module(pres)
+
+        nav.register_functional_tab("chat", "Chat", "💬")
+        nav.register_functional_tab("skill", "Skills", "🛠")
+        nav.register_functional_tab("tool", "Tools", "🔧")
+
+        nav.register_settings_category("provider", "Provider", "🏭")
+        nav.register_settings_category("llm", "LLM", "🧠")
+        nav.register_settings_category("mcp", "MCP", "🔌")
+        nav.register_settings_category("workflow", "Workflow", "🔄")
+        nav.register_settings_category("prompt", "Prompt", "📝")
+        nav.register_settings_category("memory", "Memory", "🧠")
+        nav.register_settings_category("knowledge", "Knowledge", "📚")
+
+    def _on_add_requested(self, category_id: str) -> None:
+        """Settings 分类 '+' 按钮占位：未来弹出新增实例表单。"""
+        print(f"[WorkbenchUIController] add requested for category: {category_id}")
 
     def _on_selection_changed(self, module_id: str) -> None:
         """Navigator 选中变化 → Inspector 渲染对应模块。"""
