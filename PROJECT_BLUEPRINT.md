@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v6.9.6-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 39 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v6.10.0-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 39 |
 
 ## Current Development Authority
 
@@ -341,14 +341,17 @@ Presentation Layer
 Chat Workspace          ← Agent 能聊天
 ```
 
-之后再逐步让 Agent 学会：安装能力（Skill Registry）、执行工具（Tool Runtime）、调用 LLM（Provider Framework）。
+在 IDE 骨架可用之后，第一要务是打通「配置驱动闭环」：Provider / MCP / Skill / Workflow / Prompt / Memory 都可通过 Workbench UI 的「+」按钮注册到 ConfigStore，对应 Registry 自动 Reload，Navigator 与 StatusBar 实时刷新。该闭环已在 v6.10.0-alpha 第一期完成。
+
+之后再逐步让 Agent 学会：安装能力（Skill Registry 执行器）、执行工具（Tool Runtime 执行器）、调用 LLM（Provider Framework 真实 LLM）。
 
 ### v6.10.x 目标
 
 第一梯队（⭐⭐⭐⭐⭐，立即执行）：
 
-- **GUI Platform**：把现有 Workbench UI 跑通、稳定、可交互，成为每天可用的 IDE 主界面。
-- **Provider Framework**：打通 Provider 抽象接口、配置、注册、调用链路；先支持一个 Provider。
+- **GUI Platform**：把现有 Workbench UI 跑通、稳定、可交互，成为每天可用的 IDE 主界面。 ✅
+- **Configuration-Driven Loop**：Provider / MCP / Skill / Workflow / Prompt / Memory 可通过 UI 注册、ConfigStore 持久化、Registry 自动 Reload。 ✅
+- **Provider Framework**：打通 Provider 抽象接口、配置、注册、调用链路；先支持一个 Provider（EchoProvider 已可用，OpenAIProvider 待真实验证）。
 - **Tool Runtime**：Tool 可注册、可执行、可观测；Python / PowerShell / 系统命令等先以 Tool 形式接入。
 - **Skill Framework**：定义 Skill Contract（SkillDefinition / SkillContext / SkillRuntime / SkillRegistry），先不做具体 Skill。
 
@@ -375,12 +378,13 @@ Chat Workspace          ← Agent 能聊天
 v6.9.5-alpha  Interaction Boundary Layer              ✅
 v6.9.6-alpha  Capability Runtime Contract Freeze      ✅
 v6.9.6-foundation  V6 Runtime Foundation Baseline     ✅ 当前基线
-v6.10.0-alpha  Workbench UI Framework + Presentation + Chat  当前
-v6.10.x        Skill Registry / Tool Runtime / Provider Framework
+v6.10.0-alpha  Workbench UI Framework + Presentation + Chat  ✅
+v6.10.0-alpha  Configuration-Driven Workbench Loop (Provider/MCP/Skill/Workflow/Prompt/Memory)  ✅ 当前
+v6.10.x        Skill Runtime / Tool Runtime / Provider Runtime 执行器落地  当前
         ↓
-v6.11.x  Workflow / Memory / Knowledge
+v6.11.x  Workflow / Memory / Knowledge 体验闭环
         ↓
-（未来） MCP / Browser / External Service / Marketplace / Gateway
+（未来） MCP Client / Browser / External Service / Marketplace / Gateway
 ```
 
 ### 最高级设计约束

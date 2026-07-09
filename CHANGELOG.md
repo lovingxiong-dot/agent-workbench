@@ -1,5 +1,35 @@
 # Changelog
 
+## v6.10.0-alpha (2026-07-09) — Configuration-Driven Workbench Loop
+
+> **里程碑语义**：v6.10 以「打通完整配置闭环」为第一站。以 Provider 为样板，将 No-Code Registration Principle 扩展到 MCP、Skill、Workflow、Prompt、Memory：用户通过 Workbench UI 点击「+」即可注册扩展对象，ConfigStore 持久化后对应 Registry 自动 Reload，Navigator 与 StatusBar 实时刷新，Agent 立即可见新配置。
+
+### Added
+- 新增 `agent_workbench/ui/dialogs/base.py`：`AddConfigItemDialog` 基类，统一新增配置项对话框的布局、主题样式与 `result()` 契约。
+- 新增 `agent_workbench/ui/dialogs/add_mcp_dialog.py`：`AddMcpDialog` 用于新增 MCP Server（name / command / args / env / enabled）。
+- 新增 `agent_workbench/ui/dialogs/add_skill_dialog.py`：`AddSkillDialog` 用于新增 Skill（name / type / source / description / enabled）。
+- 新增 `agent_workbench/ui/dialogs/add_workflow_dialog.py`：`AddWorkflowDialog` 用于新增 Workflow 模板（name / description / steps / enabled）。
+- 新增 `agent_workbench/ui/dialogs/add_prompt_dialog.py`：`AddPromptDialog` 用于新增 Prompt 模板（name / description / template / enabled）。
+- 新增 `agent_workbench/ui/dialogs/add_memory_dialog.py`：`AddMemoryDialog` 用于新增 Memory Store（name / provider / path / enabled）。
+- 新增 `agent_workbench/runtime/modules/mcp_module.py`：`McpModule` 读取 `mcp.servers` 配置并暴露 Metadata。
+- 新增 `agent_workbench/runtime/modules/skill_module.py`：`SkillModule` 读取 `skill.registry` 配置并维护 Skill 索引。
+- 新增 `agent_workbench/runtime/modules/workflow_module.py`：`WorkflowModule` 读取 `workflow.templates` 配置并维护模板索引。
+- 扩展 `tests/ui/test_provider_config_loop.py`：新增 MCP / Skill / Workflow / Prompt / Memory 对话框与 `_on_add_requested` 追加测试。
+
+### Changed
+- 重构 `agent_workbench/ui/dialogs/add_provider_dialog.py`：继承 `AddConfigItemDialog`，保持原有表单字段与返回契约不变。
+- 更新 `agent_workbench/runtime/agent_runtime.py`：在 ModuleRegistry 中注册 `McpModule` / `SkillModule` / `WorkflowModule`。
+- 更新 `agent_workbench/runtime/modules/memory_module.py`：`apply_config` 优先读取 `memory.configs` 列表，无列表时回退到传统 `memory` 字典，兼容旧配置。
+- 更新 `agent_workbench/ui/workbench_ui_controller.py`：`_register_configuration_categories` 为 MCP / Skill / Workflow / Prompt / Memory 绑定对应新增对话框，修正 `memory` 分类的 `config_path` 为 `memory.configs`。
+- 更新 `agent_workbench/runtime/config_store.py`：`_notify` 发出通用 `changed(path, value)` 信号，使 UI 能在任意配置变更时刷新 Navigator / StatusBar。
+
+### Tests
+- `pytest tests/ui/test_provider_config_loop.py`：**22/22 passed**。
+- `pytest tests/ui/`：**39/39 passed**。
+- `pytest tests/`：**614/614 passed**（收尾 QApplication 销毁阶段出现 Windows 已知退出码 `3221226505`，不影响断言结果）。
+
+---
+
 ## v6.9.6-foundation (2026-07-09) — V6 Runtime Foundation Baseline Frozen
 
 > **里程碑语义**：v6.9.x Runtime Kernel Freeze Series 正式收官。Repository Hygiene、Runtime Glossary、Repository Map、Audit / Verify 自动化、环境目录布局全部落地，形成可长期演进的工程基线。从此所有 Provider、MCP、Gateway、Workflow 集成均从该基线出发，不再扩展 Runtime Kernel。

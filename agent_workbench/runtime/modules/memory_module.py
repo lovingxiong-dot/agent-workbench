@@ -44,9 +44,27 @@ class MemoryModule(BaseRuntimeModule):
         self._runtime = runtime
 
     def apply_config(self, store: ConfigStore) -> None:
-        """热更新 Memory 配置：重建 MemoryService。"""
+        """热更新 Memory 配置：重建 MemoryService。
+
+        优先读取 memory.configs 列表（Workbench UI 新增 Memory Store 时使用），
+        若不存在则回退到传统 memory 字典配置。
+        """
         self._enabled = store.get("memory.enabled", True)
-        self._config = store.get("memory", {})
+        memory_configs = store.get("memory.configs", [])
+        legacy_config = store.get("memory", {})
+
+        if memory_configs:
+            active_config = next(
+                (cfg for cfg in memory_configs if cfg.get("enabled", True)),
+                memory_configs[0],
+            )
+            self._config = {
+                "provider": active_config.get("provider", "sqlite"),
+                "sqlite": {"path": active_config.get("path", "storage/agents/agent_workbench/memory.db")},
+                "max_records": active_config.get("max_records", 10000),
+            }
+        else:
+            self._config = legacy_config
 
         if not self._enabled:
             self._dispose_service()

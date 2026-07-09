@@ -31,14 +31,17 @@ from agent_workbench.runtime.metadata import ModuleMetadata
 from agent_workbench.runtime.module_registry import ModuleRegistry
 from agent_workbench.runtime.modules.config_module import ConfigModule
 from agent_workbench.runtime.modules.memory_module import MemoryModule
+from agent_workbench.runtime.modules.mcp_module import McpModule
 from agent_workbench.runtime.modules.model_module import ModelModule
 from agent_workbench.runtime.modules.profile_module import ProfileModule
 from agent_workbench.runtime.modules.prompt_module import PromptModule
 from agent_workbench.runtime.modules.runtime_module import RuntimeModule
 from agent_workbench.runtime.modules.session_module import SessionModule
+from agent_workbench.runtime.modules.skill_module import SkillModule
 from agent_workbench.runtime.modules.strategy_module import StrategyModule
 from agent_workbench.runtime.modules.tool_module import ToolModule
 from agent_workbench.runtime.modules.trace_module import TraceModule
+from agent_workbench.runtime.modules.workflow_module import WorkflowModule
 from agent_workbench.runtime.profile_manager import ProfileManager
 
 
@@ -246,7 +249,7 @@ class AgentWorkbenchRuntime:
         }
 
     def _register_modules(self) -> None:
-        """注册 10 个 RuntimeModule。"""
+        """注册 RuntimeModule。"""
         self._registry.register(RuntimeModule())
         self._registry.register(SessionModule())
         self._registry.register(ConfigModule())
@@ -257,6 +260,9 @@ class AgentWorkbenchRuntime:
         self._registry.register(MemoryModule())
         self._registry.register(StrategyModule())
         self._registry.register(TraceModule())
+        self._registry.register(McpModule())
+        self._registry.register(SkillModule())
+        self._registry.register(WorkflowModule())
 
     def _register_engines(self) -> None:
         """注册 Workbench 专用 Engine 到底层 EngineManager。"""

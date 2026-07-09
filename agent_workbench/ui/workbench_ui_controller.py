@@ -16,7 +16,7 @@ import threading
 import uuid
 from typing import TYPE_CHECKING, Callable
 
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QDialog, QWidget
 
 from v6.runtime.adapter import IRuntimeAdapter
 from v6.runtime.context import RuntimeContext
@@ -24,6 +24,15 @@ from v6.runtime.event_bus import RuntimeEvent, RuntimeEventType
 from v6.ui_controller import UIController
 
 from agent_workbench.controller import WorkbenchController
+from agent_workbench.ui.configuration import ConfigCategory, ConfigurationManager
+from agent_workbench.ui.dialogs import (
+    AddMcpDialog,
+    AddMemoryDialog,
+    AddPromptDialog,
+    AddProviderDialog,
+    AddSkillDialog,
+    AddWorkflowDialog,
+)
 from agent_workbench.ui.workbench import WorkbenchHost
 from agent_workbench.ui.workbench.chat_workspace import ChatWorkspaceItem
 from agent_workbench.ui.workbench.metadata_adapter import MetadataAdapter
@@ -79,6 +88,8 @@ class WorkbenchUIController(UIController):
         self._metadata_adapter = MetadataAdapter()
         self._current_module_id: str | None = None
         self._presentations: dict[str, ModulePresentation] = {}
+        self._config_manager = ConfigurationManager()
+        self._register_configuration_categories()
         super().__init__(
             parent=parent,
             config_service=config_service,
@@ -98,6 +109,62 @@ class WorkbenchUIController(UIController):
         """暴露 Interaction Boundary Layer，供未来 UI 组件非阻塞提交请求。"""
         return self._workbench.interaction_layer
 
+    def _register_configuration_categories(self) -> None:
+        """注册所有 Settings 配置分类并绑定新增对话框。"""
+        categories = [
+            ConfigCategory(
+                category_id="model",
+                title="AI Models",
+                icon="🤖",
+                config_path="model.providers",
+                dialog_factory=lambda: AddProviderDialog(self),
+            ),
+            ConfigCategory(
+                category_id="mcp",
+                title="MCP",
+                icon="🔌",
+                config_path="mcp.servers",
+                dialog_factory=lambda: AddMcpDialog(self),
+            ),
+            ConfigCategory(
+                category_id="skill",
+                title="Skills",
+                icon="🧩",
+                config_path="skill.registry",
+                dialog_factory=lambda: AddSkillDialog(self),
+            ),
+            ConfigCategory(
+                category_id="workflow",
+                title="Workflows",
+                icon="🔄",
+                config_path="workflow.templates",
+                dialog_factory=lambda: AddWorkflowDialog(self),
+            ),
+            ConfigCategory(
+                category_id="prompt",
+                title="Prompts",
+                icon="📝",
+                config_path="prompt.templates",
+                dialog_factory=lambda: AddPromptDialog(self),
+            ),
+            ConfigCategory(
+                category_id="memory",
+                title="Memory",
+                icon="🧠",
+                config_path="memory.configs",
+                dialog_factory=lambda: AddMemoryDialog(self),
+            ),
+            ConfigCategory(
+                category_id="knowledge",
+                title="Knowledge",
+                icon="📚",
+                config_path="knowledge.bases",
+                dialog_factory=None,
+            ),
+        ]
+        for category in categories:
+            self._config_manager.register(category)
+
     def startup(self) -> None:
         """启动 Workbench Runtime、初始化 Workbench UI、复用 v6 UI 初始化流程。"""
         self._workbench.start()
@@ -106,6 +173,7 @@ class WorkbenchUIController(UIController):
         self._wire_workbench_signals()
         self._refresh_navigator()
         self._refresh_status_bar()
+        self._workbench.runtime.config.changed.connect(self._on_config_changed)
         self._subscribe_config_changes()
 
         # 订阅 Runtime EventBus 流式事件，映射到 UI 信号
@@ -193,17 +261,28 @@ class WorkbenchUIController(UIController):
         nav.register_functional_tab("skill", "Skills", "🛠")
         nav.register_functional_tab("tool", "Tools", "🔧")
 
-        nav.register_settings_category("provider", "Provider", "🏭")
-        nav.register_settings_category("llm", "LLM", "🧠")
-        nav.register_settings_category("mcp", "MCP", "🔌")
-        nav.register_settings_category("workflow", "Workflow", "🔄")
-        nav.register_settings_category("prompt", "Prompt", "📝")
-        nav.register_settings_category("memory", "Memory", "🧠")
-        nav.register_settings_category("knowledge", "Knowledge", "📚")
+        for category in self._config_manager.list_categories():
+            nav.register_settings_category(
+                category.category_id, category.title, category.icon
+            )
 
     def _on_add_requested(self, category_id: str) -> None:
-        """Settings 分类 '+' 按钮占位：未来弹出新增实例表单。"""
-        print(f"[WorkbenchUIController] add requested for category: {category_id}")
+        """Settings 分类 '+' 按钮 → 弹出配置对话框并追加到对应配置路径。"""
+        category = self._config_manager.get(category_id)
+        if category is None or category.dialog_factory is None:
+            return
+
+        dialog = category.dialog_factory()
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        item = dialog.result()
+        if not item:
+            return
+
+        current = self._workbench.get_config_value(category.config_path, [])
+        current.append(item)
+        self._workbench.set_config_value(category.config_path, current)
 
     def _on_selection_changed(self, module_id: str) -> None:
         """Navigator 选中变化 → Inspector 渲染对应模块。"""
@@ -298,6 +377,11 @@ class WorkbenchUIController(UIController):
         sb.set_profile(overview.get("current_profile", "—"))
         sb.set_session(self._active_sid or "—")
         sb.set_memory(f"{overview.get('memory_count', 0)} records")
+
+    def _on_config_changed(self, path: str, value: object) -> None:
+        """ConfigStore 通用变更信号 → 刷新 Navigator 与 StatusBar。"""
+        self._refresh_navigator()
+        self._refresh_status_bar()
 
     def _subscribe_config_changes(self) -> None:
         """订阅 ConfigStore 变更，刷新 StatusBar 与 Inspector。"""

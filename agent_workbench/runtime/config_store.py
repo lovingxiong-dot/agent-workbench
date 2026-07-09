@@ -16,6 +16,13 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 import yaml
+from PySide6.QtCore import QObject, Signal
+
+
+class _ConfigStoreSignals(QObject):
+    """ConfigStore 的通用变更信号容器。"""
+
+    changed = Signal(str, object)  # path, value
 
 
 class ConfigStore:
@@ -30,6 +37,8 @@ class ConfigStore:
         self._data: Dict[str, Any] = {}
         self._lock = threading.RLock()
         self._subscribers: Dict[str, List[Callable[[str, Any], None]]] = {}
+        self._signals = _ConfigStoreSignals()
+        self.changed = self._signals.changed
         self._load()
 
     @property
@@ -139,12 +148,14 @@ class ConfigStore:
             yaml.safe_dump(self.snapshot(), fh, allow_unicode=True, sort_keys=False)
 
     def _notify(self, namespace: str, path: str) -> None:
-        """通知 namespace 订阅者。"""
+        """通知 namespace 订阅者，并发出通用 changed 信号。"""
         with self._lock:
             callbacks = list(self._subscribers.get(namespace, []))
+        value = self.get(path)
+        self._signals.changed.emit(path, value)
         for callback in callbacks:
             try:
-                callback(path, self.get(path))
+                callback(path, value)
             except Exception:  # pragma: no cover - defensive
                 pass
 
