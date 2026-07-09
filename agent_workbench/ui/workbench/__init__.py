@@ -18,7 +18,10 @@ from agent_workbench.ui.workbench.presentation import (
 from agent_workbench.ui.workbench.command_bar_host import CommandBarHost
 from agent_workbench.ui.workbench.host_base import WorkbenchAreaHost
 from agent_workbench.ui.workbench.inspector_host import InspectorHost
-from agent_workbench.ui.workbench.metadata_adapter import MetadataAdapter
+from agent_workbench.ui.workbench.metadata_adapter import (
+    MetadataAdapter,
+    PresentationMetadataAdapter,
+)
 from agent_workbench.ui.workbench.navigator import Navigator
 from agent_workbench.ui.workbench.navigator_host import NavigatorHost
 from agent_workbench.ui.workbench.status_bar_host import StatusBarHost
@@ -34,6 +37,7 @@ __all__ = [
     "StatisticPresentation",
     "ActionPresentation",
     "MetadataAdapter",
+    "PresentationMetadataAdapter",
     "WorkbenchAreaHost",
     "NavigatorHost",
     "WorkspaceHost",

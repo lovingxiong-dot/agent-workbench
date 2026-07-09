@@ -1,5 +1,38 @@
 # Changelog
 
+## v6.12.0-alpha.1 (2026-07-09) — Metadata → PresentationModel 完整映射
+
+> **里程碑语义**：v6.11 完成了 Metadata Contract 与 Provider Registry；v6.12 开始让 UI 真正独立于 Runtime。本次提交完整打通 `MetadataDefinition → PresentationModel → Qt` 的第一段：Adapter 现在能无损失地转换 Capability Metadata、Resource Metadata 以及旧版 Legacy Metadata，并为 PresentationModel 补齐所有常用字段。同时，`PROJECT_BLUEPRINT.md` 正式宣布 Metadata Contract 长期冻结（Additive Only），为 v6.12 及以后的 UI / CLI / Remote / Plugin 扩展提供稳定契约基础。
+
+### Added
+- `agent_workbench/ui/workbench/presentation.py`：
+  - `PropertyPresentation` 扩展 `default_value`、`category`、`sensitive`、`placeholder`、`required`。
+  - `StatisticPresentation` 扩展 `unit`、`timestamp`。
+  - `ActionPresentation` 扩展 `enabled`、`order`、`danger`。
+  - `ModulePresentation` 扩展 `tags`、`enabled`、`order`、`category`、`children`、`connection`，可同时表达 Capability Module 与 Resource。
+- `agent_workbench/ui/workbench/metadata_adapter.py`：
+  - 新增 `PresentationMetadataAdapter` 类，显式实现 `agent_workbench.metadata.adapter.MetadataAdapter` Protocol。
+  - 新增 `adapt_resource()`，将 `ResourceDefinition` 转换为 `ModulePresentation`。
+  - 完整保留 `MetadataDefinition`、`ResourceDefinition` 以及 Legacy `ModuleMetadata` / `PropertyMetadata` / `StatisticMetadata` / `ActionMetadata` 的映射。
+- `docs/v6/v6.12-task-list.md`：拆分 Commit 6/7/8，明确 v6.12 主线为 PresentationModel 打通 → Task 闭环 → 真实使用验证 → 后续扩展。
+- `tests/ui/test_metadata_presentation.py`：覆盖 Capability、Resource、Legacy 映射与 Protocol 合规性。
+
+### Changed
+- `agent_workbench/ui/workbench/__init__.py`：导出 `PresentationMetadataAdapter`，并保留 `MetadataAdapter` 向后兼容别名。
+- `agent_workbench/ui/workbench_ui_controller.py`：使用 `PresentationMetadataAdapter` 替换旧的 `MetadataAdapter`。
+- `PROJECT_BLUEPRINT.md`：新增「Metadata Contract 长期冻结（v6.11.0-beta.4 起）」小节，规定只允许 Additive Change，禁止 Breaking Change。
+- `docs/v6/v6.11-task-list.md`：原 Commit 6 拆分为 6/7/8，并链接到新的 v6.12 任务清单。
+
+### Tests
+- `pytest tests/`：**669/669 passed**（新增 7 个 PresentationModel 映射测试；收尾 QApplication 销毁阶段出现 Windows 已知退出码 `3221226505`，不影响断言结果）。
+
+### Next Phase
+- **Commit 7**：Navigator + Inspector 全面读取 `PresentationModel`。
+- **Commit 8**：StatusBar + ToolBar + Workspace 通过 `PresentationModel` 聚合。
+- **Commit 9**：Task 闭环（User → Manager → Planning → Capability → Provider → Streaming → Task → Trace → History）。
+
+---
+
 ## v6.11.0-beta.4 (2026-07-09) — Provider Registry + 多模型接入
 
 > **里程碑语义**：在 OpenAI 跑通后，引入 `ProviderRegistry` 统一注册与发现模型 Provider；新增 Claude / Gemini / Kimi / Qwen / DeepSeek 五个 OpenAI 兼容 Provider，均通过统一 `ModelProvider` 协议接入 `ModelModule`。`AddProviderDialog` 从 `ModelModule` 动态读取可用 Provider 类型，Workbench 用户可在 UI 中按需配置并切换不同云模型，无需修改源码。

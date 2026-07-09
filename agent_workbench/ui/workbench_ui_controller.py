@@ -36,7 +36,7 @@ from agent_workbench.ui.dialogs import (
 from agent_workbench.runtime.modules.model_module import ModelModule
 from agent_workbench.ui.workbench import WorkbenchHost
 from agent_workbench.ui.workbench.chat_workspace import ChatWorkspaceItem
-from agent_workbench.ui.workbench.metadata_adapter import MetadataAdapter
+from agent_workbench.ui.workbench.metadata_adapter import PresentationMetadataAdapter
 from agent_workbench.ui.workbench.presentation import ModulePresentation, PropertyPresentation
 from agent_workbench.ui.workbench.trace_workspace import TraceWorkspaceItem
 
@@ -86,7 +86,7 @@ class WorkbenchUIController(UIController):
         self._host = workbench_host
         self._chat_workspace: ChatWorkspaceItem | None = None
         self._trace_workspace: TraceWorkspaceItem | None = None
-        self._metadata_adapter = MetadataAdapter()
+        self._metadata_adapter = PresentationMetadataAdapter()
         self._current_module_id: str | None = None
         self._presentations: dict[str, ModulePresentation] = {}
         self._config_manager = ConfigurationManager()
