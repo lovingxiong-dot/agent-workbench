@@ -2,7 +2,7 @@
 
 覆盖 Commit 5 核心要求：
 - LLM 只输出 Intent，不直接选择 Tool。
-- CHAT 不进入 Runtime。
+- GENERAL_QUERY 走 ACTION → chat Capability 进入 Runtime。
 - ACTION 生成 CapabilityChain 并执行。
 - 旧 Task 路径兼容。
 - Tool Calling 污染被拒绝。
@@ -39,14 +39,19 @@ def controller() -> WorkbenchController:
         ctrl.stop()
 
 
-def test_chat_does_not_enter_runtime(controller: WorkbenchController) -> None:
-    """Test 1：CHAT 模式不创建 Task，不进入 Runtime 执行层。"""
+def test_general_query_enters_runtime_via_chat_capability(controller: WorkbenchController) -> None:
+    """Test 1：普通聊天请求由 ACTION → chat Capability 进入 Runtime，调用默认 Provider。"""
     ctx = controller.chat("解释一下TCP")
 
     assert ctx.status == RuntimeState.COMPLETED
-    assert ctx.metadata.get("skipped_runtime") is True
-    assert ctx.metadata["decision"]["mode"] == "chat"
-    assert "capability_chain" not in ctx.metadata
+    decision = ctx.metadata.get("decision", {})
+    assert decision["mode"] == "action"
+    assert decision["intent"]["type"] == "general_query"
+    assert "capability_chain" in ctx.metadata
+    chain = ctx.metadata["capability_chain"]
+    assert len(chain) == 1
+    assert chain[0]["capability_id"] == "chat"
+    assert chain[0]["engine_capability"] == "text_generation"
 
 
 def test_action_image_generation(controller: WorkbenchController) -> None:

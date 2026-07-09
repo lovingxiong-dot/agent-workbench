@@ -24,13 +24,17 @@ def test_controller_submit_request_returns_request_id() -> None:
         controller.stop()
 
 
-def test_controller_chat_still_works_for_chat_mode() -> None:
+def test_controller_chat_routes_general_query_to_chat_capability() -> None:
     controller = WorkbenchController()
     try:
         controller.start()
         ctx = controller.chat("hello")
         assert ctx.status.value == "completed"
-        assert ctx.metadata.get("skipped_runtime") is True
+        decision = ctx.metadata.get("decision", {})
+        assert decision.get("mode") == "action"
+        assert decision.get("intent", {}).get("type") == "general_query"
+        assert "capability_chain" in ctx.metadata
+        assert ctx.metadata["capability_chain"][0]["capability_id"] == "chat"
     finally:
         controller.stop()
 

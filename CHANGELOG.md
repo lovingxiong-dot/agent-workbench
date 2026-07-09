@@ -1,5 +1,29 @@
 # Changelog
 
+## v6.11.0-beta.1 (2026-07-09) — First Real LLM Link
+
+> **里程碑语义**：打通第一条真实 LLM 链路，Workbench 从架构进入产品阶段。ManagerAI 将普通聊天请求（`GENERAL_QUERY`）从 `CHAT` 改为 `ACTION`，经 Decision Layer 路由到 `chat` Capability；`CapabilityResolver` 支持 `GENERAL_QUERY → chat` 并生成 `engine_capability=text_generation` 的能力链；`OpenAIProvider` 通过 `ModelModule` 接入 Runtime，非流式调用 `chat.completions.create`。新增 `tests/integration/test_openai_chat_loop.py` 非 GUI 集成测试：使用 mock HTTP 验证完整请求/响应格式、api_key 不随响应或 Trace 泄露、Provider 错误可传播为任务 FAILED。
+
+### Added
+- 新增 `tests/integration/test_openai_chat_loop.py`：
+  - `test_openai_chat_loop_returns_mocked_response`：验证 `User → Controller → Manager AI → Capability → OpenAI Provider → LLM → Response → UI` 完整闭环。
+  - `test_openai_chat_loop_does_not_leak_api_key`：验证响应与 Trace 中均不包含 `api_key`。
+  - `test_openai_provider_error_propagates_as_failed`：验证 Provider 异常使任务进入 `FAILED` 且不泄露 api_key。
+
+### Changed
+- `agent_workbench/runtime/decision/manager_ai.py`：默认请求路由从 `CHAT` 改为 `ACTION` + `general_query`，使普通聊天进入 Runtime 并调用真实 Provider。
+- `agent_workbench/runtime/decision/resolver.py`：`CapabilityResolver._map_intent_to_capability()` 新增 `IntentType.GENERAL_QUERY → chat` 映射。
+- `tests/v6/runtime/test_decision_layer.py`：原 `test_chat_does_not_enter_runtime` 更新为 `test_general_query_enters_runtime_via_chat_capability`，匹配新路由行为。
+- `tests/test_controller_interaction.py`：`test_controller_chat_still_works_for_chat_mode` 更新为 `test_controller_chat_routes_general_query_to_chat_capability`，断言 `action/general_query/chat capability_chain`。
+
+### Tests
+- `pytest tests/`：**632/632 passed**（新增 3 个 OpenAI 集成测试；收尾 QApplication 销毁阶段出现 Windows 已知退出码 `3221226505`，不影响断言结果）。
+
+### Next Phase
+- **B 线 Commit 2**：`OpenAIProvider` Streaming 输出 + Workbench Chat Workspace 实时显示 Token + Trace 记录完整请求/响应统计。
+
+---
+
 ## v6.11.0-alpha.3 (2026-07-09) — B-line Pivot: OpenAI Provider First
 
 > **里程碑语义**：响应用户方向确认，v6.11 正式拆分 A/B 两条线并明确时序原则：B 线（产品线）优先推进单一真实 LLM 对话闭环，A 线（架构线）在 Metadata Contract 已冻结基础上冻结式推进。`docs/v6/ROADMAP.md` 与 `docs/v6/v6.11-task-list.md` 重新排序，将 OpenAI Provider 非流式对话闭环列为 v6.11.0-beta.1 唯一目标；明确延后 MCP、Workflow、Memory、Tool Calling、多模型等扩展，直到第一条真实链路跑通。

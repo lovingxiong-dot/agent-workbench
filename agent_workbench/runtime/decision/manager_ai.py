@@ -49,9 +49,9 @@ class ManagerAI:
                 "raw_input": request.text or "",
             }
 
-        # 默认走 CHAT，不进入 Runtime 执行层。
+        # 默认走 ACTION → chat Capability，进入 Runtime 执行层并调用 LLM Provider。
         return {
-            "mode": "CHAT",
+            "mode": "ACTION",
             "intent": "general_query",
             "entities": {},
             "raw_input": request.text or "",

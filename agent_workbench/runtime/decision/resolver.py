@@ -42,6 +42,9 @@ class CapabilityResolver:
         entities = intent.entities
         intent_type = intent.type
 
+        if intent_type == IntentType.GENERAL_QUERY:
+            return "chat"
+
         if intent_type == IntentType.CREATE_ARTIFACT:
             artifact = entities.get("artifact", "").lower()
             if artifact == "image":
