@@ -1,5 +1,18 @@
 # Changelog
 
+## v6.11.0-alpha.3 (2026-07-09) — B-line Pivot: OpenAI Provider First
+
+> **里程碑语义**：响应用户方向确认，v6.11 正式拆分 A/B 两条线并明确时序原则：B 线（产品线）优先推进单一真实 LLM 对话闭环，A 线（架构线）在 Metadata Contract 已冻结基础上冻结式推进。`docs/v6/ROADMAP.md` 与 `docs/v6/v6.11-task-list.md` 重新排序，将 OpenAI Provider 非流式对话闭环列为 v6.11.0-beta.1 唯一目标；明确延后 MCP、Workflow、Memory、Tool Calling、多模型等扩展，直到第一条真实链路跑通。
+
+### Changed
+- 更新 [docs/v6/ROADMAP.md](docs/v6/ROADMAP.md)：新增「真实 LLM 对话闭环」阶段，拆分 B 线（产品线）与 A 线（架构线）并标明优先级；OpenAI Provider 成为 v6.11.0-beta.1 单一目标。
+- 更新 [docs/v6/v6.11-task-list.md](docs/v6/v6.11-task-list.md)：Commit 2 改为 OpenAI Provider — First Real LLM Link，Commit 3 改为 Streaming UI 对话闭环，A 线任务标记为冻结式推进。
+
+### Next Phase
+- **B 线 Commit 1**：实现 `OpenAIProvider` 单 Provider 非流式调用，打通 `User → Workbench UI → Manager AI → Capability → OpenAI Provider → LLM → Response → UI`。
+
+---
+
 ## v6.11.0-alpha.2 (2026-07-09) — Metadata Contract Frozen
 
 > **里程碑语义**：Metadata Cross-layer Contract 首次落地实现。`agent_workbench/metadata/` 目录结构一次性冻结：`types.py`、`errors.py`、`model.py`、`registry.py`、`adapter.py`。定义 `MetadataDefinition`、`MetadataProperty`、`MetadataAction`、`MetadataStatistics` 四个核心对象；`MetadataRegistry` 提供 `register()` / `get()` / `all()`；`MetadataAdapter` 协议就位。`BaseRuntimeModule.metadata()` 返回类型迁移为 `MetadataDefinition`。旧 `agent_workbench/runtime/metadata.py` 保留为兼容层，现有 Runtime 模块可逐步迁移。ROADMAP 正式拆分 A 线（架构）与 B 线（产品）：Commit 1 完成后立即启动单一真实 LLM 接入与对话体验验证。

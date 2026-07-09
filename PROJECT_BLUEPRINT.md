@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v6.11.0-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 40 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v6.11.0-alpha.3 | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 41 |
 
 ## Current Development Authority
 
@@ -855,11 +855,12 @@ v6.7.0-alpha 完成 Step 5.4 Runtime Orchestration Foundation：新增 `v6/runti
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
-| v6.9.2-alpha | 2026-07-08 | Single Agent Runtime Foundation：Task模型固定五字段；UserRequest+Manager协议+AgentManager建立UserRequest→Task→submit_task主链；Workbench UI骨架升级为WorkbenchHost→Workbench→五大Host，Host负责mount/replace/dispose生命周期；UI与测试均调整到Host接口层；V6 176/176、Workbench 34/34通过，合计210/210 | feat/refactor/test/ui | v6/runtime/task.py, v6/runtime/user_request.py, v6/runtime/manager.py, v6/runtime/orchestrator.py, agent_workbench/controller.py, agent_workbench/runtime/agent_runtime.py, agent_workbench/services/manager.py, agent_workbench/ui/workbench/*_host.py, agent_workbench/ui/workbench/workbench.py, agent_workbench/ui/workbench/__init__.py, agent_workbench/tests/test_manager.py, tests/v6/test_v6_task.py, tests/v6/test_v6_user_request.py, agent_workbench/tests/test_agent_workbench.py, PROJECT_BLUEPRINT.md, CHANGELOG.md |
+| v6.11.0-alpha.3 | 2026-07-09 | Workbench-First B-line Pivot：ROADMAP 与 v6.11-task-list 调整时序原则，B线（产品线）优先推进单一真实 LLM 对话闭环，A线（架构线）Metadata Contract 已冻结并冻结式推进；明确 OpenAI Provider 为 v6.11.0-beta.1 唯一目标，暂缓 MCP / Workflow / Memory / Tool Calling / 多模型 | docs | docs/v6/ROADMAP.md, docs/v6/v6.11-task-list.md |
 
 ## 历史归档
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v6.9.2-alpha | 2026-07-08 | Single Agent Runtime Foundation：Task模型固定五字段；UserRequest+Manager协议+AgentManager建立UserRequest→Task→submit_task主链；Workbench UI骨架升级为WorkbenchHost→Workbench→五大Host，Host负责mount/replace/dispose生命周期；UI与测试均调整到Host接口层；V6 176/176、Workbench 34/34通过，合计210/210 | feat/refactor/test/ui | v6/runtime/task.py, v6/runtime/user_request.py, v6/runtime/manager.py, v6/runtime/orchestrator.py, agent_workbench/controller.py, agent_workbench/runtime/agent_runtime.py, agent_workbench/services/manager.py, agent_workbench/ui/workbench/*_host.py, agent_workbench/ui/workbench/workbench.py, agent_workbench/ui/workbench/__init__.py, agent_workbench/tests/test_manager.py, tests/v6/test_v6_task.py, tests/v6/test_v6_user_request.py, agent_workbench/tests/test_agent_workbench.py, PROJECT_BLUEPRINT.md, CHANGELOG.md |
 | v6.9.1-alpha | 2026-07-08 | Runtime Observability Foundation：重构RuntimeTrace为分层事件模型Task/Capability/Engine/Provider/Execution/Stream/Request；新增CapabilityRouter发射capability.resolved、Orchestrator发射engine.selected、WorkbenchLLMEngine发射execution/provider/request/stream结构化事件；EventBus Trace Hook改为publish同步写入保证顺序；新增TraceEventRegistry与TraceWorkspaceItem；新增Trace顺序/父子关系/Workspace接收测试；V6 176/176、Workbench 20/20通过 | feat/refactor/test/ui | v6/runtime/enums.py, v6/runtime/event_bus.py, v6/runtime/orchestrator.py, v6/runtime/trace.py, v6/runtime/planner_loop.py, agent_workbench/runtime/capability_router.py, agent_workbench/engines/workbench_llm_engine.py, agent_workbench/ui/workbench/trace_*.py, agent_workbench/ui/workbench_ui_controller.py, tests/v6/test_v6_*.py, agent_workbench/tests/test_agent_workbench.py, PROJECT_BLUEPRINT.md, CHANGELOG.md |
 | v6.9.0-alpha | 2026-07-08 | Agent Workbench Single Instance：新增agent_workbench/应用层，含ConfigStore/ProfileManager/ModuleRegistry/AgentWorkbenchRuntime/10个RuntimeModule/WorkbenchController/Workbench Engine；扩展v6三栏UI实现AgentConfigPanel配置面板，支持查看/修改/保存/热更新；新增7个Workbench端到端测试；V6+Workbench合计182/182测试通过 | feat/test/ui | agent_workbench/**, v6/runtime/planner_loop.py, PROJECT_BLUEPRINT.md, CHANGELOG.md |
 | v6.5.8-alpha | 2026-07-07 | 八大Engine Runtime骨架：新增engines/base.py及llm/tool/memory/planner/workflow/code/vision/knowledge空壳；EngineManager统一execute(name,ctx)；新增Runtime Kernel集成测试验证Engine发现/生命周期/Trace Timeline/Planner编排；清理旧engines不兼容实现；130/130测试通过 | feat/refactor/test | v6/runtime/engines/base.py, v6/runtime/engines/*.py, v6/runtime/engine_manager.py, tests/v6/test_v6_runtime_kernel.py, tests/v6/test_v6_smoke.py |
