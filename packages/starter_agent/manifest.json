@@ -1,0 +1,9 @@
+{
+  "id": "starter_agent",
+  "version": "1.0.0",
+  "schema_version": "1.0",
+  "metadata": "metadata.json",
+  "capabilities": "capabilities.json",
+  "view_schema": "view_schema.json",
+  "runtime": "runtime.json"
+}

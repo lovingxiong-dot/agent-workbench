@@ -1,5 +1,31 @@
 # Changelog
 
+## v6.12.0-beta.5 (2026-07-10) — Package Contract Freeze（Commit 12.1）
+
+> **里程碑语义**：Commit 12 拆分为 12.1-12.4 四个子提交，12.1 只冻结 Package 契约，不加载任何 Agent。Package 以 `manifest.json` 为唯一入口，`PackageLoader.scan()` 仅读取含 `manifest.json` 的子目录，无 manifest 的目录直接忽略。非法 manifest 被校验并跳过，不影响其他包。Package 层明确禁止依赖 Qt 和注册 Renderer。
+
+### Added
+- `agent_workbench/package/`：
+  - `__init__.py`：导出 `PackageLoader`、`PackageManifest`、`PackageValidationError`。
+  - `exceptions.py`：`PackageError` / `PackageValidationError`。
+  - `manifest.py`：`PackageManifest` 定义与解析，支持 `id` / `version` / `schema_version` / `metadata` / `capabilities` / `view_schema` / `runtime` 字段。
+  - `loader.py`：`PackageLoader.scan()` 扫描 `packages/` 目录并返回合法 manifest 列表。
+- `packages/starter_agent/manifest.json`：第一个示例 Package 的最小 manifest。
+- `tests/package/test_package_contract.py`：14 个非 GUI 单元测试，覆盖 manifest 解析、校验、Loader 扫描行为。
+
+### Design Constraints
+- Package 不允许直接依赖 Qt（禁止 `from PySide6 ...`）。
+- Package 不允许注册 Renderer；Renderer 永远属于 Workbench。
+- Loader 不扫描所有 `.json`，只读取 `manifest.json`。
+
+### Tests
+- `pytest tests/`：**761/761 passed**（新增 14 个 Package Contract 测试；收尾 Qt 退出码 `3221226505` 为 Windows 已知现象，不影响断言结果）。
+
+### Next Phase
+- **Commit 12.2**：Package Registry（discover / load / unload / reload 生命周期）。
+
+---
+
 ## v6.12.0-beta.4 (2026-07-10) — ViewComponentRegistry 契约层
 
 > **里程碑语义**：Commit 10 建立 View 层组件注册与查找的最小契约。`ViewComponentRegistry` 只负责「找得到」`ViewComponentDefinition`，不负责创建任何 Qt 控件；`ViewSchemaRenderer` 改为以 `render(component_id)` 为入口，按 `toolbar` / `status_bar` / `inspector` / `workspace` 分发渲染。Terminal / Editor / Monaco / Chart / Graph / Dock / Tree / Split 等明确禁止进入 Registry，它们属于 Builtin Component。这一层是 Commit 12 Agent Package 的基础设施铺垫。
