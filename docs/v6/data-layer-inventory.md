@@ -146,27 +146,38 @@
 |---|---|---|---|
 | `SessionService` / `ChatService` | `SessionPresentation` | Chat Workspace | 🚧 v6.10.0 |
 | `RuntimeContext` / `RuntimeTrace` | `RuntimePresentation` | Status Bar / Trace Workspace | 🚧 v6.10.0 |
-| `CapabilityRegistry` / `CapabilityDefinition` | `CapabilityPresentation` | Skill Panel / Inspector | 🚧 v6.10.x |
-| `ToolRegistry` | `ToolPresentation` | Tool Workspace | ❌ v6.10.x |
-| `ProviderRegistry`（待建） | `ProviderPresentation` | Provider Workspace | ❌ v6.10.x |
-| `ConfigManager` / `ConfigService` | `ConfigPresentation` | Settings Workspace | 🚧 v6.10.0 |
-| `ProjectService` / `PathResolver` | `WorkspacePresentation` | Project Explorer | ❌ v6.11.x |
-| `SkillRegistry`（待建） | `SkillPresentation` | Skill Workspace | ❌ v6.10.x |
-| `WorkflowService`（待建） | `WorkflowPresentation` | Workflow Workspace | ❌ v6.11.x |
-| `MemoryService` / `KnowledgeService` | `MemoryPresentation` / `KnowledgePresentation` | Memory / Knowledge Workspace | ❌ v6.11.x |
+| `ConfigManager` / `ConfigService` | `ConfigPresentation` | Settings Workspace | ✅ v6.10.0 |
+| `BaseRuntimeModule.metadata()` → `MetadataAdapter` | `ModulePresentation` | Navigator / Inspector / StatusBar | 🚧 v6.11.x |
+| `ModelModule` / `McpModule` / `SkillModule` / `WorkflowModule` / `PromptModule` / `MemoryModule` | `ModulePresentation` | Settings → 对应分类 | 🚧 v6.11.x |
+| `CapabilityRegistry` / `CapabilityDefinition` | `CapabilityPresentation` | Skill Panel / Inspector | ❌ v6.12.x 后 |
+| `ToolRegistry` | `ToolPresentation` | Tool Workspace | ❌ v6.13.x 后 |
+| `ProviderRegistry`（待建） | `ProviderPresentation` | Provider Workspace | ❌ v6.13.x 后 |
+| `ProjectService` / `PathResolver` | `WorkspacePresentation` | Project Explorer | ❌ 未来 |
+| `SkillRegistry`（待建） | `SkillPresentation` | Skill Workspace | ❌ v6.13.x 后 |
+| `WorkflowService`（待建） | `WorkflowPresentation` | Workflow Workspace | ❌ v6.12.x 后 |
+| `MemoryService` / `KnowledgeService` | `MemoryPresentation` / `KnowledgePresentation` | Memory / Knowledge Workspace | ❌ 未来 |
 
 Status 图例：✅ 已完成 / 🚧 进行中 / ❌ 未开始
 
-**核心规则**：UI 永远只认识 `PresentationModel`，不直接调用 Service。
+**核心规则**：UI 永远只认识 `PresentationModel`，不直接调用 Service。`ModuleMetadata` 必须平台无关，通过 `MetadataAdapter` 翻译为 `ModulePresentation` 后再交给 UI。
+
+## 新增数据层：Metadata / Presentation（v6.11.x）
+
+| 文件 | 类型 | 存储 | 说明 | 测试 |
+|---|---|---|---|---|
+| `agent_workbench/runtime/metadata/model.py` | `ModuleMetadata`, `PropertyMetadata`, `StatisticMetadata`, `ActionMetadata` | 内存 | Runtime Module 的统一描述契约 | `agent_workbench/tests/test_metadata_model.py`（待建） |
+| `agent_workbench/runtime/metadata/factory.py` | `MetadataFactory` | 内存 | 从 dict / dataclass 构造 Metadata | `agent_workbench/tests/test_metadata_factory.py`（待建） |
+| `agent_workbench/ui/presentation/model.py` | `ModulePresentation`, `PropertyPresentation`, `StatisticPresentation`, `ActionPresentation` | 内存 | UI 消费 PresentationModel | `agent_workbench/tests/test_presentation_model.py`（待建） |
+| `agent_workbench/ui/presentation/adapter.py` | `MetadataAdapter` | 内存 | `ModuleMetadata → ModulePresentation` | `agent_workbench/tests/test_metadata_adapter.py`（待建） |
 
 ---
 
 ## 当前风险点
 
-1. **Workspace 数据尚未统一**：项目路径、文件选择、终端状态分散在各处，UI 接入前建议先抽象出 `WorkspaceService`。→ 放 v6.11.x Project Workspace。
-2. **Presentation Layer 缺失**：目前 UI 直接依赖 Service，需建立 `Service → PresentationModel → UI` 中间层。→ v6.10.0 Commit 2。
-3. **Skill Registry 缺失**：Skill 将成为 Workbench 最核心的注册层，但目前只有 CapabilityRegistry + ToolRegistry。→ v6.10.x Commit 4。
-4. **Provider Registry 缺失**：Provider 配置停留在内存或环境变量，需建立 ProviderDefinition / ProviderRegistry / ProviderConfig。→ v6.10.x Commit 6。
-5. **Workbench UI Framework 缺失**：尚无统一的 IDE 骨架（Navigator / Workspace / Inspector / StatusBar / CommandBar）。→ v6.10.0 Commit 1。
+1. **Metadata Contract 尚未统一**：`BaseRuntimeModule.metadata()` 返回格式不一致，UI 仍按类型硬编码。→ v6.11.x Commit 1。
+2. **Presentation Layer 未完全落地**：Navigator / Inspector / StatusBar 仍需按类型分支，未完全通过 `ModulePresentation` 渲染。→ v6.11.x Commit 4-6。
+3. **Workspace 数据尚未统一**：项目路径、文件选择、终端状态分散在各处。→ 未来 `WorkspaceService`。
+4. **Skill Registry 缺失**：Skill 将成为核心注册层，但目前只有 CapabilityRegistry + ToolRegistry。→ v6.13.x 后。
+5. **Provider Registry 缺失**：Provider 配置停留在内存或环境变量。→ v6.13.x 后。
 6. **V5 数据层仍在使用**：`v5/` 目录为适配保留，长期应逐步迁移到 V6 服务。
 

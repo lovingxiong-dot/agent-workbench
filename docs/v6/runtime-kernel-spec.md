@@ -62,7 +62,8 @@ CapabilityContext  CapabilityExecutionState  ProviderBinding
 | Task | Runtime Core | Represent the execution contract: `id` / `capability` / `payload` / `metadata` / `created_at`. | Must not save UI state or UI concepts. |
 | Capability | Runtime Core | Describe what a capability is (`CapabilityDefinition`), what context it needs (`CapabilityContext`), and what state it is in (`CapabilityState`). | Must not make routing decisions or execute Engine. |
 | Engine | Runtime Core | Execute a capability according to the Engine Protocol and emit structured `RuntimeEvent`s. | Must not perform planning or choose Provider. |
-| Provider | Adapter Layer | Adapt Runtime calls to external systems (LLM / Tool / MCP / Local Agent / Remote Agent). | Must not know about Capability routing or UI. |
+| **Provider** | Adapter Layer | Adapt Runtime calls to external systems (LLM / Tool / MCP / Local Agent / Remote Agent). | Must not know about Capability routing or UI. |
+| **Metadata** | Workbench Layer | Platform-agnostic description of Runtime objects exposed to Workbench. | Must not contain UI concepts or configuration schema. |
 
 ---
 
@@ -72,6 +73,9 @@ Dependencies must flow downward only. Higher layers may depend on lower layers; 
 
 ```text
 UI
+ │
+ ▼
+Workbench Layer (Metadata → PresentationModel)
  │
  ▼
 Interaction
@@ -100,6 +104,8 @@ External System
 
 ### Allowed dependencies
 
+- Workbench Layer → Interaction
+- Workbench Layer → Metadata (Runtime objects expose Metadata upward)
 - Planning → Task
 - Task → Capability
 - Capability → Engine
@@ -114,6 +120,7 @@ External System
 - Provider → Capability routing logic
 - Engine → Decision logic
 - Task → UI concepts (`QtSelection`, `QtWorkspace`, etc.)
+- Metadata → UI concepts (`editor: slider`, `layout: horizontal`, etc.)
 
 ---
 
@@ -177,8 +184,20 @@ Everything else (UI rendering, Provider implementations, specific Planners, Arch
 
 ---
 
-## 8. Relationship to Other Documents
+## 8. Workbench Layer Relationship
 
-- [`PROJECT_BLUEPRINT.md`](../../PROJECT_BLUEPRINT.md) — Project lineage, current task, and V6 Runtime Kernel Freeze Series historical positioning.
+The Workbench Layer sits above the Runtime Kernel and is the product boundary:
+
+- Runtime objects expose `Metadata` to Workbench.
+- Workbench translates `Metadata` into `PresentationModel` via `MetadataAdapter`.
+- UI consumes `PresentationModel`, not Metadata directly.
+- Schema (v6.12.x) will describe how to configure objects; it lives in Workbench Layer, not Runtime Kernel.
+
+This preserves Runtime Kernel stability while allowing Workbench to evolve independently.
+
+## 9. Relationship to Other Documents
+
+- [`PROJECT_BLUEPRINT.md`](../../PROJECT_BLUEPRINT.md) — Project lineage, current task, and Workbench evolution roadmap.
 - [`CHANGELOG.md`](../../CHANGELOG.md) — Version-by-version changelog, including the v6.9.x Kernel Freeze Series note.
 - `docs/v6/SPEC.md` — UI component signal contracts and interface boundaries.
+- `docs/v6/runtime-glossary.md` — Definitions for Metadata, Schema, and PresentationModel.

@@ -2,7 +2,7 @@
 
 ## v6.10.0-alpha (2026-07-09) — Configuration-Driven Workbench Loop
 
-> **里程碑语义**：v6.10 以「打通完整配置闭环」为第一站。以 Provider 为样板，将 No-Code Registration Principle 扩展到 MCP、Skill、Workflow、Prompt、Memory：用户通过 Workbench UI 点击「+」即可注册扩展对象，ConfigStore 持久化后对应 Registry 自动 Reload，Navigator 与 StatusBar 实时刷新，Agent 立即可见新配置。
+> **里程碑语义**：v6.10 以「打通完整配置闭环」为第一站。以 Provider 为样板，将 No-Code Registration Principle 扩展到 MCP、Skill、Workflow、Prompt、Memory：用户通过 Workbench UI 点击「+」即可注册扩展对象，ConfigStore 持久化后对应 Registry 自动 Reload，Navigator 与 StatusBar 实时刷新，Agent 立即可见新配置。这一闭环标志着 Agent Workbench 开始具备真正的平台特征：统一的配置注册、持久化、通知与刷新链路，不再依赖为每个对象单独编写的 UI 和配置流程。
 
 ### Added
 - 新增 `agent_workbench/ui/dialogs/base.py`：`AddConfigItemDialog` 基类，统一新增配置项对话框的布局、主题样式与 `result()` 契约。
@@ -27,6 +27,9 @@
 - `pytest tests/ui/test_provider_config_loop.py`：**22/22 passed**。
 - `pytest tests/ui/`：**39/39 passed**。
 - `pytest tests/`：**614/614 passed**（收尾 QApplication 销毁阶段出现 Windows 已知退出码 `3221226505`，不影响断言结果）。
+
+### Next Phase
+- v6.11.x 进入 **Metadata-driven Workbench**：统一 Provider / MCP / Skill / Workflow / Prompt / Memory 的 `metadata()` 契约，为 v6.12.x 的 Schema-driven UI 自动生成奠定基础。项目重心从 Runtime 演进正式转向 Workbench 演进。
 
 ---
 

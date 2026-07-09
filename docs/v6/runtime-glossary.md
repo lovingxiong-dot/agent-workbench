@@ -23,6 +23,9 @@
 | **Engine** | The execution protocol for a Capability. Receives a single `RuntimeContext` and emits structured `RuntimeEvent`s. |
 | **Provider** | The conceptual adapter layer that decides which external system executes a Capability. Managed by Provider Runtime. |
 | **Adapter** | A concrete implementation of a Provider: `Runtime → External System`. |
+| **Metadata** | A platform-agnostic description of a Runtime object: `id`, `type`, `name`, `icon`, `properties`, `statistics`, `actions`. Runtime uses it to expose objects to Workbench without UI coupling. |
+| **Schema** | A declarative description of how to configure a Runtime object. Drives Dialog / Inspector / JSON Editor / Validator / Import / Export generation. |
+| **PresentationModel** | The UI-facing translation of Metadata. Navigator / Inspector / StatusBar consume PresentationModel, never Metadata directly. |
 | **Orchestrator** | The Runtime component that executes Tasks by selecting Engines and managing their lifecycle. |
 | **EventBus** | The Runtime communication backbone. Components publish and subscribe to `RuntimeEvent`s. |
 | **RuntimeTrace** | The structured execution record: Task → Capability → Engine → Provider → Execution → Request → Response. |
@@ -86,7 +89,7 @@ These words must not appear inside the Runtime Kernel with UI-specific meanings:
 | `QtSelection` | UI concept. Runtime uses `SelectionContext`. |
 | `QtWorkspace` | UI concept. Runtime uses `WorkspaceContext`. |
 | `ChatBox` | UI widget. Runtime sees `GLOBAL_CHAT` origin. |
-| `Plugin` | Ambiguous. Runtime uses `Capability`. |
+| **Plugin** | Ambiguous at the Runtime Kernel level. Use `Capability` for runtime capability, or reserve `Plugin` for Workbench-level extension packaging in v6.13.x+. |
 | `Function` | Ambiguous. Runtime uses `Capability` or `Tool`. |
 
 ---

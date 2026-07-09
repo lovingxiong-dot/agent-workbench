@@ -27,3 +27,4 @@ review/
 .dist/
 .resource/
 .sandbox/
+.trae-logs/

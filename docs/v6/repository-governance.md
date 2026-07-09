@@ -80,6 +80,7 @@ Directories that begin with `.` and live next to the Git repository are part of 
 - `.sandbox/` — temporary experiments, downloads, and scratch work.
 - `.monitor/` — local monitoring and runtime environment data.
 - `.workbuddy/` — local AI collaboration state.
+- `.trae-logs/` — Trae Code mode work logs and session memory.
 
 Any new top-level directory in the workspace that is not source must fit into one of these environment categories. If it cannot be classified, it should not exist.
 

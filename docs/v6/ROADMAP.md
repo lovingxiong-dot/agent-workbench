@@ -8,96 +8,86 @@
 
 **核心原则**：Agent Workbench 是 V6 Runtime 的**官方产品化验证平台（Official Product Validation Platform）**。任何 Provider、Tool、Skill 只有能在 Workbench 中安装、运行、验证，才算完成。
 
-**v6.10 目标**：打造一个今天能用的 **Autonomous Agent Workbench**。每一阶段回答：
+**v6.10 目标**：打造一个今天能用的 **Autonomous Agent Workbench**。v6.10.0 已完成 Configuration-Driven Workbench Loop。
 
-> **Agent 今天比昨天多会了一件什么事情？**
+从 v6.11.x 起，项目重心从 **Runtime 演进** 转向 **Workbench 演进**。每一阶段回答：
+
+> **Workbench 今天比昨天多支持一种什么类型的对象，而无需修改代码？**
 
 ## 演进路径
 
 ```text
-Foundation Runtime      ← v6.9.6-foundation 已冻结
+Foundation Runtime          ← v6.9.6-foundation 已冻结
         ↓
-Workbench UI Framework  ← v6.10.0：固定 IDE 骨架
+Configuration-driven        ← v6.10.0：Provider/MCP/Skill/Workflow/Prompt/Memory
+Workbench                       全部可通过 UI 注册，ConfigStore 驱动刷新
         ↓
-Presentation Layer      ← v6.10.0：Service → Presentation → UI
+Metadata-driven Workbench   ← v6.11.x：统一 Metadata 描述对象
         ↓
-Chat Workspace          ← v6.10.0：Agent 能聊天
+Schema-driven Workbench     ← v6.12.x：Schema 驱动 Dialog / Inspector / JSON Editor / Validator
         ↓
-Skill Registry          ← v6.10.x：Agent 能安装能力
+Plugin-driven Workbench     ← v6.13.x：零代码扩展
         ↓
-Tool Runtime            ← v6.10.x：Agent 能执行工具
-        ↓
-Provider Framework      ← v6.10.x：Agent 能调用 LLM
-        ↓
-（未来再看）
+Marketplace / Digital Identity / Gateway  ← 未来
 ```
+
+阶段定义：
+
+- **Metadata-driven**：所有对象都有统一的描述能力。Runtime 通过 `metadata()` 认识对象。
+- **Schema-driven**：所有对象的配置都由 Schema 描述，Dialog / Inspector / Property Panel / JSON Editor / Import / Export / Validator 全部自动生成。
+- **Plugin-driven**：放置一个 Plugin，Workbench 自动发现、读取 Metadata 与 Schema、生成 UI、注册 Runtime，完成零代码扩展。
 
 ## 时序原则
 
 | 梯队 | 优先级 | 内容 | 版本 |
 |---|---|---|---|
-| 第一梯队 | ⭐⭐⭐⭐⭐ | Workbench UI Framework、Presentation Layer、Chat Workspace | v6.10.0 |
-| 第二梯队 | ⭐⭐⭐⭐ | Skill Registry、Tool Runtime、Provider Framework | v6.10.x |
-| 第三梯队 | ⭐⭐⭐ | Workflow、Memory / Knowledge | v6.11.x |
-| 第四梯队 | ⭐⭐ | MCP、Browser、External Service、Marketplace、Gateway | 未来 |
+| 第一梯队 | ⭐⭐⭐⭐⭐ | Workbench UI Framework、Configuration-Driven Loop | v6.10.0 ✅ |
+| 第一梯队 | ⭐⭐⭐⭐⭐ | Metadata Contract、MetadataAdapter、UI 去硬编码 | v6.11.x |
+| 第二梯队 | ⭐⭐⭐⭐ | Schema Foundation：Schema Model / Registry / Validator / Auto Dialog / Auto Inspector | v6.12.x |
+| 第三梯队 | ⭐⭐⭐ | Runtime Executors：ProviderRuntime / ToolRuntime / SkillRuntime | v6.13.x 之前 |
+| 第四梯队 | ⭐⭐⭐ | Real Provider Adapters：Claude / Gemini / OpenAI / Kimi / Qwen / DeepSeek | UI 成熟后 |
+| 第五梯队 | ⭐⭐ | Workflow 体验闭环、Memory / Knowledge、MCP Client、Browser、Marketplace、Gateway | 更晚 |
 
-## v6.10.0-alpha：Workbench UI Framework + Chat Workspace
+## v6.10.0-alpha：Configuration-Driven Workbench Loop ✅
 
-目标：先固定 IDE 骨架，再往里面塞功能。不做聊天客户端，做 Agent IDE。
+目标：打通完整配置闭环，让 Provider / MCP / Skill / Workflow / Prompt / Memory 全部可通过 Workbench UI 注册。
 
-### Commit 1：Workbench UI Framework
+### Commit 1：Workbench UI Framework ✅
 
-- [ ] 固定 IDE 骨架：Workbench / Navigator / Workspace / Inspector / StatusBar / CommandBar
-- [ ] Workspace 管理器：创建、切换、销毁 Workspace
-- [ ] Workspace Registry：注册可用 Workspace 类型
-- [ ] Workspace Router：根据 Navigator 选择切换 Workspace
-- [ ] 所有 Workspace 初始为空实现，但布局、生命周期、事件全部固定
+- [x] 固定 IDE 骨架：Workbench / Navigator / Workspace / Inspector / StatusBar / CommandBar
+- [x] Workspace 管理器：创建、切换、销毁 Workspace
+- [x] Workspace Registry：注册可用 Workspace 类型
+- [x] Workspace Router：根据 Navigator 选择切换 Workspace
+- [x] 所有 Workspace 初始为空实现，但布局、生命周期、事件全部固定
 
-### Commit 2：Presentation Layer
+### Commit 2：Configuration-Driven Loop ✅
 
-- [ ] 建立 `Service → PresentationModel → UI` 翻译层
-- [ ] `SessionPresentation`
-- [ ] `ToolPresentation`
-- [ ] `SkillPresentation`
-- [ ] `ProviderPresentation`
+- [x] Provider / MCP / Skill / Workflow / Prompt / Memory 可通过 UI 注册
+- [x] ConfigStore 持久化并发出通用 `changed(path, value)` 信号
+- [x] Navigator / StatusBar / Inspector 自动刷新
 
-### Commit 3：Chat Workspace
+## v6.11.x：Metadata-driven Workbench
 
-- [ ] 左侧会话列表
-- [ ] 中间聊天区
-- [ ] 输入区
-- [ ] 消息通过 Runtime 链路跑通
-- [ ] Agent 能聊天
+### Commit 3：Metadata Contract & Base Model
 
-## v6.10.x 后续：Skill / Tool / Provider
+- [ ] 定义 `ModuleMetadata`、`PropertyMetadata`、`StatisticMetadata`、`ActionMetadata`
+- [ ] 更新 `BaseRuntimeModule.metadata()` 返回严格类型化的 Metadata
+- [ ] 非 GUI 测试覆盖
 
-### Commit 4：Skill Registry
+### Commit 4：MetadataAdapter & PresentationModel
 
-- [ ] `SkillDefinition` / `SkillContext` / `SkillRuntime` / `SkillRegistry`
-- [ ] Skill 可注册、可发现
-- [ ] 先不做具体 Skill 实现
+- [ ] `ModuleMetadata → ModulePresentation`
+- [ ] UI 只依赖 PresentationModel
 
-### Commit 5：Tool Runtime
+### Commit 5-7：Runtime Module Metadata 补齐 + Navigator / Inspector / StatusBar 去硬编码
 
-- [ ] Tool 可注册、可执行、可观测
-- [ ] 基础工具：read_file / write_file / bash / python
-- [ ] Tool 执行结果进入 RuntimeContext
-
-### Commit 6：Provider Framework
-
-- [ ] `ProviderDefinition` / `ProviderRegistry` / `ProviderConfig` / `ProviderSelector`
-- [ ] 先支持一个 Provider（EchoProvider 或一个真实 LLM）
-- [ ] Provider 调用结果进入 RuntimeContext
-
-## v6.11.x 预告
-
-- Workflow 基础串行流
-- Memory 上下文管理
-- Knowledge 知识库接入
+- [ ] Provider / MCP / Skill / Workflow / Prompt / Memory 返回统一 Metadata
+- [ ] Navigator / Inspector / StatusBar 通过 PresentationModel 渲染
 
 ## 现在不做的事
 
+- Schema-driven UI（v6.12.x 再做）
+- Runtime Executors（ProviderRuntime / ToolRuntime / SkillRuntime，Schema 之后）
+- 新增 Runtime 类型：Knowledge / Persona / Browser / Plugin / Gateway / Digital Identity
+- 真实 Provider 接入：Claude / Gemini / OpenAI / Kimi / Qwen / DeepSeek
 - 复杂 Workflow DAG
-- Memory / Knowledge（放 v6.11.x）
-- MCP / Browser / External Service / Marketplace
-- Gateway / Distributed / Remote Runtime / Digital Identity

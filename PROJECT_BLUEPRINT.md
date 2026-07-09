@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v6.10.0-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 39 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v6.11.0-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 40 |
 
 ## Current Development Authority
 
@@ -323,69 +323,70 @@ v6.8.0-alpha 完成 V6 Framework Core Foundation Baseline（共享核心框架�
 
 ## 当前任务
 
-**v6.10.0-alpha：打造真正可用的 Autonomous Agent Workbench**（在 `v6-agent` 分支执行）：
+**v6.11.0-alpha：Metadata-driven Workbench**（在 `v6-agent` 分支执行）：
 
-v6.9.x Runtime Kernel Freeze Series 已收官，`v6.9.6-foundation` 成为长期基线。v6.10 的目标不再是「平台建设」或「未来架构预留」，而是**打造一个今天能用的 Autonomous Agent Workbench**。
+v6.9.x Runtime Kernel Freeze Series 已收官，`v6.9.6-foundation` 成为长期基线。v6.10.0 完成了 **Configuration-Driven Workbench Loop**：Provider / MCP / Skill / Workflow / Prompt / Memory 全部可通过 Workbench UI 的「+」按钮注册到 ConfigStore，对应 Registry 自动 Reload，Navigator / StatusBar / Inspector 实时刷新。
 
-每一阶段只回答一个问题：
+v6.11.x 起，项目重心从 **Runtime 演进** 转向 **Workbench 演进**。Runtime 是内核，Workbench 才是产品。每一阶段只回答一个问题：
 
-> **Agent 今天比昨天多会了一件什么事情？**
+> **Workbench 今天比昨天多支持一种什么类型的对象，而无需修改代码？**
 
-v6.10.0 先固定 IDE 骨架并打通最小可用闭环：
+v6.11.0 先让所有已支持对象具备统一的 **Metadata** 描述能力，使 Runtime 能一致地认识 Provider / MCP / Skill / Workflow / Prompt / Memory，为后续 Schema 自动生成 UI 奠定基础。
 
-```text
-Workbench UI Framework
-        ↓
-Presentation Layer
-        ↓
-Chat Workspace          ← Agent 能聊天
-```
-
-在 IDE 骨架可用之后，第一要务是打通「配置驱动闭环」：Provider / MCP / Skill / Workflow / Prompt / Memory 都可通过 Workbench UI 的「+」按钮注册到 ConfigStore，对应 Registry 自动 Reload，Navigator 与 StatusBar 实时刷新。该闭环已在 v6.10.0-alpha 第一期完成。
-
-之后再逐步让 Agent 学会：安装能力（Skill Registry 执行器）、执行工具（Tool Runtime 执行器）、调用 LLM（Provider Framework 真实 LLM）。
-
-### v6.10.x 目标
+### v6.11.x 目标
 
 第一梯队（⭐⭐⭐⭐⭐，立即执行）：
 
-- **GUI Platform**：把现有 Workbench UI 跑通、稳定、可交互，成为每天可用的 IDE 主界面。 ✅
-- **Configuration-Driven Loop**：Provider / MCP / Skill / Workflow / Prompt / Memory 可通过 UI 注册、ConfigStore 持久化、Registry 自动 Reload。 ✅
-- **Provider Framework**：打通 Provider 抽象接口、配置、注册、调用链路；先支持一个 Provider（EchoProvider 已可用，OpenAIProvider 待真实验证）。
-- **Tool Runtime**：Tool 可注册、可执行、可观测；Python / PowerShell / 系统命令等先以 Tool 形式接入。
-- **Skill Framework**：定义 Skill Contract（SkillDefinition / SkillContext / SkillRuntime / SkillRegistry），先不做具体 Skill。
+- **Metadata Contract**：定义并统一 `BaseRuntimeModule.metadata()` 返回结构，覆盖 `id` / `type` / `name` / `icon` / `properties` / `statistics` / `actions`。
+- **MetadataAdapter**：将 `ModuleMetadata` 转换为 `PresentationModel`，供 Navigator / Inspector / StatusBar 统一消费。
+- **Runtime Module Metadata 补齐**：Provider / MCP / Skill / Workflow / Prompt / Memory 全部返回符合 Contract 的 Metadata。
+- **UI 去硬编码**：Navigator、Inspector、StatusBar 不再按类型维护私有映射，全部通过 `PresentationModel` 渲染。
 
 ### 现在不做的事
 
-- **Digital Identity / Agent Identity**：只预留接口，不实现 Identity Database。
-- **多 Provider 智能切换**：先支持一个 Provider，框架打通后再扩展。
-- **复杂 Workflow DAG**：只做基础串行任务流 A → B → C。
-- **MCP / Browser / External Service / Marketplace**：第三梯队，v6.12.x 再启动。
-- **Gateway / Distributed / Remote Runtime**：第四梯队，未来再做。
+- **Schema-driven UI**：v6.12.x 再做。当前阶段只统一 Metadata 描述，不自动生成配置控件。
+- **Runtime Executors**（ProviderRuntime / ToolRuntime / SkillRuntime）：放到 Schema Foundation 之后，避免每新增一个 Runtime 就要重写一套配置页面。
+- **新增 Runtime 类型**：Knowledge / Persona / Browser / Plugin / Gateway / Digital Identity 暂时不接。
+- **真实 Provider 接入**（Claude / Gemini / OpenAI / Kimi / Qwen / DeepSeek）：等 UI 成熟后再做。
 
 ### 开发约束
 
 1. **Runtime Kernel 不再扩展**：不允许新增 Runtime-level 模块；所有新能力通过 Capability Runtime Contract 接入。
-2. **从 GUI 开始逐步完善**：先让 GUI 可用，再反向补齐 Provider / Tool / Skill，避免先做底层再补交互。
-3. **Contract First**：Provider、Tool、Skill、Workflow 都必须先定义 Contract，再实现具体实例。
+2. **Metadata 平台无关**：`metadata()` 返回的数据必须能被 Qt、Web、CLI、REST API 同时消费，禁止出现任何 UI 概念。
+3. **先 Metadata，后 Schema，再 Plugin**：不跳过阶段，不在 Metadata 未统一时直接做 Schema。
 4. **所有实现必须能在 Workbench 中验证**：未完成 Workbench 集成的功能不算完成。
 5. **不接 Gateway / Distributed / Remote Runtime / Digital Identity**：第四梯队内容全部冻结到未来阶段。
 6. **不接 MCP / Browser / External Service / Marketplace**：第三梯队内容在第二梯队跑通后再启动。
 
-### V6 Runtime Kernel Freeze Roadmap
+### Workbench 演进路线图
 
 ```text
-v6.9.5-alpha  Interaction Boundary Layer              ✅
-v6.9.6-alpha  Capability Runtime Contract Freeze      ✅
-v6.9.6-foundation  V6 Runtime Foundation Baseline     ✅ 当前基线
-v6.10.0-alpha  Workbench UI Framework + Presentation + Chat  ✅
-v6.10.0-alpha  Configuration-Driven Workbench Loop (Provider/MCP/Skill/Workflow/Prompt/Memory)  ✅ 当前
-v6.10.x        Skill Runtime / Tool Runtime / Provider Runtime 执行器落地  当前
-        ↓
-v6.11.x  Workflow / Memory / Knowledge 体验闭环
-        ↓
-（未来） MCP Client / Browser / External Service / Marketplace / Gateway
+v6.9.x         Runtime Foundation                         ✅
+                      ↓
+v6.10.0        Configuration-driven Workbench           ✅
+                      ↓
+v6.11.x        Metadata-driven Workbench                ← 当前
+                      ↓
+v6.12.x        Schema-driven Workbench
+                      ↓
+v6.13.x        Plugin-driven Workbench
+                      ↓
+（未来）        Marketplace / Digital Identity / Gateway
 ```
+
+阶段定义：
+
+- **Metadata-driven**：所有对象都有统一的描述能力。Runtime 通过 `metadata()` 认识对象。
+- **Schema-driven**：所有对象的配置都由 Schema 描述，Dialog / Inspector / JSON Editor / Validator / Import / Export 全部自动生成。
+- **Plugin-driven**：放置一个 Plugin，Workbench 自动发现、读取 Metadata 与 Schema、生成 UI、注册 Runtime，做到零代码扩展。
+
+### 优先级重排
+
+| 优先级 | 阶段 | 内容 | 原因 |
+|--------|------|------|------|
+| 1 | v6.12.x | Schema Foundation | 没有 Schema，每新增 Runtime 都要重写配置 UI |
+| 2 | v6.13.x 之前 | Runtime Executors | ProviderRuntime / ToolRuntime / SkillRuntime |
+| 3 | UI 成熟后 | Real Provider Adapters | Claude / Gemini / OpenAI / Kimi / Qwen / DeepSeek |
 
 ### 最高级设计约束
 

@@ -23,6 +23,7 @@ docs/                     # Documentation
         repository-map.md
         data-layer-inventory.md
         v6.10-task-list.md
+        v6.11-task-list.md
         SPEC.md
         ROADMAP.md
     archive/              # Historical documents worth keeping
@@ -45,6 +46,7 @@ Environment directories (outside Git, same parent):
 .sandbox/             # Temporary experiments and downloads
 .monitor/             # Local monitoring and runtime environment data
 .workbuddy/           # Local AI collaboration state
+.trae-logs/           # Trae Code mode work logs and session memory
 ```
 
 ## Core Source
@@ -105,7 +107,10 @@ Environment directories (outside Git, same parent):
         📄 agent_runtime.py
         📄 capability_router.py
         📄 config_store.py
-        📄 metadata.py
+        📁 metadata
+            📄 __init__.py
+            📄 model.py
+            📄 factory.py
         📄 module_registry.py
         📄 profile_manager.py
     📁 services
@@ -135,18 +140,21 @@ Environment directories (outside Git, same parent):
             📄 host_base.py
             📄 inspector.py
             📄 inspector_host.py
-            📄 metadata_adapter.py
-            📄 navigator.py
-            📄 navigator_host.py
-            📄 presentation.py
-            📄 status_bar.py
-            📄 status_bar_host.py
-            📄 title_bar.py
-            📄 trace_event_registry.py
-            📄 trace_workspace.py
-            📄 workbench.py
-            📄 workbench_host.py
-            📄 workspace_host.py
+            📁 presentation
+                📄 __init__.py
+                📄 adapter.py
+                📄 model.py
+        📄 navigator.py
+        📄 navigator_host.py
+        📄 presentation.py
+        📄 status_bar.py
+        📄 status_bar_host.py
+        📄 title_bar.py
+        📄 trace_event_registry.py
+        📄 trace_workspace.py
+        📄 workbench.py
+        📄 workbench_host.py
+        📄 workspace_host.py
         📁 workspaces
             📄 __init__.py
             📄 chat_workspace.py
