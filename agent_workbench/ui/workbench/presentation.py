@@ -78,5 +78,6 @@ class ModulePresentation:
     enabled: bool = True
     order: int = 0
     category: str = ""
+    view_schema_id: str = ""
     children: List["ModulePresentation"] = field(default_factory=list)
     connection: Dict[str, Any] = field(default_factory=dict)

@@ -43,9 +43,12 @@ class PresentationMetadataAdapter:
 
     def adapt(self, metadata: ModuleMetadata | MetadataDefinition) -> ModulePresentation:
         """将 Capability Metadata 转换为 ModulePresentation。"""
+        module_type = metadata.type
+        explicit_schema_id = getattr(metadata, "view_schema_id", "")
+        view_schema_id = explicit_schema_id or self._infer_view_schema_id(module_type, metadata.id)
         return ModulePresentation(
             id=metadata.id,
-            type=metadata.type,
+            type=module_type,
             name=metadata.name,
             description=metadata.description,
             icon=metadata.icon,
@@ -55,6 +58,7 @@ class PresentationMetadataAdapter:
             tags=list(getattr(metadata, "tags", [])),
             enabled=getattr(metadata, "enabled", True),
             category="",
+            view_schema_id=view_schema_id,
         )
 
     def adapt_resource(self, resource: ResourceDefinition) -> ModulePresentation:
@@ -144,6 +148,27 @@ class PresentationMetadataAdapter:
         if value_type is None:
             return ValueType.STRING.value
         return str(value_type)
+
+    @staticmethod
+    def _infer_view_schema_id(module_type: str, module_id: str) -> str:
+        """根据 module 类型推断默认 ViewSchema ID。
+
+        与 ViewSchemaRegistry._infer_schema_id 保持对齐，只负责生成默认值。
+        """
+        if module_type == "settings":
+            return "settings_workspace"
+        if module_type == "trace":
+            return "trace_workspace"
+        if module_type == "workspace":
+            if module_id == "chat":
+                return "chat_workspace"
+            if module_id == "skill":
+                return "skill_workspace"
+            if module_id == "tool":
+                return "tool_workspace"
+        if module_type in ("model", "memory", "prompt", "strategy"):
+            return "config_workspace"
+        return "generic_workspace"
 
 
 # Runtime-checkable Protocol 注册：PresentationMetadataAdapter 满足 MetadataAdapter 协议。

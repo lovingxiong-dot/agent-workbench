@@ -46,6 +46,8 @@ from agent_workbench.ui.workbench.presentation import (
     StatisticPresentation,
 )
 from agent_workbench.ui.workbench.trace_workspace import TraceWorkspaceItem
+from agent_workbench.ui.workbench.view_schema_registry import ViewSchemaRegistry
+from agent_workbench.ui.workbench.view_schema_renderer import ViewSchemaRenderer
 
 if TYPE_CHECKING:
     from v6.services.chat_service import ChatService
@@ -93,7 +95,10 @@ class WorkbenchUIController(UIController):
         self._host = workbench_host
         self._chat_workspace: ChatWorkspaceItem | None = None
         self._trace_workspace: TraceWorkspaceItem | None = None
+        self._generic_workspace: GenericWorkspaceItem | None = None
         self._metadata_adapter = PresentationMetadataAdapter()
+        self._view_schema_registry = ViewSchemaRegistry()
+        self._view_schema_renderer: ViewSchemaRenderer | None = None
         self._current_module_id: str | None = None
         self._presentations: dict[str, ModulePresentation] = {}
         self._config_manager = ConfigurationManager()
@@ -220,6 +225,9 @@ class WorkbenchUIController(UIController):
         self._generic_workspace = GenericWorkspaceItem()
         self._host.workbench.workspace.register_workspace("generic", self._generic_workspace)
 
+        # ViewSchema Renderer：统一驱动 ToolBar / StatusBar / Inspector / Workspace
+        self._view_schema_renderer = ViewSchemaRenderer(self._host.workbench)
+
         # ToolBar → Inspector 同一条 action 通道
         self._host.workbench.tool_bar_action_triggered.connect(self._on_tool_bar_action_triggered)
 
@@ -323,7 +331,7 @@ class WorkbenchUIController(UIController):
         self._workbench.set_config_value(category.config_path, current)
 
     def _on_selection_changed(self, module_id: str) -> None:
-        """Navigator 选中变化 → Inspector / ToolBar / Workspace 同步渲染。"""
+        """Navigator 选中变化 → ViewSchemaRenderer 统一驱动各 UI Host。"""
         self._current_module_id = module_id
         pres = self._presentations.get(module_id)
         if pres is None:
@@ -331,19 +339,40 @@ class WorkbenchUIController(UIController):
             if meta is not None:
                 pres = self._metadata_adapter.adapt(meta)
                 self._presentations[module_id] = pres
-        if pres is not None and self._host is not None:
-            self._host.workbench.inspector.set_object(pres)
-            self._host.workbench.tool_bar.set_actions(pres.actions)
-            self._switch_workspace(pres)
+        if pres is not None and self._host is not None and self._view_schema_renderer is not None:
+            schema = self._view_schema_registry.resolve(pres)
+            self._view_schema_renderer.render(schema, pres, runtime_status=self._runtime_status())
+            # 兜底：generic workspace 需要额外传入模块信息
+            workspace_id = self._resolve_workspace_id(pres)
+            if workspace_id == "generic" and self._generic_workspace is not None:
+                self._generic_workspace.set_module(pres.name, pres.description)
+
+    def _runtime_status(self) -> dict[str, str]:
+        """构造当前 Runtime 核心状态字典，供 ViewSchemaRenderer 使用。"""
+        overview = self._workbench.get_overview()
+        providers = self._workbench.get_config_value("model.providers", [])
+        default_provider = overview.get("default_provider", "—")
+        model_name = "—"
+        for p in providers:
+            if p.get("name") == default_provider:
+                model_name = p.get("config", {}).get("model", "—")
+                break
+        return {
+            "runtime": "online" if self._workbench.core_runtime.running else "stopped",
+            "provider": default_provider,
+            "model": model_name,
+            "profile": overview.get("current_profile", "—"),
+            "session": self._active_sid or "—",
+            "memory": f"{overview.get('memory_count', 0)} records",
+            "latency": "—",
+        }
 
     def _switch_workspace(self, pres: ModulePresentation) -> None:
-        """根据 ModulePresentation 类型切换到对应 Workspace，不再硬编码模块 ID 分支。"""
+        """根据 ModulePresentation 类型切换到对应 Workspace（保留给 Renderer 调用）。"""
         if self._host is None:
             return
         workspace_id = self._resolve_workspace_id(pres)
         self._host.workbench.workspace.switch_to(workspace_id)
-        if workspace_id == "generic" and self._generic_workspace is not None:
-            self._generic_workspace.set_module(pres.name, pres.description)
 
     @staticmethod
     def _resolve_workspace_id(pres: ModulePresentation) -> str:
@@ -426,63 +455,18 @@ class WorkbenchUIController(UIController):
         self._on_selection_changed(module_id)
 
     def _refresh_status_bar(self) -> None:
-        """聚合所有 ModulePresentation.statistics 刷新 StatusBar。"""
-        if self._host is None:
+        """通过 ViewSchemaRenderer 刷新 StatusBar（无选中项时使用全局 Workbench Schema）。"""
+        if self._host is None or self._view_schema_renderer is None:
             return
-        statistics = self._build_status_statistics()
-        self._host.workbench.status_bar.set_statistics(statistics)
-
-    def _build_status_statistics(self) -> list[StatisticPresentation]:
-        """构造 StatusBar 所需的聚合 StatisticPresentation 列表。
-
-        包含 Runtime 核心状态 + 所有 Navigator ModulePresentation.statistics。
-        """
-        overview = self._workbench.get_overview()
-        providers = self._workbench.get_config_value("model.providers", [])
-        default_provider = overview.get("default_provider", "—")
-        model_name = "—"
-        for p in providers:
-            if p.get("name") == default_provider:
-                model_name = p.get("config", {}).get("model", "—")
-                break
-
-        statistics: list[StatisticPresentation] = [
-            StatisticPresentation(
-                name="runtime",
-                label="Runtime",
-                value="online" if self._workbench.core_runtime.running else "stopped",
-            ),
-            StatisticPresentation(
-                name="provider",
-                label="Provider",
-                value=default_provider,
-            ),
-            StatisticPresentation(
-                name="model",
-                label="Model",
-                value=model_name,
-            ),
-            StatisticPresentation(
-                name="profile",
-                label="Profile",
-                value=overview.get("current_profile", "—"),
-            ),
-            StatisticPresentation(
-                name="session",
-                label="Session",
-                value=self._active_sid or "—",
-            ),
-            StatisticPresentation(
-                name="memory",
-                label="Memory",
-                value=f"{overview.get('memory_count', 0)} records",
-            ),
-        ]
-
-        for pres in self._build_navigator_presentations():
-            statistics.extend(pres.statistics)
-
-        return statistics
+        schema = self._view_schema_registry.get("generic_workspace")
+        if schema is None:
+            return
+        workbench_presentation = ModulePresentation(
+            id="workbench",
+            type="workbench",
+            name="Workbench",
+        )
+        self._view_schema_renderer.render(schema, workbench_presentation, runtime_status=self._runtime_status())
 
     def _on_config_changed(self, path: str, value: object) -> None:
         """ConfigStore 通用变更信号 → 刷新 Navigator 与 StatusBar。"""

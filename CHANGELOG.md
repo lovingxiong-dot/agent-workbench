@@ -1,5 +1,47 @@
 # Changelog
 
+## v6.12.0-beta.2 (2026-07-10) — ViewSchema 布局协议层
+
+> **里程碑语义**：Commit 8.5 在 PresentationModel 与 Qt Renderer 之间增加 ViewSchema 布局协议层。ViewSchema 不依赖 Qt，只描述「Module 的 PresentationModel 应该如何摆放在 Workbench 的 Toolbar / Inspector / StatusBar / Workspace / Dock 中」。至此，Workbench 形成完整数据驱动链：`Metadata → PresentationModel → ViewSchema → Qt Renderer`。新增一个 Agent（如律师 AI、Trading Agent）只需注册 Metadata、配置 view_schema_id，Qt 自动渲染导航、工具栏、工作区、属性面板，无需再写 `if module.id == ...`。
+
+### Added
+- `agent_workbench/ui/workbench/view_schema.py`：定义 ViewSchema 协议层，包括 `ToolbarSchema`（支持扁平/分组）、`InspectorSchema`（Tab 布局 + category 过滤）、`StatusSchema`、`DockSchema`、`WorkspaceSchema`、`ViewSchema`。
+- `agent_workbench/ui/workbench/view_schema_registry.py`：注册 7 个默认布局协议：`chat_workspace`、`settings_workspace`、`trace_workspace`、`config_workspace`、`skill_workspace`、`tool_workspace`、`generic_workspace`；支持按 `view_schema_id` 或 `type` 解析。
+- `agent_workbench/ui/workbench/view_schema_renderer.py`：Qt 渲染器，将 `ViewSchema + ModulePresentation` 应用到 `ToolBar / StatusBar / Inspector / Workspace`。
+- `agent_workbench/ui/workbench/generic_workspace.py`：新增 GenericWorkspaceItem，作为无专属 Workspace 的默认视图。
+- `ModulePresentation.view_schema_id`：MetadataAdapter 自动推断默认值，Metadata 可显式覆盖。
+- `tests/ui/test_view_schema.py`：13 个非 GUI 单元测试，覆盖 Registry 解析、Renderer Toolbar/StatusBar/Inspector/Workspace 驱动、MetadataAdapter view_schema_id 推断。
+
+### Changed
+- `agent_workbench/ui/workbench/inspector.py`：支持 Schema 驱动的 Tab 模式；无 Schema 时保持原有平铺模式，向后兼容。
+- `agent_workbench/ui/workbench/status_bar.py`：改为纯 `set_statistics(statistics)` 接口，彻底移除 Runtime 字段硬编码。
+- `agent_workbench/ui/workbench/tool_bar.py` + `tool_bar_host.py`：新增 ToolBar，按 ActionPresentation 动态生成按钮，支持分组与 danger 样式。
+- `agent_workbench/ui/workbench/workbench.py`：将 ToolBarHost 纳入 Workbench 骨架。
+- `agent_workbench/ui/workbench_ui_controller.py`：
+  - `_on_selection_changed()` 改为通过 `ViewSchemaRenderer` 统一驱动所有 UI Host。
+  - 新增 `_runtime_status()` 提供 Runtime 核心状态给 Renderer。
+  - `_refresh_status_bar()` 使用 `generic_workspace` Schema 渲染全局状态。
+- `docs/v6/v6.12-task-list.md`：新增 Commit 8.5（ViewSchema 布局协议层）并勾选所有任务。
+
+### Tests
+- `pytest tests/`：**726/726 passed**（新增 13 个 ViewSchema 测试；收尾 Qt 退出码 `3221226505` 为 Windows 已知现象，不影响断言结果）。
+
+### Architecture
+```text
+Metadata
+    ↓
+PresentationModel
+    ↓
+ViewSchema（怎么摆）
+    ↓
+Qt Renderer（具体实现）
+```
+
+### Next Phase
+- **Commit 9**：Task 闭环（User → Manager → Planning → Capability → Provider → Streaming → Task → Trace → History）。
+
+---
+
 ## v6.12.0-beta.1 (2026-07-10) — StatusBar + ToolBar + Workspace 聚合 PresentationModel
 
 > **里程碑语义**：Commit 8 完成 Metadata → PresentationModel → Workbench UI 数据流的最后一段。StatusBar 不再直接读取 Runtime，改为聚合所有 ModulePresentation.statistics；ToolBar 根据当前选中 ModulePresentation.actions 动态生成快捷按钮；Workspace 根据 Presentation 类型自动切换（chat / trace / generic），移除硬编码模块 ID 分支。至此，Workbench 所有主 Host（Navigator / Inspector / StatusBar / ToolBar / Workspace）都只消费 PresentationModel，UI 与 Runtime 的解耦达到稳定状态。
