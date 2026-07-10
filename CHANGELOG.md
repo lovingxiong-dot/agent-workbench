@@ -1,5 +1,68 @@
 # Changelog
 
+## v6.12.0-beta.14 (2026-07-10) — Engineering Workflow Contract 冻结
+
+> **里程碑语义**：把 AI 辅助开发流程从「Prompt 驱动」升级为「工程标准驱动」。正式冻结五层架构、五大标准 Skill、单向 Mirror、Upgrade Plan、Workspace State 三元组与 Pending Questions 交接字段，发布 `docs/engineering-workflow.md` 作为所有 AI 必须遵循的跨平台工程契约。
+
+### Added
+
+- `docs/engineering-workflow.md`：
+  - 五层架构：Product / Engineering Workflow / Repository / Workspace / Runtime。
+  - 完整生命周期：`Idea → Architecture → Implementation → Testing → Archive → Mirror → Publish → Handoff → Sync Workspace → Run → Feedback → Idea`。
+  - 五大标准 Skill：Archive、Mirror、Publish、Handoff、Sync Workspace（加上 gitops 共六个触发 Skill）。
+  - Skill 职责边界与调用关系图。
+  - Mirror Policy：Gitee → GitHub 永远单向，GitHub 为 Readonly Mirror。
+  - Workspace State 规范：`.sync/workspace_state.json` / `sync_history.json` / `artifact_manifest.json`。
+  - Upgrade Plan 模板与用户确认机制。
+  - 变更控制：Frozen 后禁止修改流程顺序与职责边界。
+- `.project/decisions/ai-software-engineering-workflow.md`：
+  - 更新为五层架构与五大标准 Skill。
+  - 明确 Archive 自动触发 Mirror。
+  - 明确 Cloud Agent 必须 Push Gitee，不得通过 GitHub 反向写回。
+  - 新增 Engineering Workflow Contract 引用。
+
+### Changed
+
+- `TRAE-mirror` Skill（本地 Trae 技能目录）：
+  - 从「Gitee ↔ GitHub 双向一致性」改为「Gitee → GitHub 单向只读镜像」。
+  - 新增 `Readonly Mirror: True` Policy。
+  - 删除 Cloud Agent Push GitHub 再 Mirror 回 Gitee 的描述。
+  - Diverged 时停止并报告，不自动覆盖。
+- `TRAE-sync-workspace` Skill：
+  - 增加五层模型中的位置说明。
+  - 流程新增 Step 2 `Analyze` 与 Step 3 `Upgrade Plan`，用户确认后才执行 Backup/Upgrade/Launch。
+  - `.sync/` 从单一 `workspace_state.json` 扩展为三元组：`workspace_state.json` / `sync_history.json` / `artifact_manifest.json`。
+  - Cloud Workspace 结束后流程改为：Handoff → Push Gitee → Mirror → Terminate。
+- `TRAE-archive` Skill：
+  - 明确属于 Engineering Workflow 第一环。
+  - 把「可以自动触发 Mirror」改为「自动触发 Mirror」。
+  - 新增与 Publish 的关系说明。
+- `TRAE-handoff` Skill：
+  - schema_version 3.1 → 3.2。
+  - 新增 `Pending Questions` 字段，交接与接替流程都必须突出显示。
+  - 接替方不得擅自决定 Pending Questions。
+- `user_rules/rule.md`：
+  - 触发词路由新增「发布 / Publish」。
+  - Sync Workspace 说明更新为 Analyze → Upgrade Plan → Backup → Upgrade → Launch → Acceptance。
+
+### Infrastructure
+
+- 新增 `TRAE-publish` Skill（本地 Trae 技能目录）：
+  - Release Pipeline：Verify Repository State → Build Artifact → Verify Artifact → Generate Release Notes → Update Artifact Manifest。
+  - 产物输出到外部 `F:/Releases/<project>/<version>/` 目录，不提交到 Git。
+  - 由「发布」触发，也可在 Archive → Mirror 后自动触发。
+
+### Notes
+
+- 本地仓库已配置 `mirror` remote 指向 `https://github.com/lovingxiong-dot/agent-workbench.git`，但当前环境 GitHub 443 不可达，Mirror 实际同步需在能访问 GitHub 的环境完成。
+- 本版本无代码变更，仅文档、Skill 与工程契约。
+
+### Next Phase
+
+- **在能访问 GitHub 的环境验证 Mirror Skill。**
+
+---
+
 ## v6.12.0-beta.13 (2026-07-10) — AI软件工程工作流架构决策
 
 > **里程碑语义**：将 AI 辅助开发流程升级为标准化、可跨 AI / 跨平台复用的工程体系。明确 Repository Layer（Gitee Primary / GitHub Mirror）、Workspace Layer（Local / Cloud）、Product Layer 三层职责；新增 Mirror Skill 与重新设计的 Sync Workspace Skill；项目知识统一归集到 `.project/` 目录并纳入 Git 跟踪。

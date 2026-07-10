@@ -3,6 +3,7 @@
 ## Status
 
 Accepted — 2026-07-10
+Frozen — 2026-07-10
 
 ## Context
 
@@ -18,6 +19,7 @@ Accepted — 2026-07-10
 | Coder / Debugger / Tester / Documenter / Git / Build / Release | AI（Trae / ChatGPT / Claude / Codex / Gateway 等） |
 
 人类负责：
+
 - 产品目标
 - 架构设计
 - Contract 定义
@@ -27,103 +29,177 @@ Accepted — 2026-07-10
 
 AI 负责完整软件工程生命周期。
 
-### 2. Repository Strategy
+### 2. 五层架构
+
+整个体系分为五层，职责清晰解耦：
+
+```
+Product Layer
+        │
+        ▼
+Engineering Workflow Layer
+        │
+        ▼
+Repository Layer
+        │
+        ▼
+Workspace Layer
+        │
+        ▼
+Runtime Layer
+```
+
+- **Product Layer**：产品目标、用户价值、体验标准。由人类定义与验收。
+- **Engineering Workflow Layer**：把产品目标转化为可执行工程步骤。包含五个标准 Skill。
+- **Repository Layer**：代码资产的唯一真相。Gitee 为 Primary，GitHub 为 Readonly Mirror。
+- **Workspace Layer**：开发/运行环境（Local / Cloud）。负责把 Repository 版本安全部署为可运行状态。
+- **Runtime Layer**：真正运行的程序（Workbench.exe、Python、DB、Config）。
+
+### 3. Repository Strategy
 
 所有项目统一采用双仓库：
 
 - **Primary Repository**: Gitee（唯一 Source of Truth）
-- **Mirror Repository**: GitHub（服务于 Cloud Agent / Trae Cloud）
+- **Mirror Repository**: GitHub（Readonly Mirror / Cloud Agent 缓存）
 
 原则：
+
 - Gitee 为唯一主仓库（Single Source of Truth）。
-- GitHub 为镜像仓库，仅服务于 Cloud Agent / Trae Cloud。
+- GitHub 为只读镜像仓库，仅供 Cloud Agent Pull。
 - 用户不直接维护 GitHub，Mirror 由 AI 自动完成。
+- 方向永远单向：Gitee → GitHub。
 - 所有 Tag、Commit、Branch 同步。
-- AI 完成任务后：Commit → Push Gitee → Mirror → GitHub → Verify Commit SHA 一致。
-- 未来若增加 GitLab、Azure DevOps，统一作为 Mirror。
+- Cloud Agent 开发完成后 Push Gitee，经 PR / Merge / Archive 后由 Mirror 同步到 GitHub。
+- 未来若增加 GitLab、Azure DevOps，统一作为 Readonly Mirror。
 
-Mirror 是独立的基础设施 Skill，与 Archive、Sync Workspace 解耦：
+Mirror Policy：
 
-- **Archive**：冻结版本并推送到 Gitee。
-- **Mirror**：把 Gitee 同步到 GitHub。
-- **Sync Workspace**：把 Repository 版本部署到 Local / Cloud 工作环境。
-
-### 3. Layered Model
-
-整个体系分为三层，职责清晰解耦：
-
-```
-Repository Layer（代码资产）
-        │
-        ├── Gitee（Primary / Single Source of Truth）
-        └── GitHub（Mirror / Cloud Agent）
-                 │
-                 ▼
-Workspace Layer（开发环境）
-        │
-        ├── Local
-        ├── Trae Cloud
-        └── 未来 Workbench Cloud
-                 │
-                 ▼
-Product Layer（交付产物）
-        │
-        └── Workbench OS.exe
+```yaml
+Primary: Gitee
+Mirror: GitHub
+Direction: Primary -> Mirror
+Force Push: Forbidden
+Delete Branch: Forbidden
+Delete Tag: Forbidden
+Mirror Current Branch Only: True
+Mirror Current Tag Only: True
+Readonly Mirror: True
 ```
 
-- **Repository Layer**：只由 Git 管理，Mirror Skill 负责 Gitee ↔ GitHub 一致性。
-- **Workspace Layer**：由 Sync Workspace Skill 管理，负责 Config / Database / Runtime / Artifact / Launch。
-- **Product Layer**：由 Publish / Acceptance 管理（后期），生成可运行的产品并验收。
+### 4. 完整生命周期
 
-### 4. Cloud Workspace 定位
+所有开发流程统一为：
+
+```
+Idea → Architecture → Implementation → Testing → Archive → Mirror → Publish → Handoff → Sync Workspace → Run → Feedback → Idea
+```
+
+禁止跳步骤。
+
+- **Archive**：冻结版本，推送到 Gitee。
+- **Mirror**：把版本同步到 GitHub Readonly Mirror。
+- **Publish**：从已归档版本生成可发布产物（Release Pipeline）。
+- **Handoff**：生成交接上下文（可选，Cloud Workspace 必填）。
+- **Sync Workspace**：把版本部署到本地/云端运行环境。
+
+### 5. 五大标准 Skill
+
+| Skill | 触发词 | 职责 | 输出 |
+|-------|--------|------|------|
+| gitops | 新建项目 | Git init + 项目骨架生成 + 可选远程关联 | Project Report |
+| Archive | 存档 / 存档并push | Version、CHANGELOG、PROJECT_BLUEPRINT、Git Commit、Git Tag、Push Gitee | Archive Report |
+| Mirror | 镜像 / Mirror | Gitee → GitHub 单向镜像同步与一致性校验（当前分支 + 当前 Tag） | Mirror Report |
+| Publish | 发布 / Publish | Release Pipeline：Build、生成 Release Notes、更新 Artifact Manifest | Publish Report |
+| Handoff | 移交 / 接替 | 完整交接，包含 Version、Progress、Completed、Remaining、Known Issues、Risks、Environment、Next Step、Pending Questions、Git Status | Handoff Report |
+| Sync Workspace | 同步 / Sync Workspace | 把工作环境安全升级到指定版本。Repository Sync → Analyze → Upgrade Plan → Backup → Upgrade → Launch → Acceptance。维护 `.sync/` 目录 | Sync Report |
+
+### 6. Skill 调用关系
+
+#### 6.1 标准自动化链路
+
+```
+Archive
+  └── Commit
+  └── Tag
+  └── Push Gitee
+  └── Trigger Mirror  ← 自动调用
+  └── Mirror Skill
+  └── Verify
+```
+
+Archive 完成 Push Gitee 后自动触发 Mirror。
+
+#### 6.2 发布链路
+
+```
+Publish
+  ├── Verify Repository State
+  ├── Build Artifact
+  ├── Verify Artifact
+  ├── Generate Release Notes
+  ├── Update Artifact Manifest
+  └── Output Publish Report
+```
+
+Publish 由「发布」触发，或在 Archive → Mirror 成功后自动触发。
+
+#### 6.3 交接链路
+
+Handoff 必须包含：
+
+- Mission
+- Progress
+- Blocker
+- Decision Log
+- Pending Questions（等待用户确认的问题）
+- Key Files
+- Error Log
+- Environment Snapshot
+- Working State
+- Recent Conversation
+- Next Steps
+- Test Status
+- Notes
+
+### 7. Workspace State
+
+Sync Workspace 维护 `.sync/` 目录：
+
+```
+.sync/
+    workspace_state.json      # 当前环境状态
+    sync_history.json         # 同步历史
+    artifact_manifest.json    # 产物清单
+```
+
+AI 不再猜测当前同步状态，直接读取 `.sync/`。
+
+### 8. Upgrade Plan
+
+Sync Workspace 在执行升级前必须生成 Upgrade Plan，包含：
+
+- 当前版本 vs 目标版本
+- 影响面（Database Migration、Config Merge、Artifact Rebuild 等）
+- 预计时间
+- 备份位置
+- 风险等级
+- 用户确认（Continue? Y/N）
+
+### 9. Cloud Workspace 定位
 
 Cloud Workspace 不是仓库，只是 **Temporary Development Workspace**。
 
 流程：
 
 ```
-Git Clone → Coding → Testing → Commit → Push → 结束
+Git Clone → Coding → Testing → Commit → Push Gitee → Mirror → Handoff → Terminate Session
 ```
 
 Session 可以删除。真正的数据永远保存在 Git Repository。
 
 任何时候：**Git Repository > Cloud Session**。
 
-### 4. Release Pipeline
-
-所有开发流程统一为：
-
-```
-Idea → Architecture → Implementation → Testing → Archive → Mirror → Handoff → Sync Workspace → Experience → Feedback
-```
-
-禁止跳步骤。
-
-- **Archive**：冻结版本，推送到 Gitee。
-- **Mirror**：把版本同步到 GitHub Mirror。
-- **Handoff**：生成交接上下文。
-- **Sync Workspace**：把版本部署到本地/云端运行环境。
-
-Publish / Acceptance 作为后期 Skill，在当前阶段不强制纳入主线。
-
-### 5. Standard Skills
-
-所有 AI 默认拥有的工程技能：
-
-| Skill | 触发词 | 职责 | 输出 |
-|-------|--------|------|------|
-| gitops | 新建项目 | Git init + 项目骨架生成 + 可选远程关联 | Project Report |
-| Archive | 存档 / 存档并push | Version、CHANGELOG、PROJECT_BLUEPRINT、Handoff、Docs、Git Commit、Git Tag | Archive Report |
-| Mirror | 镜像 / Mirror | Gitee → GitHub 仓库镜像同步与一致性校验（当前分支 + 当前 Tag） | Mirror Report |
-| Handoff | 移交 / 接替 | 完整交接，包含 Version、Progress、Completed、Remaining、Known Issues、Risks、Environment、Next Step、Git Status | Handoff Report |
-| Sync Workspace | 同步 / Sync Workspace | 把工作环境安全升级到指定版本。双层：Repository Sync（Git/Branch/Tag）→ Workspace Backup → Workspace Upgrade（Replace/Config Merge/DB Migration/Artifact）→ Launch → Acceptance。维护 `.sync/workspace_state.json`，执行前生成 Upgrade Plan | Sync Report |
-
-未来扩展：
-
-- **Publish**：Build / PyInstaller / Release（后期）。
-- **Acceptance**：GUI 自动验收 / 截图 / Smoke Test（后期）。
-
-### 6. Workbench OS 定位
+### 10. Workbench OS 定位
 
 Workbench OS 不是 IDE，而是 **AI Product Operating System**。
 
@@ -135,7 +211,7 @@ Workbench OS 不是 IDE，而是 **AI Product Operating System**。
 
 用户不参与：编码、Debug、Git 操作、测试、Build。
 
-### 7. Project Knowledge Management
+### 11. Project Knowledge Management
 
 不依赖 IDE Memory。所有长期知识统一保存在项目内：
 
@@ -154,17 +230,25 @@ Workbench OS 不是 IDE，而是 **AI Product Operating System**。
 
 保证更换 AI、IDE、云平台时项目知识全部保留。
 
-### 8. Core Design Principle
+### 12. Engineering Workflow Contract
 
-> 任何工具（Trae、ChatGPT、Claude、Codex、Gateway）都是可替换的执行者；Git 仓库和项目知识才是永久资产。整个架构必须保证更换任何 AI 或平台时，无需迁移项目资产，只需更换执行者即可继续开发。
+完整工程生命周期与 Skill 职责边界已冻结于 `docs/engineering-workflow.md`。
+
+本决策进入 Frozen 状态后：
+
+- 允许新增字段、新增 Skill、新增说明。
+- 禁止修改已冻结的流程顺序、Skill 职责边界、Repository Strategy。
+- 如需修改，必须走架构评审，并更新版本号。
 
 ## Consequences
 
 - 所有项目必须建立 `.project/` 目录。
 - 所有 AI 交互以 Git 状态为基准，不以 Cloud Session 为基准。
-- 发布流程必须包含 Archive → Mirror → Handoff → Sync Workspace 四阶段。
+- 发布流程必须包含 Archive → Mirror → Publish → Handoff → Sync Workspace。
 - 用户从 Developer 彻底转型为 Product Architect。
+- 任何 AI 进入项目后，先读 `docs/engineering-workflow.md` 和 `.project/`。
 
 ## Related Decisions
 
+- `docs/engineering-workflow.md` — Engineering Workflow Contract
 - `docs/v6/product-contract.md` — Workbench OS 1.0 Product Contract
