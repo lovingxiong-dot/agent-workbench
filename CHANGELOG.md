@@ -1,5 +1,39 @@
 # Changelog
 
+## v6.12.0-beta.13 (2026-07-10) — AI软件工程工作流架构决策
+
+> **里程碑语义**：将 AI 辅助开发流程升级为标准化、可跨 AI / 跨平台复用的工程体系。明确 Repository Layer（Gitee Primary / GitHub Mirror）、Workspace Layer（Local / Cloud）、Product Layer 三层职责；新增 Mirror Skill 与重新设计的 Sync Workspace Skill；项目知识统一归集到 `.project/` 目录并纳入 Git 跟踪。
+
+### Added
+
+- `.project/decisions/ai-software-engineering-workflow.md`：
+  - 定义人类（Product Architect）与 AI（工程执行者）角色划分。
+  - 确立 Gitee 为唯一 Source of Truth，GitHub 为 Cloud Agent 服务的 Mirror。
+  - 提出 Repository / Workspace / Product 三层模型。
+  - 统一 Release Pipeline：`Idea → Architecture → Implementation → Testing → Archive → Mirror → Handoff → Sync Workspace → Experience → Feedback`。
+  - 明确 Standard Skills：gitops / Archive / Mirror / Handoff / Sync Workspace，后期扩展 Publish / Acceptance。
+  - 项目知识管理：所有长期知识保存于 `.project/` 目录。
+- `.gitignore`：新增 `!.project/` 与 `!.project/**`，确保项目知识目录被 Git 跟踪。
+- `TRAE-mirror` Skill（本地 Trae 技能目录）：Gitee → GitHub 镜像同步与一致性校验，禁止 `--mirror` / `--all` / `--force`，仅同步当前分支与当前 Tag。
+- `TRAE-archive` Skill：更新提交范围，纳入 `.project/`；Push Gitee 后可自动触发 Mirror。
+- `TRAE-sync-workspace` Skill：重新设计为双层流程（Repository Sync → Workspace Backup → Workspace Upgrade → Launch → Acceptance），引入 `.sync/workspace_state.json` 与 Upgrade Plan。
+- `user_rules/rule.md`：新增「镜像 / Mirror」触发词，扩展文件边界规则至 `.project/`。
+
+### Changed
+
+- Sync Workspace 职责从「同步代码」重新定位为「把当前工作环境安全升级到指定版本，并保证用户数据、配置和运行状态完整保留」。
+
+### Notes
+
+- 当前仓库尚未配置 `mirror` remote；启用 GitHub 自动镜像前需手动添加指向 GitHub 仓库的 `mirror` remote。
+- 历史 tag 存在缺口：commit 消息已引用 beta.10–beta.12，但仓库 tag 最新为 `v6.12.0-beta.9`。本次 Archive 按项目文档当前版本 `v6.12.0-beta.12` 递进至 `v6.12.0-beta.13`。
+
+### Next Phase
+
+- **配置 GitHub `mirror` remote 并验证 Mirror Skill。**
+
+---
+
 ## v6.12.0-beta.12 (2026-07-10) — Feedback：产品迭代系统
 
 > **里程碑语义**：Workbench 标题栏新增 💡 Feedback 入口，用户可一键提交反馈并自动生成 `feedback/YYYY-MM-DD-NNN.md`。这不是普通功能，而是未来产品迭代工作流的基础设施：真实使用 → 点 Feedback → Trae 次日读取、分类、分析、修改 → 生成新版本。
