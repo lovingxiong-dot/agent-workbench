@@ -1,5 +1,50 @@
 # Changelog
 
+## v6.12.0-beta.15 (2026-07-10) — Repository Infrastructure Migration
+
+> **里程碑语义**：全局 Git 基础设施标准化。所有项目统一 GitHub 为 Single Source of Truth（`origin`），Gitee 退化为可选 Release Mirror（`release`）；所有 Skill 重构为 Repository Generic、Project Independent、Language Independent、Framework Independent；Engineering Workflow Contract 升级为 v1.1。
+
+### Changed
+
+- `docs/engineering-workflow.md`：
+  - Repository Policy 更新：GitHub 为 Single Source of Truth，`origin` 必须指向 GitHub。
+  - Gitee 角色从 Primary / Readonly Mirror 改为可选 Release Mirror（`release`）。
+  - Mirror 方向从 Gitee→GitHub 改为 GitHub→Gitee，且仅在 Release 时由用户显式触发。
+  - Archive 不再自动触发 Mirror。
+  - 生命周期更新为 `Idea → Architecture → Implementation → Testing → Archive → Publish → Mirror → Handoff → Sync Workspace → Run → Feedback`。
+  - 强调所有 Skill 必须 Repository Generic，不绑定项目/语言/框架。
+- `.project/decisions/ai-software-engineering-workflow.md`：
+  - 同步更新为 GitHub-centric Repository Strategy。
+  - 明确 Mirror 属于 Release Infrastructure，不参与开发。
+  - 明确 Cloud Workspace 流程改为 `GitHub Clone → Development → Testing → Archive → Push origin → Handoff → Terminate Session`。
+- 本地 Trae Skill 目录全部重构为 Repository Generic：
+  - `TRAE-archive`：移除 Gitee 与自动触发 Mirror，`origin` 指向 GitHub。
+  - `TRAE-mirror`：改为 Release Mirror（GitHub → Gitee），使用 `release` remote。
+  - `TRAE-sync-workspace`：移除 mirror fallback，Repository Sync 仅使用 `origin`。
+  - `TRAE-publish`：基于 GitHub `origin` 构建，可选触发 Release Mirror。
+  - `TRAE-handoff`：schema_version 3.2 → 3.3，Environment Snapshot 改为 Repository Generic。
+  - `TRAE-gitops`：默认 `origin→GitHub`，增加 `.project/` 骨架与模板。
+- `c:/Users/ThinkPad/.trae-cn/user_rules/rule.md`：
+  - 新增 Repository Policy 段落。
+  - 更新所有 Skill 说明为 GitHub-centric。
+
+### Added
+
+- `.project/contracts/repository_contract.md`：
+  - 冻结 Single Source of Truth、Release Mirror、Workspace 类型、Cloud / Local 约束、Remote 配置示例、禁止行为。
+
+### Infrastructure
+
+- 当前仓库 remote 即将迁移：`origin` → `git@github.com:lovingxiong-dot/agent-workbench.git`，可选 `release` → `git@gitee.com:xyzturbo_0/agent-workbench.git`。
+- 所有本地分支与 Tag 将推送到 GitHub，确保历史完整迁移。
+
+### Notes
+
+- 本版本无代码变更，仅文档、Skill、Contract 与仓库基础设施标准化。
+- Gitee 仍作为 Release Mirror 保留，但不再参与开发流程。
+
+---
+
 ## v6.12.0-beta.14 (2026-07-10) — Engineering Workflow Contract 冻结
 
 > **里程碑语义**：把 AI 辅助开发流程从「Prompt 驱动」升级为「工程标准驱动」。正式冻结五层架构、五大标准 Skill、单向 Mirror、Upgrade Plan、Workspace State 三元组与 Pending Questions 交接字段，发布 `docs/engineering-workflow.md` 作为所有 AI 必须遵循的跨平台工程契约。

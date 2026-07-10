@@ -4,10 +4,18 @@
 
 Accepted — 2026-07-10
 Frozen — 2026-07-10
+Updated — 2026-07-10 (v1.1: GitHub as Single Source of Truth)
 
 ## Context
 
 经过最近几轮 Workbench OS 开发，现有 AI 辅助流程已证明可以完成编码、调试、测试、文档、Git 和交接。但缺少一个统一的、跨项目的长期规范。本决策定义所有未来项目遵循的 AI 软件工程工作流。
+
+本次更新的核心变化：
+
+- **GitHub 成为唯一 Source of Truth（`origin`）。**
+- **Gitee 退化为可选的 Release Mirror（`release`），不参与开发。**
+- **所有 Skill 重构为 Repository Generic、Project Independent、Language Independent、Framework Independent。**
+- **Mirror 从 Archive 子流程中解耦，仅在正式发布时由用户显式触发。**
 
 ## Decision
 
@@ -16,7 +24,7 @@ Frozen — 2026-07-10
 | 角色 | 负责人 |
 |------|--------|
 | Product Architect / System Architect | 人类用户 |
-| Coder / Debugger / Tester / Documenter / Git / Build / Release | AI（Trae / ChatGPT / Claude / Codex / Gateway 等） |
+| Coder / Debugger / Tester / Documenter / Git / Build / Release | AI（Trae / ChatGPT / Claude / Codex / Cursor / Gateway 等） |
 
 人类负责：
 
@@ -51,39 +59,39 @@ Runtime Layer
 
 - **Product Layer**：产品目标、用户价值、体验标准。由人类定义与验收。
 - **Engineering Workflow Layer**：把产品目标转化为可执行工程步骤。包含五个标准 Skill。
-- **Repository Layer**：代码资产的唯一真相。Gitee 为 Primary，GitHub 为 Readonly Mirror。
+- **Repository Layer**：代码资产的唯一真相。**GitHub 为 Primary（`origin`），Gitee 为可选 Release Mirror（`release`）。**
 - **Workspace Layer**：开发/运行环境（Local / Cloud）。负责把 Repository 版本安全部署为可运行状态。
-- **Runtime Layer**：真正运行的程序（Workbench.exe、Python、DB、Config）。
+- **Runtime Layer**：真正运行的程序（Application、Python、DB、Config）。
 
 ### 3. Repository Strategy
 
-所有项目统一采用双仓库：
+所有项目统一采用以下策略：
 
-- **Primary Repository**: Gitee（唯一 Source of Truth）
-- **Mirror Repository**: GitHub（Readonly Mirror / Cloud Agent 缓存）
+- **Primary Repository**: GitHub（唯一 Source of Truth）
+- **Release Mirror**: Gitee（可选，仅在正式发布时同步）
 
 原则：
 
-- Gitee 为唯一主仓库（Single Source of Truth）。
-- GitHub 为只读镜像仓库，仅供 Cloud Agent Pull。
-- 用户不直接维护 GitHub，Mirror 由 AI 自动完成。
-- 方向永远单向：Gitee → GitHub。
-- 所有 Tag、Commit、Branch 同步。
-- Cloud Agent 开发完成后 Push Gitee，经 PR / Merge / Archive 后由 Mirror 同步到 GitHub。
-- 未来若增加 GitLab、Azure DevOps，统一作为 Readonly Mirror。
+- GitHub 为唯一开发仓库（Single Source of Truth）。
+- Gitee 为可选 Release Mirror，不参与开发。
+- 所有 Pull / Push / Archive / Handoff / Sync 基于 GitHub。
+- 方向只在 Release 时单向：GitHub → Gitee。
+- 所有 Tag、Commit、Branch 的开发历史以 GitHub 为准。
+- Cloud Agent 开发完成后 Push origin（GitHub），经 PR / Merge / Archive 后，由 Publish（可选）+ Mirror 同步到 Gitee。
+- 未来若增加 GitLab、Azure DevOps，统一作为可选 Release Mirror。
 
 Mirror Policy：
 
 ```yaml
-Primary: Gitee
-Mirror: GitHub
-Direction: Primary -> Mirror
+Primary: GitHub
+Release Mirror: Gitee
+Direction: GitHub -> Gitee
 Force Push: Forbidden
 Delete Branch: Forbidden
 Delete Tag: Forbidden
 Mirror Current Branch Only: True
 Mirror Current Tag Only: True
-Readonly Mirror: True
+Release Mirror: Optional
 ```
 
 ### 4. 完整生命周期
@@ -91,14 +99,14 @@ Readonly Mirror: True
 所有开发流程统一为：
 
 ```
-Idea → Architecture → Implementation → Testing → Archive → Mirror → Publish → Handoff → Sync Workspace → Run → Feedback → Idea
+Idea → Architecture → Implementation → Testing → Archive → Publish → Mirror → Handoff → Sync Workspace → Run → Feedback → Idea
 ```
 
 禁止跳步骤。
 
-- **Archive**：冻结版本，推送到 Gitee。
-- **Mirror**：把版本同步到 GitHub Readonly Mirror。
+- **Archive**：冻结版本，推送到 GitHub `origin`。
 - **Publish**：从已归档版本生成可发布产物（Release Pipeline）。
+- **Mirror**：可选，仅在正式发布时把 GitHub 同步到 Gitee Release Mirror。
 - **Handoff**：生成交接上下文（可选，Cloud Workspace 必填）。
 - **Sync Workspace**：把版本部署到本地/云端运行环境。
 
@@ -106,12 +114,12 @@ Idea → Architecture → Implementation → Testing → Archive → Mirror → 
 
 | Skill | 触发词 | 职责 | 输出 |
 |-------|--------|------|------|
-| gitops | 新建项目 | Git init + 项目骨架生成 + 可选远程关联 | Project Report |
-| Archive | 存档 / 存档并push | Version、CHANGELOG、PROJECT_BLUEPRINT、Git Commit、Git Tag、Push Gitee | Archive Report |
-| Mirror | 镜像 / Mirror | Gitee → GitHub 单向镜像同步与一致性校验（当前分支 + 当前 Tag） | Mirror Report |
+| gitops | 新建项目 | Git init + 项目骨架生成 + 可选远程关联（默认 origin→GitHub） | Project Report |
+| Archive | 存档 / 存档并push | Version、CHANGELOG、PROJECT_BLUEPRINT、Git Commit、Git Tag、Push origin（GitHub） | Archive Report |
 | Publish | 发布 / Publish | Release Pipeline：Build、生成 Release Notes、更新 Artifact Manifest | Publish Report |
 | Handoff | 移交 / 接替 | 完整交接，包含 Version、Progress、Completed、Remaining、Known Issues、Risks、Environment、Next Step、Pending Questions、Git Status | Handoff Report |
 | Sync Workspace | 同步 / Sync Workspace | 把工作环境安全升级到指定版本。Repository Sync → Analyze → Upgrade Plan → Backup → Upgrade → Launch → Acceptance。维护 `.sync/` 目录 | Sync Report |
+| Mirror | 镜像 / Mirror | Release Mirror：GitHub → Gitee 单向同步（当前分支 + 当前 Tag） | Mirror Report |
 
 ### 6. Skill 调用关系
 
@@ -121,13 +129,10 @@ Idea → Architecture → Implementation → Testing → Archive → Mirror → 
 Archive
   └── Commit
   └── Tag
-  └── Push Gitee
-  └── Trigger Mirror  ← 自动调用
-  └── Mirror Skill
-  └── Verify
+  └── Push origin (GitHub)
 ```
 
-Archive 完成 Push Gitee 后自动触发 Mirror。
+Archive 不再自动触发 Mirror。
 
 #### 6.2 发布链路
 
@@ -139,9 +144,10 @@ Publish
   ├── Generate Release Notes
   ├── Update Artifact Manifest
   └── Output Publish Report
+       │
+       ▼
+Mirror（可选，Release 时触发）
 ```
-
-Publish 由「发布」触发，或在 Archive → Mirror 成功后自动触发。
 
 #### 6.3 交接链路
 
@@ -192,7 +198,7 @@ Cloud Workspace 不是仓库，只是 **Temporary Development Workspace**。
 流程：
 
 ```
-Git Clone → Coding → Testing → Commit → Push Gitee → Mirror → Handoff → Terminate Session
+GitHub Clone → Coding → Testing → Archive → Push origin (GitHub) → Handoff → Terminate Session
 ```
 
 Session 可以删除。真正的数据永远保存在 Git Repository。
@@ -243,12 +249,14 @@ Workbench OS 不是 IDE，而是 **AI Product Operating System**。
 ## Consequences
 
 - 所有项目必须建立 `.project/` 目录。
-- 所有 AI 交互以 Git 状态为基准，不以 Cloud Session 为基准。
-- 发布流程必须包含 Archive → Mirror → Publish → Handoff → Sync Workspace。
+- 所有 AI 交互以 GitHub 状态为基准，不以 Cloud Session 为基准。
+- 发布流程必须包含 Archive → Publish → Mirror（可选）→ Handoff（Cloud 必填）→ Sync Workspace。
 - 用户从 Developer 彻底转型为 Product Architect。
 - 任何 AI 进入项目后，先读 `docs/engineering-workflow.md` 和 `.project/`。
+- Skill 文档必须保持 Repository Generic，不得绑定具体项目、语言、框架。
 
 ## Related Decisions
 
 - `docs/engineering-workflow.md` — Engineering Workflow Contract
+- `.project/contracts/repository_contract.md` — Repository Contract
 - `docs/v6/product-contract.md` — Workbench OS 1.0 Product Contract

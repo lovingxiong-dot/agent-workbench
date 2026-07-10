@@ -1,12 +1,13 @@
 # Engineering Workflow Contract
 
-> 版本：v1.0
+> 版本：v1.1
 > 状态：Frozen
-> 适用范围：Workbench OS 及所有未来项目
+> 适用范围：所有项目（Repository Generic）
+> 生效日期：2026-07-10
 
 ## 1. 概述
 
-本文档冻结 AI 辅助软件工程的完整生命周期。所有 AI（Trae、ChatGPT、Claude、Gemini、Codex、Gateway 等）进入项目后，必须遵循本合约定义的流水线与 Skill 职责边界。
+本文档冻结 AI 辅助软件工程的完整生命周期。所有 AI（Trae、ChatGPT、Claude、Gemini、Codex、Cursor、Gateway 等）进入项目后，必须遵循本合约定义的流水线与 Skill 职责边界。
 
 本合约的核心目标：
 
@@ -14,6 +15,7 @@
 - **一致性**：无论换什么 AI，工程流程不变。
 - **可追溯性**：每个阶段都有明确输入、输出与校验标准。
 - **安全性**：用户数据、配置、运行状态在升级过程中完整保留。
+- **Repository Generic**：不绑定任何项目、语言、框架或平台。
 
 ## 2. 五层架构
 
@@ -43,26 +45,40 @@ Runtime Layer
 
 - 把产品目标转化为可执行工程步骤。
 - 由 AI 执行，人类监督。
-- 包含五个标准 Skill：Archive、Mirror、Publish、Handoff、Sync Workspace。
+- 包含五个标准 Skill：Archive、Publish、Handoff、Sync Workspace、Mirror（可选 Release Infrastructure）。
 
 ### 2.3 Repository Layer
 
 - 代码资产的唯一真相。
-- Gitee 为 Primary，GitHub 为 Readonly Mirror。
-- 所有版本、标签、分支、架构决策都保存在这里。
+- **GitHub 为 Single Source of Truth（`origin`）。**
+- Gitee 仅作为可选的 Release Mirror（`release`），不参与开发。
+- 所有版本、标签、分支、架构决策都保存在 Repository Layer。
 
 ### 2.4 Workspace Layer
 
 - 开发/运行环境。
-- Local、Trae Cloud、未来 Workbench Cloud。
+- Local、Cloud、未来 Workbench Cloud。
 - 负责把 Repository 的某个版本安全部署为可运行状态。
 
 ### 2.5 Runtime Layer
 
-- 真正运行的程序：Workbench.exe、Python 进程、数据库、配置。
+- 真正运行的程序：Application、Python 进程、数据库、配置。
 - 由 Sync Workspace 启动与健康检查。
 
-## 3. 完整生命周期
+## 3. Repository Policy
+
+```yaml
+Single Source of Truth: GitHub
+origin: GitHub
+Workspace: Local | Cloud
+Archive: Commit → Tag → Push origin
+Handoff: Generate HANDOFF.md
+Sync Workspace: Pull origin
+Release Mirror（可选）: GitHub → Gitee
+Forbidden: Gitee → GitHub 任何反向同步
+```
+
+## 4. 完整生命周期
 
 ```
         ┌─────────────┐
@@ -82,11 +98,7 @@ Runtime Layer
         └──────┬──────┘
                ▼
         ┌─────────────┐
-        │   Archive   │ ← AI 冻结版本，Push Gitee
-        └──────┬──────┘
-               ▼
-        ┌─────────────┐
-        │   Mirror    │ ← AI 同步 GitHub（Readonly Mirror）
+        │   Archive   │ ← AI 冻结版本，Push origin（GitHub）
         └──────┬──────┘
                ▼
         ┌─────────────┐
@@ -94,7 +106,11 @@ Runtime Layer
         └──────┬──────┘
                ▼
         ┌─────────────┐
-        │   Handoff   │ ← AI 生成交接上下文（可选）
+        │   Mirror    │ ← 可选：Release Mirror 到 Gitee
+        └──────┬──────┘
+               ▼
+        ┌─────────────┐
+        │   Handoff   │ ← AI 生成交接上下文（可选，Cloud 必填）
         └──────┬──────┘
                ▼
         ┌─────────────┐
@@ -112,20 +128,20 @@ Runtime Layer
 
 禁止跳步骤。每个步骤的输出是下一个步骤的输入。
 
-## 4. 五大标准 Skill
+## 5. 五大标准 Skill
 
 | Skill | 触发词 | 输入 | 输出 | 职责边界 |
 |-------|--------|------|------|----------|
-| **gitops** | 新建项目 | 项目名、可选远程 | 项目骨架 | 初始化项目 |
-| **Archive** | 存档 / 存档并push | 工作区变更 | Commit + Tag + Push Gitee | 版本冻结，不 Build |
-| **Mirror** | 镜像 / Mirror | Gitee 最新状态 | GitHub 同步 + 校验 | 单向同步，不修改 Primary |
+| **gitops** | 新建项目 | 项目名、可选远程 | 项目骨架 | 初始化项目，`origin→GitHub` |
+| **Archive** | 存档 / 存档并push | 工作区变更 | Commit + Tag + Push origin | 版本冻结，不 Build，不 Mirror |
 | **Publish** | 发布 / Publish | 已归档 Tag | Artifact + Release Notes | Release Pipeline，不部署 |
 | **Handoff** | 移交 / 接替 | 当前上下文 | HANDOFF.md | 上下文交接，不打标签 |
 | **Sync Workspace** | 同步 / Sync Workspace | 目标版本 | 运行中的 Workspace | 部署、升级、保留用户数据 |
+| **Mirror** | 镜像 / Mirror | GitHub 当前分支/Tag | Gitee 同步 + 校验 | Release Infrastructure，单向 |
 
-## 5. Skill 调用关系
+## 6. Skill 调用关系
 
-### 5.1 标准自动化链路
+### 6.1 标准自动化链路
 
 ```
 人类：「存档并push」
@@ -135,23 +151,10 @@ Archive
   │
   ├── Commit
   ├── Tag
-  └── Push Gitee
-       │
-       ▼
-  Trigger Mirror
-       │
-       ▼
-Mirror
-  │
-  ├── Fetch origin
-  ├── Fetch mirror
-  ├── Compare SHA
-  ├── Push branch
-  ├── Push tag
-  └── Verify
+  └── Push origin (GitHub)
 ```
 
-### 5.2 发布链路
+### 6.2 发布链路
 
 ```
 人类：「发布」
@@ -167,10 +170,13 @@ Publish
   └── Output Publish Report
        │
        ▼
+Mirror（可选，Release 时触发）
+       │
+       ▼
 Sync Workspace（可选，由人类触发）
 ```
 
-### 5.3 交接链路
+### 6.3 交接链路
 
 ```
 人类：「移交」
@@ -196,50 +202,54 @@ Handoff
   └── Commit HANDOFF.md
 ```
 
-## 6. Repository Strategy
+## 7. Repository Strategy
 
-### 6.1 Single Source of Truth
+### 7.1 Single Source of Truth
 
-- **Primary**: Gitee（`origin`）
-- **Mirror**: GitHub（`mirror`）
-- **Direction**: Gitee → GitHub，永远单向。
-- **GitHub 角色**: Readonly Mirror，仅供 Cloud Agent Pull。
+- **Primary**: GitHub（`origin`）
+- **Release Mirror**: Gitee（`release`，可选）
+- **Direction**: GitHub → Gitee，仅在 Release 时单向同步。
+- **GitHub 角色**: 唯一开发仓库，所有 Pull / Push / Archive / Handoff / Sync 基于 GitHub。
+- **Gitee 角色**: 可选 Release Mirror，不参与开发。
 
-### 6.2 Mirror Policy
+### 7.2 Mirror Policy
 
 ```yaml
-Primary: Gitee
-Mirror: GitHub
-Direction: Primary -> Mirror
+Primary: GitHub
+Release Mirror: Gitee
+Direction: GitHub -> Gitee
 Force Push: Forbidden
 Delete Branch: Forbidden
 Delete Tag: Forbidden
 Mirror Current Branch Only: True
 Mirror Current Tag Only: True
-Readonly Mirror: True
+Release Mirror: Optional
 ```
 
-### 6.3 Cloud Agent 工作流
+### 7.3 Cloud Agent 工作流
 
-Cloud Agent 绝不 Push GitHub 再 Mirror 回 Gitee。正确路径：
+Cloud Agent 绝不 Push Gitee 再 Mirror 回 GitHub。正确路径：
 
 ```
 Cloud Agent 开发
     │
     ▼
-Push Gitee（Primary）
+Push origin（GitHub）
     │
     ▼
 PR / Merge / Archive
     │
     ▼
-Mirror → GitHub
+Publish（可选）
     │
     ▼
-其他 Cloud Agent Pull GitHub
+Mirror → Gitee（Release Mirror）
+    │
+    ▼
+其他 Cloud Agent Pull origin（GitHub）
 ```
 
-## 7. Workspace State
+## 8. Workspace State
 
 Sync Workspace 维护 `.sync/` 目录：
 
@@ -250,32 +260,32 @@ Sync Workspace 维护 `.sync/` 目录：
     artifact_manifest.json    # 产物清单
 ```
 
-### 7.1 workspace_state.json
+### 8.1 workspace_state.json
 
 ```json
 {
     "workspace": "Local",
-    "branch": "v6-agent",
-    "current_version": "v6.12.0-beta.13",
+    "branch": "main",
+    "current_version": "v1.2.3",
     "last_sync": "2026-07-10T08:31:00+08:00",
     "git_commit": "abcd1234",
-    "git_tag": "v6.12.0-beta.13",
-    "artifact_version": "v6.12.0-beta.13",
-    "artifact_path": "dist/WorkbenchOS.exe",
+    "git_tag": "v1.2.3",
+    "artifact_version": "v1.2.3",
+    "artifact_path": "dist/app.exe",
     "database_version": 8,
     "config_version": 3
 }
 ```
 
-### 7.2 sync_history.json
+### 8.2 sync_history.json
 
 记录每次同步的源版本、目标版本、时间、备份位置、结果。
 
-### 7.3 artifact_manifest.json
+### 8.3 artifact_manifest.json
 
 记录产物版本、commit、构建时间、SHA256、路径。
 
-## 8. Upgrade Plan
+## 9. Upgrade Plan
 
 Sync Workspace 在执行任何升级前必须生成 Upgrade Plan：
 
@@ -283,9 +293,9 @@ Sync Workspace 在执行任何升级前必须生成 Upgrade Plan：
 ## Upgrade Plan
 
 ### Versions
-- Repository: v6.12.0-beta.13
-- Local: v6.12.0-beta.10
-- Artifact: v6.12.0-beta.10
+- Repository: v1.2.3
+- Local: v1.2.0
+- Artifact: v1.2.0
 - Database: 7
 - Config: 2
 
@@ -311,7 +321,7 @@ Sync Workspace 在执行任何升级前必须生成 Upgrade Plan：
 Continue? [Y/N]
 ```
 
-## 9. 项目知识管理
+## 10. 项目知识管理
 
 所有长期知识保存在项目内，不依赖 IDE Memory：
 
@@ -328,17 +338,18 @@ Continue? [Y/N]
 
 所有 AI 进入项目第一步：读取 `.project/`。
 
-## 10. 核心原则
+## 11. 核心原则
 
-1. **任何工具都是可替换的执行者**：Trae、ChatGPT、Claude、Gemini、Codex、Gateway 都可以接入同一套流程。
+1. **任何工具都是可替换的执行者**：Trae、ChatGPT、Claude、Gemini、Codex、Cursor、Gateway 都可以接入同一套流程。
 2. **Git 仓库和项目知识是永久资产**：更换 AI 或平台时无需迁移。
-3. **Gitee 是唯一 Source of Truth**：GitHub 只是 Readonly Mirror。
-4. **不跳过步骤**：Idea → Architecture → Implementation → Testing → Archive → Mirror → Publish → Handoff → Sync Workspace → Run → Feedback。
+3. **GitHub 是 Single Source of Truth**：Gitee 只是可选 Release Mirror。
+4. **不跳过步骤**：Idea → Architecture → Implementation → Testing → Archive → Publish → Mirror → Handoff → Sync Workspace → Run → Feedback。
 5. **保留用户数据**：Workspace 升级时，config、database、feedback 必须完整保留。
 6. **先计划后执行**：Sync Workspace 必须生成 Upgrade Plan 并等待确认。
 7. **交接必须完整**：Handoff 必须包含 Decision Log 和 Pending Questions。
+8. **Repository Generic**：Skill、Prompt、Contract 不绑定具体项目、语言、框架。
 
-## 11. 变更控制
+## 12. 变更控制
 
 本合约进入 Frozen 状态后：
 
@@ -346,9 +357,10 @@ Continue? [Y/N]
 - 禁止修改已冻结的流程顺序、Skill 职责边界、Repository Strategy。
 - 如需修改，必须走架构评审，并更新版本号。
 
-## 12. 相关文档
+## 13. 相关文档
 
 - `.project/decisions/ai-software-engineering-workflow.md` — 架构决策记录
+- `.project/contracts/repository_contract.md` — Repository Contract
 - `docs/v6/product-contract.md` — Workbench OS 1.0 产品契约
 - `PROJECT_BLUEPRINT.md` — 项目蓝图
 - `CHANGELOG.md` — 版本历史

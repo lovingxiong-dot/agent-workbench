@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v6.12.0-beta.14 | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 59 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v6.12.0-beta.15 | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 61 |
 
 ## Current Development Authority
 
@@ -904,11 +904,12 @@ v6.7.0-alpha 完成 Step 5.4 Runtime Orchestration Foundation：新增 `v6/runti
 ## 最近变更
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
-| v6.12.0-beta.14 | 2026-07-10 | Engineering Workflow 全面冻结：五层架构（Product/Workflow/Repository/Workspace/Runtime）、五大标准 Skill（Archive/Mirror/Publish/Handoff/Sync Workspace）、Mirror 严格单向、Sync Workspace 增加 Analyze/Upgrade Plan/.sync/ 三元状态、Handoff 新增 Pending Questions、发布 docs/engineering-workflow.md 作为跨 AI 工程契约 | docs | .project/decisions/ai-software-engineering-workflow.md, docs/engineering-workflow.md |
+| v6.12.0-beta.15 | 2026-07-10 | Repository Infrastructure Migration：所有项目统一 GitHub 为 Single Source of Truth（origin），Gitee 退化为可选 Release Mirror（release）；所有 Skill 重构为 Repository Generic（Archive/Mirror/Publish/Handoff/Sync Workspace/GitOps）；Mirror 从 Archive 解耦，仅在 Release 时 GitHub→Gitee 单向同步；Sync Workspace 移除 mirror fallback；新增 .project/contracts/repository_contract.md；Engineering Workflow Contract 升级为 v1.1 | docs | docs/engineering-workflow.md, .project/decisions/ai-software-engineering-workflow.md, .project/contracts/repository_contract.md, c:/Users/ThinkPad/.trae-cn/skills/*, c:/Users/ThinkPad/.trae-cn/user_rules/rule.md |
 
 ## 历史归档
 | 版本 | 日期 | 描述 | 类型 | 涉及文件 |
 |---|---|---|---|---|
+| v6.12.0-beta.14 | 2026-07-10 | Engineering Workflow 全面冻结：五层架构（Product/Workflow/Repository/Workspace/Runtime）、五大标准 Skill（Archive/Mirror/Publish/Handoff/Sync Workspace）、Mirror 严格单向、Sync Workspace 增加 Analyze/Upgrade Plan/.sync/ 三元状态、Handoff 新增 Pending Questions、发布 docs/engineering-workflow.md 作为跨 AI 工程契约 | docs | .project/decisions/ai-software-engineering-workflow.md, docs/engineering-workflow.md |
 | v6.12.0-beta.13 | 2026-07-10 | AI软件工程工作流架构决策：定义 Repository/Workspace/Product 三层模型，新增 Mirror Skill 负责 Gitee→GitHub 同步，Sync Workspace 拆分为 Repository Sync 与 Workspace Upgrade，建立 .project/ 项目知识目录并纳入 Git 跟踪 | docs | .gitignore, .project/decisions/ai-software-engineering-workflow.md |
 | v6.12.0-alpha.2 | 2026-07-09 | Conversation 自动标题：新增 `agent_workbench/conversation/` Domain 层，包含 `TitleGenerator` / `RuleTitleGenerator` / `ConversationTitleService` / `ConversationService`；`ConversationService` 统一封装 Session/Chat/Title 生命周期，在第一轮 Assistant 回复完成后自动根据首条用户消息生成标题；空标题会话在 Navigator / 会话列表显示 `New Conversation`；手动重命名后自动标题不再覆盖；新增 tests/conversation/ 17 个测试；686/686 测试通过 | feat/test | agent_workbench/conversation/__init__.py, agent_workbench/conversation/title_generator.py, agent_workbench/conversation/title_service.py, agent_workbench/conversation/conversation_service.py, agent_workbench/ui/workbench_ui_controller.py, v6/ui/session_item.py, tests/conversation/test_title_generator.py, tests/conversation/test_conversation_service.py |
 | v6.12.0-alpha.1 | 2026-07-09 | Metadata → PresentationModel 完整映射：扩展 PropertyPresentation / StatisticPresentation / ActionPresentation / ModulePresentation 字段，支持 ResourceDefinition 通过 `adapt_resource()` 进入 PresentationModel；UI Adapter 重命名为 `PresentationMetadataAdapter` 并显式实现 `MetadataAdapter` Protocol；PROJECT_BLUEPRINT 正式宣布 Metadata Contract 长期冻结（Additive Only）；新增 docs/v6/v6.12-task-list.md 拆分 Commit 6/7/8；新增 tests/ui/test_metadata_presentation.py 覆盖 Capability / Resource / Legacy 映射与 Protocol 合规；669/669 测试通过 | feat/test/docs | agent_workbench/ui/workbench/presentation.py, agent_workbench/ui/workbench/metadata_adapter.py, agent_workbench/ui/workbench/__init__.py, agent_workbench/ui/workbench_ui_controller.py, docs/v6/v6.11-task-list.md, docs/v6/v6.12-task-list.md, tests/ui/test_metadata_presentation.py |
