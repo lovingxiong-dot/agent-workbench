@@ -1,0 +1,61 @@
+{
+    "schema_version":  "2.0.0",
+    "description":  "Agent Control Plane Entry — first file every AI agent MUST read before any operation",
+    "handoff":  {
+                    "description":  "Agent MUST read latest handoff before development and update after task completion",
+                    "location":  "lovingxiong-dot/agent-governance/.agent-governance/handoff/agent-workbench/",
+                    "required":  true
+                },
+    "branch_strategy":  {
+                            "development_line_rule":  "All feature/fix/refactor branches merge here. When stable, merge to main.",
+                            "temp_branches":  "trae/* (temporary workspace, auto-delete after merge, NEVER merge directly to main)",
+                            "stable_line_rule":  "Always compilable, runnable, releasable. All Release Tags created from main. NEVER commit directly to main.",
+                            "release_flow":  "feature/* -\u003e v6-agent -\u003e (stable+CI) -\u003e main -\u003e Tag \u0026 Release",
+                            "archive_policy":  "Each major version completion: merge v{N}-agent -\u003e main -\u003e tag -\u003e create archive/v{N} -\u003e delete v{N}-agent -\u003e create v{N+1}-agent",
+                            "stable_line":  "main",
+                            "development_line":  "v6-agent",
+                            "feature_branches":  "feature/*, fix/*, refactor/*, experiment/*, ui/*, service/*, core/*"
+                        },
+    "rules":  {
+                  "no_rebase_shared":  "NEVER rebase shared branches (main, v6-agent).",
+                  "no_squash_merge":  "Use --no-ff merge to preserve complete commit history.",
+                  "no_force_push":  "NEVER force push to main or v6-agent.",
+                  "test_rule":  "Tests must pass before any merge to v6-agent or main.",
+                  "no_direct_main":  "NEVER commit directly to main. All changes go through v6-agent.",
+                  "trae_rule":  "trae/* branches are temporary. Merge to v6-agent only, then delete. NEVER merge to main.",
+                  "handoff_rule":  "Read handoff before work. Update handoff after work."
+              },
+    "effective_date":  "2026-07-11",
+    "entry_documents":  [
+                            "PROJECT_BLUEPRINT.md",
+                            "PROJECT_LINEAGE.md",
+                            "README.md",
+                            "CHANGELOG.md"
+                        ],
+    "repository":  {
+                       "development_branch":  "v6-agent",
+                       "name":  "agent-workbench",
+                       "github":  "lovingxiong-dot/agent-workbench",
+                       "archived_branches":  [
+                                                 "archive/v3",
+                                                 "archive/v4",
+                                                 "archive/v5",
+                                                 "archive/v6-core",
+                                                 "archive/v6-service",
+                                                 "archive/v6-dev"
+                                             ],
+                       "default_branch":  "main",
+                       "protected_branches":  [
+                                                  "main"
+                                              ]
+                   },
+    "governance":  {
+                       "required_reading":  [
+                                                ".agent-governance/agent-contract.json",
+                                                ".agent-governance/git-policy.json",
+                                                ".agent-governance/repository-identities.json"
+                                            ],
+                       "description":  "Single Source of Truth for all Git policies, branch strategy, agent contracts, and identity rules",
+                       "repo":  "lovingxiong-dot/agent-governance"
+                   }
+}
