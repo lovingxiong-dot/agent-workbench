@@ -1,10 +1,44 @@
 # AI Agent Workbench
 
-> **Active development line: V6 (`v6-agent` branch).**
+> **Stable line: `main` (v6.12.0-beta.15) | Development line: `v6-agent`**
 >
 > V6 is a ground-up rewrite of the Agent Runtime platform. It uses `RuntimeContext` as the single public protocol and treats Agent capabilities as first-class Runtime objects.
 >
-> V5 and earlier are frozen in Git history and no longer maintained in the workspace.
+> V5 and earlier are frozen in Git history (`archive/*`) and no longer maintained in the workspace.
+
+---
+
+## For AI Agents — Start Here
+
+**Before any operation, read `.agent-entry.json`** — it is the Agent Control Plane entry point that defines:
+
+- Which branch is stable (`main`) and which is for development (`v6-agent`)
+- The governance rules all agents must follow
+- Required reading documents
+- Handoff protocol
+
+Governance center: [`lovingxiong-dot/agent-governance`](https://github.com/lovingxiong-dot/agent-governance)
+
+---
+
+## Branch Strategy
+
+```
+main          ← Stable release line (always compilable, runnable, releasable)
+  └── v6-agent ← Active development (all feature/fix branches merge here)
+        ├── feature/*
+        ├── fix/*
+        └── experiment/*
+
+archive/v3, v4, v5, v6-core, v6-service, v6-dev  ← Frozen version snapshots
+```
+
+**Rules:**
+- NEVER commit directly to `main`
+- All changes go through `v6-agent`
+- `trae/*` branches are temporary — merge to `v6-agent` only, then delete
+- Use `--no-ff` merge to preserve complete commit history
+- Tests must pass before any merge
 
 ---
 
@@ -51,6 +85,7 @@ Current status: **575/575 passed**.
 
 | Document | Purpose | Read Time |
 |---|---|---|
+| [`.agent-entry.json`](./.agent-entry.json) | **ACP Entry — AI agent MUST read first** | 5 min |
 | [`docs/v6/runtime-kernel-spec.md`](./docs/v6/runtime-kernel-spec.md) | Runtime Kernel: layers, ownership, dependency rules | 30 min |
 | [`docs/v6/runtime-glossary.md`](./docs/v6/runtime-glossary.md) | Standard vocabulary for the platform | 15 min |
 | [`docs/v6/repository-governance.md`](./docs/v6/repository-governance.md) | Repository structure and cleanliness rules | 10 min |
@@ -89,8 +124,9 @@ For the full map, see [`docs/v6/repository-map.md`](./docs/v6/repository-map.md)
 
 | Item | Value |
 |---|---|
-| Active branch | `v6-agent` |
-| Current version | `v6.9.6-alpha` |
+| Stable branch | `main` |
+| Development branch | `v6-agent` |
+| Current version | `v6.12.0-beta.15` |
 | Runtime Kernel | Frozen — Request / Planning / Task / Capability / Engine / Provider |
 | Test status | `pytest` 575/575 passed |
 | Package status | V6 spec configured via `agent_workbench.spec` |
@@ -109,11 +145,12 @@ Release artifacts are generated under `F:\Agent\.dist/`. Build cache goes to `F:
 
 ## For AI / New Contributors
 
-1. **Use the project venv** — do not install packages into the system Python.
-2. **Read the Runtime Kernel Spec first** — it defines the architectural boundaries.
-3. **Use the glossary** — terms like Capability, Engine, Provider, and Adapter have precise meanings.
-4. **Run repository audits** — `python scripts/audit_repository.py` and `python scripts/verify_repository.py`.
-5. **Keep the workspace clean** — generated files, backups, and historical copies do not belong in Git.
+1. **Read `.agent-entry.json` first** — it defines the governance contract all agents must follow.
+2. **Use the project venv** — do not install packages into the system Python.
+3. **Read the Runtime Kernel Spec** — it defines the architectural boundaries.
+4. **Use the glossary** — terms like Capability, Engine, Provider, and Adapter have precise meanings.
+5. **Run repository audits** — `python scripts/audit_repository.py` and `python scripts/verify_repository.py`.
+6. **Keep the workspace clean** — generated files, backups, and historical copies do not belong in Git.
 
 ---
 
