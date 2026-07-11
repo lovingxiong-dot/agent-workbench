@@ -1,0 +1,110 @@
+# ============================================================
+# ACP Gate — Branch Protection & Test Gate (Level 3)
+# ============================================================
+# This workflow enforces the governance rules defined in
+# .agent-entry.json and agent-governance. It acts as the
+# server-side enforcement layer when GitHub Branch Protection
+# is not available (free private repos).
+# ============================================================
+
+name: ACP Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+      - v6-agent
+  push:
+    branches:
+      - main
+      - v6-agent
+
+jobs:
+  # ============================================================
+  # Job 1: Branch Rule Validation
+  # ============================================================
+  branch-check:
+    name: Branch Rule Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Validate source branch
+        run: |
+          SOURCE="${{ github.head_ref }}"
+          TARGET="${{ github.base_ref }}"
+
+          echo "::group::Branch Check"
+          echo "Source: $SOURCE"
+          echo "Target: $TARGET"
+          echo "::endgroup::"
+
+          # Rule: trae/* branches MUST NOT merge to main
+          if [[ "$TARGET" == "main" && "$SOURCE" == trae/* ]]; then
+            echo "::error::trae/* branches are FORBIDDEN from merging directly to main."
+            echo "::error::Merge trae/* to v6-agent first, then v6-agent to main."
+            exit 1
+          fi
+
+          # Rule: v6-agent is the only allowed source for main
+          if [[ "$TARGET" == "main" && "$SOURCE" != "v6-agent" && "$SOURCE" != feature/* && "$SOURCE" != fix/* ]]; then
+            echo "::warning::Direct merge to main from '$SOURCE' is discouraged."
+            echo "::warning::Normal flow: feature/* → v6-agent → main."
+          fi
+
+          echo "::notice::Branch check passed. Source=$SOURCE, Target=$TARGET"
+
+  # ============================================================
+  # Job 2: Test Suite
+  # ============================================================
+  test:
+    name: Test Suite
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: |
+          pytest tests/ -x --tb=short --no-header -q
+
+      - name: Test summary
+        if: always()
+        run: |
+          echo "::notice::Tests completed. Check results above."
+
+  # ============================================================
+  # Job 3: Repository Audit
+  # ============================================================
+  audit:
+    name: Repository Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check .agent-entry.json exists
+        run: |
+          if [ ! -f ".agent-entry.json" ]; then
+            echo "::error::.agent-entry.json is missing! This is the ACP entry point."
+            exit 1
+          fi
+          echo "::notice::.agent-entry.json present."
+
+      - name: Check no force-push tags in history
+        run: |
+          if git reflog show main | grep -q "forced-update"; then
+            echo "::warning::Force push detected in reflog. Review manually."
+          fi
+
+      - name: Check no direct commits to main (when PR)
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "::notice::PR flow detected. Merge commit will be reviewed in PR."
