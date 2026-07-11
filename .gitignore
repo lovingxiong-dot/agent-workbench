@@ -1,3 +1,22 @@
+# ============================================================
+# Version Management (2026-07-11)
+# ============================================================
+# Branch Strategy:
+#   main       = stable release line (always compilable, runnable, releasable)
+#   v6-agent   = current generation active development branch
+#   feature/*  = short-lived feature branches (merge → v6-agent → delete)
+#   fix/*      = short-lived bugfix branches (merge → v6-agent → delete)
+#   trae/*     = temporary cloud session workspace (NEVER merge to main)
+#   archive/*  = frozen version snapshots (archive/v3, v4, v5, v6-core, etc.)
+#
+# Governance:
+#   Source of Truth: lovingxiong-dot/agent-governance
+#   Entry Pointer:  .agent-entry.json (TRACKED — do NOT ignore)
+#   Release Flow:   feature/* → v6-agent → (stable) → main → Tag & Release
+#   Archive Policy: v{N} complete → merge to main → tag → archive/v{N}
+# ============================================================
+
+# --- Python ---
 venv/
 build/
 dist/
@@ -5,6 +24,8 @@ __pycache__/
 .pytest_cache/
 *.pyc
 *.pyo
+
+# --- Data ---
 *.db
 storage/*.db
 storage/*.json
@@ -12,23 +33,34 @@ storage/*.yaml
 storage/vector_store/
 config/.env
 *.spec.bak
+
+# --- IDE / Agent Temp ---
 .trae/
+.trae-logs/
 deepseek_api/
 .memory/
-crash.log
-debug.log
-last_pytest.log
-*.bak
-.reference/
-.scripts/
-review/
 .workbuddy/
 .handoff/
-!.project/
-!.project/**
 .backup/
 .sync/
 .dist/
 .resource/
 .sandbox/
-.trae-logs/
+
+# --- Logs ---
+crash.log
+debug.log
+last_pytest.log
+
+# --- Temp ---
+*.bak
+.reference/
+.scripts/
+review/
+
+# --- Project Knowledge (TRACKED) ---
+!.project/
+!.project/**
+
+# --- Governance Entry (TRACKED — do NOT ignore) ---
+!.agent-entry.json
