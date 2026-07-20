@@ -32,6 +32,7 @@ from agent_workbench.runtime.module_registry import ModuleRegistry
 from agent_workbench.runtime.modules.config_module import ConfigModule
 from agent_workbench.runtime.modules.memory_module import MemoryModule
 from agent_workbench.runtime.modules.mcp_module import McpModule
+from agent_workbench.runtime.modules.agent_module import AgentModule
 from agent_workbench.runtime.modules.model_module import ModelModule
 from agent_workbench.runtime.modules.profile_module import ProfileModule
 from agent_workbench.runtime.modules.prompt_module import PromptModule
@@ -279,6 +280,7 @@ class AgentWorkbenchRuntime:
         self._registry.register(ConfigModule())
         self._registry.register(ProfileModule())
         self._registry.register(PromptModule())
+        self._registry.register(AgentModule())
         self._registry.register(ModelModule())
         self._registry.register(ToolModule())
         self._registry.register(MemoryModule())

@@ -53,11 +53,19 @@ def run_cli(config_path: str | None = None, test_input: str | None = None) -> in
             return 0
 
         print("输入消息按回车，输入 'exit' 退出。")
+        print("命令：/agent <id> 切换 Agent | /agents 查看 Agent 列表 | /model <name> 切换模型")
         while True:
             text = input("> ").strip()
             if text.lower() in {"exit", "quit"}:
                 break
             if not text:
+                continue
+
+            # 处理 CLI 命令
+            if text.startswith("/"):
+                result = _handle_cli_command(text, controller)
+                if result is not None:
+                    print(result)
                 continue
 
             cli_renderer.reset()
@@ -85,6 +93,56 @@ def _print_fallback(ctx, cli_renderer: CLIStreamRenderer) -> None:
         if status == "failed":
             error = ctx.result.error if ctx.result and ctx.result.error else "未知错误"
             print(f"[失败] {error}")
+
+
+def _handle_cli_command(text: str, controller) -> str | None:
+    """处理 CLI 斜杠命令。
+
+    Returns:
+        命令执行结果消息，None 表示不输出。
+    """
+    parts = text.split(maxsplit=1)
+    cmd = parts[0].lower()
+    arg = parts[1] if len(parts) > 1 else ""
+
+    if cmd == "/agents":
+        agents = controller.list_agents()
+        active = controller.get_active_agent()
+        active_id = active["id"] if active else ""
+        lines = ["可用 Agent："]
+        for a in agents:
+            marker = " *" if a["id"] == active_id else "  "
+            lines.append(f"  {marker} {a['id']} — {a['name']}: {a['description']}")
+        return "\n".join(lines)
+
+    if cmd == "/agent":
+        if not arg:
+            a = controller.get_active_agent()
+            if a:
+                return f"当前 Agent: {a['name']} ({a['id']})\n  {a['description']}"
+            return "当前无活跃 Agent"
+        if controller.switch_agent(arg):
+            a = controller.get_active_agent()
+            return f"已切换到 Agent: {a['name']} ({a['id']})"
+        return f"Agent '{arg}' 不存在。可用: {', '.join(a['id'] for a in controller.list_agents())}"
+
+    if cmd == "/model":
+        if not arg:
+            return f"当前模型: {controller.get_current_model()} (Provider: {controller.get_current_provider()})"
+        if controller.switch_model(arg):
+            return f"已切换到模型: {arg}"
+        models = controller.list_models()
+        return f"模型 '{arg}' 不存在。可用: {', '.join(models)}"
+
+    if cmd == "/provider":
+        if not arg:
+            return f"当前 Provider: {controller.get_current_provider()}"
+        if controller.switch_provider(arg):
+            return f"已切换到 Provider: {arg}，模型: {controller.get_current_model()}"
+        providers = controller.list_providers()
+        return f"Provider '{arg}' 不存在。可用: {', '.join(providers)}"
+
+    return f"未知命令: {cmd}。可用: /agent, /agents, /model, /provider"
 
 
 def run_gui(config_path: str | None = None) -> int:

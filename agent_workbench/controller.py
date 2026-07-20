@@ -209,6 +209,54 @@ class WorkbenchController:
             return []
         return [p["name"] for p in model_module.list_providers()]
 
+    def switch_agent(self, agent_id: str) -> bool:
+        """运行时切换 Agent Identity。
+
+        Args:
+            agent_id: Agent 标识（如 "personal_agent"、"coding_agent"）。
+
+        Returns:
+            True 如果切换成功。
+        """
+        agent_module = self._runtime.module_registry.get("agent")
+        if agent_module is None:
+            return False
+        return agent_module.switch_agent(agent_id)
+
+    def list_agents(self) -> list[dict]:
+        """返回所有可用 Agent 列表。"""
+        agent_module = self._runtime.module_registry.get("agent")
+        if agent_module is None:
+            return []
+        return agent_module.list_agents()
+
+    def get_active_agent(self) -> dict | None:
+        """返回当前活跃 Agent 信息。"""
+        agent_module = self._runtime.module_registry.get("agent")
+        if agent_module is None:
+            return None
+        active = agent_module.get_active_agent()
+        if active:
+            return active.to_dict()
+        return None
+
+    def get_active_agent_name(self) -> str:
+        """返回当前活跃 Agent 名称。"""
+        agent_module = self._runtime.module_registry.get("agent")
+        if agent_module is None:
+            return "Unknown"
+        active = agent_module.get_active_agent()
+        if active:
+            return active.name
+        return "Unknown"
+
+    def get_system_prompt(self) -> str:
+        """返回当前 Agent 的 System Prompt。"""
+        agent_module = self._runtime.module_registry.get("agent")
+        if agent_module is None:
+            return ""
+        return agent_module.get_system_prompt()
+
     def get_config_value(self, path: str, default: Any = None) -> Any:
         """读取配置。"""
         return self._runtime.config.get(path, default)

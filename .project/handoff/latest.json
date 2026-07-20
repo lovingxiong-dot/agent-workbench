@@ -9,7 +9,7 @@
   "project": {
     "name": "agent-workbench",
     "version": "v6.14.0-alpha",
-    "phase": "Dogfooding Phase (D3 已完成)",
+    "phase": "Dogfooding Phase (D5 已完成 — v6.14 全部任务完成)",
     "runtime": "v6.9.6-foundation",
     "branch": "v6-agent",
     "last_commit": "0518302",

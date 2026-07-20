@@ -1,5 +1,26 @@
 # Changelog
 
+## v6.14.0-alpha (2026-07-20) — Dogfooding Phase: D5 Agent Selector
+
+> **里程碑语义**：D5 完成 Agent 选择器。支持在 CLI 中通过 `/agent` 命令切换 Agent Identity（Personal/Coding/Research），每个 Agent 有独立的 system_prompt、provider、model 配置。
+
+### Added
+
+- `packages/personal_agent/manifest.yaml`：个人助手 Agent 包。
+- `packages/coding_agent/manifest.yaml`：编程助手 Agent 包。
+- `packages/research_agent/manifest.yaml`：研究助手 Agent 包。
+- `agent_workbench/runtime/modules/agent_module.py`：Agent Identity 模块（AgentModule），扫描 packages/ 目录发现 Agent 包，管理 Active Agent 选择和切换。
+- `AgentIdentity` 数据类：封装 Agent 的 id/name/system_prompt/provider/model。
+- `WorkbenchController.switch_agent()` / `list_agents()` / `get_active_agent()` / `get_active_agent_name()` / `get_system_prompt()`：Controller 级别 Agent 管理 API。
+- `tests/v6/test_v6_agent.py`：10 个 AgentModule 测试，覆盖发现、切换、System Prompt、失败场景。
+- CLI 命令：`/agent <id>` 切换 Agent，`/agents` 查看列表，`/model` 切换模型，`/provider` 切换 Provider。
+
+### Changed
+
+- `agent_workbench/runtime/agent_runtime.py`：注册 `AgentModule`。
+- `agent_workbench/app.py`：`run_cli()` 支持斜杠命令（`/agent`、`/agents`、`/model`、`/provider`）。
+
+---
 ## v6.14.0-alpha (2026-07-20) — Dogfooding Phase: D4 Provider Runtime Switching
 
 > **里程碑语义**：D4 完成 Provider 运行时切换。无需重启 Runtime，即可在 UI 中切换 Provider 和 Model。
