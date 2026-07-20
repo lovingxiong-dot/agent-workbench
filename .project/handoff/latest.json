@@ -8,12 +8,12 @@
   },
   "project": {
     "name": "agent-workbench",
-    "version": "v6.13-frozen",
-    "phase": "Architecture Stabilization",
+    "version": "v6.14.0-alpha",
+    "phase": "Dogfooding Phase",
     "runtime": "v6.9.6-foundation",
     "branch": "v6-agent",
-    "last_commit": "39eadbe",
-    "last_commit_msg": "merge: main → v6-agent — sync ACP Gate CI"
+    "last_commit": "0518302",
+    "last_commit_msg": "feat(v6.13): Architecture Stabilization — Frozen Zone + Boundary Rules + Handoff"
   },
   "workspace": {
     "modified_files": 13,

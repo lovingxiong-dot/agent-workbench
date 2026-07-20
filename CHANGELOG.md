@@ -1,5 +1,19 @@
 # Changelog
 
+## v6.14.0-alpha (2026-07-20) — Dogfooding Phase: D1 CLI Streaming
+
+> **里程碑语义**：v6.14 Dogfooding Phase 启动。从"架构验证"转向"真实使用验证"，目标是将 Workbench OS 打造为日常可用的 AI 工作台。D1 打通 CLI 流式输出基础闭环。
+
+### Added
+
+- `agent_workbench/runtime/interaction/cli_renderer.py`：CLI 流式渲染器，实现 `UIEventRenderer` 协议，在终端逐字输出 AI 回复。通过 Interaction Boundary 接入，不依赖 Qt/Web 框架。
+- `run_cli()` 接入 `CLIStreamRenderer`：CLI 交互模式支持流式逐字输出，与 GUI 共享同一套 Interaction Layer 事件流。
+
+### Changed
+
+- `agent_workbench/app.py`：`run_cli()` 重构，接入 `CLIStreamRenderer`，新增 `_print_fallback()` 兜底逻辑（CHAT 模式或流式事件未触发时回退到完整输出）。
+
+---
 ## v6.12.0-beta.15 (2026-07-10) — Repository Infrastructure Migration
 
 > **里程碑语义**：全局 Git 基础设施标准化。所有项目统一 GitHub 为 Single Source of Truth（`origin`），Gitee 退化为可选 Release Mirror（`release`）；所有 Skill 重构为 Repository Generic、Project Independent、Language Independent、Framework Independent；Engineering Workflow Contract 升级为 v1.1。
