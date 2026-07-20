@@ -153,6 +153,62 @@ class WorkbenchController:
         """手动触发某个 namespace 的 Module 热更新。"""
         self._runtime.apply_config(namespace)
 
+    def switch_provider(self, provider_name: str) -> bool:
+        """运行时切换 Model Provider，无需重启 Runtime。
+
+        Args:
+            provider_name: 目标 Provider 名称（如 "agnes"、"deepseek"）。
+
+        Returns:
+            True 如果切换成功。
+        """
+        model_module = self._runtime.module_registry.get("model")
+        if model_module is None:
+            return False
+        return model_module.switch_provider(provider_name)
+
+    def switch_model(self, model_name: str) -> bool:
+        """运行时切换模型（在当前 Provider 内）。
+
+        Args:
+            model_name: 目标模型名称（如 "agnes-2.0-flash"）。
+
+        Returns:
+            True 如果切换成功。
+        """
+        model_module = self._runtime.module_registry.get("model")
+        if model_module is None:
+            return False
+        return model_module.switch_model(model_name)
+
+    def get_current_provider(self) -> str:
+        """返回当前 Provider 名称。"""
+        model_module = self._runtime.module_registry.get("model")
+        if model_module is None:
+            return ""
+        return model_module.get_current_provider_name()
+
+    def get_current_model(self) -> str:
+        """返回当前模型名称。"""
+        model_module = self._runtime.module_registry.get("model")
+        if model_module is None:
+            return ""
+        return model_module.current_model
+
+    def list_models(self) -> list[str]:
+        """返回当前 Provider 的可用模型列表。"""
+        model_module = self._runtime.module_registry.get("model")
+        if model_module is None:
+            return []
+        return model_module.list_models()
+
+    def list_providers(self) -> list[str]:
+        """返回可用 Provider 名称列表。"""
+        model_module = self._runtime.module_registry.get("model")
+        if model_module is None:
+            return []
+        return [p["name"] for p in model_module.list_providers()]
+
     def get_config_value(self, path: str, default: Any = None) -> Any:
         """读取配置。"""
         return self._runtime.config.get(path, default)

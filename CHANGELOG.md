@@ -1,5 +1,21 @@
 # Changelog
 
+## v6.14.0-alpha (2026-07-20) — Dogfooding Phase: D4 Provider Runtime Switching
+
+> **里程碑语义**：D4 完成 Provider 运行时切换。无需重启 Runtime，即可在 UI 中切换 Provider 和 Model。
+
+### Added
+
+- `ModelModule.switch_provider(provider_name)`：运行时切换 Provider，自动选择第一个可用模型。切换后下次请求立即生效，无需重启 Runtime。
+- `ModelModule.get_current_provider_name()`：返回当前 Provider 名称。
+- `WorkbenchController.switch_provider()` / `switch_model()` / `get_current_provider()` / `get_current_model()` / `list_models()` / `list_providers()`：Controller 级别 Provider/Model 管理 API。
+- `tests/v6/test_v6_provider_switch.py`：10 个 Provider 运行时切换测试，覆盖切换、回退、失败场景、列表查询、配置不持久化验证。
+
+### Changed
+
+- `ModelModule.__init__`：新增 `_last_config` 引用，保存上次配置供测试重新 apply。
+
+---
 ## v6.14.0-alpha (2026-07-20) — Dogfooding Phase: D3 Multi-turn Context Validation
 
 > **里程碑语义**：D3 完成多轮上下文验证。通过 14 个集成测试覆盖 SessionModule 持久化、多轮历史累积、跨重启恢复、边界隔离等场景。

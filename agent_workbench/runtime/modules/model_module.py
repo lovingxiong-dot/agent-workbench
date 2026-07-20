@@ -40,6 +40,7 @@ class ModelModule(BaseRuntimeModule):
         self._available_models: Dict[str, list[str]] = {}  # provider_name → [model_names]
         self._sampling: Dict[str, Any] = {}
         self._context: Dict[str, Any] = {}
+        self._last_config: "ConfigStore | None" = None  # 保存上次配置引用
 
     @property
     def namespace(self) -> str:
@@ -50,6 +51,7 @@ class ModelModule(BaseRuntimeModule):
 
     def apply_config(self, store: ConfigStore) -> None:
         """热更新 Model 配置：注册 provider、更新参数、解析可用模型列表。"""
+        self._last_config = store
         providers_config = store.get("model.providers", [])
         new_providers: Dict[str, ModelProvider] = {}
         new_models: Dict[str, list[str]] = {}
@@ -106,6 +108,28 @@ class ModelModule(BaseRuntimeModule):
             self._current_model = model_name
             return True
         return False
+
+    def switch_provider(self, provider_name: str) -> bool:
+        """运行时切换到指定 Provider，自动选择第一个可用模型。
+
+        无需重启 Runtime，下次请求自动使用新 Provider。
+
+        Args:
+            provider_name: 目标 Provider 名称（如 "agnes"、"deepseek"）。
+
+        Returns:
+            True 如果切换成功，False 如果 Provider 不存在或无可用模型。
+        """
+        models = self._available_models.get(provider_name, [])
+        if not models:
+            return False
+        self._default_provider = provider_name
+        self._current_model = models[0]
+        return True
+
+    def get_current_provider_name(self) -> str:
+        """返回当前 Provider 名称。"""
+        return self._default_provider
 
     def list_models(self) -> list[str]:
         """返回当前 Provider 的可用模型列表。"""
