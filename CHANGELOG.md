@@ -1,5 +1,17 @@
 # Changelog
 
+## v6.14.0-alpha (2026-07-20) — Dogfooding Phase: D3 Multi-turn Context Validation
+
+> **里程碑语义**：D3 完成多轮上下文验证。通过 14 个集成测试覆盖 SessionModule 持久化、多轮历史累积、跨重启恢复、边界隔离等场景。
+
+### Added
+
+- `tests/v6/test_v6_multi_turn.py`：14 个多轮上下文验证测试，覆盖：
+  - `TestSessionModulePersistence`（7 个）：消息追加、持久化加载、活跃会话恢复、磁盘文件清除、去重、5 轮累积、limit 截断。
+  - `TestMultiTurnBoundaries`（4 个）：Memory/Capability 边界隔离、Session 数据隔离、JSON 文件格式验证。
+  - `TestSessionRestart`（3 个）：5 轮跨重启恢复、空 Session 重启、无历史 Session 处理。
+
+---
 ## v6.14.0-alpha (2026-07-20) — Dogfooding Phase: D2 Session Persistence
 
 > **里程碑语义**：D2 完成 Session 持久化。关闭 Workbench 后重新打开，自动恢复上次会话和完整消息历史。
