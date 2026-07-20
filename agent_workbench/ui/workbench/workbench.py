@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QSplitter, QVBoxLayout, QWidget
 
 from v6.ui.base import C, install_invisible_handles
 from agent_workbench.ui.workbench.command_bar_host import CommandBarHost
+from agent_workbench.ui.workbench.control_bar import ControlBar
 from agent_workbench.ui.workbench.inspector_host import InspectorHost
 from agent_workbench.ui.workbench.navigator_host import NavigatorHost
 from agent_workbench.ui.workbench.status_bar_host import StatusBarHost
@@ -66,6 +67,10 @@ class Workbench(QWidget):
         self._tool_bar = ToolBarHost(self)
         self._layout.addWidget(self._tool_bar)
 
+        # 控制栏（Agent / Provider / Model 选择器）
+        self._control_bar = ControlBar(self)
+        self._layout.addWidget(self._control_bar)
+
         # 底部：StatusBarHost + CommandBarHost
         self._status_bar = StatusBarHost(self)
         self._command_bar = CommandBarHost(self)
@@ -103,6 +108,10 @@ class Workbench(QWidget):
     @property
     def tool_bar(self) -> ToolBarHost:
         return self._tool_bar
+
+    @property
+    def control_bar(self) -> ControlBar:
+        return self._control_bar
 
     @property
     def status_bar(self) -> StatusBarHost:

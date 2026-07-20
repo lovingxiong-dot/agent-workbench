@@ -16,6 +16,7 @@ from agent_workbench.ui.workbench.presentation import (
     StatisticPresentation,
 )
 from agent_workbench.ui.workbench.command_bar_host import CommandBarHost
+from agent_workbench.ui.workbench.control_bar import ControlBar
 from agent_workbench.ui.workbench.host_base import WorkbenchAreaHost
 from agent_workbench.ui.workbench.inspector_host import InspectorHost
 from agent_workbench.ui.workbench.metadata_adapter import (
@@ -44,6 +45,7 @@ __all__ = [
     "InspectorHost",
     "StatusBarHost",
     "CommandBarHost",
+    "ControlBar",
     "Navigator",
     "Workbench",
     "WorkbenchHost",

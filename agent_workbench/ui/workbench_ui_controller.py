@@ -263,8 +263,10 @@ class WorkbenchUIController(UIController):
         super().startup()
         self._setup_workbench_ui()
         self._wire_workbench_signals()
+        self._wire_control_bar()
         self._refresh_navigator()
         self._refresh_status_bar()
+        self._refresh_control_bar()
         self._workbench.runtime.config.on_changed(self._on_config_changed)
         self._subscribe_config_changes()
 
@@ -681,6 +683,52 @@ class WorkbenchUIController(UIController):
             name="Workbench",
         )
         self._view_schema_renderer.render(schema, workbench_presentation)
+
+    def _wire_control_bar(self) -> None:
+        """连接 ControlBar 信号到控制器。"""
+        if self._host is None:
+            return
+        cb = self._host.workbench.control_bar
+        cb.agent_changed.connect(self._on_control_agent_changed)
+        cb.provider_changed.connect(self._on_control_provider_changed)
+        cb.model_changed.connect(self._on_control_model_changed)
+
+    def _refresh_control_bar(self) -> None:
+        """刷新 ControlBar 的 Agent / Provider / Model 选择器。"""
+        if self._host is None:
+            return
+        cb = self._host.workbench.control_bar
+
+        # Agent 列表
+        agents = self._workbench.list_agents()
+        active_agent = self._workbench.get_active_agent()
+        active_id = active_agent["id"] if active_agent else "personal_agent"
+        cb.set_agents(agents, active_id)
+
+        # Provider 列表
+        providers = self._workbench.list_providers()
+        current_provider = self._workbench.get_current_provider()
+        cb.set_providers(providers, current_provider)
+
+        # Model 列表
+        models = self._workbench.list_models()
+        current_model = self._workbench.get_current_model()
+        cb.set_models(models, current_model)
+
+    def _on_control_agent_changed(self, agent_id: str) -> None:
+        """ControlBar Agent 切换 → 运行时切换 Agent。"""
+        self._workbench.switch_agent(agent_id)
+        self._refresh_control_bar()
+
+    def _on_control_provider_changed(self, provider_name: str) -> None:
+        """ControlBar Provider 切换 → 运行时切换 Provider。"""
+        if self._workbench.switch_provider(provider_name):
+            self._refresh_control_bar()
+
+    def _on_control_model_changed(self, model_name: str) -> None:
+        """ControlBar Model 切换 → 运行时切换 Model。"""
+        if self._workbench.switch_model(model_name):
+            self._refresh_control_bar()
 
     def _on_config_changed(self, path: str, value: object) -> None:
         """ConfigStore 通用变更信号 → 刷新 Navigator 与 StatusBar。"""
