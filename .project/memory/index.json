@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.4.0",
+  "description": "Agent Memory Index — long-term shared knowledge for all AI Agents across all projects.",
+  "last_updated": "2026-07-11T02:30:00+08:00",
+  "memory_types": {
+    "knowledge": "Domain knowledge, technical concepts, project-specific information",
+    "decisions": "Architecture decisions, design choices, trade-offs with rationale",
+    "architecture": "System architecture, component diagrams, data flow descriptions",
+    "glossary": "Project terminology, naming conventions, domain-specific vocabulary",
+    "patterns": "Code patterns, conventions, best practices established in the project"
+  },
+  "projects": {
+    "agent-workbench": {
+      "knowledge": "memory/agent-workbench/knowledge/",
+      "decisions": "memory/agent-workbench/decisions/",
+      "architecture": "memory/agent-workbench/architecture/",
+      "glossary": "memory/agent-workbench/glossary/",
+      "patterns": "memory/agent-workbench/patterns/"
+    },
+    "aise-standard": {
+      "knowledge": "memory/aise-standard/knowledge/",
+      "decisions": "memory/aise-standard/decisions/"
+    },
+    "data-panel": {
+      "knowledge": "memory/data-panel/knowledge/",
+      "decisions": "memory/data-panel/decisions/"
+    },
+    "jinshi-widget": {
+      "knowledge": "memory/jinshi-widget/knowledge/",
+      "decisions": "memory/jinshi-widget/decisions/"
+    }
+  }
+}

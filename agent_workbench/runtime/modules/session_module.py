@@ -2,13 +2,15 @@
 
 职责：
 - 当前 Conversation 状态。
-- History 浏览。
+- Session 级别消息历史（多轮上下文）。
 - Context Window 管理。
-- Current Task / Statistics。
+- 消息存储与查询。
 """
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Dict, List
+
+from v6.runtime.types import ChatMessage
 
 from agent_workbench.runtime.config_store import ConfigStore
 from agent_workbench.runtime.metadata import (
@@ -19,24 +21,66 @@ from agent_workbench.runtime.metadata import (
 from agent_workbench.runtime.modules.base import BaseRuntimeModule
 
 if TYPE_CHECKING:
-    from agent_workbench.runtime.agent_runtime import AgentRuntime
+    from agent_workbench.runtime.agent_runtime import AgentWorkbenchRuntime
 
 
 class SessionModule(BaseRuntimeModule):
     """Session 运行态模块。"""
 
     def __init__(self) -> None:
-        self._runtime: "AgentRuntime | None" = None
+        self._runtime: "AgentWorkbenchRuntime | None" = None
+        self._messages: Dict[str, List[ChatMessage]] = {}
 
     @property
     def namespace(self) -> str:
         return "session"
 
-    def initialize(self, runtime: "AgentRuntime") -> None:
+    def initialize(self, runtime: "AgentWorkbenchRuntime") -> None:
         self._runtime = runtime
 
     def apply_config(self, store: ConfigStore) -> None:
         """Session 参数变更：更新 max_history / context_window。"""
+        pass
+
+    def history(self, session_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """返回指定 Session 的消息历史。
+
+        Args:
+            session_id: 会话标识。
+            limit: 最大返回条数。
+
+        Returns:
+            消息列表，每条包含 role 和 content。
+        """
+        messages = self._messages.get(session_id, [])
+        return [{"role": m.role, "content": m.content} for m in messages[-limit:]]
+
+    def append(self, session_id: str, messages: List[ChatMessage]) -> None:
+        """向 Session 追加消息（去重）。
+
+        Args:
+            session_id: 会话标识。
+            messages: 要追加的消息列表。
+        """
+        existing = self._messages.setdefault(session_id, [])
+        existing_contents = {(m.role, m.content) for m in existing}
+        for m in messages:
+            if (m.role, m.content) not in existing_contents:
+                existing.append(m)
+
+    def clear(self, session_id: str) -> bool:
+        """清除指定 Session 的消息历史。
+
+        Returns:
+            True 如果存在并已清除，False 如果 Session 不存在。
+        """
+        if session_id in self._messages:
+            del self._messages[session_id]
+            return True
+        return False
+
+    def persist(self) -> None:
+        """持久化 Session 消息到磁盘（未来实现）。"""
         pass
 
     def current_state(self) -> Dict[str, Any]:
@@ -58,13 +102,6 @@ class SessionModule(BaseRuntimeModule):
             "context_window": self._runtime.config.get("session.context_window", 4096),
             "max_history": self._runtime.config.get("session.max_history", 20),
         }
-
-    def history(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """返回最近会话历史摘要。"""
-        if self._runtime is None:
-            return []
-        # 第一版从 RuntimeTrace 或上下文收集；此处占位
-        return []
 
     def metadata(self) -> ModuleMetadata:
         """返回 Session Capability Metadata。"""

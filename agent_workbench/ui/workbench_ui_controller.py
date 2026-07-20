@@ -28,6 +28,8 @@ from agent_workbench.controller import WorkbenchController
 from agent_workbench.conversation import ConversationService
 from agent_workbench.feedback import FeedbackService
 from agent_workbench.package import PackageIntegration, PackageRegistry
+from agent_workbench.runtime.interaction.event import InteractionEvent, InteractionEventType
+from agent_workbench.runtime.interaction.renderer import UIEventRenderer
 from agent_workbench.ui.configuration import ConfigCategory, ConfigurationManager
 from agent_workbench.ui.dialogs import (
     AddMcpDialog,
@@ -83,6 +85,43 @@ class NoopRuntimeAdapter(IRuntimeAdapter):
         self._callbacks.setdefault(event_type, []).append(callback)
 
 
+class WorkbenchStreamRenderer:
+    """RuntimeEvent → InteractionEvent → Qt UI 的桥接渲染器。
+
+    实现 UIEventRenderer 协议，在 EventBus 后台线程运行，
+    通过 Qt Signal（线程安全）更新 UI 流式输出。
+
+    与 InteractionLayer 配合，替代直接订阅 RuntimeEventBus。
+    """
+
+    def __init__(self, controller: "WorkbenchUIController") -> None:
+        self._controller = controller
+
+    def render(self, event: InteractionEvent) -> None:
+        """渲染 InteractionEvent 到 Qt UI 信号。"""
+        ctrl = self._controller
+        if event.type == InteractionEventType.MESSAGE_DELTA:
+            with ctrl._lock:
+                if event.task_id != ctrl._current_task_id:
+                    return
+                text = event.payload.get("text", "")
+                ctrl._ai_parts.append(text)
+            ctrl.sign_stream_chunk.emit(text)
+        elif event.type == InteractionEventType.MESSAGE_COMPLETE:
+            with ctrl._lock:
+                if event.task_id != ctrl._current_task_id:
+                    return
+                ctrl._stream_finalized = True
+            ctrl.sign_stream_end.emit()
+        elif event.type == InteractionEventType.ERROR:
+            with ctrl._lock:
+                if event.task_id != ctrl._current_task_id:
+                    return
+            msg = event.payload.get("message", event.payload.get("code", "Unknown error"))
+            ctrl.sign_stream_chunk.emit(f"\n[{msg}]")
+            ctrl.sign_stream_end.emit()
+
+
 class WorkbenchUIController(UIController):
     """Agent Workbench 专用 UI 控制器。"""
 
@@ -98,7 +137,6 @@ class WorkbenchUIController(UIController):
         config_path: str | None = None,
         packages_dir: str | os.PathLike | None = None,
     ) -> None:
-        self._workbench = workbench or WorkbenchController(config_path=config_path)
         self._host = workbench_host
         self._chat_workspace: ChatWorkspaceItem | None = None
         self._trace_workspace: TraceWorkspaceItem | None = None
@@ -113,6 +151,8 @@ class WorkbenchUIController(UIController):
         self._presentations: dict[str, ModulePresentation] = {}
         self._config_manager = ConfigurationManager()
         self._register_configuration_categories()
+
+        # 先创建 PackageRegistry，再创建 WorkbenchController（避免双重建构）
         self._packages_dir = self._resolve_packages_dir(packages_dir, config_path)
         self._package_registry = PackageRegistry(self._packages_dir)
         self._package_integration = PackageIntegration(self._metadata_adapter)
@@ -225,16 +265,13 @@ class WorkbenchUIController(UIController):
         self._wire_workbench_signals()
         self._refresh_navigator()
         self._refresh_status_bar()
-        self._workbench.runtime.config.changed.connect(self._on_config_changed)
+        self._workbench.runtime.config.on_changed(self._on_config_changed)
         self._subscribe_config_changes()
 
-        # 订阅 Runtime EventBus 流式事件，映射到 UI 信号
-        event_bus = self._workbench.core_runtime.event_bus
-        event_bus.subscribe(RuntimeEventType.AI_CHUNK, self._on_ai_chunk)
-        event_bus.subscribe(RuntimeEventType.AI_END, self._on_ai_end)
-        event_bus.subscribe(RuntimeEventType.ENGINE_FAILED, self._on_engine_failed)
+        # 通过 Interaction Boundary 渲染流式事件，不再直接订阅 RuntimeEventBus
+        self._workbench.interaction_layer.set_renderer(WorkbenchStreamRenderer(self))
 
-        # 没有激活会话时进入 Welcome / Home Workspace
+        # 订阅 Runtime Trace 事件（Trace Workspace 仍使用直接订阅，属于可观测层）
         if not self._active_sid:
             self._show_welcome()
 
@@ -714,15 +751,6 @@ class WorkbenchUIController(UIController):
         if timeline:
             self._trace_workspace.append_event(timeline[-1])
 
-    def _on_ai_chunk(self, event: RuntimeEvent) -> None:
-        """Runtime AI_CHUNK 事件 → UI 流式片段信号。"""
-        with self._lock:
-            if event.task_id != self._current_task_id:
-                return
-            text = event.payload.get("text", "")
-            self._ai_parts.append(text)
-        self.sign_stream_chunk.emit(text)
-
     def _finalize_stream(self, error: str | None = None) -> None:
         """原子化结束当前流式输出；确保 UI 终止信号只发射一次。"""
         with self._lock:
@@ -737,19 +765,6 @@ class WorkbenchUIController(UIController):
             self.sign_chat_ai.emit(error, "error")
         self.sign_stream_end.emit()
         self.sign_set_streaming.emit(False)
-
-    def _on_ai_end(self, event: RuntimeEvent) -> None:
-        """Runtime AI_END 事件 → 结束当前流式输出。"""
-        if event.task_id != self._current_task_id:
-            return
-        self._finalize_stream()
-
-    def _on_engine_failed(self, event: RuntimeEvent) -> None:
-        """Runtime ENGINE_FAILED 事件 → 显示错误并结束流式输出。"""
-        if event.task_id != self._current_task_id:
-            return
-        error = event.payload.get("error", "生成失败")
-        self._finalize_stream(f"[错误: {error}]")
 
     def on_send_msg(self, text: str) -> None:
         """用户发送消息：持久化用户消息并提交到 WorkbenchController 在后台线程执行。"""

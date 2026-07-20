@@ -54,6 +54,8 @@ class OpenAIProvider(ModelProvider):
             stream=True,
         )
         for chunk in stream:
+            if not chunk.choices:
+                continue
             delta = getattr(chunk.choices[0].delta, "content", None)
             if delta:
                 yield delta

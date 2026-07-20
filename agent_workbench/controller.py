@@ -4,21 +4,18 @@
 - 属于 Application Layer，不属于 v6-core / v6-service。
 - 只持有 AgentWorkbenchRuntime，不直接持有 Module。
 - 为 UI 提供统一 API。
+- 所有请求通过 Interaction Layer 进入 Runtime，DecisionManager 只调用一次。
 """
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
 from v6.runtime.context import RuntimeContext
-from v6.runtime.enums import RuntimeState
 from v6.runtime.manager import Manager
 from v6.runtime.task import Task
-from v6.runtime.types import ChatMessage
-from v6.runtime.user_request import UserRequest
 
 from agent_workbench.package import PackageExecutor, PackageRegistry
 from agent_workbench.runtime.agent_runtime import AgentWorkbenchRuntime
-from agent_workbench.runtime.decision import RuntimeMode
 from agent_workbench.runtime.interaction import RuntimeRequest, RuntimeRequestSource, WorkbenchInteractionLayer
 from agent_workbench.runtime.manager.decision_manager import DecisionManager
 from agent_workbench.metadata import MetadataDefinition
@@ -80,11 +77,10 @@ class WorkbenchController:
         session_id: Optional[str] = None,
         task_id: Optional[str] = None,
     ) -> RuntimeContext:
-        """提交一条用户消息（chat 兼容包装），返回最终 RuntimeContext。
+        """提交一条用户消息，返回最终 RuntimeContext。
 
-        Commit 6：通过 RuntimeRequest 进入 Interaction Layer。
-        - CHAT 模式不进入 Runtime 执行层，直接返回完成上下文。
-        - ACTION / WORKFLOW 模式生成 Task 并调用 submit_task()。
+        统一入口：所有请求（CLI / GUI / MCP / API）都通过 Interaction Layer
+        进入 Runtime，DecisionManager 只调用一次。
         """
         request = RuntimeRequest(
             source=RuntimeRequestSource.GLOBAL_CHAT,
@@ -92,31 +88,7 @@ class WorkbenchController:
             session_id=session_id,
             task_id=task_id,
         )
-
-        if hasattr(self._manager, "decide"):
-            decision = self._manager.decide(request.to_user_request())
-            if decision.mode == RuntimeMode.CHAT:
-                # _build_chat_context 仍保留在 Controller，不提前迁移。
-                return self._build_chat_context(request.to_user_request(), decision)
-
         return self._interaction.execute_request(request)
-
-    def _build_chat_context(
-        self,
-        request: UserRequest,
-        decision,
-    ) -> RuntimeContext:
-        """为 CHAT 模式构造不进入 Runtime 的完成上下文。"""
-        ctx = RuntimeContext.new(
-            task_id=request.task_id,
-            session_id=request.session_id,
-        )
-        ctx.status = RuntimeState.COMPLETED
-        ctx.metadata["decision"] = decision.to_dict()
-        ctx.metadata["skipped_runtime"] = True
-        if request.text:
-            ctx.messages.append(ChatMessage(role="user", content=request.text))
-        return ctx
 
     def chat_with_tool(
         self,

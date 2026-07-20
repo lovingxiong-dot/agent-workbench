@@ -7,24 +7,29 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
-from typing import Any, Dict
 
-from agent_workbench.config.loader import ConfigLoader, default_config
+from dotenv import load_dotenv
+
 from agent_workbench.controller import WorkbenchController
 
+# 加载 config/.env 到 os.environ，供 Provider 环境变量展开使用
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
 
-def run_cli(config: Dict[str, Any], test_input: str | None = None) -> int:
+
+def run_cli(config_path: str | None = None, test_input: str | None = None) -> int:
     """命令行交互模式。
 
     Args:
-        config: Agent 配置。
+        config_path: 配置文件路径，默认使用 default.yaml。
         test_input: 若提供，直接以此输入运行一次后退出（用于测试）。
     """
-    print(f"[{config['agent']['name']}] 已启动")
-
-    controller = WorkbenchController()
+    controller = WorkbenchController(config_path=config_path)
     controller.start()
+    agent_name = controller.runtime.config.get("agent.name", "Agent Workbench V6")
+    print(f"[{agent_name}] 已启动")
+
     try:
         if test_input is not None:
             ctx = controller.chat(test_input)
@@ -52,20 +57,20 @@ def run_cli(config: Dict[str, Any], test_input: str | None = None) -> int:
     return 0
 
 
-def run_gui(config: Dict[str, Any]) -> int:
+def run_gui(config_path: str | None = None) -> int:
     """Desktop UI 模式。"""
     try:
         from PySide6.QtWidgets import QApplication
     except ImportError:  # pragma: no cover - optional
         print("PySide6 未安装，回退到 CLI 模式。")
-        return run_cli(config)
+        return run_cli(config_path=config_path)
 
     from agent_workbench.ui.main_window import WorkbenchMainWindow
     from agent_workbench.ui.workbench_ui_controller import WorkbenchUIController
 
     app = QApplication(sys.argv)
-    ui_controller = WorkbenchUIController()
-    window = WorkbenchMainWindow(ui_controller=ui_controller, config=config)
+    ui_controller = WorkbenchUIController(config_path=config_path)
+    window = WorkbenchMainWindow(ui_controller=ui_controller)
     window.show()
     return app.exec()
 
@@ -77,23 +82,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--test-input", default=None, help="非交互模式：运行一次输入后退出（用于测试）")
     args = parser.parse_args(argv)
 
-    loader = ConfigLoader(args.config)
-    loaded = loader.load()
-    config = default_config()
-    _merge(config, loaded)
-
     if args.mode == "gui":
-        return run_gui(config)
-    return run_cli(config, test_input=args.test_input)
-
-
-def _merge(base: Dict[str, Any], override: Dict[str, Any]) -> None:
-    """深度合并两个字典。"""
-    for key, value in override.items():
-        if isinstance(value, dict) and key in base and isinstance(base[key], dict):
-            _merge(base[key], value)
-        else:
-            base[key] = value
+        return run_gui(config_path=args.config)
+    return run_cli(config_path=args.config, test_input=args.test_input)
 
 
 if __name__ == "__main__":

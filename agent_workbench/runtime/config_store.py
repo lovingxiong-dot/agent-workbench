@@ -6,6 +6,7 @@
 - 支持点分路径 get/set/delete。
 - 按 namespace 发布变更通知，供 RuntimeModule 热更新。
 - 配置属于资源文件，便于 Git diff 和 Profile 导入导出。
+- 纯 Python Observer 模式，不依赖任何 GUI 框架。
 """
 from __future__ import annotations
 
@@ -16,13 +17,6 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 import yaml
-from PySide6.QtCore import QObject, Signal
-
-
-class _ConfigStoreSignals(QObject):
-    """ConfigStore 的通用变更信号容器。"""
-
-    changed = Signal(str, object)  # path, value
 
 
 class ConfigStore:
@@ -37,8 +31,7 @@ class ConfigStore:
         self._data: Dict[str, Any] = {}
         self._lock = threading.RLock()
         self._subscribers: Dict[str, List[Callable[[str, Any], None]]] = {}
-        self._signals = _ConfigStoreSignals()
-        self.changed = self._signals.changed
+        self._change_callbacks: List[Callable[[str, Any], None]] = []
         self._load()
 
     @property
@@ -113,6 +106,10 @@ class ConfigStore:
         if persist:
             self._save()
 
+    def on_changed(self, callback: Callable[[str, Any], None]) -> None:
+        """注册全局变更回调（替代 Qt Signal）。"""
+        self._change_callbacks.append(callback)
+
     def subscribe(self, namespace: str, callback: Callable[[str, Any], None]) -> None:
         """订阅某个 namespace 的变更通知。"""
         with self._lock:
@@ -148,11 +145,15 @@ class ConfigStore:
             yaml.safe_dump(self.snapshot(), fh, allow_unicode=True, sort_keys=False)
 
     def _notify(self, namespace: str, path: str) -> None:
-        """通知 namespace 订阅者，并发出通用 changed 信号。"""
+        """通知 namespace 订阅者，并调用全局变更回调。"""
         with self._lock:
             callbacks = list(self._subscribers.get(namespace, []))
         value = self.get(path)
-        self._signals.changed.emit(path, value)
+        for cb in self._change_callbacks:
+            try:
+                cb(path, value)
+            except Exception:  # pragma: no cover - defensive
+                pass
         for callback in callbacks:
             try:
                 callback(path, value)

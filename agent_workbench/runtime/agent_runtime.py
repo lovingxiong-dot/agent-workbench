@@ -130,22 +130,46 @@ class AgentWorkbenchRuntime:
     def submit_task(self, task: Task) -> RuntimeContext:
         """提交任意 Task，等待任务完成，返回最终 RuntimeContext。
 
-        这是 Runtime 的传统同步任务入口；外部调用方应通过 Manager 生成 Task 后调用本方法。
+        通过 SessionModule 维护 Session 级别消息历史，确保多轮对话上下文正确。
         """
+        # 注入 Session 历史消息到 Task metadata
+        session_id = task.session_id or "default"
+        session_module = self._registry.get("session")
+        if isinstance(session_module, SessionModule):
+            history = session_module.history(session_id)
+            if history:
+                task.metadata["session_history"] = history
+
         task_id = self._core_runtime.orchestrate(task)
 
-        # 轮询等待任务完成
-        for _ in range(200):
+        # 轮询等待任务完成（最多 60 秒，适应远程 API 调用）
+        for _ in range(1200):
             state = self._core_runtime.orchestrator.state(task_id)
             if state in {RuntimeState.COMPLETED, RuntimeState.FAILED}:
                 break
-            time.sleep(0.01)
+            time.sleep(0.05)
 
         ctx = self._core_runtime.orchestrator.context(task_id)
         if ctx is None:
             ctx = RuntimeContext.new(task_id=task_id, session_id=task.session_id)
             ctx.set_status(RuntimeState.FAILED)
+            ctx.result.set_error("Orchestrator context is None")
         self._current_context = ctx
+
+        # 记录失败信息
+        if ctx.status == RuntimeState.FAILED and ctx.result.error:
+            import logging
+            logging.getLogger("agent_workbench").error(
+                "Task %s FAILED: %s (type=%s)",
+                task_id[:8],
+                ctx.result.error,
+                ctx.result.extra.get("error_type", "unknown"),
+            )
+
+        # 追加本轮新消息到 Session 历史
+        if isinstance(session_module, SessionModule):
+            session_module.append(session_id, ctx.messages)
+
         return ctx
 
     def submit_request(self, request: RuntimeRequest) -> str:

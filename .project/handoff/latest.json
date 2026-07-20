@@ -1,0 +1,116 @@
+{
+  "handoff_type": "SAVE",
+  "session_id": "6a5c85036d28e0576cc4cd51",
+  "date": "2026-07-19",
+  "agent": {
+    "model": "DeepSeek-V4-Pro",
+    "platform": "Trae IDE"
+  },
+  "project": {
+    "name": "agent-workbench",
+    "version": "v6.13-frozen",
+    "phase": "Architecture Stabilization",
+    "runtime": "v6.9.6-foundation",
+    "branch": "v6-agent",
+    "last_commit": "39eadbe",
+    "last_commit_msg": "merge: main → v6-agent — sync ACP Gate CI"
+  },
+  "workspace": {
+    "modified_files": 13,
+    "deleted_files": 2,
+    "new_directories": [
+      ".project/architecture/",
+      ".project/handoff/",
+      ".project/memory/"
+    ],
+    "new_files": [
+      ".project/architecture/v6.13-freeze-report.md",
+      ".project/handoff/latest.md",
+      ".project/handoff/latest.json",
+      "docs/v6/architecture-boundaries.md"
+    ]
+  },
+  "frozen_zone": {
+    "file_count": 19,
+    "prohibitions": [
+      "Skill 不得进入 Runtime Kernel",
+      "Memory 不得进入 Capability",
+      "AgentIdentityRegistry 不负责执行",
+      "PackageRegistry 不保存运行状态"
+    ]
+  },
+  "tests": {
+    "core_architecture": "50/50 PASS",
+    "interaction_capability": "62/62 PASS",
+    "non_ui": "4/4 PASS",
+    "preexisting_failures": 7,
+    "run_command": "python -m pytest tests/v6/ tests/interaction/ tests/package/ -v"
+  },
+  "p0_changes": [
+    {
+      "id": "P0-1",
+      "name": "统一入口 — 消除双重决策",
+      "files": ["agent_workbench/controller.py"],
+      "summary": "controller.chat() 不再调用 decide()，统一走 InteractionLayer"
+    },
+    {
+      "id": "P0-2",
+      "name": "ConfigStore 解耦 PySide6 + 删除 v5 配置系统",
+      "files": [
+        "agent_workbench/runtime/config_store.py",
+        "agent_workbench/app.py",
+        "agent_workbench/ui/workbench_ui_controller.py"
+      ],
+      "deleted": ["agent_workbench/config/loader.py", "config/config.yaml"],
+      "summary": "ConfigStore 替换为纯 Python Observer，CLI 不再依赖 PySide6"
+    },
+    {
+      "id": "P0-3",
+      "name": "流式事件走 Interaction Boundary",
+      "files": ["agent_workbench/ui/workbench_ui_controller.py"],
+      "summary": "新建 WorkbenchStreamRenderer，UI 不再直接订阅 RuntimeEventBus"
+    },
+    {
+      "id": "P0-4",
+      "name": "SessionModule 真正实现消息存储",
+      "files": [
+        "agent_workbench/runtime/modules/session_module.py",
+        "agent_workbench/runtime/agent_runtime.py"
+      ],
+      "summary": "实现 history/append/clear/persist，移除 _session_messages"
+    }
+  ],
+  "architecture_docs": [
+    {
+      "path": ".project/architecture/v6.13-freeze-report.md",
+      "revision": 3,
+      "sections": 12
+    },
+    {
+      "path": "docs/v6/architecture-boundaries.md",
+      "priority": "最高",
+      "sections": 7
+    }
+  ],
+  "next_phase": {
+    "version": "v6.14",
+    "name": "Dogfooding Phase",
+    "tasks": [
+      {"id": "D1", "name": "CLI 流式输出", "priority": "P0"},
+      {"id": "D2", "name": "Session 持久化", "priority": "P0"},
+      {"id": "D3", "name": "多轮上下文验证", "priority": "P0"},
+      {"id": "D4", "name": "Provider 运行时切换", "priority": "P1"},
+      {"id": "D5", "name": "Agent 选择器", "priority": "P1"}
+    ]
+  },
+  "restore_instructions": [
+    "读取 .project/handoff/latest.md 获取完整上下文",
+    "读取 docs/v6/architecture-boundaries.md 了解系统边界",
+    "读取 .project/architecture/v6.13-freeze-report.md 了解 Frozen Zone",
+    "运行 git status --short 确认工作区状态",
+    "运行 git log --oneline -5 了解提交历史",
+    "确认 Frozen Zone 19 文件未被修改",
+    "运行 python -m pytest tests/v6/ tests/interaction/ tests/package/ -v 确认测试通过",
+    "确认 config/.env 中的 AGNES_API_KEY 有效"
+  ]
+}

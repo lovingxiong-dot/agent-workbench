@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import json
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -62,6 +63,20 @@ class WorkbenchLLMEngine(BaseEngine):
             )
 
             messages = [{"role": m.role, "content": m.content} for m in ctx.messages]
+
+            # 合并 Session 历史消息（多轮对话上下文）
+            session_history = ctx.metadata.get("session_history", [])
+            if session_history:
+                history_messages = [
+                    {"role": h["role"], "content": h["content"]}
+                    for h in session_history
+                    if h.get("role") and h.get("content")
+                ]
+                # 去重：历史消息 + 当前消息（避免重复）
+                seen = {json.dumps(m, sort_keys=True, ensure_ascii=False) for m in history_messages}
+                current = [m for m in messages if json.dumps(m, sort_keys=True, ensure_ascii=False) not in seen]
+                messages = history_messages + current
+
             request_metadata = {
                 "messages_count": len(messages),
                 "tools": [],
@@ -125,12 +140,16 @@ class WorkbenchLLMEngine(BaseEngine):
             )
             return RuntimeResult(status="completed", answer=response)
         except Exception as exc:
+            error_msg = f"{type(exc).__name__}: {exc}"
+            ctx.result.set_error(error_msg)
+            ctx.result.extra["error_type"] = type(exc).__name__
+            ctx.result.extra["error_message"] = str(exc)
             self._emit(
                 RuntimeEventType.EXECUTION_FINISHED,
-                {"status": "failed", "error": str(exc)},
+                {"status": "failed", "error": error_msg},
                 ctx,
             )
-            self._emit(RuntimeEventType.ENGINE_FAILED, {"error": str(exc)}, ctx)
+            self._emit(RuntimeEventType.ENGINE_FAILED, {"error": error_msg}, ctx)
             raise
         finally:
             if self._state == EngineState.RUNNING:

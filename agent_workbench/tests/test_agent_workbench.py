@@ -105,17 +105,16 @@ def test_config_store_read_write(controller: WorkbenchController) -> None:
     store = controller._runtime.config
     store.set("model.sampling.temperature", 0.5, persist=False)
     assert store.get("model.sampling.temperature") == 0.5
-    assert store.get("model.default_provider") == "echo"
+    assert store.get("model.default_provider") == "agnes"
 
 
-def test_config_loader_reads_default_yaml() -> None:
-    """验证配置加载器能读取默认 YAML。"""
-    from agent_workbench.config.loader import ConfigLoader
+def test_config_store_reads_default_yaml() -> None:
+    """验证 ConfigStore 能读取默认 YAML 并支持点分路径访问。"""
+    from agent_workbench.runtime.config_store import ConfigStore
 
-    loader = ConfigLoader()
-    loader.load()
-    assert loader.get("agent.name") == "Agent Workbench V6"
-    assert loader.get("runtime.use_orchestrator") is True
+    store = ConfigStore()
+    assert store.get("agent.name") == "Agent Workbench V6"
+    assert store.get("runtime.use_orchestrator") is True
 
 
 def test_app_cli_mode_exits_cleanly() -> None:
@@ -124,7 +123,6 @@ def test_app_cli_mode_exits_cleanly() -> None:
 
     result = main([
         "--mode", "cli",
-        "--config", "agent_workbench/config/default.yaml",
         "--test-input", "hello",
     ])
     assert result == 0
