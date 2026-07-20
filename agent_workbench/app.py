@@ -9,8 +9,6 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-import uuid
-
 from dotenv import load_dotenv
 
 from agent_workbench.controller import WorkbenchController
@@ -21,7 +19,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
 
 
 def run_cli(config_path: str | None = None, test_input: str | None = None) -> int:
-    """命令行交互模式 — 支持流式逐字输出。
+    """命令行交互模式 — 支持流式逐字输出 + Session 持久化。
 
     Args:
         config_path: 配置文件路径，默认使用 default.yaml。
@@ -32,6 +30,16 @@ def run_cli(config_path: str | None = None, test_input: str | None = None) -> in
     agent_name = controller.runtime.config.get("agent.name", "Agent Workbench V6")
     print(f"[{agent_name}] 已启动")
 
+    # 显示 Session 恢复状态
+    if controller.session_id:
+        session_module = controller.runtime.module_registry.get("session")
+        if session_module is not None:
+            history = session_module.history(controller.session_id)
+            if history:
+                print(f"[Session] 已恢复上次会话 ({len(history)} 条消息, id={controller.session_id})")
+            else:
+                print(f"[Session] 新建会话 (id={controller.session_id})")
+
     # 接入 CLI 流式渲染器，通过 Interaction Boundary 接收流式事件
     cli_renderer = CLIStreamRenderer()
     controller.interaction_layer.set_renderer(cli_renderer)
@@ -39,7 +47,7 @@ def run_cli(config_path: str | None = None, test_input: str | None = None) -> in
     try:
         if test_input is not None:
             print(f"> {test_input}")
-            cli_renderer.reset(str(uuid.uuid4()))
+            cli_renderer.reset()
             ctx = controller.chat(test_input)
             _print_fallback(ctx, cli_renderer)
             return 0
@@ -52,7 +60,7 @@ def run_cli(config_path: str | None = None, test_input: str | None = None) -> in
             if not text:
                 continue
 
-            cli_renderer.reset(str(uuid.uuid4()))
+            cli_renderer.reset()
             ctx = controller.chat(text)
             _print_fallback(ctx, cli_renderer)
     finally:

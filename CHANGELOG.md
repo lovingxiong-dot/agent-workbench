@@ -1,5 +1,27 @@
 # Changelog
 
+## v6.14.0-alpha (2026-07-20) — Dogfooding Phase: D2 Session Persistence
+
+> **里程碑语义**：D2 完成 Session 持久化。关闭 Workbench 后重新打开，自动恢复上次会话和完整消息历史。
+
+### Added
+
+- `SessionModule.persist()`：实现 JSON 文件持久化，消息保存到 `storage/sessions/session_{id}.json`。
+- `SessionModule.load(session_id)`：从磁盘加载指定 Session 的消息历史。
+- `SessionModule.load_last_active()`：自动恢复上次活跃会话。
+- `SessionModule.start_session(session_id)`：开始或切换 Session，自动保存活跃状态。
+- `WorkbenchController._session_id`：Controller 级别 Session 管理，自动创建/恢复。
+- `WorkbenchController.start()`：启动时自动恢复上次会话。
+- `WorkbenchController.stop()`：停止时持久化当前会话并保存活跃状态。
+
+### Changed
+
+- `SessionModule.append()`：追加消息后自动持久化到磁盘（原子写入）。
+- `SessionModule.clear()`：清除消息时同时删除磁盘文件。
+- `WorkbenchController.chat()`：自动创建或使用已有 Session ID。
+- `agent_workbench/app.py`：`run_cli()` 启动时显示 Session 恢复状态。
+
+---
 ## v6.14.0-alpha (2026-07-20) — Dogfooding Phase: D1 CLI Streaming
 
 > **里程碑语义**：v6.14 Dogfooding Phase 启动。从"架构验证"转向"真实使用验证"，目标是将 Workbench OS 打造为日常可用的 AI 工作台。D1 打通 CLI 流式输出基础闭环。

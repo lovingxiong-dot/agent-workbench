@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import uuid
 from typing import Any, Dict, Optional
 
 from v6.runtime.context import RuntimeContext
@@ -18,6 +19,7 @@ from agent_workbench.package import PackageExecutor, PackageRegistry
 from agent_workbench.runtime.agent_runtime import AgentWorkbenchRuntime
 from agent_workbench.runtime.interaction import RuntimeRequest, RuntimeRequestSource, WorkbenchInteractionLayer
 from agent_workbench.runtime.manager.decision_manager import DecisionManager
+from agent_workbench.runtime.modules.session_module import SessionModule
 from agent_workbench.metadata import MetadataDefinition
 from agent_workbench.runtime.modules.memory_module import MemoryModule
 from agent_workbench.services.manager import AgentManager
@@ -39,14 +41,30 @@ class WorkbenchController:
         self._interaction = WorkbenchInteractionLayer(runtime=self._runtime)
         self._package_registry = package_registry
         self._package_executor = PackageExecutor()
+        self._session_id: str | None = None
 
     def start(self) -> None:
-        """启动 Runtime。"""
+        """启动 Runtime，恢复上次会话。"""
         self._runtime.start()
+        # 恢复上次活跃 Session
+        session_module = self._runtime.module_registry.get("session")
+        if isinstance(session_module, SessionModule):
+            restored = session_module.load_last_active()
+            if restored:
+                self._session_id = restored
 
     def stop(self) -> None:
-        """停止 Runtime。"""
+        """停止 Runtime，持久化当前 Session。"""
+        session_module = self._runtime.module_registry.get("session")
+        if isinstance(session_module, SessionModule):
+            session_module.persist()
+            session_module.save_last_active()
         self._runtime.stop()
+
+    @property
+    def session_id(self) -> str | None:
+        """当前活跃 Session ID。"""
+        return self._session_id
 
     @property
     def core_runtime(self):
@@ -82,10 +100,19 @@ class WorkbenchController:
         统一入口：所有请求（CLI / GUI / MCP / API）都通过 Interaction Layer
         进入 Runtime，DecisionManager 只调用一次。
         """
+        # 自动创建或使用已有 Session
+        sid = session_id or self._session_id
+        if sid is None:
+            sid = uuid.uuid4().hex[:12]
+            self._session_id = sid
+            session_module = self._runtime.module_registry.get("session")
+            if isinstance(session_module, SessionModule):
+                session_module.start_session(sid)
+
         request = RuntimeRequest(
             source=RuntimeRequestSource.GLOBAL_CHAT,
             text=text,
-            session_id=session_id,
+            session_id=sid,
             task_id=task_id,
         )
         return self._interaction.execute_request(request)
