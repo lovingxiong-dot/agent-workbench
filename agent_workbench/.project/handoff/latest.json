@@ -1,0 +1,69 @@
+{
+    "generated": "2026-07-21T13:14:00+08:00",
+    "agent": "AI-DeepSeek-V4-Pro",
+    "schema_version": "3.1.0",
+    "project": "Agent Workbench OS",
+    "branch": "v6-agent",
+    "last_commit": "ebc426b",
+    "progress": {
+        "phase_1a": "completed",
+        "phase_1a_1": "completed",
+        "phase_1b": "completed",
+        "phase_1b_1": "completed",
+        "phase_1c": "completed",
+        "phase_1d": "pending"
+    },
+    "mission": "v6.14 Shell Integration — Runtime → Presentation → Shell Contract 单向数据流建立",
+    "decisions": [
+        {"id": "D1", "decision": "v6/ui 不嵌入 Workbench", "reason": "防止 UI 概念混合"},
+        {"id": "D2", "decision": "ShellProtocol 使用 typing.Protocol", "reason": "Structural Typing"},
+        {"id": "D3", "decision": "NavigationState→NavigationGroup", "reason": "结构模型非运行时状态"},
+        {"id": "D4", "decision": "WorkspaceViewModel→WorkspaceState", "reason": "区分 layer 命名"},
+        {"id": "D5", "decision": "PresentationPipeline 编排全链路", "reason": "不创建 Widget"},
+        {"id": "D6", "decision": "Workbench 不 import v6/ui", "reason": "Shell Adapter 中间层"}
+    ],
+    "key_files": {
+        "modified": [
+            "v6/ui/function_page.py",
+            "ui/workbench_ui_controller.py"
+        ],
+        "new": [
+            "presentation/shell/protocol.py",
+            "presentation/shell/transformers/session.py",
+            "presentation/shell/transformers/message.py",
+            "presentation/shell/transformers/capability.py",
+            "presentation/shell/integration.py",
+            "tests/test_shell_protocol.py",
+            "tests/test_presentation_flow.py",
+            "docs/v6/shell-adapter-architecture.md",
+            "docs/v6/shell-integration-architecture-report.md"
+        ]
+    },
+    "tests": {
+        "test_shell_protocol": "14/14 PASS",
+        "test_presentation_flow": "10/10 PASS"
+    },
+    "environment": {
+        "python": "3.10.11",
+        "git_status": "M workbench.py, M workbench_ui_controller.py",
+        "untracked": ["PROJECT_BLUEPRINT.md", "docs/", "presentation/shell/", "tests/", "v6/ui/"]
+    },
+    "next_steps": [
+        "Phase 1-D: 实现 QtShell implements ShellProtocol",
+        "v6/ui ChatArea 添加 bind_workspace() 公开接口",
+        "Workbench Shell 完成 NavigationGroup 消费",
+        "WorkbenchUIController 瘦身"
+    ],
+    "constraints": {
+        "forbidden": [
+            "修改 Runtime",
+            "修改 metadata()",
+            "v6/ui 作为 Workbench 子组件",
+            "Shell Protocol 暴露 UI 组件名"
+        ],
+        "allowed": [
+            "presentation/shell/implementations/",
+            "v6/ui/"
+        ]
+    }
+}
