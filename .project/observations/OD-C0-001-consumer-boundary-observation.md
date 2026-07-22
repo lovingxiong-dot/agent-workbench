@@ -82,12 +82,31 @@ This observation does NOT create Consumers. It only records what currently exist
 
 | Class | Consumers |
 |-------|-----------|
-| Runtime-internal evidence collector | Orchestrator, RuntimeTrace Hook, ReplayService |
-| Runtime-external Consumer | WorkbenchInteractionLayer |
+| Runtime-internal evidence collector | Orchestrator, RuntimeTrace Hook |
+| Passive Consumer (location-bound) | ReplayService (subscribes to all events, but lives in `v6/runtime/`) |
+| External Consumer (boundary adapter) | WorkbenchInteractionLayer (RuntimeEvent → InteractionEvent) |
+| External Renderer Consumer | Renderer (consumes InteractionEvent only) |
 
-**Observation**: Currently **only ONE external Consumer exists** — the Renderer Consumer. No Debugger Consumer, no Audit Consumer, no Governance Consumer.
+**Multi-layer Consumer Classification** (refined per Architecture Review):
 
-**Result**: PASS (boundary identifiable) — but consumer diversity is currently LOW. Phase 2-E is the first opportunity to introduce additional Consumers.
+```
+Runtime Event Consumer
+├── Adapter Consumer           # RuntimeEvent → InteractionEvent
+│    InteractionLayer          # ✅ Active
+├── Observation Consumer       # RuntimeEvent → Timeline / Debug view
+│    ReplayService             # ⚠️ Existing, location-bound (v6/runtime/)
+│    Debugger                  # ⏳ Future
+├── Storage Consumer           # RuntimeEvent → Immutable log
+│    Audit                     # ⏳ Future
+└── Policy Consumer            # RuntimeEvent → Policy observation
+     Governance               # ⏳ Future
+```
+
+**Important refinement**: `ReplayService` IS a Passive Consumer by **behavior**, even though it lives in `v6/runtime/`. Architecture is defined by behavior, not file location. The fact that it is currently inside `v6/runtime/` is **a future extraction candidate**, not a reason to deny its Consumer nature.
+
+**Observation**: 1 active external Adapter Consumer (InteractionLayer). 1 existing Passive Observation Consumer (ReplayService). 4 future Consumers untested (Debugger / Audit / Governance).
+
+**Result**: PASS (boundary identifiable, behavior-over-location principle applied).
 
 ### Q2: Event Stream Accessibility
 
@@ -234,12 +253,15 @@ External Consumer = Authority Builder
 
 | Boundary | Health | Reason |
 |----------|--------|--------|
-| Runtime ↔ Renderer Consumer | Stable | WorkbenchInteractionLayer is established, well-bounded |
-| Runtime ↔ Debugger Consumer | **Untested** | No consumer exists yet |
-| Runtime ↔ Audit Consumer | **Untested** | No consumer exists yet |
-| Runtime ↔ Governance Consumer | **Untested** | No consumer exists yet |
+| Runtime ↔ Adapter Consumer | ✅ Stable | WorkbenchInteractionLayer is established, well-bounded |
+| Runtime ↔ Observation Consumer (Replay) | ⚠️ Stable but location-bound | ReplayService behavior is Consumer-like, but file location is `v6/runtime/` |
+| Runtime ↔ Observation Consumer (Debugger) | ⏳ Untested | No debugger consumer exists yet |
+| Runtime ↔ Storage Consumer (Audit) | ⏳ Untested | No audit consumer exists yet |
+| Runtime ↔ Policy Consumer (Governance) | ⏳ Untested | No governance consumer exists yet |
 
-**Implication for Phase 2-E.2+**: Three Consumer types (Debugger / Audit / Governance) are unproven. Building ANY of them WITHOUT modifying Runtime is the validation criterion.
+**Refined metric**: **Validated Consumer Pattern** count = 1 (Adapter pattern, proven via InteractionLayer).
+
+**Implication for Phase 2-E.2+**: The next validation target is **Observation Consumer (Debugger)** — observe whether ReplayService's existing capabilities can be extended WITHOUT Runtime modification.
 
 ---
 
@@ -260,3 +282,4 @@ Phase 2-E.1 is **observation only**. Implementation is deferred to Phase 2-E.2+ 
 | Version | Date | Change |
 |---------|------|--------|
 | v1.0 | 2026-07-23 | Initial Consumer Boundary Observation. Four-question observation; one external Consumer (Renderer) identified; three untested Consumer types (Debugger / Audit / Governance) recorded. |
+| v1.1 | 2026-07-23 | Architecture Review refinement: applied **behavior > file location** principle. ReplayService reclassified as Passive Observation Consumer (location-bound). Introduced multi-layer Consumer classification (Adapter / Observation / Storage / Policy). Validated Consumer Pattern count = 1 (Adapter pattern). Next validation target: Observation Consumer (Debugger). |
