@@ -25,13 +25,14 @@ CENTRE Runtime → Interaction Boundary → Presentation Renderer → v6/ui → 
 
 **Before any operation, read these documents in order:**
 
-1. [AGENT_ENTRY.md](./AGENT_ENTRY.md) — **Mandatory onboarding (Repository Governance v1.0)**
-2. [ROOT_INDEX.md](./ROOT_INDEX.md) — Repository navigation
-3. [PROJECT_DECLARATION.md](./PROJECT_DECLARATION.md) — Repository Constitution
-4. [PROJECT_STATE.md](./PROJECT_STATE.md) — Current development snapshot
-5. [ARCHITECTURE_BOUNDARY.md](./ARCHITECTURE_BOUNDARY.md) — Construction rules
-6. [v6/UI_FOUNDATION.md](./v6/UI_FOUNDATION.md) — v6/ui freeze contract
-7. [PROJECT_BLUEPRINT.md](./PROJECT_BLUEPRINT.md) — Project overview and frozen zones
+1. [FOUNDATION.md](./FOUNDATION.md) — **Shared ancestor (CENTRE ecosystem) — read first**
+2. [AGENT_ENTRY.md](./AGENT_ENTRY.md) — Mandatory onboarding + target system identification
+3. [ROOT_INDEX.md](./ROOT_INDEX.md) — Repository navigation
+4. [PROJECT_DECLARATION.md](./PROJECT_DECLARATION.md) — Workbench v6 Constitution
+5. [PROJECT_STATE.md](./PROJECT_STATE.md) — Current development snapshot
+6. [ARCHITECTURE_BOUNDARY.md](./ARCHITECTURE_BOUNDARY.md) — Construction rules
+7. [v6/UI_FOUNDATION.md](./v6/UI_FOUNDATION.md) — v6/ui freeze contract
+8. [PROJECT_BLUEPRINT.md](./PROJECT_BLUEPRINT.md) — Project overview and frozen zones
 
 Governance center: [`lovingxiong-dot/agent-governance`](https://github.com/lovingxiong-dot/agent-governance)
 
@@ -101,9 +102,10 @@ Current status: **575/575 passed**.
 
 | Document | Purpose | Read Time |
 |---|---|---|
-| [AGENT_ENTRY.md](./AGENT_ENTRY.md) | **Mandatory Agent onboarding — MUST read first** | 5 min |
+| [FOUNDATION.md](./FOUNDATION.md) | **Shared ancestor (CENTRE ecosystem) — MUST read first** | 5 min |
+| [AGENT_ENTRY.md](./AGENT_ENTRY.md) | **Mandatory Agent onboarding** | 5 min |
 | [ROOT_INDEX.md](./ROOT_INDEX.md) | **Repository navigation homepage** | 3 min |
-| [PROJECT_DECLARATION.md](./PROJECT_DECLARATION.md) | **Repository Constitution** | 10 min |
+| [PROJECT_DECLARATION.md](./PROJECT_DECLARATION.md) | **Workbench v6 Constitution** | 10 min |
 | [PROJECT_STATE.md](./PROJECT_STATE.md) | Current development snapshot | 5 min |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Architecture navigation layer | 5 min |
 | [ARCHITECTURE_BOUNDARY.md](./ARCHITECTURE_BOUNDARY.md) | Agent construction rules | 10 min |

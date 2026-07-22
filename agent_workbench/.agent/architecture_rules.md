@@ -11,14 +11,15 @@
 ### Before Touching ANY File
 
 ```
-1. Read AGENT_ENTRY.md (root) — mandatory onboarding
-2. Read ROOT_INDEX.md (root) — repository navigation
-3. Read PROJECT_DECLARATION.md (root) — repository constitution
-4. Read PROJECT_STATE.md (root) — current frozen state
-5. Read ARCHITECTURE_BOUNDARY.md (root) — construction rules
-6. Check which layer you're modifying
-7. Check Frozen Zone status
-8. Verify dependency direction is downward only
+1. Read FOUNDATION.md (root) — shared ancestor (CENTRE ecosystem)
+2. Read AGENT_ENTRY.md (root) — mandatory onboarding, identify target system
+3. Read ROOT_INDEX.md (root) — repository navigation
+4. Read PROJECT_DECLARATION.md (root) — Workbench v6 constitution
+5. Read PROJECT_STATE.md (root) — current frozen state
+6. Read ARCHITECTURE_BOUNDARY.md (root) — construction rules
+7. Check which layer you're modifying
+8. Check Frozen Zone status
+9. Verify dependency direction is downward only
 ```
 
 ### Architecture (One-Line)
@@ -58,9 +59,10 @@ CENTRE Runtime → Interaction Boundary → Presentation Renderer → v6/ui → 
 
 | Document | When to Read |
 |----------|-------------|
-| `AGENT_ENTRY.md` | **First thing — always** |
+| `FOUNDATION.md` | **First thing — always** |
+| `AGENT_ENTRY.md` | **Mandatory onboarding + target system ID** |
 | `ROOT_INDEX.md` | Repository navigation |
-| `PROJECT_DECLARATION.md` | Repository constitution |
+| `PROJECT_DECLARATION.md` | Workbench v6 constitution |
 | `PROJECT_STATE.md` | Current frozen state |
 | `ARCHITECTURE_BOUNDARY.md` | Construction rules |
 | `v6/UI_FOUNDATION.md` | Before touching v6/ui |

@@ -1,19 +1,32 @@
-# Project Declaration
+# Project Declaration — Workbench v6
 
-> **Repository Constitution** — Repository Governance v1.0
+> **Product Constitution** — Repository Governance v1.0
 > **Status**: FROZEN
 > **Audience**: All contributors, AI agents, reviewers
 > **Priority**: First read for any new participant
+>
+> **Identity**: This document is the constitution of **Workbench v6**, one product inside the CENTRE ecosystem. For the shared ancestor that defines common capabilities across all CENTRE products, see [FOUNDATION.md](./FOUNDATION.md).
 
 ---
 
 ## Vision
 
-**Agent Workbench OS** is a CENTRE-governed AI Agent Runtime platform.
+**Workbench v6** is an Agent Workspace — a single-agent intelligent workbench where users and agents collaborate on tasks.
 
-It is not a chatbot. It is not an IDE. It is an **Agent Operating System** — a runtime kernel that hosts multiple AI agents, manages their capabilities, and presents their output through a replaceable UI shell.
+It is not a chatbot. It is not an IDE. It is not a multi-agent governance platform.
 
-The goal: a single Runtime that can power Desktop, Web, CLI, and Mobile interfaces without changing the agent logic.
+Its role in the CENTRE ecosystem:
+```
+CENTRE / AOS (Shared Ancestor)
+    │
+    ├── Workbench v6 (this product)     ← Agent Workspace
+    │     Single Agent, Workflow, Chat UI
+    │
+    └── Agent Manager OS (future)       ← Governance Plane
+          Multi-Agent, Routing, Dashboard
+```
+
+The goal: prove that Agent + Workflow + Runtime + UI can run end-to-end on the CENTRE Foundation.
 
 ---
 
@@ -161,6 +174,7 @@ Interaction Protocol → Runtime → Presentation → Renderer → UI
 
 | Document | Purpose |
 |----------|---------|
+| [FOUNDATION.md](./FOUNDATION.md) | **Shared ancestor — CENTRE ecosystem capabilities** |
 | [PROJECT_STATE.md](./PROJECT_STATE.md) | Current development snapshot |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Architecture navigation |
 | [AGENT_ENTRY.md](./AGENT_ENTRY.md) | Mandatory Agent onboarding |

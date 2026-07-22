@@ -12,29 +12,57 @@
 Every AI Agent entering this repository MUST read these documents in order:
 
 ```
-1. ROOT_INDEX.md
+1. FOUNDATION.md
        ↓
-2. PROJECT_DECLARATION.md
+2. ROOT_INDEX.md
        ↓
-3. PROJECT_STATE.md
+3. PROJECT_DECLARATION.md
        ↓
-4. ARCHITECTURE.md
+4. PROJECT_STATE.md
        ↓
-5. Relevant Domain Docs
+5. ARCHITECTURE.md
        ↓
-6. Code
+6. Relevant Domain Docs
+       ↓
+7. Code
 ```
+
+---
+
+## Before Any Modification — Identify Your Target System
+
+Every modification MUST declare which system it targets. Check before you touch:
+
+```
+Target System Checklist:
+
+[ ] FOUNDATION (Shared Ancestor) — Protocol, Runtime, Data Contract, Gateway
+    → Requires Architecture Review before any change
+
+[ ] Workbench v6 — Agent Workspace, Chat UI, Workflow
+    → This is the current active product
+
+[ ] Agent Manager OS — Governance, Dashboard, Federation
+    → Future product. Not yet in this repository.
+
+[ ] Documentation Only — No code changes
+```
+
+**Rule**: You cannot modify one target system while thinking you're modifying another.
 
 ---
 
 ## Quick Reference (3 Minutes)
 
-### What This Project Is
-
-Agent Workbench OS — a CENTRE-governed AI Agent Runtime platform.
+### What This Repository Contains
 
 ```
-Interaction Protocol → Runtime → Presentation → Renderer → UI
+CENTRE / AOS (Shared Ancestor)
+    │
+    ├── Workbench v6 (active)         ← Agent Workspace
+    └── Agent Manager OS (future)     ← Governance Plane
+
+For shared ancestor definition, see FOUNDATION.md.
 ```
 
 ### What You Must NOT Do
@@ -118,8 +146,9 @@ UI Foundation (v6/ui)
 
 | Document | Purpose |
 |----------|---------|
-| [ROOT_INDEX.md](./ROOT_INDEX.md) | Repository navigation (first read) |
-| [PROJECT_DECLARATION.md](./PROJECT_DECLARATION.md) | Repository Constitution |
+| [FOUNDATION.md](./FOUNDATION.md) | **Shared ancestor — read first** |
+| [ROOT_INDEX.md](./ROOT_INDEX.md) | Repository navigation |
+| [PROJECT_DECLARATION.md](./PROJECT_DECLARATION.md) | Workbench v6 Constitution |
 | [PROJECT_STATE.md](./PROJECT_STATE.md) | Current development snapshot |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Architecture navigation |
 | [ARCHITECTURE_BOUNDARY.md](./ARCHITECTURE_BOUNDARY.md) | Construction rules |

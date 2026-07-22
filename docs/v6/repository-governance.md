@@ -35,6 +35,7 @@ Each type of document has exactly one official version.
 
 | Asset | Authority |
 |---|---|
+| Foundation | `FOUNDATION.md` (root) |
 | README | `README.md` (root) |
 | Agent Entry | `AGENT_ENTRY.md` (root) |
 | Root Index | `ROOT_INDEX.md` (root) |

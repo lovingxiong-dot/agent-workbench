@@ -1,8 +1,19 @@
-# Project State
+# Project State — Workbench v6
 
 > **Current Development Snapshot** — Repository Governance v1.0
 > **Last Updated**: 2026-07-22
 > **Audience**: Contributors, AI agents, reviewers
+
+---
+
+## Product Identity
+
+| Field | Value |
+|-------|-------|
+| Repository | `agent-workbench` (lovingxiong-dot/agent-workbench) |
+| Active Product | **Workbench v6** — Agent Workspace |
+| Future Product | Agent Manager OS — Governance Plane |
+| Shared Ancestor | CENTRE / AOS — see [FOUNDATION.md](./FOUNDATION.md) |
 
 ---
 
@@ -109,7 +120,8 @@ Phase 2-D: Renderer Migration
 
 | Document | Purpose |
 |----------|---------|
-| [PROJECT_DECLARATION.md](./PROJECT_DECLARATION.md) | Repository Constitution |
+| [FOUNDATION.md](./FOUNDATION.md) | **Shared ancestor — CENTRE ecosystem** |
+| [PROJECT_DECLARATION.md](./PROJECT_DECLARATION.md) | Workbench v6 Constitution |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Architecture navigation |
 | [AGENT_ENTRY.md](./AGENT_ENTRY.md) | Agent onboarding |
 | [ROOT_INDEX.md](./ROOT_INDEX.md) | Repository navigation |

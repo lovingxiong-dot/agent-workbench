@@ -1,6 +1,6 @@
 # Root Index
 
-> **Repository Homepage** — Repository Governance v1.0
+> **CENTRE Ecosystem Repository Router** — Repository Governance v1.0
 > **Status**: FROZEN
 > **Audience**: All contributors, AI agents, reviewers
 > **Priority**: First read for any new participant
@@ -9,10 +9,17 @@
 
 ## What Is This Repository?
 
-**Agent Workbench OS** — a CENTRE-governed AI Agent Runtime platform.
+This repository currently contains **Workbench v6** — an Agent Workspace product inside the CENTRE ecosystem. Future products (Agent Manager OS) will live alongside it.
+
+For the shared ancestor that defines common capabilities across all CENTRE products, read [FOUNDATION.md](./FOUNDATION.md).
+
+```
+CENTRE / AOS
+    │
+    ├── Workbench v6 (active)         ← Agent Workspace
+    └── Agent Manager OS (future)     ← Governance Plane
 
 Current architecture:
-```
 CENTRE Runtime → Interaction Boundary → Presentation Renderer → v6/ui → Qt
 ```
 
@@ -23,12 +30,13 @@ For full context, read [PROJECT_DECLARATION.md](./PROJECT_DECLARATION.md).
 ## New Here? Read This
 
 ```
-1. PROJECT_DECLARATION.md   ← Repository Constitution
-2. PROJECT_STATE.md         ← Current development snapshot
-3. AGENT_ENTRY.md           ← Mandatory AI Agent onboarding
-4. ARCHITECTURE.md          ← Architecture navigation
-5. Relevant Domain Docs     ← Deep dive into your area
-6. Code                     ← Start working
+1. FOUNDATION.md              ← Shared ancestor (CENTRE ecosystem)
+2. PROJECT_DECLARATION.md     ← Workbench v6 Constitution
+3. PROJECT_STATE.md           ← Current development snapshot
+4. AGENT_ENTRY.md             ← Mandatory AI Agent onboarding
+5. ARCHITECTURE.md            ← Architecture navigation
+6. Relevant Domain Docs       ← Deep dive into your area
+7. Code                       ← Start working
 ```
 
 ---
@@ -37,7 +45,8 @@ For full context, read [PROJECT_DECLARATION.md](./PROJECT_DECLARATION.md).
 
 ```
 agent_workbench/
-├── PROJECT_DECLARATION.md     ← Repository Constitution
+├── FOUNDATION.md              ← Shared ancestor (CENTRE ecosystem)
+├── PROJECT_DECLARATION.md     ← Workbench v6 Constitution
 ├── PROJECT_STATE.md           ← Current development snapshot
 ├── AGENT_ENTRY.md             ← Mandatory Agent onboarding
 ├── ARCHITECTURE.md            ← Architecture navigation
