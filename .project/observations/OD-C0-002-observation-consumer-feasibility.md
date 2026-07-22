@@ -217,14 +217,16 @@ These fields are **stable** for the Consumer side. Consumer can:
 ## Architecture Stabilization Status (Probe Result)
 
 ```
-Evidence ≠ Authority   : Established (OD-R0-004 v1.1)
-Consumer Taxonomy      : v0.x (PROPOSAL, NOT FROZEN, append-only)
-ReplayService          : Validated as Passive Observation Consumer
-Debugger Consumer      : Feasible WITHOUT Runtime modification
-Runtime modification   : None required for Phase 2-E.2
+Evidence ≠ Authority        : Established (OD-R0-004 v1.1)
+Consumer Taxonomy           : v0.x (PROPOSAL, NOT FROZEN, append-only)
+ReplayService Capability    : Validated as Passive Observation Consumer capability
+  (NOT a full Consumer Pattern — lifecycle / deployment / multi-instance /
+   permissions / storage strategy not yet defined)
+Debugger Consumer Feasibility: PASS (WITHOUT Runtime modification)
+Runtime Modification Required: None for Phase 2-E.2 scope
 
-Recommended next       : Phase 2-E.3 (Real-time push feasibility, separate ADR)
-  OR                    : End Phase 2-E series; resume Phase 2-D Workbench v6 closure
+Recommended next            : Phase 2-E.3 Consumer Diversity Observation
+  (scan for existing Storage / Policy / Coordination Consumer evidence)
 ```
 
 ---
@@ -234,3 +236,4 @@ Recommended next       : Phase 2-E.3 (Real-time push feasibility, separate ADR)
 | Version | Date | Change |
 |---------|------|--------|
 | v1.0 | 2026-07-23 | Initial Capability Probe. Three diagnostic questions answered. ReplayService validated as Observation Consumer baseline. No Runtime modification recommended. |
+| v1.1 | 2026-07-23 | Architecture Review refinement: ReplayService is a validated **capability**, NOT a full Consumer Pattern (lifecycle / deployment / multi-instance / permissions / storage strategy not yet defined). Phase 2-E.3 next: Consumer Diversity Observation. |
