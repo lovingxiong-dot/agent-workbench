@@ -1,12 +1,13 @@
 """application/v6_ui_application.py — v6/ui 纯 UI 设计的 Application 编排入口。
 
 Phase 2-B：将 v6/ui Presentation Foundation 接入 Runtime 数据流。
+Phase 2-D.1：使用 PresentationRuntime + RendererRegistry 替代手动绑定。
 
 职责（仅 4 项）：
   1. Runtime 生命周期：创建 WorkbenchController、启动/停止 Runtime
-  2. UI 装配：创建 v6/ui 三栏组件（LeftPanel, ChatArea, RightPanel）
-  3. Renderer 绑定：V6UIEventRenderer → InteractionLayer, V6UIShellAdapter → ShellContract
-  4. 初始状态加载：调用 WorkbenchController 查询 API 填充 UI 初始数据
+  2. UI 装配：接收 v6/ui 三栏组件引用
+  3. Renderer 注册：通过 PresentationRuntime → RendererRegistry 注册 V6UIRenderer
+  4. 初始状态加载：通过 PresentationRuntime.pipeline 转换数据
 
 不负责（已移出）：
   - Session 管理（WorkbenchController 已有 API）
@@ -14,14 +15,16 @@ Phase 2-B：将 v6/ui Presentation Foundation 接入 Runtime 数据流。
   - Model 切换（WorkbenchController.switch_model()）
   - 文件操作（RightPanel 自身处理）
   - 信号映射逻辑（归 event_renderer / shell_adapter）
+  - 事件分发（归 PresentationRuntime）
 
 约束：
   ✓ 使用 WorkbenchController（非 WorkbenchUIController）
+  ✓ 使用 PresentationRuntime + RendererRegistry
   ✓ 使用 RuntimeRequestSource + action_id（非 text 伪装命令）
   ✓ 不穿透 v6/ui 私有成员
   ✗ 不导入 WorkbenchUIController
   ✗ 不修改 v6/ui 布局/视觉设计
-  ✗ 不修改 Runtime
+  ✗ 不修改 Runtime Kernel
   ✗ 不修改 Shell Contract
 """
 from __future__ import annotations
@@ -29,9 +32,10 @@ from __future__ import annotations
 from agent_workbench.controller import WorkbenchController
 from agent_workbench.runtime.interaction.request import RuntimeRequest, RuntimeRequestSource
 
-from agent_workbench.presentation.shell.integration import PresentationPipeline
+from agent_workbench.presentation.runtime import PresentationRuntime
 from agent_workbench.presentation.renderers.v6_ui.event_renderer import V6UIEventRenderer
 from agent_workbench.presentation.renderers.v6_ui.shell_adapter import V6UIShellAdapter
+from agent_workbench.presentation.renderers.v6_ui.renderer import V6UIRenderer
 
 
 class V6UIApplication:
@@ -57,20 +61,31 @@ class V6UIApplication:
         self._controller = WorkbenchController(config_path=config_path)
         self._controller.start()
 
-        # ── Renderer 层（纯数据 → UI 映射）──
-        self._event_renderer = V6UIEventRenderer(
-            chat_area=self._chat,
-            left_panel=self._left,
-            right_panel=self._right,
-        )
-        self._shell_adapter = V6UIShellAdapter(
-            left_panel=self._left,
-            chat_area=self._chat,
-            right_panel=self._right,
-        )
+        # ── PresentationRuntime（Phase 2-D.1）──
+        self._presentation = PresentationRuntime()
 
-        # ── 绑定 Event Renderer 到 Interaction Boundary ──
-        self._controller.interaction_layer.set_renderer(self._event_renderer)
+        # ── Renderer 创建并注册到 RendererRegistry ──
+        event_renderer = V6UIEventRenderer(
+            chat_area=self._chat,
+            left_panel=self._left,
+            right_panel=self._right,
+        )
+        shell_adapter = V6UIShellAdapter(
+            left_panel=self._left,
+            chat_area=self._chat,
+            right_panel=self._right,
+        )
+        v6_renderer = V6UIRenderer(
+            event_renderer=event_renderer,
+            shell_adapter=shell_adapter,
+        )
+        self._presentation.register_renderer("v6", v6_renderer)
+        self._presentation.activate_renderer("v6")
+
+        # ── 绑定 PresentationRuntime 到 Interaction Boundary ──
+        # PresentationRuntime.render() 兼容 UIEventRenderer 协议，
+        # InteractionLayer 调用 render(event) → dispatch_event(event) → 活跃 Renderer
+        self._controller.interaction_layer.set_renderer(self._presentation)
 
         # ── 连接 v6/ui 信号 → InteractionLayer ──
         self._connect_signals()
@@ -134,22 +149,15 @@ class V6UIApplication:
     def _load_initial_state(self) -> None:
         """加载初始状态：会话列表、Agent 列表、模型列表。
 
-        通过 WorkbenchController 查询 API（非 Runtime 直调）。
+        通过 PresentationRuntime.pipeline 转换数据。
         """
-        pipeline = PresentationPipeline()
+        pipeline = self._presentation.pipeline
 
         # ── 会话列表 → NavigationGroup → LeftPanel ──
         raw_sessions = self._get_raw_sessions()
         if raw_sessions:
             groups = pipeline.sessions_to_navigation_groups(raw_sessions)
-            self._shell_adapter.update_navigation(groups)
-
-        # ── Agent 列表 → InputArea.set_mode() ──
-        # Phase 2-C：InputArea 当前 mode 是固定枚举 ["Agent", "Chat", "Coder"]，
-        # 需要扩展为动态列表后接入
-
-        # ── Model 列表 → InputArea.set_model() ──
-        # Phase 2-C：同上
+            self._presentation.update_navigation(groups)
 
     def _get_raw_sessions(self) -> list[dict]:
         """从 WorkbenchController 获取会话原始数据。"""
@@ -180,7 +188,7 @@ class V6UIApplication:
 
     def _on_session_selected(self, sid: str) -> None:
         """会话选中 → 加载历史消息到 ChatArea。"""
-        pipeline = PresentationPipeline()
+        pipeline = self._presentation.pipeline
         try:
             session_module = self._controller.runtime.module_registry.get("session")
             if session_module is None:
@@ -194,7 +202,7 @@ class V6UIApplication:
                 subtitle=subtitle,
                 raw_messages=raw_messages,
             )
-            self._shell_adapter.update_workspace(state)
+            self._presentation.update_workspace(state)
         except Exception:
             pass
 
@@ -238,9 +246,9 @@ class V6UIApplication:
                     # 刷新会话列表
                     raw = self._get_raw_sessions()
                     if raw:
-                        pipeline = PresentationPipeline()
+                        pipeline = self._presentation.pipeline
                         groups = pipeline.sessions_to_navigation_groups(raw)
-                        self._shell_adapter.update_navigation(groups)
+                        self._presentation.update_navigation(groups)
             except Exception:
                 pass
 
@@ -249,6 +257,7 @@ class V6UIApplication:
     # ═══════════════════════════════════════════════════════════════
 
     def shutdown(self) -> None:
-        """停止 Runtime 并清理 Renderer。"""
+        """停止 Runtime 并清理 PresentationRuntime。"""
         self._controller.interaction_layer.set_renderer(None)
+        self._presentation.shutdown()
         self._controller.stop()

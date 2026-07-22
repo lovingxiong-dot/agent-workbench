@@ -146,7 +146,12 @@ def _handle_cli_command(text: str, controller) -> str | None:
 
 
 def run_gui(config_path: str | None = None) -> int:
-    """Desktop UI 模式（旧 Workbench UI）。"""
+    """Desktop UI 模式（旧 Workbench UI）。
+
+    LEGACY — Phase 2-D.1 冻结。
+    使用 WorkbenchUIController + agent_workbench/ui/workbench/。
+    新代码请使用 run_gui_v6() 或 --mode gui-v6。
+    """
     try:
         from PySide6.QtWidgets import QApplication
     except ImportError:  # pragma: no cover - optional
@@ -247,6 +252,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.mode == "gui":
         return run_gui(config_path=args.config)
+    if args.mode == "gui-v6":
+        return run_gui_v6(config_path=args.config)
     return run_cli(config_path=args.config, test_input=args.test_input)
 
 

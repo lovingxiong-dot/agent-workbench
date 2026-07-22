@@ -168,6 +168,14 @@ class PresentationRuntime:
     # Event Dispatch
     # ═══════════════════════════════════════════════════════════════
 
+    def render(self, event: InteractionEvent) -> None:
+        """UIEventRenderer 协议兼容入口。
+
+        InteractionLayer 通过 set_renderer() 绑定 PresentationRuntime 时，
+        调用此方法。PresentationRuntime 内部转发给活跃 Renderer。
+        """
+        self.dispatch_event(event)
+
     def dispatch_event(self, event: InteractionEvent) -> None:
         """将 InteractionEvent 分发给活跃 Renderer。
 
