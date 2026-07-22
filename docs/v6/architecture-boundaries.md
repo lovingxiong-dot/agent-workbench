@@ -273,7 +273,19 @@ Runtime → Interaction Contract → Renderer → v6/ui → Qt
 
 ---
 
-## 7. 变更控制
+## 8. Phase 2-C 预告（Contract Freeze）
+
+Phase 2-C Presentation Architecture RFC 已冻结于 [.project/decisions/ADR-002-phase-2c-presentation-rfc.md](../../.project/decisions/ADR-002-phase-2c-presentation-rfc.md)。
+
+核心变更：
+1. **Interaction Protocol 独立包**：`protocols/interaction/`（`command.py` + `event.py` + `renderer.py`）
+2. **InteractionCommand 独立化**：非聊天命令不再通过 `RuntimeRequest.action_id` 传递
+3. **PresentationRuntime**：`PresentationPipeline` 从静态工具箱升级为生命周期服务
+4. **Renderer Registry**：支持多 Renderer（Qt / Web / CLI / Mobile）并存
+
+---
+
+## 9. 版本历史
 
 本文档进入 Frozen 状态后：
 

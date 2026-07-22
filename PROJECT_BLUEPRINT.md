@@ -405,6 +405,8 @@ Changes forbidden:
 - [v6/UI_FOUNDATION.md](./v6/UI_FOUNDATION.md) — Formal freeze contract
 - [ARCHITECTURE_BOUNDARY.md](./ARCHITECTURE_BOUNDARY.md) — Agent construction rules
 - [docs/v6/architecture-boundaries.md](./docs/v6/architecture-boundaries.md) — Architecture boundary spec
+- [.project/decisions/ADR-001-shell-contract-freeze.md](./.project/decisions/ADR-001-shell-contract-freeze.md) — Shell Contract ADR
+- [.project/decisions/ADR-002-phase-2c-presentation-rfc.md](./.project/decisions/ADR-002-phase-2c-presentation-rfc.md) — Phase 2-C Presentation RFC
 
 ## V6 Framework Core Foundation Baseline
 

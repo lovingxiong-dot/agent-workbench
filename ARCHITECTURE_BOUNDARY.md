@@ -198,6 +198,8 @@ Before modifying any file, Agent MUST verify:
 | [docs/v6/architecture-boundaries.md](./docs/v6/architecture-boundaries.md) | Detailed architecture boundary spec |
 | [docs/v6/SPEC.md](./docs/v6/SPEC.md) | UI signal contract, module constraints |
 | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Historical architecture overview |
+| [.project/decisions/ADR-001-shell-contract-freeze.md](./.project/decisions/ADR-001-shell-contract-freeze.md) | Shell Contract ADR |
+| [.project/decisions/ADR-002-phase-2c-presentation-rfc.md](./.project/decisions/ADR-002-phase-2c-presentation-rfc.md) | **Phase 2-C Presentation RFC (next phase)** |
 
 ---
 
