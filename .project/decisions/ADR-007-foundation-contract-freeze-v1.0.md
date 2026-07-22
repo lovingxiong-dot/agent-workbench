@@ -1,154 +1,120 @@
-# ADR-007 — Foundation Contract Freeze v1.0
+# ADR-007 — Foundation Contract Introduction v0.5
 
-> **Status**: FROZEN
+> **Status**: PROPOSAL (Not Frozen)
 > **Date**: 2026-07-22
-> **Supersedes**: None
-> **Scope**: Cross-product shared ancestor contracts
+> **Supersedes**: ADR-007 Foundation Contract Freeze v1.0 (reverted)
+> **Scope**: Foundation Contract introduction — proposal stage
 
 ---
 
-## 1. Context
+## 1. Decision Status
 
-After Project Identity Separation (ADR-005) and Workbench v6 Identity Freeze (ADR-006), the repository has clear product boundaries. However, the **shared ancestor** (CENTRE / AOS Foundation) is still undefined at the interface level.
+**v0.5 PROPOSAL — Not Frozen**
 
-Without explicit contracts:
-- Workbench v6 may develop its own Runtime interface
-- Future Agent Manager OS may develop its own Runtime interface
-- Both products will need to be retrofitted to a shared contract
+This ADR introduces Foundation Contract symbols as **proposal**, not as a frozen v1.0 contract. The previous version (ADR-007 v1.0 Frozen) was reverted based on Architecture Review.
 
-This ADR freezes the **shared ancestor interfaces** as v1.0 contracts.
+**Reverted Status**:
+- The previous Foundation Contract Freeze v1.0 was premature
+- Real product behavior (Workbench v6 Runtime, Renderer, etc.) has not yet validated the contracts
+- Data Contract duplicates already exist (`shell/protocol.py` has overlapping models)
 
----
-
-## 2. Decision
-
-**Freeze Foundation Contract v1.0** — four protocol packages in `presentation/protocols/foundation/`.
-
-### 2.1 Runtime Contract (`runtime.py`)
-
-| Symbol | Type | Purpose |
-|--------|------|---------|
-| `AgentRuntime` | Protocol | Agent Runtime interface (start/stop/execute/pause/resume/terminate) |
-| `AgentRuntimeInfo` | dataclass | Runtime instance metadata |
-| `ExecutionHandle` | dataclass | Reference to a submitted task |
-| `RuntimeLifecycleState` | Enum | Runtime lifecycle (initializing/ready/running/paused/stopping/stopped/error) |
-
-### 2.2 Event Contract (`event.py`)
-
-| Symbol | Type | Purpose |
-|--------|------|---------|
-| `EventEnvelope` | dataclass | Cross-boundary event container |
-| `EventChannel` | Enum | Channel classification (runtime/interaction/agent/workflow/system) |
-| `EventBus` | Protocol | Publish/subscribe API |
-
-### 2.3 Data Contract (`data.py`)
-
-| Symbol | Type | Purpose |
-|--------|------|---------|
-| `AgentIdentity` | dataclass | Agent unique identification |
-| `AgentType` | Enum | chat/coder/research/personal/custom |
-| `AgentSession` | dataclass | Conversation session state |
-| `AgentMessage` | dataclass | Single message in session |
-| `WorkflowState` | dataclass | Workflow execution state |
-| `WorkflowStep` | dataclass | Single step in workflow |
-| `WorkflowPhase` | Enum | pending/planning/executing/paused/completed/failed/cancelled |
-| `CapabilityDefinition` | dataclass | Capability description |
-| `CapabilityParameter` | dataclass | Capability parameter |
-| `CapabilityCategory` | Enum | tool/skill/workflow/memory/provider/custom |
-
-### 2.4 Gateway Contract (`gateway.py`)
-
-| Symbol | Type | Purpose |
-|--------|------|---------|
-| `Gateway` | Protocol | Provider/Model/Capability routing |
-| `GatewayMode` | Enum | single_runtime/multi_runtime/federation |
-| `GatewayRequest` | dataclass | Capability invocation request |
-| `GatewayResponse` | dataclass | Capability invocation response |
-| `ProviderEndpoint` | dataclass | Provider connection config |
-| `ProviderProtocol` | Enum | openai/anthropic/deepseek/gemini/qwen/kimi/echo/custom |
+**Current Status**:
+- Symbols live at `presentation/protocols/foundation/`
+- They are **proposals** — may change without major version bump
+- Future v1.0 Freeze requires:
+  1. Workbench v6 Runtime implements AgentRuntime
+  2. Renderer consumes Gateway interface
+  3. Data Contract duplication resolved
+  4. Provider enumeration validated against real Provider needs
 
 ---
 
-## 3. Rules
+## 2. What Was Reverted
 
-### 3.1 Shared Ancestor Contract Rule
-
-Any product (Workbench v6, future Agent Manager OS) MUST consume the Foundation Contract. Products cannot fork these interfaces.
-
-### 3.2 Reverse Boundary Rule
-
-Foundation Contracts define interfaces, not implementations. Adding implementations requires a separate ADR (ADR-008+).
-
-### 3.3 Forbidden Imports
-
-Foundation Contracts MUST NOT import:
-- Any Runtime Implementation (`agent_workbench/runtime/`)
-- Any UI Framework (`v6/ui/`, `PySide6`)
-- Any Product-specific module (`WorkbenchController`, `V6UIApplication`)
-
-### 3.4 Backward Compatibility
-
-Foundation Contract is frozen at v1.0. Breaking changes require a new major version (v2.0) and Architecture Review.
+| Symbol | Previous Status | New Status | Reason |
+|--------|----------------|-----------|--------|
+| `AgentRuntime` | v1.0 Frozen Protocol | v0.5 Proposal | Runtime name conflicts with existing `v6.runtime.runtime.AgentRuntime` |
+| `EventBus` | v1.0 Frozen Protocol | v0.5 Proposal | Real EventBus shape not validated |
+| `AgentIdentity` | v1.0 Frozen dataclass | v0.5 Proposal | Overlaps with `shell/protocol.py` |
+| `AgentSession` | v1.0 Frozen dataclass | v0.5 Proposal | Overlaps with `shell/protocol.py` |
+| `WorkflowState` | v1.0 Frozen dataclass | v0.5 Proposal | Overlaps with `shell/protocol.py` |
+| `CapabilityDefinition` | v1.0 Frozen dataclass | v0.5 Proposal | Not validated against real Capability Registry |
+| `Gateway` | v1.0 Frozen Protocol | v0.5 Proposal | Mode enumeration (federation) not validated |
+| `ProviderProtocol` | v1.0 Frozen Enum | v0.5 Proposal | Locked-in Provider enumeration is risky |
 
 ---
 
-## 4. Implementation
+## 3. Risks Identified (Architecture Review)
 
-### 4.1 Files Created
+### 3.1 Data Contract Duplication (HIGH)
 
-- `presentation/protocols/foundation/__init__.py` — Package declaration + re-exports
-- `presentation/protocols/foundation/runtime.py` — Runtime Contract
-- `presentation/protocols/foundation/event.py` — Event Contract
-- `presentation/protocols/foundation/data.py` — Data Contract
-- `presentation/protocols/foundation/gateway.py` — Gateway Contract
+Existing models in `shell/protocol.py`:
+- `NavigationGroup`, `NavigationItem`, `WorkspaceMessage`, `WorkspaceState`, `InspectorState`, `CommandState`
 
-### 4.2 No Code Changes Outside `protocols/`
+Proposed models in `foundation/data.py`:
+- `AgentIdentity`, `AgentSession`, `AgentMessage`, `WorkflowState`, `WorkflowStep`, `CapabilityDefinition`
 
-This ADR defines interfaces only. No existing Runtime/UI files were modified.
+Overlap risk: `AgentMessage` vs `WorkspaceMessage`. Both represent agent↔user messages but have different shapes. Unifying requires Architecture Review.
 
-### 4.3 Verification
+### 3.2 Runtime Name Conflict (MEDIUM)
 
-```
-✓ All Foundation symbols importable
-✓ All dataclasses instantiable (smoke test)
-✓ Zero Runtime Implementation import
-✓ Zero UI framework import
-✓ Multi Renderer Proof still passes
-```
+The symbol name `AgentRuntime` collides with `v6.runtime.runtime.AgentRuntime` (the existing core Runtime). The Protocol symbol should be renamed to `RuntimeContract` or `AgentRuntimeProtocol` to avoid confusion.
+
+### 3.3 Provider Enumeration Lock-in (MEDIUM)
+
+`ProviderProtocol` enum hardcodes 7 providers (openai/anthropic/deepseek/gemini/qwen/kimi/echo). Future providers (new LLM vendors, custom APIs) would require Protocol updates. The enum should be replaced with `str` literal type or extensible registry.
+
+### 3.4 Premature Freeze (HIGH)
+
+v1.0 Freeze before Workbench v6 Runtime implements the contracts means:
+- Real product feedback cannot influence the contract
+- Any mistake becomes a frozen interface
+- Future Agent Manager OS may inherit a flawed contract
+
+### 3.5 Location Risk (MEDIUM)
+
+Placing Foundation Contracts under `presentation/protocols/` is unusual. Foundation is meant to be product-agnostic, but Presentation is Workbench v6's domain. Consider relocating to `agent_workbench/foundation/` (a shared ancestor namespace).
 
 ---
 
-## 5. Consequences
+## 4. What Remains
 
-### Positive
+The Foundation Contract **concept** is correct:
+- Workbench v6 and future Agent Manager OS should share ancestor contracts
+- Runtime / Event / Data / Gateway are the right dimensions
+- Products must consume, not fork, the ancestor
 
-- Workbench v6 has a stable ancestor to consume
-- Future Agent Manager OS can consume the same contracts
-- No accidental interface drift between products
-- Foundation Contract is now reviewable before implementation
+The Foundation Contract **implementation details** are still proposal:
+- Symbol names may change
+- Data models may merge or split
+- Provider enumeration may become extensible
 
-### Negative
+---
 
-- Adding new capabilities requires updating contracts
-- Future products cannot request contract changes after v1.0 freeze
+## 5. Next Step
 
-### Neutral
+**Phase 2-D.2 Renderer Migration — Workbench v6 closure.**
 
-- Foundation Contract v1.0 is the minimum viable surface
-- Future versions (v1.1, v2.0) will extend based on product needs
+After Workbench v6 has a working closed loop:
+- Runtime implements Foundation.AgentRuntime
+- Renderer consumes Foundation.Gateway
+- Data Contract duplication resolved
+
+Then:
+- ADR-008 Foundation Contract Freeze v1.0 (after Workbench v6 validation)
 
 ---
 
 ## 6. Architecture Position
 
 ```
-FOUNDATION.md (Identity — what is shared)
+Foundation Identity (FOUNDATION.md)
     ↓
-ADR-007 (Contract — how is shared)
+Foundation Contract PROPOSAL v0.5 (this ADR)
     ↓
-presentation/protocols/foundation/ (Implementation — protocols)
+Workbench v6 implementation validates contracts
     ↓
-Workbench v6 / Agent Manager OS (Products — consume)
+Foundation Contract v1.0 FREEZE (ADR-008 future)
 ```
 
 ---
@@ -157,4 +123,5 @@ Workbench v6 / Agent Manager OS (Products — consume)
 
 | Version | Date | Change |
 |---------|------|--------|
-| v1.0 | 2026-07-22 | Initial Foundation Contract Freeze. |
+| v0.5 | 2026-07-22 | Reverted v1.0 Freeze. Status: PROPOSAL. |
+| v1.0 (reverted) | 2026-07-22 | Initial v1.0 Freeze — reverted by Architecture Review. |

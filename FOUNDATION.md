@@ -92,29 +92,36 @@ Any new file must declare which product it belongs to:
 
 | Layer | Status | Location | Contract |
 |-------|--------|----------|----------|
-| Protocol | Active | `agent_workbench/presentation/protocols/` | InteractionCommand / InteractionEvent |
-| Runtime | Active | `agent_workbench/runtime/` | [ADR-007 Foundation Contract v1.0](./.project/decisions/ADR-007-foundation-contract-freeze-v1.0.md) |
-| Event Bus | Active | `agent_workbench/runtime/interaction/mapper.py` | `EventEnvelope` / `EventBus` |
-| Data Contract | Active | `agent_workbench/presentation/shell/protocol.py` | `AgentIdentity` / `AgentSession` / `WorkflowState` |
-| Gateway | Active | `agent_workbench/services/` (7 providers) | `Gateway` / `ProviderEndpoint` |
-| Workflow Engine | Active | `agent_workbench/runtime/capability/` | `WorkflowState` / `WorkflowStep` |
+| Protocol | Active | `agent_workbench/presentation/protocols/interaction/` | InteractionCommand / InteractionEvent |
+| Runtime | Active | `agent_workbench/runtime/` | [ADR-007 Foundation Contract v0.5 (PROPOSAL)](./.project/decisions/ADR-007-foundation-contract-freeze-v1.0.md) |
+| Event Bus | Active | `agent_workbench/runtime/interaction/mapper.py` | (not yet Foundation-contract-bound) |
+| Data Contract | Active | `agent_workbench/presentation/shell/protocol.py` | (not yet merged with Foundation proposal) |
+| Gateway | Active | `agent_workbench/services/` (7 providers) | (not yet Foundation-contract-bound) |
+| Workflow Engine | Active | `agent_workbench/runtime/capability/` | (not yet Foundation-contract-bound) |
 | Workbench v6 | Active | `agent_workbench/application/`, `v6/ui/` | [ADR-006 Identity Freeze](./.project/decisions/ADR-006-workbench-v6-identity-freeze.md) |
 | Agent Manager OS | Future | Not yet in this repository | Not yet defined |
 
 ---
 
-## Foundation Contract v1.0
+## Foundation Contract — Proposal v0.5 (NOT Frozen)
 
-Per [ADR-007](./.project/decisions/ADR-007-foundation-contract-freeze-v1.0.md), the shared ancestor contracts are frozen at `presentation/protocols/foundation/`:
+Per [ADR-007](./.project/decisions/ADR-007-foundation-contract-freeze-v1.0.md), the Foundation Contract symbols live at `presentation/protocols/foundation/` as **proposal**, not frozen contract.
 
-| Contract | Symbols | Purpose |
-|----------|---------|---------|
-| Runtime | `AgentRuntime`, `ExecutionHandle`, `RuntimeLifecycleState` | Runtime interface |
-| Event | `EventEnvelope`, `EventBus`, `EventChannel` | Cross-boundary events |
-| Data | `AgentIdentity`, `AgentSession`, `WorkflowState`, `CapabilityDefinition` | Shared data models |
-| Gateway | `Gateway`, `GatewayRequest`, `ProviderEndpoint` | Provider routing |
+**Status: PROPOSAL — May change without major version bump.**
 
-These contracts are frozen. Products consume them. They cannot be forked.
+Why proposal (not frozen):
+- Workbench v6 Runtime does not yet implement these symbols
+- Real Renderer behavior is not yet validated against Gateway interface
+- Data Contract duplicates with `shell/protocol.py` not yet resolved
+- Provider enumeration has not been validated against real Provider needs
+
+**When will it become v1.0 Frozen?**
+- After Workbench v6 Runtime implements `AgentRuntime`
+- After Renderer consumes `Gateway`
+- After Data Contract duplication resolved
+- After Provider enumeration validated
+
+The proposal introduces the **concept** (Runtime / Event / Data / Gateway are the right dimensions), but the **implementation details** are still under review.
 
 ---
 
