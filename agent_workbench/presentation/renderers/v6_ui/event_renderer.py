@@ -4,7 +4,7 @@ V6UIEventRenderer 实现 UIEventRenderer 协议（duck typing）：
 将 InteractionEvent 映射到 v6/ui 纯 UI 组件的公共方法。
 
 约束：
-  ✓ 允许引用 Interaction Contract（runtime.interaction.event）
+  ✓ 允许引用 Interaction Protocol（presentation.protocols.interaction）
   ✓ 只引用 v6/ui 组件公共 API
   ✗ 不引用 Runtime Implementation（engine, executor, session, llm, tool）
   ✗ 不 import PySide6（v6/ui 组件内部处理）
@@ -13,7 +13,7 @@ V6UIEventRenderer 实现 UIEventRenderer 协议（duck typing）：
 """
 from __future__ import annotations
 
-from agent_workbench.runtime.interaction.event import InteractionEvent, InteractionEventType
+from agent_workbench.presentation.protocols.interaction.event import InteractionEvent, InteractionEventType
 
 
 class V6UIEventRenderer:

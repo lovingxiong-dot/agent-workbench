@@ -28,8 +28,8 @@ from agent_workbench.controller import WorkbenchController
 from agent_workbench.conversation import ConversationService
 from agent_workbench.feedback import FeedbackService
 from agent_workbench.package import PackageIntegration, PackageRegistry
-from agent_workbench.runtime.interaction.event import InteractionEvent, InteractionEventType
-from agent_workbench.runtime.interaction.renderer import UIEventRenderer
+from agent_workbench.presentation.protocols.interaction.event import InteractionEvent, InteractionEventType
+from agent_workbench.presentation.protocols.interaction.renderer import UIEventRenderer
 from agent_workbench.ui.configuration import ConfigCategory, ConfigurationManager
 from agent_workbench.ui.dialogs import (
     AddMcpDialog,

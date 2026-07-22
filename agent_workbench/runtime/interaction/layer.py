@@ -20,9 +20,9 @@ from v6.runtime.context import RuntimeContext
 from v6.runtime.event_bus import RuntimeEvent
 from v6.runtime.enums import RuntimeState
 
-from agent_workbench.runtime.interaction.event import InteractionEvent, InteractionEventType
+from agent_workbench.presentation.protocols.interaction.event import InteractionEvent, InteractionEventType
 from agent_workbench.runtime.interaction.mapper import RuntimeEventMapper
-from agent_workbench.runtime.interaction.renderer import UIEventRenderer
+from agent_workbench.presentation.protocols.interaction.renderer import UIEventRenderer
 from agent_workbench.runtime.interaction.request import RuntimeRequest
 
 if TYPE_CHECKING:

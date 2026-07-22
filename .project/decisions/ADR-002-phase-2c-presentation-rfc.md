@@ -136,40 +136,35 @@ RuntimeRequest(source=COMMAND_BAR, text=cmd, action_id="terminal_execute")
 - 命令语义分散在 `action_id` 和 `text` 之间
 - Runtime 需要解析 `action_id` 来判断是否是非聊天命令
 
-### 3.2 目标：InteractionCommand
+### 3.2 目标：InteractionCommand（Phase 2-C.1 修正）
+
+**关键约束**：CommandType 只表达用户交互动作，禁止 Runtime 概念（TOOL / CAPABILITY / ENGINE / PROVIDER）。
+
+原则：
+```
+UI 说"用户点击了运行按钮"
+  ↓
+InteractionCommand(type=WORKSPACE_ACTION, payload={"action":"run"})
+  ↓
+Runtime Decision Layer 判断调用什么 Capability
+```
 
 ```python
 # protocols/interaction/command.py
 
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any
-
-
 class CommandType(str, Enum):
-    """用户意图类型。"""
-    CHAT_MESSAGE = "chat.message"       # 聊天消息
-    GENERATION_CANCEL = "generation.cancel"  # 停止生成
-    SESSION_CREATE = "session.create"   # 新建会话
-    SESSION_SWITCH = "session.switch"   # 切换会话
-    SESSION_DELETE = "session.delete"   # 删除会话
-    WORKSPACE_OPEN = "workspace.open"   # 打开工作区
-    TOOL_EXECUTE = "tool.execute"       # 执行工具
-    TERMINAL_EXECUTE = "terminal.execute"  # 终端命令
+    """用户交互意图类型。只表达用户做了什么，不表达 Runtime 应该怎么执行。"""
+    CHAT_SUBMIT = "chat.submit"           # 用户发送聊天消息
+    GENERATION_CANCEL = "generation.cancel"  # 用户点击停止
+    SESSION_SELECT = "session.select"     # 用户选中会话
+    SESSION_CREATE = "session.create"     # 用户新建会话
+    SESSION_DELETE = "session.delete"     # 用户删除会话
+    WORKSPACE_ACTION = "workspace.action"  # 用户在工作区执行操作
+    INPUT_SUBMIT = "input.submit"          # 用户提交输入（终端命令等）
+    UI_ACTION = "ui.action"                # 通用 UI 动作
 
-
-@dataclass
-class InteractionCommand:
-    """UI 层用户意图。
-
-    与 RuntimeRequest 的区别：
-    - InteractionCommand 表达用户意图（UI 语言）
-    - RuntimeRequest 表达执行请求（Runtime 语言）
-    - Decision Layer 负责将 Command 翻译为 Request
-    """
-    type: CommandType
-    payload: dict[str, Any] = field(default_factory=dict)
-    session_id: str | None = None
+    # 禁止：TOOL_EXECUTE、CAPABILITY_RUN、ENGINE_SELECT、PROVIDER_SWITCH
+    # 这些是 Runtime 概念，不属于 UI Protocol
 ```
 
 ### 3.3 使用对比
@@ -205,7 +200,7 @@ class WorkbenchInteractionLayer:
 
     def _command_to_request(self, command: InteractionCommand) -> RuntimeRequest:
         match command.type:
-            case CommandType.CHAT_MESSAGE:
+            case CommandType.CHAT_SUBMIT:
                 return RuntimeRequest(
                     source=RuntimeRequestSource.GLOBAL_CHAT,
                     text=command.payload.get("text", ""),
@@ -216,16 +211,16 @@ class WorkbenchInteractionLayer:
                     source=RuntimeRequestSource.COMMAND_BAR,
                     action_id="stop_generation",
                 )
-            case CommandType.SESSION_CREATE:
-                return RuntimeRequest(
-                    source=RuntimeRequestSource.COMMAND_BAR,
-                    action_id="create_session",
-                )
-            case CommandType.SESSION_SWITCH:
+            case CommandType.SESSION_SELECT:
                 return RuntimeRequest(
                     source=RuntimeRequestSource.COMMAND_BAR,
                     action_id="switch_session",
                     payload={"session_id": command.payload.get("session_id")},
+                )
+            case CommandType.SESSION_CREATE:
+                return RuntimeRequest(
+                    source=RuntimeRequestSource.COMMAND_BAR,
+                    action_id="create_session",
                 )
             case CommandType.SESSION_DELETE:
                 return RuntimeRequest(
@@ -233,11 +228,22 @@ class WorkbenchInteractionLayer:
                     action_id="delete_session",
                     payload={"session_id": command.payload.get("session_id")},
                 )
-            case CommandType.TERMINAL_EXECUTE:
+            case CommandType.INPUT_SUBMIT:
                 return RuntimeRequest(
                     source=RuntimeRequestSource.COMMAND_BAR,
                     text=command.payload.get("cmd", ""),
                     action_id="terminal_execute",
+                )
+            case CommandType.WORKSPACE_ACTION:
+                return RuntimeRequest(
+                    source=RuntimeRequestSource.WORKSPACE_ACTION,
+                    action_id=command.payload.get("action", ""),
+                    payload=command.payload,
+                )
+            case CommandType.UI_ACTION:
+                return RuntimeRequest(
+                    source=RuntimeRequestSource.COMMAND_BAR,
+                    action_id=command.payload.get("action", ""),
                 )
             case _:
                 return RuntimeRequest(

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from v6.runtime.event_bus import RuntimeEvent, RuntimeEventType
 
-from agent_workbench.runtime.interaction.event import InteractionEvent, InteractionEventType
+from agent_workbench.presentation.protocols.interaction.event import InteractionEvent, InteractionEventType
 
 
 class RuntimeEventMapper:
