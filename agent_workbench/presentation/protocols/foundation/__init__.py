@@ -1,43 +1,52 @@
-"""presentation/protocols/ — Cross-layer communication protocols。
+"""presentation/protocols/foundation/ — Foundation Contract v1.0。
 
-Protocols 是 Runtime ↔ Presentation 之间的通信契约。
-它们不属于 Runtime，也不属于 UI。类似 HTTP 不属于 nginx 也不属于浏览器。
-
-三个协议包：
-  - interaction/    Runtime ↔ UI 交互协议（InteractionCommand / InteractionEvent）
-  - foundation/    跨产品祖先契约（AgentRuntime / EventBus / Data / Gateway）
+Phase 1: Foundation Contract Freeze。
+两个产品（Workbench v6 + Agent Manager OS）共同继承的祖先接口契约。
 
 约束：
-  ✓ 纯 Python 数据模型（dataclasses + Protocol）
+  ✓ 纯 Python 数据模型（dataclass + Protocol）
   ✓ 零 Runtime Implementation import
   ✓ 零 PySide6 import
-  ✗ 不 import Runtime（engine, executor, session, llm, tool）
-  ✗ 不 import UI 框架
+  ✗ 不引用 v6/runtime/*.py
+  ✗ 不引用 v6/ui/*
+  ✗ 不引用 WorkbenchController / V6UIApplication
+
+四个契约：
+  - runtime.py     AgentRuntime Protocol
+  - event.py       EventEnvelope + EventBus Protocol
+  - data.py        AgentIdentity / AgentSession / WorkflowState / CapabilityDefinition
+  - gateway.py     Gateway Protocol
 """
-from agent_workbench.presentation.protocols.foundation import (
+from agent_workbench.presentation.protocols.foundation.data import (
     AgentIdentity,
     AgentMessage,
-    AgentRuntime,
-    AgentRuntimeInfo,
     AgentSession,
     AgentType,
     CapabilityCategory,
     CapabilityDefinition,
     CapabilityParameter,
+    WorkflowPhase,
+    WorkflowState,
+    WorkflowStep,
+)
+from agent_workbench.presentation.protocols.foundation.event import (
     EventBus,
     EventChannel,
     EventEnvelope,
-    ExecutionHandle,
+)
+from agent_workbench.presentation.protocols.foundation.gateway import (
     Gateway,
     GatewayMode,
     GatewayRequest,
     GatewayResponse,
     ProviderEndpoint,
     ProviderProtocol,
+)
+from agent_workbench.presentation.protocols.foundation.runtime import (
+    AgentRuntime,
+    AgentRuntimeInfo,
+    ExecutionHandle,
     RuntimeLifecycleState,
-    WorkflowPhase,
-    WorkflowState,
-    WorkflowStep,
 )
 
 __all__ = [

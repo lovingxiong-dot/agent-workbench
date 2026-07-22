@@ -90,16 +90,31 @@ Any new file must declare which product it belongs to:
 
 ## Current Status
 
-| Layer | Status | Location |
-|-------|--------|----------|
-| Protocol | Active | `agent_workbench/presentation/protocols/` |
-| Runtime | Active | `agent_workbench/runtime/` |
-| Event Bus | Active | `agent_workbench/runtime/interaction/mapper.py` |
-| Data Contract | Active | `agent_workbench/presentation/shell/protocol.py` |
-| Gateway | Active | `agent_workbench/services/` (7 providers) |
-| Workflow Engine | Active | `agent_workbench/runtime/capability/` |
-| Workbench v6 | Active | `agent_workbench/application/`, `v6/ui/` |
-| Agent Manager OS | Future | Not yet in this repository |
+| Layer | Status | Location | Contract |
+|-------|--------|----------|----------|
+| Protocol | Active | `agent_workbench/presentation/protocols/` | InteractionCommand / InteractionEvent |
+| Runtime | Active | `agent_workbench/runtime/` | [ADR-007 Foundation Contract v1.0](./.project/decisions/ADR-007-foundation-contract-freeze-v1.0.md) |
+| Event Bus | Active | `agent_workbench/runtime/interaction/mapper.py` | `EventEnvelope` / `EventBus` |
+| Data Contract | Active | `agent_workbench/presentation/shell/protocol.py` | `AgentIdentity` / `AgentSession` / `WorkflowState` |
+| Gateway | Active | `agent_workbench/services/` (7 providers) | `Gateway` / `ProviderEndpoint` |
+| Workflow Engine | Active | `agent_workbench/runtime/capability/` | `WorkflowState` / `WorkflowStep` |
+| Workbench v6 | Active | `agent_workbench/application/`, `v6/ui/` | [ADR-006 Identity Freeze](./.project/decisions/ADR-006-workbench-v6-identity-freeze.md) |
+| Agent Manager OS | Future | Not yet in this repository | Not yet defined |
+
+---
+
+## Foundation Contract v1.0
+
+Per [ADR-007](./.project/decisions/ADR-007-foundation-contract-freeze-v1.0.md), the shared ancestor contracts are frozen at `presentation/protocols/foundation/`:
+
+| Contract | Symbols | Purpose |
+|----------|---------|---------|
+| Runtime | `AgentRuntime`, `ExecutionHandle`, `RuntimeLifecycleState` | Runtime interface |
+| Event | `EventEnvelope`, `EventBus`, `EventChannel` | Cross-boundary events |
+| Data | `AgentIdentity`, `AgentSession`, `WorkflowState`, `CapabilityDefinition` | Shared data models |
+| Gateway | `Gateway`, `GatewayRequest`, `ProviderEndpoint` | Provider routing |
+
+These contracts are frozen. Products consume them. They cannot be forked.
 
 ---
 
