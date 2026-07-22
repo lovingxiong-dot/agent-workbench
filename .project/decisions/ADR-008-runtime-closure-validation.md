@@ -522,3 +522,4 @@ ADR-008 is COMPLETE as a Workbench v6 Runtime Closure validation record. The fou
 | v1.2 | 2026-07-22 | Phase 2-D.2.2 InteractionLayer Boundary Principle + records (008.2.1-008.2.4). |
 | v1.3 | 2026-07-22 | Phase 2-D.3 Data Flow Validation records (008.4.1-008.4.4). All four loops closed. |
 | v1.4 | 2026-07-22 | ADR-008.4.5 Provider Boundary Structural Check (NOT behavioral). Foundation promotion deferred to second consumer. |
+| v1.5 | 2026-07-23 | Phase 2-D.4 Observation Link: see [OD-R0-004 Runtime Replay Validation Preparation](../../observations/OD-R0-004-runtime-replay-preparation.md). No new Contract / Schema / Protocol created. |
