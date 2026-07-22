@@ -3,7 +3,8 @@
 > **Type**: Observation Log (NOT RFC / NOT ADR)
 > **Date**: 2026-07-23
 > **Scope**: Runtime Event Consumer boundary observation only
-> **Status**: OBSERVING (Phase 2-E.1)
+> **Status**: OBSERVING (Phase 2-E.1 complete; Phase 2-E.2 next)
+> **Consumer Taxonomy Version**: v0.x (PROPOSAL — NOT FROZEN, append-only)
 
 ---
 
