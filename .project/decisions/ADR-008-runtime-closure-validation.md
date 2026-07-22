@@ -524,3 +524,4 @@ ADR-008 is COMPLETE as a Workbench v6 Runtime Closure validation record. The fou
 | v1.4 | 2026-07-22 | ADR-008.4.5 Provider Boundary Structural Check (NOT behavioral). Foundation promotion deferred to second consumer. |
 | v1.5 | 2026-07-23 | Phase 2-D.4 Observation Link: see [OD-R0-004 Runtime Replay Validation Preparation](../../observations/OD-R0-004-runtime-replay-preparation.md). No new Contract / Schema / Protocol created. |
 | v1.6 | 2026-07-23 | OD-R0-004 v1.1: added Q5 Trace Semantic Stability (OBSERVATION REQUIRED, 4 gaps) + Evidence ≠ Authority boundary. Phase 2-D.4 CLOSED. Phase 2-E Consumer Boundary Validation next. |
+| v1.7 | 2026-07-23 | Phase 2-E.1 Observation Link: see [OD-C0-001 Consumer Boundary Observation](../../observations/OD-C0-001-consumer-boundary-observation.md). 4 questions observed: Q1 PASS (LOW diversity), Q2/Q3/Q4 PASS with caveats. No Consumer directory created. No Runtime modification. |
