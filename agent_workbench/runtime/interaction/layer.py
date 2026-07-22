@@ -165,18 +165,31 @@ class WorkbenchInteractionLayer:
             return False
 
     def get_session_metadata(self, sid: str) -> dict | None:
-        """获取会话元数据。
+        """获取会话摘要元数据。
 
         Phase 2-D.2.1: 替代 Application 直接调用 session_module.manager.get(sid)。
-        返回 session dict（包含 title 等字段），不存在则返回 None。
+
+        **Boundary Contract**:
+        - 仅返回 SessionSummary 字段（id / title / created_at / updated_at）
+        - 禁止返回 SessionManager 内部对象
+        - 禁止暴露 Runtime 内部数据结构（preview / icon / summary 等 SessionManager
+          私有字段不外漏）
+
+        返回 None 表示会话不存在。
         """
         session_module = self._runtime.module_registry.get("session")
         if session_module is None:
             return None
         session = session_module.manager.get(sid)
-        if session is None:
+        if session is None or not isinstance(session, dict):
             return None
-        return dict(session) if isinstance(session, dict) else None
+        # Boundary Adapter: 仅返白名单字段（Runtime 实际字段名为 sid/title）
+        return {
+            "id": session.get("sid", sid),
+            "title": session.get("title", ""),
+            "created_at": session.get("created_at", 0.0),
+            "updated_at": session.get("updated_at", 0.0),
+        }
 
     def close(self) -> None:
         """关闭 Interaction Layer：取消 EventBus 订阅并释放资源。"""

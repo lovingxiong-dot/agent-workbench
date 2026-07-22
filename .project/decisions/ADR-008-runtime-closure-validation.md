@@ -279,7 +279,137 @@ The observation confirms that Workbench v6 has **already** built the architectur
 3. Validate that Data Flow (Input → Context → Execution → Output) is replayable
 4. Then extract the observed patterns into `ADR-009 Foundation Contract v1.0 Freeze`
 
-**No new Contract / Protocol / Schema added during Phase 2-D.2.**
+**No new Contract / Protocol / Schema added during Phase 2-D.2.1.**
+
+---
+
+## 4.3 Phase 2-D.2.2 — InteractionLayer Boundary Principle (Reinforcement)
+
+Per Architecture Review, two constraints are locked in to prevent InteractionLayer from becoming a God Object:
+
+### Constraint 1: InteractionLayer is Boundary Adapter, NOT Service Locator
+
+```
+Allowed:
+    interaction_layer.submit_request(RuntimeRequest)
+    interaction_layer.list_conversation_groups()
+    interaction_layer.create_conversation()
+    interaction_layer.delete_conversation()
+    interaction_layer.get_session_metadata()
+
+Forbidden:
+    interaction_layer.runtime.xxx        # escape hatch
+    interaction_layer.session_module.xxx # directly exposing Runtime internals
+    interaction_layer.decision_manager   # leaking Runtime control plane
+    interaction_layer.orchestrator       # leaking Runtime control plane
+```
+
+### Constraint 2: get_session_metadata returns SessionSummary only
+
+**Allowed fields**: `id / title / created_at / updated_at`
+**Forbidden fields**: `preview / icon / summary / is_active / is_pinned / manager internal refs`
+
+Application must NOT receive Runtime's internal session dict. Only the whitelisted summary.
+
+### Boundary Operations vs Domain Operations
+
+| Allowed (Boundary Operation) | Forbidden (Domain Operation) |
+|------------------------------|------------------------------|
+| `submit_request` | `create_agent` |
+| `list_conversation_groups` | `train_model` |
+| `create_conversation` | `execute_workflow` |
+| `delete_conversation` | `manage_memory` |
+| `get_session_metadata` | `switch_provider` |
+| | `install_skill` |
+| | `open_workspace` |
+
+---
+
+## 4.4 Phase 2-D.2.2 Renderer Boundary Completion Validation
+
+Goal: complete the proof that every Renderer in `presentation/renderers/` is purely Presentation.
+
+### Validation Records
+
+| Record | Question | Result |
+|--------|----------|--------|
+| 008.2.1 | All Renderer implementations zero `from agent_workbench.runtime.*` | PASS |
+| 008.2.2 | All Renderer consume InteractionEvent (Presentation Protocol) | PASS |
+| 008.2.3 | RuntimeEvent → InteractionEvent flows through `RuntimeEventMapper` only | PASS |
+| 008.2.4 | Application uses InteractionLayer only (no direct runtime module registry) | PASS |
+
+### ADR-008.2.1 — Renderer Import Boundary
+
+**Question**: Do any Renderer modules import `agent_workbench.runtime.*` (Runtime Implementation)?
+
+**Evidence**:
+```
+$ grep -r "^from agent_workbench\.runtime" agent_workbench/presentation/
+No matches found.
+```
+
+Renderer modules import only:
+- `agent_workbench.presentation.protocols.interaction.event` (Protocol dataclass)
+- `agent_workbench.presentation.protocols.interaction.renderer` (Protocol)
+- `agent_workbench.presentation.shell.protocol` (ShellContract)
+- `v6.ui.*` (UI public API)
+
+Zero Runtime Implementation import.
+
+**Result**: PASS.
+
+### ADR-008.2.2 — Renderer Event Consumption
+
+**Question**: Do all Renderers consume `InteractionEvent` (Presentation Protocol)?
+
+**Evidence**:
+- `cli_renderer.py`: imports `InteractionEvent, InteractionEventType`. `render(event: InteractionEvent)`.
+- `v6_ui/event_renderer.py`: imports `InteractionEvent, InteractionEventType`. `render(event: InteractionEvent)`.
+- `v6_ui/renderer.py`: imports `InteractionEvent`. `render(event: InteractionEvent)`.
+- `multi_renderer_proof.py`: imports `InteractionEvent, InteractionEventType`.
+- `registry.py`: imports `InteractionEvent`.
+
+All Renderers implement `render(event: InteractionEvent)`.
+
+**Result**: PASS.
+
+### ADR-008.2.3 — RuntimeEventMapper as Single Translation Point
+
+**Question**: Is there exactly one RuntimeEvent → InteractionEvent translation point?
+
+**Evidence**:
+- `runtime/interaction/mapper.py`: `class RuntimeEventMapper` defines `def map(event: RuntimeEvent) -> InteractionEvent | None`.
+- `runtime/interaction/layer.py`: `WorkbenchInteractionLayer._on_event` calls `_map_event(event)` which calls `self._mapper.map(event)`.
+- No other file defines RuntimeEvent → InteractionEvent translation.
+
+Single translation point. No duplicate Mappers.
+
+**Result**: PASS.
+
+### ADR-008.2.4 — Application Single-Entry
+
+**Question**: Does Application route ALL operations through InteractionLayer (not directly through Runtime)?
+
+**Evidence (Phase 2-D.2.1 + 2-D.2.2)**:
+- `application/v6_ui_application.py`: zero direct `runtime.module_registry`, `session_module`, `orchestrator`, `runtime.` calls.
+- All session operations: `interaction_layer.list_conversation_groups()`, `interaction_layer.create_conversation()`, `interaction_layer.delete_conversation()`, `interaction_layer.get_session_metadata()`.
+- All event submissions: `interaction_layer.submit_request(RuntimeRequest(...))`.
+- App entry (`app.py`): `controller.interaction_layer.set_renderer(...)` + `controller.chat(text)`.
+
+**Result**: PASS.
+
+### Summary
+
+Phase 2-D.2.2 completes the validation of Renderer Boundary. Workbench v6 has proven:
+
+1. Renderer is purely Presentation — zero Runtime Implementation import.
+2. InteractionLayer is the single entry point — Application routes through it.
+3. RuntimeEventMapper is the single translation point.
+4. Runtime's internal module registry is no longer a public surface.
+
+This is the evidence (not declaration) that Workbench v6 has become Runtime's first Renderer, not a Runtime + UI hybrid.
+
+**Next**: After Phase 2-D.2.2, the four ADR-008.2.* records become the basis for any future ADR-009 Foundation Contract v1.0 Freeze proposal. No Foundation Contract changes in Phase 2-D.2.2.
 
 ---
 
