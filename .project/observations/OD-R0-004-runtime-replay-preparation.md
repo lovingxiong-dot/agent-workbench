@@ -1,9 +1,9 @@
 # OD-R0-004 — Runtime Replay Validation Preparation
 
 > **Type**: Observation Log (NOT RFC / NOT ADR)
-> **Date**: 2026-07-23
+> **Date**: 2026-07-23 (revised: 2026-07-23)
 > **Scope**: Runtime evidence observation only
-> **Status**: OBSERVING
+> **Status**: OBSERVING (Phase 2-D.4 complete; Phase 2-E next)
 
 ---
 
@@ -172,6 +172,96 @@ State changes outside this coupling (observed):
 
 **Result**: PASS — Runtime owns execution facts (per-task evidence). It does NOT own ecosystem history (cross-task aggregation, persistence, governance). Evidence ≠ Authority.
 
+### Q5: Trace Semantic Stability (Observation Required)
+
+**Question**: Can future Replay Consumers rely on Runtime trace semantics (event type, parent hierarchy, phase, payload)?
+
+This question is NOT a simple PASS/FAIL. It requires **semantic stability observation across Runtime versions**.
+
+#### What was observed (semantic primitives)
+
+`RuntimeEvent` dataclass (`v6/runtime/event_bus.py:111-130`):
+```
+- type:        event type string (24 RuntimeEventType enum values)
+- payload:     dict (free-form, no schema)
+- task_id:     routing key
+- source:      "engine:llm" / "service:chat" / etc.
+- trace_id:    string, default "" (often empty in current code paths)
+- phase:       string, default ""
+- timestamp:   float (epoch)
+```
+
+`RuntimeTrace.add()` API (`v6/runtime/trace.py:73-127`):
+```
+- node:        string or Enum (runtime / engine / service / tool / adapter)
+- action:      string or TraceEvent Enum (mapped from RuntimeEventType)
+- phase:       string or Enum (inference / memory / tool / policy)
+- payload:     dict (free-form)
+- duration_ms, tokens, cost, tool_time_ms, metrics
+- parent_id:   string, default "" — supports Tree structure
+- status:      pending / running / success / failed
+```
+
+#### Observation gaps (recorded, not closed)
+
+**Gap 1 — trace_id consistency**:
+- `RuntimeEvent.trace_id` exists but most `_publish` callers in `agent_runtime.py:188`, `agent_runtime/runtime.py:165/171` do not pass it.
+- `_write_trace_hook` (event_bus.py:269-298) reads `trace_id` from event but never writes it into TraceStep.
+- Consequence: `RuntimeTrace` does NOT carry `trace_id`. Per-task trace has no `trace_id` column.
+- Future Replay Consumer cannot group events by `trace_id` from RuntimeTrace alone.
+
+**Gap 2 — parent_id auto-inference coverage**:
+- `_write_trace_hook` auto-infers `parent_id` via `_trace_contexts[task_id]` (`event_bus.py:281-282`).
+- The `_RUNTIME_EVENT_TO_TRACE` map covers 17 of 24 RuntimeEventType (event_bus.py:88-107).
+- Events not in the map (e.g., `USER_MESSAGE`, `AI_START`, `ADAPTER_RECEIVED`, `SERVICE_FAILED`, etc.) are NOT auto-inferred.
+- `parent_id` for these events defaults to "" (flat).
+- Consequence: partial tree, not full hierarchy.
+
+**Gap 3 — phase field semantics**:
+- `RuntimeEvent.phase` is filled by Engine (`workbench_llm_engine.py:47` etc.) using `ctx.phase`.
+- `RuntimeTrace.add()` accepts `phase` directly with no validation.
+- Observed phases: "inference", "tool", "policy", "memory", "plan", etc.
+- There is NO central registry of valid phase values.
+- Consequence: phase is a free-form string. Different callers may use different names for the same concept.
+
+**Gap 4 — payload schema drift**:
+- `payload` is `dict` with no schema. Each RuntimeEventType carries a different shape.
+- No validation that payload keys are stable across versions.
+- Replay Consumers must tolerate schema drift.
+
+#### Observation: NOT CLOSED
+
+This question cannot be answered PASS without:
+1. Schema for RuntimeEvent per type.
+2. Central phase registry.
+3. Full `_RUNTIME_EVENT_TO_TRACE` mapping.
+4. Trace_id population in all publish paths.
+
+These are **NOT added by Phase 2-D.4**. They are deferred to consumer-facing ADRs (e.g., OD-R0-005+).
+
+**Result**: OBSERVATION REQUIRED — semantic primitives exist, but cross-version stability is not yet proven.
+
+---
+
+## Evidence ≠ Authority (Boundary Reinforcement)
+
+Per Architecture Review, this observation reaffirms a critical boundary:
+
+```
+Runtime produces evidence (RuntimeTrace / RuntimeEvent stream).
+Runtime does NOT produce policy, persistence, or history aggregation.
+
+Future Consumers (Debugger / Audit / Governance):
+  - Consume RuntimeTrace snapshot from RuntimeContext
+  - Build their own: Index / Storage / Policy
+  - Live OUTSIDE Runtime boundary
+
+This is why Phase 2-E Consumer Boundary Validation must:
+  - Confirm Runtime remains evidence producer only.
+  - Verify external consumers can build aggregation / persistence / policy independently.
+  - NOT add Trace Schema / Audit Protocol / Debugger Protocol to Runtime.
+```
+
 ---
 
 ## Observation Summary
@@ -182,6 +272,7 @@ State changes outside this coupling (observed):
 | Q2 Event ordering | PASS | Synchronous Trace Hook + single-consumer async loop |
 | Q3 Hidden state mutation | NOT OBSERVED | State mutations coupled with events; no hidden transitions |
 | Q4 Trace ownership | PASS | Runtime owns per-task evidence; not ecosystem history |
+| Q5 Trace semantic stability | OBSERVATION REQUIRED | 4 gaps recorded: trace_id empty, parent_id partial, phase free-form, payload schema drift |
 
 ---
 
@@ -203,12 +294,20 @@ The Runtime already produces observable evidence sufficient for replay/trace/aud
 
 ## Phase 2-D.4 Next Steps
 
-This observation log is **preparation only**. Actual behavioral validation (replay experiment, ordering test under load, hidden mutation hunt under failure scenarios) is deferred until:
+This observation log is **preparation only**. Phase 2-D.4 is **CLOSED** with five observations (Q1-Q4 PASS, Q5 OBSERVATION REQUIRED).
 
-1. A second consumer (Agent Manager OS / IDE Plugin) is needed.
-2. OR behavioral evidence becomes a Foundation Promotion requirement.
+**Phase 2-D.4 deliverables**:
+- Q1-Q4 confirm Runtime is structurally ready for replay consumers.
+- Q5 records 4 gaps that need consumer-side decisions before any consumer-side contract can be frozen.
 
-For now, observation continues with **reading code only**, not writing new contracts.
+**Next milestone: Phase 2-E Consumer Boundary Validation** (NOT Phase 2-D.5).
+
+Phase 2-E must:
+- Confirm external consumers (Debugger / Audit / Inspector) can be built WITHOUT modifying Runtime.
+- Verify Trace Semantic Gaps (Q5) are consumer-tolerable.
+- Avoid introducing Trace Schema / Audit Protocol / Debugger Protocol into Runtime.
+
+**No new Runtime Contract / Schema / Protocol is added during Phase 2-D.4 or Phase 2-E.**
 
 ---
 
@@ -217,3 +316,4 @@ For now, observation continues with **reading code only**, not writing new contr
 | Version | Date | Change |
 |---------|------|--------|
 | v1.0 | 2026-07-23 | Initial Runtime Replay Validation Preparation Observation Log. |
+| v1.1 | 2026-07-23 | Phase 2-D.4 review feedback: added Q5 Trace Semantic Stability (4 gaps recorded, observation required) + Evidence ≠ Authority boundary reinforcement. No Schema / Protocol changes. |
