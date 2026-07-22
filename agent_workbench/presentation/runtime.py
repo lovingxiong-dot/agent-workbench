@@ -1,111 +1,47 @@
 """presentation/runtime.py — Presentation Runtime 生命周期服务。
 
 Phase 2-C.2：将 Presentation 从静态工具箱升级为生命周期服务。
+Phase 2-C.3：Renderer 注册管理委托给 RendererRegistry。
 
 职责：
   - Presentation 生命周期管理（start/shutdown）
-  - Renderer 生命周期协调（注册/激活/停用）
   - InteractionEvent 分发（Runtime → Renderer）
   - Shell State 同步（Nav/Workspace/Inspector/Command）
   - 数据转换编排（owns PresentationPipeline）
 
 不负责：
+  - Renderer 注册表状态机（委托给 RendererRegistry）
   - UI 创建（归 Application 层）
   - Runtime 执行（归 agent_workbench/runtime/）
   - Widget 管理（归 v6/ui）
 
 约束：
-  ✓ 依赖：PresentationProtocols（protocols/） + ShellContract（shell/）
+  ✓ 依赖：PresentationProtocols（protocols/） + ShellContract（shell/） + RendererRegistry
   ✗ 禁止：PySide6、v6/ui、QWidget、ChatArea、LeftPanel、RightPanel
   ✗ 禁止：Runtime Implementation（engine, executor, session, llm, tool）
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Protocol
+from typing import TYPE_CHECKING, Any, List
 
 from agent_workbench.presentation.protocols.interaction.event import InteractionEvent
-from agent_workbench.presentation.protocols.interaction.renderer import UIEventRenderer
+from agent_workbench.presentation.renderers.registry import (
+    RendererProtocol,
+    RendererRegistry,
+    RendererRegistryError,
+    RendererState,
+)
 from agent_workbench.presentation.shell.integration import PresentationPipeline
 from agent_workbench.presentation.shell.protocol import (
     CommandState,
     InspectorState,
     NavigationGroup,
     NavigationItem,
-    ShellProtocol,
     WorkspaceState,
 )
 
 if TYPE_CHECKING:
     pass
-
-
-# ═══════════════════════════════════════════════════════════════════
-# Renderer Lifecycle Protocol
-# ═══════════════════════════════════════════════════════════════════
-
-class RendererProtocol(Protocol):
-    """Renderer 生命周期协议。
-
-    Renderer 是 UI 技术栈无关的生命周期抽象。
-    每个具体 Renderer（Qt / Web / CLI / Mobile）必须实现此协议。
-
-    与 UIEventRenderer 的区别：
-    - UIEventRenderer：纯事件消费（render 方法）
-    - RendererProtocol：生命周期管理 + 事件消费 + 状态同步
-
-    Phase 2-C.3 将扩展为 RendererRegistry 的注册单元。
-    """
-
-    def start(self) -> None:
-        """启动 Renderer。
-
-        调用时机：PresentationRuntime.start() 时。
-        具体实现：创建 UI 组件、连接信号、初始化显示。
-        """
-        ...
-
-    def stop(self) -> None:
-        """停止 Renderer。
-
-        调用时机：PresentationRuntime.shutdown() 或切换 Renderer 时。
-        具体实现：清理 UI 组件、断开信号、释放资源。
-        """
-        ...
-
-    def render(self, event: InteractionEvent) -> None:
-        """渲染一个 InteractionEvent（兼容 UIEventRenderer 协议）。
-
-        具体实现：根据 event.type 分发到对应 UI 组件更新。
-        """
-        ...
-
-    def update_navigation(self, groups: List[NavigationGroup]) -> None:
-        """同步导航状态。
-
-        具体实现：NavigationGroup[] → LeftPanel / Sidebar
-        """
-        ...
-
-    def update_workspace(self, state: WorkspaceState) -> None:
-        """同步工作区状态。
-
-        具体实现：WorkspaceState → ChatArea / HeaderBar
-        """
-        ...
-
-    def update_inspector(self, state: InspectorState) -> None:
-        """同步属性面板状态。
-
-        具体实现：InspectorState → RightPanel / Inspector
-        """
-        ...
-
-    def update_command(self, state: CommandState) -> None:
-        """同步命令/状态栏状态。
-
-        具体实现：CommandState → StatusBar / CommandBar
-        """
-        ...
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -116,10 +52,12 @@ class PresentationRuntime:
     """Presentation 层运行时。
 
     职责：
-    - 管理 Renderer 生命周期
+    - Presentation 生命周期管理（start/shutdown）
     - 分发 InteractionEvent 到活跃 Renderer
     - 同步 ShellContract 状态到活跃 Renderer
     - 编排数据转换（owns PresentationPipeline）
+
+    Renderer 注册管理委托给 RendererRegistry（Phase 2-C.3）。
 
     生命周期：
       start() → register_renderer() → activate_renderer() → [运行]
@@ -134,10 +72,9 @@ class PresentationRuntime:
     def __init__(self) -> None:
         """初始化 PresentationRuntime。
 
-        初始状态：无 Renderer 注册，Pipeline 就绪。
+        初始状态：Registry 就绪，Pipeline 就绪。
         """
-        self._renderers: Dict[str, RendererProtocol] = {}
-        self._active_renderer_id: str | None = None
+        self._registry = RendererRegistry()
         self._pipeline = PresentationPipeline()
         self._started = False
 
@@ -152,25 +89,24 @@ class PresentationRuntime:
         如果某个 Renderer 失败，不影响其他 Renderer 启动。
         """
         self._started = True
-        for rid, renderer in self._renderers.items():
-            try:
-                renderer.start()
-            except Exception:
-                # 单个 Renderer 启动失败不影响 PresentationRuntime 运行
-                pass
+        for entry in self._registry.list_entries():
+            if entry.state == RendererState.INACTIVE:
+                try:
+                    entry.instance.start()
+                except Exception:
+                    pass
 
     def shutdown(self) -> None:
         """关闭 Presentation Runtime。
 
-        停用所有 Renderer，清空注册表，释放资源。
+        停用并注销所有 Renderer，释放资源。
         """
-        for rid, renderer in self._renderers.items():
+        self._registry.deactivate()
+        for rid in list(self._registry.list_ids()):
             try:
-                renderer.stop()
-            except Exception:
+                self._registry.unregister(rid)
+            except RendererRegistryError:
                 pass
-        self._renderers.clear()
-        self._active_renderer_id = None
         self._started = False
 
     @property
@@ -179,80 +115,54 @@ class PresentationRuntime:
         return self._started
 
     # ═══════════════════════════════════════════════════════════════
-    # Renderer Registry
+    # Renderer Registry（委托给 RendererRegistry）
     # ═══════════════════════════════════════════════════════════════
 
-    def register_renderer(self, renderer_id: str, renderer: RendererProtocol) -> None:
-        """注册一个 Renderer。
+    @property
+    def registry(self) -> RendererRegistry:
+        """获取底层 RendererRegistry 实例。
 
-        注册不会自动启动 Renderer。必须调用 start() 或 activate_renderer()。
-
-        参数：
-        - renderer_id: 唯一标识（如 "qt", "web", "cli", "mobile"）
-        - renderer: 实现 RendererProtocol 的实例
+        Application 层可直接访问 registry 进行高级操作（如查询状态）。
         """
-        if renderer_id in self._renderers:
-            raise ValueError(f"Renderer '{renderer_id}' already registered")
-        self._renderers[renderer_id] = renderer
+        return self._registry
+
+    def register_renderer(self, renderer_id: str, renderer: RendererProtocol) -> None:
+        """注册一个 Renderer（委托给 RendererRegistry）。"""
+        self._registry.register(renderer_id, renderer)
 
     def unregister_renderer(self, renderer_id: str) -> None:
-        """注销一个 Renderer。
-
-        如果该 Renderer 是活跃的，先停用再注销。
-        """
-        if renderer_id == self._active_renderer_id:
-            self._active_renderer_id = None
-        renderer = self._renderers.pop(renderer_id, None)
-        if renderer is not None:
-            try:
-                renderer.stop()
-            except Exception:
-                pass
+        """注销一个 Renderer（委托给 RendererRegistry）。"""
+        self._registry.unregister(renderer_id)
 
     def activate_renderer(self, renderer_id: str) -> None:
-        """激活指定 Renderer。
+        """激活指定 Renderer（委托给 RendererRegistry）。
 
-        切换时：
-        - 旧 Renderer 收到 stop()
-        - 新 Renderer 收到 start()（如果尚未启动）
-        - 更新活跃 Renderer 引用
-
-        参数：
-        - renderer_id: 已注册的 Renderer 标识
+        强制 Single Active Renderer Rule：
+        - 如果已有活跃 Renderer，抛出 RendererRegistryError
+        - 必须先 deactivate_renderer() 再 activate_renderer()
         """
-        if renderer_id not in self._renderers:
-            raise ValueError(f"Renderer '{renderer_id}' not registered")
+        self._registry.activate(renderer_id)
 
-        # 停用旧 Renderer
-        old = self._active_renderer_id
-        if old is not None and old != renderer_id:
-            old_renderer = self._renderers.get(old)
-            if old_renderer is not None:
-                try:
-                    old_renderer.stop()
-                except Exception:
-                    pass
-
-        self._active_renderer_id = renderer_id
+    def deactivate_renderer(self) -> None:
+        """停用当前活跃 Renderer（委托给 RendererRegistry）。"""
+        self._registry.deactivate()
 
     def get_active_renderer(self) -> RendererProtocol | None:
-        """获取当前活跃 Renderer。"""
-        if self._active_renderer_id is None:
-            return None
-        return self._renderers.get(self._active_renderer_id)
+        """获取当前活跃 Renderer 实例。"""
+        return self._registry.get_active()
 
     def get_renderer(self, renderer_id: str) -> RendererProtocol | None:
-        """获取指定 Renderer（不激活）。"""
-        return self._renderers.get(renderer_id)
+        """获取指定 Renderer 实例（不激活）。"""
+        return self._registry.get(renderer_id)
 
     def list_renderers(self) -> List[str]:
         """列出所有已注册 Renderer 标识。"""
-        return list(self._renderers.keys())
+        return self._registry.list_ids()
 
     @property
     def active_renderer_id(self) -> str | None:
         """当前活跃 Renderer 标识。"""
-        return self._active_renderer_id
+        return self._registry.get_active_id()
 
     # ═══════════════════════════════════════════════════════════════
     # Event Dispatch
