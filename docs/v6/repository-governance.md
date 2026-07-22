@@ -1,6 +1,7 @@
 # V6 Repository Governance
 
 > Git is the archive. The workspace contains only the current truth.
+> **Repository Governance v1.0**: Root-level governance entry layer at [`AGENT_ENTRY.md`](../../AGENT_ENTRY.md), [`PROJECT_DECLARATION.md`](../../PROJECT_DECLARATION.md), [`PROJECT_STATE.md`](../../PROJECT_STATE.md), [`ARCHITECTURE.md`](../../ARCHITECTURE.md), [`ROOT_INDEX.md`](../../ROOT_INDEX.md).
 
 This document defines the governance rules for the `agent_workbench` repository. It complements [`runtime-kernel-spec.md`](./runtime-kernel-spec.md) — while that document constrains how the Runtime works, this document constrains how the project is organized.
 

@@ -25,10 +25,13 @@ CENTRE Runtime → Interaction Boundary → Presentation Renderer → v6/ui → 
 
 **Before any operation, read these documents in order:**
 
-1. [ARCHITECTURE_BOUNDARY.md](./ARCHITECTURE_BOUNDARY.md) — **Construction rules (MANDATORY first read)**
-2. [v6/UI_FOUNDATION.md](./v6/UI_FOUNDATION.md) — v6/ui freeze contract
-3. [PROJECT_BLUEPRINT.md](./PROJECT_BLUEPRINT.md) — Project overview and frozen zones
-4. [`.agent-entry.json`](./.agent-entry.json) — Agent Control Plane entry point
+1. [AGENT_ENTRY.md](./AGENT_ENTRY.md) — **Mandatory onboarding (Repository Governance v1.0)**
+2. [ROOT_INDEX.md](./ROOT_INDEX.md) — Repository navigation
+3. [PROJECT_DECLARATION.md](./PROJECT_DECLARATION.md) — Repository Constitution
+4. [PROJECT_STATE.md](./PROJECT_STATE.md) — Current development snapshot
+5. [ARCHITECTURE_BOUNDARY.md](./ARCHITECTURE_BOUNDARY.md) — Construction rules
+6. [v6/UI_FOUNDATION.md](./v6/UI_FOUNDATION.md) — v6/ui freeze contract
+7. [PROJECT_BLUEPRINT.md](./PROJECT_BLUEPRINT.md) — Project overview and frozen zones
 
 Governance center: [`lovingxiong-dot/agent-governance`](https://github.com/lovingxiong-dot/agent-governance)
 
@@ -98,9 +101,13 @@ Current status: **575/575 passed**.
 
 | Document | Purpose | Read Time |
 |---|---|---|
-| [ARCHITECTURE_BOUNDARY.md](./ARCHITECTURE_BOUNDARY.md) | **Construction rules for agents — MUST read first** | 10 min |
+| [AGENT_ENTRY.md](./AGENT_ENTRY.md) | **Mandatory Agent onboarding — MUST read first** | 5 min |
+| [ROOT_INDEX.md](./ROOT_INDEX.md) | **Repository navigation homepage** | 3 min |
+| [PROJECT_DECLARATION.md](./PROJECT_DECLARATION.md) | **Repository Constitution** | 10 min |
+| [PROJECT_STATE.md](./PROJECT_STATE.md) | Current development snapshot | 5 min |
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | Architecture navigation layer | 5 min |
+| [ARCHITECTURE_BOUNDARY.md](./ARCHITECTURE_BOUNDARY.md) | Agent construction rules | 10 min |
 | [v6/UI_FOUNDATION.md](./v6/UI_FOUNDATION.md) | v6/ui formal freeze contract | 10 min |
-| [`.agent-entry.json`](./.agent-entry.json) | **ACP Entry — AI agent MUST read first** | 5 min |
 | [PROJECT_BLUEPRINT.md](./PROJECT_BLUEPRINT.md) | Project lineage, architecture, frozen zones | 1 hour |
 | [`docs/v6/architecture-boundaries.md`](./docs/v6/architecture-boundaries.md) | Detailed architecture boundary spec | 20 min |
 | [`docs/v6/runtime-kernel-spec.md`](./docs/v6/runtime-kernel-spec.md) | Runtime Kernel: layers, ownership, dependency rules | 30 min |
