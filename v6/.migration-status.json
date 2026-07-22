@@ -1,0 +1,10 @@
+{
+  "status": "active_dependency",
+  "role": "runtime_foundation",
+  "owner": "agent_workbench",
+  "migration_target": "aos-runtime",
+  "archive_allowed": false,
+  "description": "v6/ is the Runtime Foundation Layer for Workbench v6.14. It is NOT legacy code. It provides RuntimeContext, EventBus, Orchestrator, Engines, and all core runtime abstractions. The agent_workbench/ product layer depends on v6/ via 100+ import statements. Do NOT archive or remove.",
+  "created": "2026-07-20",
+  "protocol": "Pre-AISE Stabilization"
+}

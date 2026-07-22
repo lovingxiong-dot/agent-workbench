@@ -1,5 +1,21 @@
 # V6 接口与信号契约
 
+> **架构版本**: v6.14.0-alpha — Presentation Boundary Freeze
+> **v6/ui 状态**: Frozen Foundation（22 文件，详见 [v6/UI_FOUNDATION.md](../../v6/UI_FOUNDATION.md)）
+> **血统**: v6/ui 是独立 Pure UI Foundation，不是旧 v6-agent 的延续
+
+## 0. 架构边界声明（Phase 2-B.1 新增）
+
+```
+Runtime → Interaction Contract → Renderer → v6/ui → Qt
+```
+
+- **v6/ui** 是 Pure UI Foundation，不引用任何 `agent_workbench/` 包
+- **Renderer** (`presentation/renderers/v6_ui/`) 允许引用 Interaction Contract，禁止引用 Runtime Implementation
+- **Application** (`application/`) 使用 `WorkbenchController`，禁止使用 `WorkbenchUIController`
+
+详见 [ARCHITECTURE_BOUNDARY.md](../../ARCHITECTURE_BOUNDARY.md)。
+
 ## 1. 分层契约
 
 ### 1.1 MainWindow 职责边界

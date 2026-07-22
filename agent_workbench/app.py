@@ -146,7 +146,7 @@ def _handle_cli_command(text: str, controller) -> str | None:
 
 
 def run_gui(config_path: str | None = None) -> int:
-    """Desktop UI 模式。"""
+    """Desktop UI 模式（旧 Workbench UI）。"""
     try:
         from PySide6.QtWidgets import QApplication
     except ImportError:  # pragma: no cover - optional
@@ -163,10 +163,85 @@ def run_gui(config_path: str | None = None) -> int:
     return app.exec()
 
 
+def run_gui_v6(config_path: str | None = None) -> int:
+    """Phase 2-B：使用 v6/ui 纯 UI 设计作为 Renderer 启动。
+
+    架构：
+      v6/ui 三栏组件 + V6UIApplication（Runtime 桥接）
+      不依赖 WorkbenchUIController，不依赖 agent_workbench/ui/workbench/
+    """
+    try:
+        from PySide6.QtWidgets import QApplication
+    except ImportError:  # pragma: no cover - optional
+        print("PySide6 未安装，回退到 CLI 模式。")
+        return run_cli(config_path=config_path)
+
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QMainWindow, QWidget
+
+    from v6.layout_manager import LayoutManager
+    from v6.ui.base import theme
+    from v6.ui.chat_area import ChatArea
+    from v6.ui.left_panel import LeftPanel
+    from v6.ui.right_panel import RightPanel
+    from v6.ui.window_frame import FramelessWindowHelper
+
+    from agent_workbench.application.v6_ui_application import V6UIApplication
+
+    app = QApplication(sys.argv)
+
+    # ── 窗口 ──
+    window = QMainWindow(None, Qt.WindowType.FramelessWindowHint)
+    window.setMinimumSize(900, 600)
+    window.resize(1280, 800)
+
+    central = QWidget()
+    window.setCentralWidget(central)
+
+    # ── v6/ui 三联布局（复用 v6-ui-complete 的 LayoutManager）──
+    layout_mgr = LayoutManager(central)
+
+    # ── v6/ui 纯 UI 三栏组件（Presentation Foundation）──
+    left = LeftPanel()
+    chat = ChatArea()
+    right = RightPanel()
+
+    layout_mgr.left_panel.layout().addWidget(left)
+    layout_mgr.chat_area.layout().addWidget(chat)
+    layout_mgr.right_panel.layout().addWidget(right)
+
+    # ── 窗口控制按钮（内嵌于 RightPanel 标签栏）──
+    right.set_window_buttons(
+        window.showMinimized,
+        lambda: window.showNormal() if window.isMaximized() else window.showMaximized(),
+        window.close,
+    )
+
+    # ── 折叠按钮 → LayoutManager ──
+    chat.left_expand_toggled.connect(layout_mgr.toggle_left)
+    chat.toggle_right_panel.connect(layout_mgr.toggle_right)
+
+    # ── Application 编排器（Runtime 桥接）──
+    app_ctrl = V6UIApplication(
+        left_panel=left,
+        chat_area=chat,
+        right_panel=right,
+        config_path=config_path,
+    )
+
+    # ── 无边框窗口辅助 ──
+    FramelessWindowHelper(window, central)
+
+    window.setStyleSheet(f"background-color: {theme.C['bg_primary']};")
+    window.show()
+
+    return app.exec()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Agent Workbench V6")
     parser.add_argument("--config", "-c", default=None, help="配置文件路径")
-    parser.add_argument("--mode", "-m", choices=["cli", "gui"], default="cli", help="运行模式")
+    parser.add_argument("--mode", "-m", choices=["cli", "gui", "gui-v6"], default="cli", help="运行模式")
     parser.add_argument("--test-input", default=None, help="非交互模式：运行一次输入后退出（用于测试）")
     args = parser.parse_args(argv)
 

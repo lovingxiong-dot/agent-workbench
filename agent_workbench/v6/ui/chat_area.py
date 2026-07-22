@@ -150,6 +150,42 @@ class ChatArea(QWidget):
         self._scene.add_system_card("系统消息", "分析完成，结果已自动保存。")
         self.append_ai("需要我帮你生成改进后的代码吗？")
 
+    # ── Data Injection Methods（Presentation Contract → UI Shell）──
+
+    def load_messages(self, messages: list) -> None:
+        """从 MessageViewModel 列表注入消息数据。
+        
+        清除 demo 数据，替换为真实消息流。
+        不修改任何视觉属性。
+        """
+        self._scene.clear()
+        for msg in messages:
+            if msg.role == "user":
+                self._scene.add_user_message(msg.content)
+            elif msg.role == "assistant":
+                self._scene.add_ai_message(msg.content)
+            elif msg.role == "tool":
+                for tc in msg.tool_calls or []:
+                    self._scene.add_tool(
+                        tc.get("name", ""),
+                        tc.get("result", {}),
+                        tc.get("status", "ok"),
+                    )
+        self._view.verticalScrollBar().setValue(
+            self._view.verticalScrollBar().maximum()
+        )
+
+    def load_models(self, models: list[str]) -> None:
+        """从 ViewModel 列表注入模型选项。
+        
+        替换硬编码的模型列表。
+        不修改任何视觉属性。
+        """
+        if models:
+            self._models = models
+            self._model_i = 0
+            self._input.set_model(self._models[0])
+
     def set_title(self, title: str, subtitle: str) -> None:
         self._header.set_title(title, subtitle)
 
@@ -175,25 +211,6 @@ class ChatArea(QWidget):
 
     def set_streaming(self, streaming: bool) -> None:
         self._input.set_running(streaming)
-
-    def reset_workspace(self) -> None:
-        """清空聊天场景，供 ShellAdapter 调用。
-
-        v6/UI Foundation Boundary — Allowed Change:
-        暴露 ChatScene.clear_chat() 为 ChatArea 公共 API，
-        使 Renderer 无需穿透 Widget 私有成员。
-        """
-        self._scene.clear_chat()
-        self._stream_item = None
-
-    def add_capability_step(self, index: int, step: str) -> None:
-        """添加能力执行步骤，供 EventRenderer 调用。
-
-        v6/UI Foundation Boundary — Allowed Change:
-        暴露 ChatScene.add_step() 为 ChatArea 公共 API，
-        使 Renderer 无需穿透 Widget 私有成员。
-        """
-        self._scene.add_step(index, step)
 
     def set_analyze_button_visible(self, visible: bool) -> None:
         self._analyze_bar.setVisible(visible)

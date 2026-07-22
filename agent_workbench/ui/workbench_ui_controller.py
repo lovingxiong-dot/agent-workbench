@@ -57,6 +57,9 @@ from agent_workbench.ui.workbench.view_schema_registry import ViewSchemaRegistry
 from agent_workbench.ui.workbench.view_schema_renderer import ViewSchemaRenderer
 from agent_workbench.ui.workbench.welcome_workspace import WelcomeWorkspaceItem
 
+# Phase 1-C: Presentation Pipeline 集成
+from agent_workbench.presentation.shell.integration import PresentationPipeline
+
 if TYPE_CHECKING:
     from v6.services.chat_service import ChatService
     from v6.services.config_service import ConfigService
@@ -511,6 +514,55 @@ class WorkbenchUIController(UIController):
                 )
             )
         return presentations
+
+    # ── Phase 1-C: Presentation Pipeline 集成方法 ──
+
+    def _build_navigation_groups(self) -> list:
+        """通过 Presentation Pipeline 构建 NavigationGroup 列表。
+
+        完整链路：
+            Runtime Session → ConversationService.list_groups()
+            → PresentationPipeline.sessions_to_navigation_groups()
+            → NavigationGroup[]
+        """
+        raw_sessions: list[dict] = []
+        for _gid, _title, sessions in self._conversation_service.list_groups():
+            raw_sessions.extend(sessions)
+        return PresentationPipeline.sessions_to_navigation_groups(raw_sessions)
+
+    def _build_workspace_state(
+        self, sid: str, models: list[str] | None = None
+    ) -> object:
+        """通过 Presentation Pipeline 构建 WorkspaceState。
+
+        完整链路：
+            Runtime Message → ConversationService
+            → PresentationPipeline.messages_to_workspace_state()
+            → WorkspaceState
+        """
+        from agent_workbench.presentation.shell.protocol import WorkspaceState
+
+        session = self._session.manager.get(sid)
+        title = session.get("title") if session else ""
+        if not title:
+            title = self._conversation_service.DEFAULT_TITLE
+        subtitle = self._project_path or ""
+
+        ctx = self._new_ctx(sid)
+        self._chat.load(ctx)
+        raw_messages = [
+            {"id": m.id, "role": m.role, "content": m.content, "tool_calls": getattr(m, "tool_calls", [])}
+            for m in ctx.messages
+        ]
+        return PresentationPipeline.messages_to_workspace_state(
+            title=title, subtitle=subtitle, raw_messages=raw_messages, models=models,
+        )
+
+    def _build_inspector_state(self, module_id: str, raw_properties: list[dict]) -> object:
+        """通过 Presentation Pipeline 构建 InspectorState。"""
+        return PresentationPipeline.metadata_to_inspector_state(module_id, raw_properties)
+
+    # ── 原有方法 ──
 
     def _on_add_requested(self, category_id: str) -> None:
         """Settings 分类 '+' 按钮 → 弹出配置对话框并追加到对应配置路径。"""

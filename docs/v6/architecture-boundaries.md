@@ -194,7 +194,86 @@ agent_workbench/package/registry.py
 
 ---
 
-## 6. 变更控制
+## 6. Presentation Boundary（Phase 2-B.1 新增）
+
+### 6.1 核心边界图
+
+```
+Runtime
+    |
+    v
+Interaction Boundary
+    |
+    v
+Presentation Renderer
+    |
+    v
+v6/ui Pure UI Foundation
+    |
+    v
+Qt
+```
+
+### 6.2 各层职责
+
+| 层 | 职责 | 允许引用 | 禁止引用 |
+|----|------|---------|---------|
+| **Application** (`application/`) | 启动编排、依赖注入、生命周期 | `WorkbenchController`, `v6/ui`, `Renderer` | `WorkbenchUIController` |
+| **Renderer** (`presentation/renderers/`) | 数据→UI 映射、事件→UI 方法 | `InteractionEvent`, `ShellContract`, `v6/ui` Public API | Runtime Implementation, v6/ui 私有成员 |
+| **v6/ui Foundation** (`v6/ui/`) | 视觉系统、布局、交互组件 | `PySide6`, `Qt`, theme constants | 任何 `agent_workbench/` 包 |
+
+### 6.3 依赖方向（单向，不可逆）
+
+```
+Runtime → Interaction Contract → Renderer → v6/ui → Qt
+```
+
+- Runtime 不知道 v6/ui 存在
+- v6/ui 不引用任何 agent_workbench 包
+- Renderer 允许引用 Interaction Contract（`runtime.interaction.event`），禁止引用 Runtime Implementation
+
+**违反此依赖方向即视为架构污染。**
+
+### 6.4 三项禁止事项（Presentation 专用）
+
+#### 禁止 1：Renderer 不得穿透 v6/ui 私有成员
+
+```
+禁止：  self._chat._scene.clear_chat()
+正确：  self._chat.reset_workspace()
+```
+
+#### 禁止 2：v6/ui 不得吸收 Runtime 概念
+
+```
+禁止：  ChatArea.update_agent()
+禁止：  ChatArea.update_model()
+禁止：  ChatArea.update_session()
+正确：  ChatArea.append_user()          ← UI Capability
+正确：  ChatArea.reset_workspace()      ← UI Capability
+```
+
+#### 禁止 3：不得将 v6/ui 混同于旧 v6-agent
+
+```
+禁止：  把 v6/ui 当成 v6-agent 的 UI 层
+正确：  v6/ui 是独立 Pure UI Foundation，与 v6-agent 无关
+```
+
+### 6.5 血统区分
+
+| 产物 | 定位 | 状态 |
+|------|------|------|
+| `v6/ui/` (22 files) | Pure UI Foundation | **ACTIVE** |
+| `agent_workbench/ui/workbench/` (32 files) | 旧架构验证 UI | **PRESERVED** |
+| `v6-agent` branch | 废弃的应用中心架构 | **ARCHIVED** |
+
+旧架构：`UI → Controller → Agent Runtime → LLM`（应用中心）
+新架构：`CENTRE Runtime → Interaction Boundary → Presentation Renderer → v6/ui → Qt`（Runtime-first, Presentation-agnostic）
+
+---
+
+## 7. 变更控制
 
 本文档进入 Frozen 状态后：
 

@@ -1,0 +1,10 @@
+[
+  {
+    "role": "user",
+    "content": "hello"
+  },
+  {
+    "role": "assistant",
+    "content": "[错误：未找到 provider 'echo']"
+  }
+]

@@ -1,5 +1,8 @@
 # V6 路线图
 
+> **当前版本**: v6.14.0-alpha — Presentation Boundary Freeze
+> **v6/ui 状态**: Frozen Foundation，详见 [v6/UI_FOUNDATION.md](../../v6/UI_FOUNDATION.md)
+
 ## 产品定位
 
 **Personal Agent Workbench / Agent IDE**
@@ -27,6 +30,10 @@ Metadata-driven Workbench   ← v6.11.0-alpha.2：Metadata Cross-layer Contract 
 真实 LLM 对话闭环         ← v6.11.0-beta.x：B 线优先，让 Workbench 真正可用
         ↓
 Schema-driven Workbench     ← v6.12.x：Schema 驱动 Dialog / Inspector / JSON Editor / Validator
+        ↓
+Presentation Boundary Freeze ← v6.14.0-alpha Phase 2-B.1：v6/ui Frozen Foundation + Renderer Layer
+        ↓
+Presentation Runtime         ← v6.14.x Phase 2-C：InteractionCommand 独立化、PresentationPipeline 生命周期化
         ↓
 Plugin-driven Workbench     ← v6.13.x：零代码扩展
         ↓

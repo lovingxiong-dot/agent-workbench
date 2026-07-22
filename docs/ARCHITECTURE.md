@@ -1,7 +1,26 @@
 # 架构概览
 
-> 当前架构版本：**v3.11.0**（事件总线 + 会话运行时 + 统一协调器）
+> 当前架构版本：**v6.14.0-alpha**（Presentation Boundary Freeze）
+> 历史架构版本：**v3.11.0**（事件总线 + 会话运行时 + 统一协调器）
 > 技术栈：Python 3.11+ / PySide6 6.21 / DeepSeek V4 / Ollama / SQLite
+
+---
+
+## v6.14 架构状态
+
+当前项目已完成从 Application-Centric 到 Runtime-First Presentation-Agnostic 的架构迁移：
+
+```
+旧（v3.11）：UI → Controller → Runtime
+新（v6.14）：CENTRE Runtime → Interaction Boundary → Presentation Renderer → v6/ui → Qt
+```
+
+- **v6/ui** (22 files) 是冻结的 Pure UI Foundation，不是旧 v6-agent 的延续
+- **Renderer** 层 (`presentation/renderers/v6_ui/`) 负责数据→UI 映射，不穿透 v6/ui 私有成员
+- **Application** 层 (`application/`) 负责启动编排，使用 `WorkbenchController`（非 `WorkbenchUIController`）
+- Runtime 不知道 v6/ui 存在
+
+详见 [ARCHITECTURE_BOUNDARY.md](../ARCHITECTURE_BOUNDARY.md) 和 [v6/UI_FOUNDATION.md](../v6/UI_FOUNDATION.md)。
 
 ---
 

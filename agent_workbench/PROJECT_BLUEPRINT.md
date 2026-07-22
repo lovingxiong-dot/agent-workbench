@@ -1,7 +1,22 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v6.14.0-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 61 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v6.14.0-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 61+ |
+
+---
+
+## Architecture Constitution（最高架构文档）
+
+> **本蓝图的架构决策受 [`docs/v6/architecture-constitution-v6.13.md`](docs/v6/architecture-constitution-v6.13.md) 约束。**
+>
+> Architecture Constitution 定义了五个不可违反的核心原则：
+> 1. **Workbench OS Identity** — Workbench OS 是 AI Agent 操作系统，Desktop UI 是第一个参考 Shell
+> 2. **Runtime Kernel Freeze** — Runtime 已冻结，UI 需求不得导致 Runtime 变更
+> 3. **Presentation Contract** — Protocol + ViewModel + Adapter 三层结构，UI Shell 只消费此层
+> 4. **UI Shell Boundary** — UI Shell 是视觉外壳，不导入 Runtime，只消费 Presentation Contract
+> 5. **Configuration-Driven Workbench** — 所有扩展对象通过 UI 注册配置，不需要修改源码
+>
+> 违反 Constitution 的代码不得合并。违反 Constitution 的架构决策视为无效。
 
 ## Current Development Authority
 
@@ -179,18 +194,44 @@ From this point forward:
 - **All GUI, Provider, Tool, Skill, Workflow, Memory, and Knowledge work** branches from `v6.9.6-foundation`.
 - **Repository hygiene** is enforced by `scripts/audit_repository.py` and `scripts/verify_repository.py`.
 
-## Agent Workbench 定位
+## Agent Workbench OS 定位（v6.14+）
 
-> **Agent Workbench 是 Personal Agent Workbench / Agent IDE 的第一个参考实现，也是 V6 Runtime 的官方产品化验证平台（Official Product Validation Platform）。**
+> **Agent Workbench OS 是一个 AI Agent 操作系统，不是 IDE。**
+>
+> 它是 Runtime Kernel + Agent Identity System + Capability Ecosystem + Presentation Shell + Multi-Device Interface 的组合体。Desktop UI（PySide6）是第一个参考 Shell 实现，未来可替换为 Web / Mobile / CLI / Embedded Shell。
 
-它不是 Demo，也不是一个聊天机器人。它是一个可以不断安装能力、工具、Provider、Workflow 的 AI 工作台。Runtime、UI、Engine、Service、Module 等全部能力首先在 Workbench 中完成集成验证，证明其体验、边界、异常、性能均达到产品化标准后，再决定是否进入 `v6-core` / `v6-service` 框架核心。
+### Agent Workbench OS IS
 
-这一句话决定以下行为：
+- 一个可替换 UI 的 Agent 操作系统
+- Runtime Kernel 之上的 Presentation + Entry Layer
+- Agent / Conversation / Capability / Memory / Tool / Artifact / Context 的统一编排平台
+- 所有新能力（Provider、Skill、MCP、Workflow）的集成验证平台与产品化门槛
 
-- 禁止为 Demo 快速写特殊逻辑或临时分支。
-- 禁止「先放这里，之后再重构」的折中方案。
-- Workbench 自然成为所有新能力的集成验证平台与产品化门槛。
-- 任何在 Workbench 中无法以 Composable 方式集成的新能力，都不应进入框架核心。
+### Agent Workbench OS IS NOT
+
+- 不是 IDE（不是代码编辑器、不是项目管理器）
+- 不是 Desktop App（Desktop 只是一个 Shell 实现，不是产品本质）
+- 不是 Demo 或原型
+
+### 核心对象模型（AI OS 语义）
+
+| 概念 | 含义 | UI 表达 |
+|------|------|---------|
+| Agent | 数字身份对象（谁） | LeftPanel Agent 列表 |
+| Conversation | 用户与 Agent 的对话 | ChatArea 消息时间线 |
+| Capability | Agent 的能力单元 | LeftPanel 功能页、RightPanel |
+| Tool | 可调用的工具 | RightPanel 工具列表 |
+| Memory | 记忆（短期/长期/知识） | RightPanel 上下文面板 |
+| Artifact | Agent 产生的产物 | ChatArea 内嵌卡片 |
+| Context | 当前运行环境上下文 | StatusBar |
+
+### 关键约束
+
+1. **UI Shell 不依赖 Runtime**：UI 只消费 ViewModel，不 import Runtime 对象。
+2. **Runtime 不感知 UI**：Runtime 只通过 Metadata 描述自己，不关心消费端是 Qt/Web/CLI。
+3. **Presentation Layer 是唯一翻译层**：Adapter 将 Runtime 对象转为 ViewModel。
+4. **Frozen Core 不可修改**：v6.9.6-foundation 冻结层只接受 bug fix。
+5. **任何在 Workbench 中无法以 Composable 方式集成的新能力，都不应进入框架核心。**
 
 ## Runtime Decision Layer Contract Boundary (v6.9.4-alpha)
 
@@ -300,111 +341,6 @@ User / UI / MCP / Local Agent / Remote Agent
 - `WorkbenchInteractionLayer` 只调用 `AgentWorkbenchRuntime.submit_request()`；`DecisionManager` 保持在 Runtime 内部。
 - `AgentWorkbenchRuntime.submit_request()` 是纯入口，不增加 session / identity / memory / queue / remote agent 等业务判断。
 - CHAT 路径不伪造 `TASK_STARTED` / `TASK_FINISHED`。
-
-## Presentation Architecture (v6.14.0-alpha — Phase 2-B Freeze)
-
-> **v6.14.0-alpha introduces the Presentation Boundary — the formal separation of UI from Runtime.**
-
-### Architecture
-
-```
-Runtime
-    |
-    | Interaction Contract
-    |
-Presentation Runtime
-    |
-    | Renderer Adapter
-    |
-Pure UI Foundation
-```
-
-### Layer Ownership
-
-| Layer | Owns | Does NOT Own |
-|-------|------|-------------|
-| **Application** (`application/`) | startup, dependency wiring, lifecycle | UI behavior, Renderer logic |
-| **Runtime** (`runtime/`) | execution, agent lifecycle, capability | UI, v6/ui, Widget |
-| **Protocol** (`runtime/interaction/`) | communication contracts | UI implementation |
-| **Renderer** (`presentation/renderers/`) | data→UI mapping, event→UI method | Runtime Implementation, Widget internals |
-| **v6/ui Foundation** (`v6/ui/`) | visual system, layout, interaction widgets | Runtime, Agent, Session, Model, LLM, Tool |
-
-### v6/ui Positioning
-
-`v6/ui` is the **frozen Pure UI Foundation** — the canonical Presentation Foundation for Agent Workbench OS.
-
-It is NOT:
-- The deprecated `v6-agent` application architecture
-- `WorkbenchUIController` layer
-- A "UI component library" that can be redesigned per Renderer
-- Runtime presentation logic
-
-It IS:
-- Visual System (dual-theme color palette, fonts, icons)
-- Layout System (three-panel QSplitter, collapse/expand)
-- Interaction Component System (LeftPanel, ChatArea, RightPanel, InputArea, HeaderBar, FunctionPage)
-- Theme System (dark/light instant toggle)
-- UX Specification (spacing, border-radius, hover states, drag)
-
-### Renderer Constraints
-
-```
-Allowed:
-  ✓ Interaction Contract imports (runtime.interaction.event)
-  ✓ v6/ui Public API calls
-
-Forbidden:
-  ✗ Runtime Implementation imports (engine, executor, session, llm, tool)
-  ✗ v6/ui private member access (._scene, ._stream, ._input)
-  ✗ WorkbenchUIController imports
-  ✗ v6/ui layout/visual/component structure changes
-```
-
-### Dependency Direction
-
-```
-Runtime → Interaction Contract → Renderer → v6/ui → Qt
-```
-
-Only downward. Never upward. Runtime does not know v6/ui exists.
-
-### Artifacts
-
-| Artifact | Lineage | Status |
-|----------|---------|--------|
-| `v6/ui/` (22 files) | Pure UI Foundation — extracted from early Workbench | **ACTIVE** — Phase 2-B Renderer target |
-| `agent_workbench/ui/workbench/` (32 files) | Legacy architecture validation UI | **PRESERVED** |
-| `v6-agent` branch | Deprecated application-centric architecture | **ARCHIVED** |
-
-### Lineage Distinction
-
-`v6/ui` is the **Pure UI Foundation** — an independent Presentation Design System.
-It does **not** inherit from the deprecated `v6-agent` (`UI → Controller → Agent Runtime → LLM`).
-
-The current architecture is:
-
-```
-CENTRE Runtime → Interaction Boundary → Presentation Renderer → v6/ui → Qt
-```
-
-This is **Runtime-first, Presentation-agnostic**: UI is a Shell Renderer, not an application.
-
-### Frozen Foundation Status
-
-`v6/ui` is now a **Frozen Foundation**. Changes allowed:
-- Visual refinement (colors, spacing, accessibility)
-- UI Capability API additions (e.g., `ChatArea.reset_workspace()`)
-
-Changes forbidden:
-- Runtime dependency, Agent lifecycle, Session ownership, Model ownership
-- Business logic inside widgets
-- Layout/component structure changes per Renderer need
-
-### Related Documents
-
-- [v6/UI_FOUNDATION.md](./v6/UI_FOUNDATION.md) — Formal freeze contract
-- [ARCHITECTURE_BOUNDARY.md](./ARCHITECTURE_BOUNDARY.md) — Agent construction rules
-- [docs/v6/architecture-boundaries.md](./docs/v6/architecture-boundaries.md) — Architecture boundary spec
 
 ## V6 Framework Core Foundation Baseline
 
@@ -531,42 +467,7 @@ v6.9.0-alpha 完成 **Agent Workbench Single Instance**（V6 框架内第一个�
 
 v6.8.0-alpha 完成 V6 Framework Core Foundation Baseline（共享核心框架基座）：新增 `v6/runtime/decision.py` 定义 `DecisionAction`/`Decision` 模型；新增 `v6/runtime/decision_policy.py` 定义 `DecisionPolicy` 与 `RuleBasedDecisionPolicy`；新增 `v6/runtime/planner_loop.py` 实现 `PlannerLoop`（observe/decide/evaluate/plan），补齐 Runtime 调度决策机制；升级 `v6/runtime/orchestrator.py` 集成 PlannerLoop，按 Decision 选择 Engine 执行；升级 `v6/runtime/runtime.py` 使 `AgentRuntime` 默认构造 `PlannerLoop` 并注入 Orchestrator；`Orchestrator._ensure_context()` 自动从 `ChatTask` 提取 `task_type` 与 `messages` 供策略匹配；新增 `tests/v6/test_v6_planner_loop.py` 共 10 个测试覆盖决策、事件发布、Orchestrator 集成与 PlannerLoop/Trace 隔离；至此 V6 核心控制面完整闭环：统一入口（RuntimeContext/Task）、统一协议（Engine）、统一通信（EventBus）、能力发现（CapabilityRegistry）、执行追踪（RuntimeTrace/Replay）、任务编排（Orchestrator）、调度决策（PlannerLoop/Decision）；明确 `PlannerLoop` 是 Runtime 决策机制，`PlannerEngine` 是八大 Engine 之一的能力组件，二者职责分离；该版本作为后续 Agent / Service / Adapter 开发的长期依赖基线；V6 全量测试 175/175 通过。
 
-## v6.14.0-alpha 当前阶段：Agent Workbench OS — Presentation / Shell Integration
-
-```
-Phase 0  Architecture Stabilization        ✅ 2026-07-19
-         Frozen Zone + Boundary Rules
-         ├── v6/runtime/           (19 文件 Frozen)
-         ├── capability/           (CapabilityRuntimeContract)
-         └── architecture-boundaries.md
-
-Phase 1  Presentation Layer                ✅ 2026-07-20
-         ├── Phase 1-A  Presentation Foundation
-         │   ├── view_models/    (agent/capability/conversation/memory/settings)
-         │   └── adapters/       (5 个 Adapter)
-         │
-         ├── Phase 1-B  Shell Contract Freeze     ✅ 2026-07-21
-         │   ├── shell/protocol.py  (ShellBoundary + 6 模型)
-         │   ├── shell/transformers/ (3 个转换器)
-         │   ├── shell/integration.py (PresentationPipeline)
-         │   └── ADR-001-shell-contract-freeze.md
-         │
-         └── Phase 1-C  Runtime Adapter Integration   ⏳ Next
-             └── 第一条黄金路径：Session → NavigationGroup
-
-Phase 2  Workbench Integration             待定
-Phase 3  Multi-Renderer                    待定
-```
-
-> **Shell 不是 UI。Shell 是 Agent Workbench OS 的 Renderer-Independent Presentation Contract。**
->
-> UI 只是 Shell 的一种 Renderer。未来 Desktop UI / Web UI / Mobile UI / CLI / Embedded Component 全部通过 ShellProtocol 接入。
->
-> 详见 [.project/decisions/ADR-001-shell-contract-freeze.md](.project/decisions/ADR-001-shell-contract-freeze.md)
-
----
-
-## 历史阶段
+## 当前任务
 
 **v6.11.0-alpha：Metadata-driven Workbench**（在 `v6-agent` 分支执行）：
 
@@ -707,25 +608,25 @@ UI (Qt / Web / CLI)
 
 以后增加 Knowledge、Workflow、Profiler，WorkspaceHost 一行不用改。第一版可以只实现 ChatWorkspaceItem，但 `WorkspaceHost` 的接口必须允许后续动态注册新的 WorkspaceItem 类型，不能一开始就把 Workspace 的内容写死。
 
-#### 5. MainWindow → WorkbenchHost → Workbench
+#### 5. Entry → Presentation → UI Shell
 
 不要替换 `MainWindow`。正确的分层是：
 
 ```
 MainWindow（顶层窗口，只负责 OS 级窗口行为：标题栏、缩放、关闭、菜单）
-    ↓ 持有
-WorkbenchHost（负责把 Workbench 装进窗口，处理 Host 级事件）
-    ↓ 持有
-Workbench（真正的 IDE 骨架：Navigator / WorkspaceHost / Inspector / StatusBar / CommandBar）
+    ↓
+UI Shell（Workbench QWidget：QSplitter + LeftPanel + ChatArea + RightPanel + StatusBar）
+    ↓
+Presentation Layer（ViewModel + Adapter：Runtime 数据转为 UI 可消费的 ViewModel）
+    ↓
+Runtime OS（Agent / Capability / Memory / Tool / Provider Runtime）
 ```
 
-这样以后：
-
-- Desktop：`MainWindow` → `WorkbenchHost` → `Workbench`
-- Web：`Browser` → `WorkbenchHost` → `Workbench`
-- Embedded：`Host` → `WorkbenchHost` → `Workbench`
-
-Runtime 完全一样，Workbench 本身保持不变。
+核心原则：
+- UI Shell 是纯 View，零 Runtime import
+- Presentation Layer 是唯一翻译层
+- 未来 Desktop 可替换为 Web / Mobile / Embedded Shell，Runtime 完全不变
+- UI 组件使用 AI OS 语义（Agent / Conversation / Capability / Memory / Tool），不使用 IDE 语义（Navigator / Inspector / CommandBar）
 
 #### 6. UI 不保存业务状态
 
@@ -835,11 +736,24 @@ v6.7.0-alpha 完成 Step 5.4 Runtime Orchestration Foundation：新增 `v6/runti
 │   └── getting-started.md  # 5 分钟上手指南
 │
 ├── # 源码分组
-├── agent_workbench/        # 【V6 第一个真实产品实例】Agent Workbench V6
+├── agent_workbench/        # 【Agent Workbench OS】产品层
 │   ├── __init__.py
 │   ├── app.py              # CLI/GUI 双入口
-│   ├── controller.py       # Application Layer 控制器，持有 AgentWorkbenchRuntime
-│   ├── adapter.py          # Workbench Runtime Adapter（预留）
+│   ├── controller.py       # Application Layer 控制器
+│   ├── adapter.py          # Workbench Runtime Adapter
+│   ├── presentation/       # Presentation Layer（ViewModel + Adapter）★ v6.14+
+│   │   ├── __init__.py
+│   │   ├── view_models/    # ViewModel Contract（UI 消费的数据模型）
+│   │   │   ├── agent.py        # AgentViewModel + AgentRuntimeViewModel
+│   │   │   ├── conversation.py # ConversationViewModel
+│   │   │   ├── capability.py   # CapabilityViewModel + ToolViewModel
+│   │   │   ├── memory.py       # MemoryViewModel
+│   │   │   └── settings.py     # SettingsViewModel
+│   │   └── adapters/       # Runtime → ViewModel 翻译层
+│   │       ├── agent_adapter.py
+│   │       ├── conversation_adapter.py
+│   │       ├── capability_adapter.py
+│   │       └── memory_adapter.py
 │   ├── config/             # 配置资源
 │   │   ├── default.yaml    # 10 模块默认 YAML 配置
 │   │   └── loader.py       # 配置加载器

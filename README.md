@@ -1,6 +1,6 @@
 # AI Agent Workbench
 
-> **Stable line: `main` (v6.12.0-beta.15) | Development line: `v6-agent`**
+> **Stable line: `main` (v6.12.0-beta.15) | Development line: `v6-agent` (v6.14.0-alpha)**
 >
 > V6 is a ground-up rewrite of the Agent Runtime platform. It uses `RuntimeContext` as the single public protocol and treats Agent capabilities as first-class Runtime objects.
 >
@@ -8,14 +8,27 @@
 
 ---
 
+## Architecture Status (v6.14.0-alpha)
+
+```
+CENTRE Runtime → Interaction Boundary → Presentation Renderer → v6/ui → Qt
+```
+
+- **v6/ui** (22 files) is the frozen Pure UI Foundation — NOT the deprecated v6-agent
+- **Renderer** layer (`presentation/renderers/v6_ui/`) maps data to UI, never touches v6/ui private members
+- **Application** layer (`application/`) uses `WorkbenchController`, NOT `WorkbenchUIController`
+- Read [ARCHITECTURE_BOUNDARY.md](./ARCHITECTURE_BOUNDARY.md) before modifying any file
+
+---
+
 ## For AI Agents — Start Here
 
-**Before any operation, read `.agent-entry.json`** — it is the Agent Control Plane entry point that defines:
+**Before any operation, read these documents in order:**
 
-- Which branch is stable (`main`) and which is for development (`v6-agent`)
-- The governance rules all agents must follow
-- Required reading documents
-- Handoff protocol
+1. [ARCHITECTURE_BOUNDARY.md](./ARCHITECTURE_BOUNDARY.md) — **Construction rules (MANDATORY first read)**
+2. [v6/UI_FOUNDATION.md](./v6/UI_FOUNDATION.md) — v6/ui freeze contract
+3. [PROJECT_BLUEPRINT.md](./PROJECT_BLUEPRINT.md) — Project overview and frozen zones
+4. [`.agent-entry.json`](./.agent-entry.json) — Agent Control Plane entry point
 
 Governance center: [`lovingxiong-dot/agent-governance`](https://github.com/lovingxiong-dot/agent-governance)
 
@@ -85,17 +98,18 @@ Current status: **575/575 passed**.
 
 | Document | Purpose | Read Time |
 |---|---|---|
+| [ARCHITECTURE_BOUNDARY.md](./ARCHITECTURE_BOUNDARY.md) | **Construction rules for agents — MUST read first** | 10 min |
+| [v6/UI_FOUNDATION.md](./v6/UI_FOUNDATION.md) | v6/ui formal freeze contract | 10 min |
 | [`.agent-entry.json`](./.agent-entry.json) | **ACP Entry — AI agent MUST read first** | 5 min |
+| [PROJECT_BLUEPRINT.md](./PROJECT_BLUEPRINT.md) | Project lineage, architecture, frozen zones | 1 hour |
+| [`docs/v6/architecture-boundaries.md`](./docs/v6/architecture-boundaries.md) | Detailed architecture boundary spec | 20 min |
 | [`docs/v6/runtime-kernel-spec.md`](./docs/v6/runtime-kernel-spec.md) | Runtime Kernel: layers, ownership, dependency rules | 30 min |
 | [`docs/v6/runtime-glossary.md`](./docs/v6/runtime-glossary.md) | Standard vocabulary for the platform | 15 min |
 | [`docs/v6/repository-governance.md`](./docs/v6/repository-governance.md) | Repository structure and cleanliness rules | 10 min |
 | [`docs/v6/repository-map.md`](./docs/v6/repository-map.md) | Auto-generated directory overview | 5 min |
-| [`docs/v6/data-layer-inventory.md`](./docs/v6/data-layer-inventory.md) | Data layer inventory and UI mapping | 15 min |
-| [`docs/v6/v6.10-task-list.md`](./docs/v6/v6.10-task-list.md) | v6.10.x executable task list | 15 min |
-| [`PROJECT_BLUEPRINT.md`](./PROJECT_BLUEPRINT.md) | Project lineage, current task, and roadmap | 1 hour |
+| [`docs/v6/SPEC.md`](./docs/v6/SPEC.md) | UI component signal contracts | 30 min |
 | [`PROJECT_LINEAGE.md`](./PROJECT_LINEAGE.md) | V5 / V6 identity map and branch rules | 15 min |
 | [`CHANGELOG.md`](./CHANGELOG.md) | Version-by-version changelog | 20 min |
-| [`docs/v6/SPEC.md`](./docs/v6/SPEC.md) | UI component signal contracts | 30 min |
 
 ---
 
@@ -126,8 +140,10 @@ For the full map, see [`docs/v6/repository-map.md`](./docs/v6/repository-map.md)
 |---|---|
 | Stable branch | `main` |
 | Development branch | `v6-agent` |
-| Current version | `v6.12.0-beta.15` |
+| Current version | `v6.14.0-alpha` (Presentation Boundary Freeze) |
 | Runtime Kernel | Frozen — Request / Planning / Task / Capability / Engine / Provider |
+| v6/ui Foundation | Frozen — 22 files Pure UI Foundation |
+| Presentation Boundary | Frozen — Phase 2-B.1 |
 | Test status | `pytest` 575/575 passed |
 | Package status | V6 spec configured via `agent_workbench.spec` |
 
