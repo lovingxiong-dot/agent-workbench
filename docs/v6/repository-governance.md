@@ -36,6 +36,12 @@ Each type of document has exactly one official version.
 | Asset | Authority |
 |---|---|
 | README | `README.md` (root) |
+| Agent Entry | `AGENT_ENTRY.md` (root) |
+| Root Index | `ROOT_INDEX.md` (root) |
+| Project Declaration | `PROJECT_DECLARATION.md` (root) |
+| Project State | `PROJECT_STATE.md` (root) |
+| Architecture Nav | `ARCHITECTURE.md` (root) |
+| Architecture Boundary | `ARCHITECTURE_BOUNDARY.md` (root) |
 | Blueprint | `PROJECT_BLUEPRINT.md` (root) |
 | Changelog | `CHANGELOG.md` (root) |
 | Lineage | `PROJECT_LINEAGE.md` (root) |
@@ -157,9 +163,10 @@ This repository is maintained by multiple agents. The following conventions ensu
 
 ### Before You Start
 
-1. **Read the constitution first** — `repository-governance.md`, `runtime-glossary.md`, and `runtime-kernel-spec.md` define the boundaries.
-2. **Check the baseline** — note the current Git commit and tag (e.g., `v6.9.6-hygiene`).
-3. **Run the audits** — `python -B scripts/audit_repository.py` and `python -B scripts/verify_repository.py` must pass before you claim completion.
+1. **Read the governance entry layer first** — `AGENT_ENTRY.md`, `PROJECT_DECLARATION.md`, `PROJECT_STATE.md`, and `ARCHITECTURE.md` at the repository root define the boundaries.
+2. **Read the deep specs** — `runtime-glossary.md` and `runtime-kernel-spec.md` define the Runtime constraints.
+3. **Check the baseline** — note the current Git commit and tag (e.g., `v6.9.6-hygiene`).
+4. **Run the audits** — `python -B scripts/audit_repository.py` and `python -B scripts/verify_repository.py` must pass before you claim completion.
 
 ### While You Work
 

@@ -11,10 +11,14 @@
 ### Before Touching ANY File
 
 ```
-1. Read ARCHITECTURE_BOUNDARY.md (project root)
-2. Check which layer you're modifying
-3. Check Frozen Zone status
-4. Verify dependency direction is downward only
+1. Read AGENT_ENTRY.md (root) — mandatory onboarding
+2. Read ROOT_INDEX.md (root) — repository navigation
+3. Read PROJECT_DECLARATION.md (root) — repository constitution
+4. Read PROJECT_STATE.md (root) — current frozen state
+5. Read ARCHITECTURE_BOUNDARY.md (root) — construction rules
+6. Check which layer you're modifying
+7. Check Frozen Zone status
+8. Verify dependency direction is downward only
 ```
 
 ### Architecture (One-Line)
@@ -54,7 +58,11 @@ CENTRE Runtime → Interaction Boundary → Presentation Renderer → v6/ui → 
 
 | Document | When to Read |
 |----------|-------------|
-| `ARCHITECTURE_BOUNDARY.md` | **First thing — always** |
+| `AGENT_ENTRY.md` | **First thing — always** |
+| `ROOT_INDEX.md` | Repository navigation |
+| `PROJECT_DECLARATION.md` | Repository constitution |
+| `PROJECT_STATE.md` | Current frozen state |
+| `ARCHITECTURE_BOUNDARY.md` | Construction rules |
 | `v6/UI_FOUNDATION.md` | Before touching v6/ui |
 | `PROJECT_BLUEPRINT.md` | For project overview |
 | `docs/v6/architecture-boundaries.md` | For detailed boundary rules |

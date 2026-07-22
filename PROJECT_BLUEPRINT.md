@@ -25,6 +25,8 @@
 
 See also [`PROJECT_LINEAGE.md`](./PROJECT_LINEAGE.md) for the complete V5 / V6 identity map.
 
+For governance rules, see [`AGENT_ENTRY.md`](./AGENT_ENTRY.md), [`PROJECT_DECLARATION.md`](./PROJECT_DECLARATION.md), and [`PROJECT_STATE.md`](./PROJECT_STATE.md).
+
 ## Product Contract — Workbench OS 1.0
 
 > 产品契约已冻结于 [`docs/v6/product-contract.md`](./docs/v6/product-contract.md)。
