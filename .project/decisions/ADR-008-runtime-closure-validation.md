@@ -111,6 +111,104 @@ When all four loops have a record marked `closed`, this ADR is complete and `ADR
 
 ---
 
+## 4.1 Phase 2-D.2.1 Renderer Migration Validation Records
+
+Per the review feedback, validation records must record **evidence**, not declare completion. Each record names the question, the evidence, and the status.
+
+### Validation Record Status
+
+```
+ADR-008 Runtime Closure Validation
+
+Status: VALIDATING
+
+Validation Records:
+
+ADR-008.1
+Renderer Boundary Validation
+Result: PASS
+
+ADR-008.2
+Gateway Path Validation
+Result: PASS (de facto, all session ops now route through interaction_layer)
+
+ADR-008.3
+Runtime Independence Validation
+Result: PASS
+
+ADR-008.4
+State Ownership Validation
+Result: PASS
+```
+
+### ADR-008.1 — Renderer Boundary Validation
+
+**Question**: Is Renderer purely Presentation?
+
+**Evidence**:
+- `presentation/renderers/v6_ui/event_renderer.py`: only imports `InteractionEvent`, `InteractionEventType`, and v6/ui panel references. Zero `agent_workbench.runtime.*` import. Zero Agent Logic.
+- `presentation/renderers/v6_ui/shell_adapter.py`: only imports `ShellContract` and v6/ui public APIs (`update_sessions`, `set_title`, `reset_workspace`, `append_user`, `append_ai`, `show_file`, `append_terminal`).
+
+**Result**: PASS.
+
+### ADR-008.2 — Gateway Path Validation
+
+**Question**: Is there a single Gateway entry, and is every Presentation path routed through it?
+
+**Evidence (Phase 2-D.2.1)**:
+- Before: `application/v6_ui_application.py` directly accessed `runtime.module_registry.get("session")` and `session_module.manager.get(sid)`, bypassing the InteractionLayer.
+- After: `WorkbenchInteractionLayer` now provides 4 session/operation methods:
+  - `list_conversation_groups()`
+  - `create_conversation()`
+  - `delete_conversation()`
+  - `get_session_metadata()`
+- `v6_ui_application.py` now calls only `interaction_layer.*` for both request submission and session operations.
+- Grep verification: `runtime\.module_registry|orchestrator\.|session_module\.` in `application/` returns zero matches (excluding `from agent_workbench.runtime.interaction.request` which is a Protocol dataclass, not Runtime Implementation).
+- CLI: `controller.interaction_layer.set_renderer(...)` + `controller.chat(text)` → `interaction_layer`.
+- GUI: signal handlers → `interaction_layer.submit_request(RuntimeRequest(...))`.
+- All UI signals (ChatArea / LeftPanel / RightPanel) converge to `interaction_layer.submit_request`.
+
+**Result**: PASS (de facto — `WorkbenchInteractionLayer` is the single entry, not yet named Gateway).
+
+### ADR-008.3 — Runtime Independence Validation
+
+**Question**: Is Runtime truly self-governing, independent of UI?
+
+**Evidence**:
+- `AgentWorkbenchRuntime.__init__` takes only `config_path`. No UI dependency.
+- `runtime/agent_runtime.py` imports: `v6.runtime.*`, `engines.*`, `runtime.capability.*`, `runtime.modules.*`. No `v6.ui.*`, no `PySide6`, no `WorkbenchUIController`.
+- Runtime can be constructed and started without any UI component (CLI launches Runtime, GUI adds Presentation layer on top).
+- `WorkbenchController` constructs Runtime internally — UI layer never touches Runtime directly.
+- After Phase 2-D.2.1, no Presentation code path accesses `runtime.module_registry` or `session_module.manager` — Runtime's internal module registry is no longer a public surface.
+
+**Result**: PASS.
+
+### ADR-008.4 — State Ownership Validation
+
+**Question**: Does State belong to Runtime, not UI or Foundation?
+
+**Evidence**:
+- Session State: `SessionModule` (Runtime kernel). Owner is Runtime.
+- Decision State: `DecisionManager` (Runtime kernel). Owner is Runtime.
+- Orchestrator State: `CoreAgentRuntime` (Runtime kernel). Owner is Runtime.
+- UI State (Navigation / Workspace / Inspector): `ShellContract` (Presentation layer). Owner is Presentation.
+- Foundation State: not defined (Candidate only — avoids premature abstraction).
+- `ConversationService` is now accessed exclusively through `interaction_layer`, not directly from Application. Session ownership remains in Runtime.
+
+**Result**: PASS.
+
+---
+
+## 4.2 Implication for ADR-007 / ADR-009
+
+Phase 2-D.2.1 observations and migration confirm that Workbench v6 has **already** built the architectural pattern Foundation Contract v0.5 was trying to extract.
+
+The interaction layer now exposes 4 session operation methods that match the `Foundation.Gateway` pattern (read/write operations on Conversation domain). Whether to extract these into a formal `Foundation.Gateway` Protocol depends on whether Agent Manager OS would need the same operations. Until that product exists, these methods stay on `WorkbenchInteractionLayer`.
+
+**No new Contract / Protocol / Schema added during Phase 2-D.2.1.**
+
+---
+
 ## 4.1 Phase 2-D.2 Implementation Observation
 
 Phase 2-D.2 enters **Implementation Observation Mode**. No new Contract / Protocol / Schema introduced. Only four questions answered by reading current code:

@@ -160,27 +160,19 @@ class V6UIApplication:
             self._presentation.update_navigation(groups)
 
     def _get_raw_sessions(self) -> list[dict]:
-        """从 WorkbenchController 获取会话原始数据。"""
-        from agent_workbench.conversation import ConversationService
-        from v6.services.session_service import SessionService
-        from v6.services.chat_service import ChatService
+        """通过 InteractionLayer 拉取会话原始数据。
 
+        Phase 2-D.2.1: 不再直接访问 runtime.module_registry，
+        所有 session / conversation 操作必须经过 interaction_layer。
+        """
+        raw: list[dict] = []
         try:
-            runtime = self._controller.runtime
-            session_module = runtime.module_registry.get("session")
-            chat_module = runtime.module_registry.get("chat")
-            if session_module is not None and chat_module is not None:
-                conv_service = ConversationService(
-                    SessionService(session_module),
-                    ChatService(chat_module),
-                )
-                raw: list[dict] = []
-                for _gid, _title, sessions in conv_service.list_groups():
-                    raw.extend(sessions)
-                return raw
+            groups = self._controller.interaction_layer.list_conversation_groups()
+            for _gid, _title, sessions in groups:
+                raw.extend(sessions)
         except Exception:
             pass
-        return []
+        return raw
 
     # ═══════════════════════════════════════════════════════════════
     # Session 操作
@@ -190,10 +182,7 @@ class V6UIApplication:
         """会话选中 → 加载历史消息到 ChatArea。"""
         pipeline = self._presentation.pipeline
         try:
-            session_module = self._controller.runtime.module_registry.get("session")
-            if session_module is None:
-                return
-            session = session_module.manager.get(sid)
+            session = self._controller.interaction_layer.get_session_metadata(sid)
             title = session.get("title", "") if session else ""
             subtitle = ""
             raw_messages = self._controller.get_state().get("messages", [])
@@ -209,19 +198,8 @@ class V6UIApplication:
     def _on_new_session(self) -> None:
         """新建会话。"""
         try:
-            from agent_workbench.conversation import ConversationService
-            from v6.services.session_service import SessionService
-            from v6.services.chat_service import ChatService
-
-            runtime = self._controller.runtime
-            session_module = runtime.module_registry.get("session")
-            chat_module = runtime.module_registry.get("chat")
-            if session_module is not None and chat_module is not None:
-                conv_service = ConversationService(
-                    SessionService(session_module),
-                    ChatService(chat_module),
-                )
-                sid = conv_service.create_conversation()
+            sid = self._controller.interaction_layer.create_conversation()
+            if sid:
                 self._left.set_active_session(sid)
         except Exception:
             pass
@@ -230,25 +208,13 @@ class V6UIApplication:
         """会话操作（删除/重命名/置顶）。"""
         if action == "delete":
             try:
-                from agent_workbench.conversation import ConversationService
-                from v6.services.session_service import SessionService
-                from v6.services.chat_service import ChatService
-
-                runtime = self._controller.runtime
-                session_module = runtime.module_registry.get("session")
-                chat_module = runtime.module_registry.get("chat")
-                if session_module is not None and chat_module is not None:
-                    conv_service = ConversationService(
-                        SessionService(session_module),
-                        ChatService(chat_module),
-                    )
-                    conv_service.delete_conversation(sid)
-                    # 刷新会话列表
-                    raw = self._get_raw_sessions()
-                    if raw:
-                        pipeline = self._presentation.pipeline
-                        groups = pipeline.sessions_to_navigation_groups(raw)
-                        self._presentation.update_navigation(groups)
+                self._controller.interaction_layer.delete_conversation(sid)
+                # 刷新会话列表
+                raw = self._get_raw_sessions()
+                if raw:
+                    pipeline = self._presentation.pipeline
+                    groups = pipeline.sessions_to_navigation_groups(raw)
+                    self._presentation.update_navigation(groups)
             except Exception:
                 pass
 

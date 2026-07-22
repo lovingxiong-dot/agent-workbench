@@ -5,11 +5,14 @@ WorkbenchInteractionLayer 是 UI / MCP / Local Agent 与 Runtime 之间的薄边
 - 调用 AgentWorkbenchRuntime.submit_request() 非阻塞提交。
 - 订阅 EventBus，将 RuntimeEvent 映射为 InteractionEvent。
 - 通过 UIEventRenderer 协议把 InteractionEvent 交给 UI。
+- 提供 Session / Conversation 操作包装（load / create / delete），让 UI 不必
+  直接访问 runtime.module_registry。
 
 约束：
 - 不持有 DecisionManager。
 - 不做 Capability 路由决策。
 - 不依赖任何 UI 框架。
+- 不被任何 UI 直接绕过——所有外部输入必须经过本层。
 """
 from __future__ import annotations
 
@@ -78,9 +81,102 @@ class WorkbenchInteractionLayer:
             return self._runtime.build_chat_context(request.to_user_request(), decision)
 
         task = self._runtime.decision_manager.resolve_from_decision(
-            request.to_user_request(), decision
+            request.to_user_request(), decision,
         )
         return self._runtime.submit_task(task)
+
+    # ═══════════════════════════════════════════════════════════════
+    # Session / Conversation 操作（薄包装，禁止 UI 直接访问 Runtime）
+    # ═══════════════════════════════════════════════════════════════
+
+    def list_conversation_groups(self) -> list:
+        """列出 Conversation 分组。
+
+        Phase 2-D.2.1: 替代 Application 直接调用
+        `runtime.module_registry.get("session")` 与 `session_module.manager.list_groups()`。
+        返回 v6 ConversationMetadata TypedDict 列表，Application 只做形状转换。
+        """
+        session_module = self._runtime.module_registry.get("session")
+        chat_module = self._runtime.module_registry.get("chat")
+        if session_module is None or chat_module is None:
+            return []
+        from agent_workbench.conversation import ConversationService
+        from v6.services.chat_service import ChatService
+        from v6.services.session_service import SessionService
+
+        service = ConversationService(
+            SessionService(session_module),
+            ChatService(chat_module),
+        )
+        return service.list_groups()
+
+    def create_conversation(
+        self,
+        title: str = "",
+        *,
+        summary: str = "",
+        icon: str = "",
+        workspace_id: str = "",
+    ) -> str | None:
+        """创建新会话，返回 session_id。
+
+        Phase 2-D.2.1: 替代 Application 直接调用 conversation_service.create_conversation。
+        """
+        session_module = self._runtime.module_registry.get("session")
+        chat_module = self._runtime.module_registry.get("chat")
+        if session_module is None or chat_module is None:
+            return None
+        from agent_workbench.conversation import ConversationService
+        from v6.services.chat_service import ChatService
+        from v6.services.session_service import SessionService
+
+        service = ConversationService(
+            SessionService(session_module),
+            ChatService(chat_module),
+        )
+        return service.create_conversation(
+            title=title,
+            summary=summary,
+            icon=icon,
+            workspace_id=workspace_id,
+        )
+
+    def delete_conversation(self, sid: str) -> bool:
+        """删除会话。
+
+        Phase 2-D.2.1: 替代 Application 直接调用 conversation_service.delete_conversation。
+        """
+        session_module = self._runtime.module_registry.get("session")
+        chat_module = self._runtime.module_registry.get("chat")
+        if session_module is None or chat_module is None:
+            return False
+        from agent_workbench.conversation import ConversationService
+        from v6.services.chat_service import ChatService
+        from v6.services.session_service import SessionService
+
+        service = ConversationService(
+            SessionService(session_module),
+            ChatService(chat_module),
+        )
+        try:
+            service.delete_conversation(sid)
+            return True
+        except Exception:
+            return False
+
+    def get_session_metadata(self, sid: str) -> dict | None:
+        """获取会话元数据。
+
+        Phase 2-D.2.1: 替代 Application 直接调用 session_module.manager.get(sid)。
+        返回 session dict（包含 title 等字段），不存在则返回 None。
+        """
+        session_module = self._runtime.module_registry.get("session")
+        if session_module is None:
+            return None
+        session = session_module.manager.get(sid)
+        if session is None:
+            return None
+        return dict(session) if isinstance(session, dict) else None
 
     def close(self) -> None:
         """关闭 Interaction Layer：取消 EventBus 订阅并释放资源。"""
