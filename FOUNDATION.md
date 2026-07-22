@@ -161,10 +161,20 @@ Per [ADR-007](./.project/decisions/ADR-007-foundation-contract-freeze-v1.0.md), 
 **State**: Candidate (non-binding)
 **Authority**: NONE
 **Binding**: NON-BINDING
-**Validation**: PENDING ([ADR-008 Runtime Closure Validation](./.project/decisions/ADR-008-runtime-closure-validation.md))
-**Next Milestone**: Phase 2-D.2 Renderer Migration
+**Validation Status (per ADR-008 / ADR-009)**:
+- Workbench v6 Runtime Closure: CLOSED (3 PASS + 1 STRUCTURAL CHECK)
+- Cross-product Validation: PENDING (requires second consumer, e.g., Agent Manager OS)
+**Next Milestone**: [ADR-009 Foundation Contract Promotion Proposal](./.project/decisions/ADR-009-foundation-contract-promotion-proposal.md) (NOT Freeze)
+**Next Phase**: Phase 2-D.4 Runtime Replay / Trace Validation
 
-Workbench v6 implementation is the source of truth until validation records close. The proposal introduces the **concept** (Runtime / Event / Data / Gateway are the right dimensions), but the **implementation details** are still under review.
+Workbench v6 implementation is the source of truth for what Workbench needs. Any Foundation promotion must reference [ADR-008 validation records](./.project/decisions/ADR-008-runtime-closure-validation.md) and **must be deferred until a second consumer (Agent Manager OS / IDE Plugin / Mobile) proves cross-product stability**.
+
+Per [ADR-009 §2 Promotion Tiers](./.project/decisions/ADR-009-foundation-contract-promotion-proposal.md):
+- **Tier A** (Workbench-validated): `InteractionEvent` shape, `RuntimeRequest` shape, `_task_to_request` mapping, `RuntimeEventMapper` concept
+- **Tier B** (Structurally checked only, behavioral untested): `ProviderProtocol`, `ProviderEndpoint`, `GatewayMode`, `EventEnvelope`, `AgentIdentity`/`Session`/`Message`, `WorkflowState`/`Step`, `CapabilityDefinition`/`Parameter`/`Category`
+- **Tier C** (Not yet defined): `ExecutionContext`, `RuntimeTrace`, routing policy, Provider health/retry/fallback
+
+The proposal introduces the **concept** (Runtime / Event / Data / Gateway are the right dimensions), but the **implementation details** are still under review.
 
 ---
 
@@ -173,18 +183,28 @@ Workbench v6 implementation is the source of truth until validation records clos
 ```
 Phase 1: Complete Workbench v6 (Phase 2-D.x)
   → Prove: Agent + Workflow + Runtime + UI can run end-to-end
-  → Validate four loops: Identity / Event / Provider / Data
+  → Validate four loops: Identity / Event / Provider (structural) / Data
+  → Status: COMPLETE (per ADR-008 v1.4 — 3 PASS + 1 STRUCTURAL CHECK)
 
 Phase 2: Runtime Closure Validation (ADR-008)
-  → Four loops must close before any Foundation Freeze
+  → Four loops evidence accumulated: 008.1, 008.2.1-4, 008.3, 008.4.1-5
+  → Workbench v6 Runtime Closure: CLOSED
+  → Cross-product Validation: PENDING
 
-Phase 3: Foundation Contract v1.0 Freeze (ADR-009, future)
-  → Only after ADR-008 validation records close
+Phase 3: Foundation Contract Promotion (ADR-009, deferred)
+  → Wait for second consumer (Agent Manager OS / IDE Plugin / Mobile)
+  → Tier A symbols ready: InteractionEvent / RuntimeRequest shape
+  → Tier B symbols need behavioral tests (Provider switching, retry, etc.)
 
-Phase 4: Agent Manager OS
-  → Build on validated Foundation Contract
+Phase 4: Runtime Replay / Trace (Phase 2-D.4)
+  → Prove: same Event Stream can be replayed
+  → Foundation for: Debugger / Audit / Agent Governance / Enterprise Control Plane
 
-Phase 5: CENTRE Federation
+Phase 5: Agent Manager OS (future)
+  → Build on validated Tier A symbols only
+  → Cross-product validation leg completes
+
+Phase 6: CENTRE Federation
   → Multi-runtime, multi-agent governance
 ```
 
@@ -202,7 +222,8 @@ Phase 5: CENTRE Federation
 | [ADR-005 Project Identity Boundary](./.project/decisions/ADR-005-project-identity-boundary.md) | Repository vs Product separation |
 | [ADR-006 Workbench v6 Identity Freeze](./.project/decisions/ADR-006-workbench-v6-identity-freeze.md) | Workbench v6 scope freeze |
 | [ADR-007 Foundation Contract v0.5](./.project/decisions/ADR-007-foundation-contract-freeze-v1.0.md) | Foundation Contract (proposal) |
-| [ADR-008 Runtime Closure Validation](./.project/decisions/ADR-008-runtime-closure-validation.md) | Validation gate before Freeze |
+| [ADR-008 Runtime Closure Validation](./.project/decisions/ADR-008-runtime-closure-validation.md) | Workbench v6 Runtime Closure: CLOSED |
+| [ADR-009 Foundation Contract Promotion Proposal](./.project/decisions/ADR-009-foundation-contract-promotion-proposal.md) | Promotion path to Freeze (deferred to second consumer) |
 
 ---
 
@@ -210,4 +231,5 @@ Phase 5: CENTRE Federation
 
 | Version | Date | Change |
 |---------|------|--------|
-| v1.0 | 2026-07-22 | Initial Foundation. Three-tier state model (Frozen / Proposal / Experimental). ADR-008 validation gate. |
+| v1.0 | 2026-07-22 | Initial Foundation. Three-tier state model. ADR-008 validation gate. |
+| v1.1 | 2026-07-22 | Provider Boundary: PASS → STRUCTURAL CHECK ONLY. Cross-product validation pending. ADR-009 Promotion Proposal replaces Freeze plan. |

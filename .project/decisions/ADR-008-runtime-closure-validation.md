@@ -104,7 +104,7 @@ Each closed loop must produce a validation record:
 |------|--------|-----------------|
 | 2.1 Runtime Identity | PASS | ADR-008.3 |
 | 2.2 Event Flow | PASS | ADR-008.1, 008.2.2, 008.2.3 |
-| 2.3 Provider Boundary | PASS | ADR-008.4 (provider pin) |
+| 2.3 Provider Boundary | STRUCTURAL CHECK ONLY | ADR-008.4.5 (Phase 2-D.3, structural) |
 | 2.4 Data Flow | PASS | ADR-008.4.1-4 (Phase 2-D.3) |
 
 When all four loops have a record marked `closed`, this ADR is complete and `ADR-009 Foundation Contract v1.0 Freeze` can be proposed.
@@ -445,10 +445,37 @@ After Phase 2-D.3, the four ADR-008 validation loops have observational evidence
 |------|---------|--------|
 | 2.1 Runtime Identity | ADR-008.3 | PASS |
 | 2.2 Event Flow | ADR-008.1, 008.2.2, 008.2.3 | PASS |
-| 2.3 Provider Boundary | ADR-008.4 (provider pin via ExecutionContext) | PASS |
+| 2.3 Provider Boundary | ADR-008.4.5 (structural check only) | STRUCTURAL CHECK |
 | 2.4 Data Flow | ADR-008.4.1-4 | PASS |
 
 ADR-008 section 2.4 Data Flow Loop is closed.
+
+ADR-008 section 2.3 Provider Boundary Loop is **structurally checked** (ADR-008.4.5), not yet behaviorally validated. Behavioral validation requires runtime switching, failure handling, retry policy, capability/provider binding, and multi-provider routing tests (deferred to Phase 2-D.4+).
+
+---
+
+## 4.6 ADR-008.4.5 — Provider Boundary Structural Check (NOT Behavioral)
+
+**Status**: STRUCTURAL CHECK ONLY — behavioral validation deferred.
+
+**What was checked (structural)**:
+- `ExecutionContext.provider_id` carries Provider identity through Task → Engine. PASS.
+- `RuntimeEventMapper` emits `PROVIDER_SELECTED` event when Provider is chosen. PASS.
+- Provider identity does not leak into UI (Renderer consumes only `InteractionEvent`). PASS.
+- `services/` owns Provider Adapter implementations; Runtime consumes via Engine. PASS.
+
+**What was NOT checked (behavioral)**:
+- Runtime Provider switching mid-session (no execution interruption).
+- Provider failure handling (timeout, rate-limit, retry policy).
+- Capability ↔ Provider binding (which Provider serves which Capability).
+- Multi-provider routing (fallback chains).
+- Provider lifecycle (register / unregister / health check) without Runtime restart.
+
+**Implication for Foundation Contract**:
+- `presentation/protocols/foundation/gateway.py` declares `ProviderProtocol` enum, but Provider enumeration is **not yet validated**. It must remain Candidate.
+- The Foundation Contract must NOT lock-in Provider enumeration or routing policy until behavioral validation completes.
+
+**Next milestone**: Provider behavioral validation in Phase 2-D.4+ (separate ADR).
 
 ---
 
@@ -472,13 +499,17 @@ Foundation Contract v0.5: Candidate (non-binding)
 
 Authority: NONE
 Binding: NON-BINDING
-Validation: CLOSED (this ADR - 4 loops PASS)
-Next Milestone: ADR-009 Foundation Contract v1.0 Freeze (proposal only)
+Validation: CLOSED for Workbench v6 Runtime Closure (this ADR - 4 loops PASS or STRUCTURAL CHECK)
+Cross-product Validation: PENDING (requires second consumer such as Agent Manager OS)
+Next Milestone: ADR-009 Foundation Contract Promotion Proposal (NOT Freeze)
 ```
 
-ADR-008 is now COMPLETE as a validation record. All four loops have observational evidence.
+ADR-008 is COMPLETE as a Workbench v6 Runtime Closure validation record. The four loops have observational evidence (3 PASS + 1 STRUCTURAL CHECK).
 
-`presentation/protocols/foundation/` is still a CANDIDATE, not a contract. Workbench v6 implementation is the source of truth. Any future Foundation Freeze must reference the validation records in this ADR as evidence.
+`presentation/protocols/foundation/` is still a CANDIDATE, not a contract. Workbench v6 implementation is the source of truth for what Workbench needs. Any Foundation promotion must:
+1. Reference the validation records in this ADR as Workbench-side evidence.
+2. Be deferred until a second consumer (e.g., Agent Manager OS) proves cross-product stability.
+3. Treat Provider enumeration as Candidate (not yet behaviorally validated, see §4.6).
 
 ---
 
@@ -490,3 +521,4 @@ ADR-008 is now COMPLETE as a validation record. All four loops have observationa
 | v1.1 | 2026-07-22 | Phase 2-D.2.1 Renderer Migration records (008.1-008.4). |
 | v1.2 | 2026-07-22 | Phase 2-D.2.2 InteractionLayer Boundary Principle + records (008.2.1-008.2.4). |
 | v1.3 | 2026-07-22 | Phase 2-D.3 Data Flow Validation records (008.4.1-008.4.4). All four loops closed. |
+| v1.4 | 2026-07-22 | ADR-008.4.5 Provider Boundary Structural Check (NOT behavioral). Foundation promotion deferred to second consumer. |
