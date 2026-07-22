@@ -128,6 +128,33 @@ Interaction Protocol → Runtime → Presentation → Renderer → UI
 
 ---
 
+## Workbench v6 Scope (Frozen)
+
+Per [ADR-006 Workbench v6 Identity Freeze](.project/decisions/ADR-006-workbench-v6-identity-freeze.md):
+
+### Belongs to Workbench v6
+
+| Capability | Description |
+|------------|-------------|
+| Chat Workspace | User ↔ Agent single conversation |
+| Agent Runtime Interaction | Single agent execution context |
+| Workflow Execution | Single workflow / task running |
+| Tool Use | Single agent calling tools |
+| Memory Interaction | Single agent reading/writing memory |
+| User Experience | Local UI, single user, single session |
+
+### Does NOT Belong to Workbench v6
+
+| Capability | Belongs To |
+|------------|------------|
+| Multi Agent Scheduling | Agent Manager OS |
+| Federation | Agent Manager OS |
+| Global Registry | Agent Manager OS |
+| Tenant Governance | Agent Manager OS |
+| Permission Control Plane | Agent Manager OS |
+
+---
+
 ## Architecture Boundary
 
 ```

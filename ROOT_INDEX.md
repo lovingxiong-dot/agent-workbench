@@ -30,14 +30,17 @@ For full context, read [PROJECT_DECLARATION.md](./PROJECT_DECLARATION.md).
 ## New Here? Read This
 
 ```
-1. FOUNDATION.md              ← Shared ancestor (CENTRE ecosystem)
-2. PROJECT_DECLARATION.md     ← Workbench v6 Constitution
-3. PROJECT_STATE.md           ← Current development snapshot
-4. AGENT_ENTRY.md             ← Mandatory AI Agent onboarding
-5. ARCHITECTURE.md            ← Architecture navigation
-6. Relevant Domain Docs       ← Deep dive into your area
-7. Code                       ← Start working
+1. ROOT_INDEX.md              ← Repository Router (this file — what is here)
+2. FOUNDATION.md              ← Shared Ancestor (CENTRE ecosystem worldview)
+3. AGENT_ENTRY.md             ← AI Agent onboarding + action rules
+4. PROJECT_DECLARATION.md     ← Workbench v6 Constitution
+5. PROJECT_STATE.md           ← Current development snapshot
+6. ARCHITECTURE.md            ← Architecture navigation
+7. Relevant Domain Docs       ← Deep dive into your area
+8. Code                       ← Start working
 ```
+
+The reading order follows cognitive progression: **Map → Worldview → Rules → Constitution → State → Architecture → Domain → Code**.
 
 ---
 

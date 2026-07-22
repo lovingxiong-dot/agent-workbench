@@ -25,14 +25,16 @@ CENTRE Runtime → Interaction Boundary → Presentation Renderer → v6/ui → 
 
 **Before any operation, read these documents in order:**
 
-1. [FOUNDATION.md](./FOUNDATION.md) — **Shared ancestor (CENTRE ecosystem) — read first**
-2. [AGENT_ENTRY.md](./AGENT_ENTRY.md) — Mandatory onboarding + target system identification
-3. [ROOT_INDEX.md](./ROOT_INDEX.md) — Repository navigation
+1. [ROOT_INDEX.md](./ROOT_INDEX.md) — **Repository Router (what is here)**
+2. [FOUNDATION.md](./FOUNDATION.md) — **Shared Ancestor (CENTRE ecosystem worldview)**
+3. [AGENT_ENTRY.md](./AGENT_ENTRY.md) — Mandatory onboarding + target system identification
 4. [PROJECT_DECLARATION.md](./PROJECT_DECLARATION.md) — Workbench v6 Constitution
 5. [PROJECT_STATE.md](./PROJECT_STATE.md) — Current development snapshot
 6. [ARCHITECTURE_BOUNDARY.md](./ARCHITECTURE_BOUNDARY.md) — Construction rules
 7. [v6/UI_FOUNDATION.md](./v6/UI_FOUNDATION.md) — v6/ui freeze contract
 8. [PROJECT_BLUEPRINT.md](./PROJECT_BLUEPRINT.md) — Project overview and frozen zones
+
+Reading order follows cognitive progression: **Map → Worldview → Rules → Constitution → State → Architecture → Domain → Code**.
 
 Governance center: [`lovingxiong-dot/agent-governance`](https://github.com/lovingxiong-dot/agent-governance)
 

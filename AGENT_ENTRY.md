@@ -12,20 +12,24 @@
 Every AI Agent entering this repository MUST read these documents in order:
 
 ```
-1. FOUNDATION.md
+1. ROOT_INDEX.md            ← Repository Router (what is here)
        ↓
-2. ROOT_INDEX.md
+2. FOUNDATION.md            ← Shared Ancestor (worldview)
        ↓
-3. PROJECT_DECLARATION.md
+3. AGENT_ENTRY.md           ← Onboarding + Action Rules
        ↓
-4. PROJECT_STATE.md
+4. PROJECT_DECLARATION.md   ← Workbench v6 Constitution
        ↓
-5. ARCHITECTURE.md
+5. PROJECT_STATE.md         ← Current development snapshot
        ↓
-6. Relevant Domain Docs
+6. ARCHITECTURE.md          ← Architecture navigation
        ↓
-7. Code
+7. Relevant Domain Docs
+       ↓
+8. Code
 ```
+
+The reading order follows cognitive progression: **Map → Worldview → Rules → Constitution → State → Architecture → Domain → Code**.
 
 ---
 
@@ -34,7 +38,7 @@ Every AI Agent entering this repository MUST read these documents in order:
 Every modification MUST declare which system it targets. Check before you touch:
 
 ```
-Target System Checklist:
+Modification Target Checklist:
 
 [ ] FOUNDATION (Shared Ancestor) — Protocol, Runtime, Data Contract, Gateway
     → Requires Architecture Review before any change

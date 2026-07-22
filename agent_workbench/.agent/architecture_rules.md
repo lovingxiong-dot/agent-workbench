@@ -11,9 +11,9 @@
 ### Before Touching ANY File
 
 ```
-1. Read FOUNDATION.md (root) — shared ancestor (CENTRE ecosystem)
-2. Read AGENT_ENTRY.md (root) — mandatory onboarding, identify target system
-3. Read ROOT_INDEX.md (root) — repository navigation
+1. Read ROOT_INDEX.md (root) — repository router (what is here)
+2. Read FOUNDATION.md (root) — shared ancestor (CENTRE ecosystem worldview)
+3. Read AGENT_ENTRY.md (root) — mandatory onboarding, identify target system
 4. Read PROJECT_DECLARATION.md (root) — Workbench v6 constitution
 5. Read PROJECT_STATE.md (root) — current frozen state
 6. Read ARCHITECTURE_BOUNDARY.md (root) — construction rules
@@ -21,6 +21,8 @@
 8. Check Frozen Zone status
 9. Verify dependency direction is downward only
 ```
+
+The reading order follows cognitive progression: **Map → Worldview → Rules → Constitution → State → Architecture → Domain → Code**.
 
 ### Architecture (One-Line)
 
@@ -59,7 +61,8 @@ CENTRE Runtime → Interaction Boundary → Presentation Renderer → v6/ui → 
 
 | Document | When to Read |
 |----------|-------------|
-| `FOUNDATION.md` | **First thing — always** |
+| `ROOT_INDEX.md` | **First thing — repository router** |
+| `FOUNDATION.md` | **Second — shared ancestor worldview** |
 | `AGENT_ENTRY.md` | **Mandatory onboarding + target system ID** |
 | `ROOT_INDEX.md` | Repository navigation |
 | `PROJECT_DECLARATION.md` | Workbench v6 constitution |

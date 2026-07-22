@@ -27,9 +27,9 @@
               },
     "effective_date":  "2026-07-11",
     "entry_documents":  [
+                            "ROOT_INDEX.md",
                             "FOUNDATION.md",
                             "AGENT_ENTRY.md",
-                            "ROOT_INDEX.md",
                             "PROJECT_DECLARATION.md",
                             "PROJECT_STATE.md",
                             "ARCHITECTURE.md",
