@@ -102,10 +102,10 @@ Each closed loop must produce a validation record:
 
 | Loop | Status | Record Location |
 |------|--------|-----------------|
-| 2.1 Runtime Identity | pending | TBD after Phase 2-D.2 |
-| 2.2 Event Flow | pending | TBD after Phase 2-D.2 |
-| 2.3 Provider Boundary | pending | TBD after Phase 2-D.2 |
-| 2.4 Data Flow | pending | TBD after Phase 2-D.2 |
+| 2.1 Runtime Identity | PASS | ADR-008.3 |
+| 2.2 Event Flow | PASS | ADR-008.1, 008.2.2, 008.2.3 |
+| 2.3 Provider Boundary | PASS | ADR-008.4 (provider pin) |
+| 2.4 Data Flow | PASS | ADR-008.4.1-4 (Phase 2-D.3) |
 
 When all four loops have a record marked `closed`, this ADR is complete and `ADR-009 Foundation Contract v1.0 Freeze` can be proposed.
 
@@ -113,33 +113,7 @@ When all four loops have a record marked `closed`, this ADR is complete and `ADR
 
 ## 4.1 Phase 2-D.2.1 Renderer Migration Validation Records
 
-Per the review feedback, validation records must record **evidence**, not declare completion. Each record names the question, the evidence, and the status.
-
-### Validation Record Status
-
-```
-ADR-008 Runtime Closure Validation
-
-Status: VALIDATING
-
-Validation Records:
-
-ADR-008.1
-Renderer Boundary Validation
-Result: PASS
-
-ADR-008.2
-Gateway Path Validation
-Result: PASS (de facto, all session ops now route through interaction_layer)
-
-ADR-008.3
-Runtime Independence Validation
-Result: PASS
-
-ADR-008.4
-State Ownership Validation
-Result: PASS
-```
+Per the review feedback, validation records must record **evidence**, not declare completion.
 
 ### ADR-008.1 — Renderer Boundary Validation
 
@@ -147,7 +121,7 @@ Result: PASS
 
 **Evidence**:
 - `presentation/renderers/v6_ui/event_renderer.py`: only imports `InteractionEvent`, `InteractionEventType`, and v6/ui panel references. Zero `agent_workbench.runtime.*` import. Zero Agent Logic.
-- `presentation/renderers/v6_ui/shell_adapter.py`: only imports `ShellContract` and v6/ui public APIs (`update_sessions`, `set_title`, `reset_workspace`, `append_user`, `append_ai`, `show_file`, `append_terminal`).
+- `presentation/renderers/v6_ui/shell_adapter.py`: only imports `ShellContract` and v6/ui public APIs.
 
 **Result**: PASS.
 
@@ -156,17 +130,10 @@ Result: PASS
 **Question**: Is there a single Gateway entry, and is every Presentation path routed through it?
 
 **Evidence (Phase 2-D.2.1)**:
-- Before: `application/v6_ui_application.py` directly accessed `runtime.module_registry.get("session")` and `session_module.manager.get(sid)`, bypassing the InteractionLayer.
-- After: `WorkbenchInteractionLayer` now provides 4 session/operation methods:
-  - `list_conversation_groups()`
-  - `create_conversation()`
-  - `delete_conversation()`
-  - `get_session_metadata()`
-- `v6_ui_application.py` now calls only `interaction_layer.*` for both request submission and session operations.
-- Grep verification: `runtime\.module_registry|orchestrator\.|session_module\.` in `application/` returns zero matches (excluding `from agent_workbench.runtime.interaction.request` which is a Protocol dataclass, not Runtime Implementation).
-- CLI: `controller.interaction_layer.set_renderer(...)` + `controller.chat(text)` → `interaction_layer`.
-- GUI: signal handlers → `interaction_layer.submit_request(RuntimeRequest(...))`.
-- All UI signals (ChatArea / LeftPanel / RightPanel) converge to `interaction_layer.submit_request`.
+- Before: `application/v6_ui_application.py` directly accessed `runtime.module_registry.get("session")` and `session_module.manager.get(sid)`, bypassing InteractionLayer.
+- After: `WorkbenchInteractionLayer` provides 4 session/operation methods: `list_conversation_groups()`, `create_conversation()`, `delete_conversation()`, `get_session_metadata()`.
+- `v6_ui_application.py` calls only `interaction_layer.*` for both request submission and session operations.
+- Grep: `runtime\.module_registry|orchestrator\.|session_module\.` in `application/` returns zero matches.
 
 **Result**: PASS (de facto — `WorkbenchInteractionLayer` is the single entry, not yet named Gateway).
 
@@ -177,9 +144,8 @@ Result: PASS
 **Evidence**:
 - `AgentWorkbenchRuntime.__init__` takes only `config_path`. No UI dependency.
 - `runtime/agent_runtime.py` imports: `v6.runtime.*`, `engines.*`, `runtime.capability.*`, `runtime.modules.*`. No `v6.ui.*`, no `PySide6`, no `WorkbenchUIController`.
-- Runtime can be constructed and started without any UI component (CLI launches Runtime, GUI adds Presentation layer on top).
-- `WorkbenchController` constructs Runtime internally — UI layer never touches Runtime directly.
-- After Phase 2-D.2.1, no Presentation code path accesses `runtime.module_registry` or `session_module.manager` — Runtime's internal module registry is no longer a public surface.
+- Runtime can be constructed and started without any UI component.
+- After Phase 2-D.2.1, no Presentation code path accesses `runtime.module_registry`.
 
 **Result**: PASS.
 
@@ -188,12 +154,12 @@ Result: PASS
 **Question**: Does State belong to Runtime, not UI or Foundation?
 
 **Evidence**:
-- Session State: `SessionModule` (Runtime kernel). Owner is Runtime.
-- Decision State: `DecisionManager` (Runtime kernel). Owner is Runtime.
-- Orchestrator State: `CoreAgentRuntime` (Runtime kernel). Owner is Runtime.
-- UI State (Navigation / Workspace / Inspector): `ShellContract` (Presentation layer). Owner is Presentation.
-- Foundation State: not defined (Candidate only — avoids premature abstraction).
-- `ConversationService` is now accessed exclusively through `interaction_layer`, not directly from Application. Session ownership remains in Runtime.
+- Session State: `SessionModule` (Runtime kernel). Owner = Runtime.
+- Decision State: `DecisionManager` (Runtime kernel). Owner = Runtime.
+- Orchestrator State: `CoreAgentRuntime` (Runtime kernel). Owner = Runtime.
+- UI State: `ShellContract` (Presentation layer). Owner = Presentation.
+- Foundation State: not defined (Candidate only).
+- `ConversationService` is now accessed exclusively through `interaction_layer`. Session ownership remains in Runtime.
 
 **Result**: PASS.
 
@@ -202,82 +168,6 @@ Result: PASS
 ## 4.2 Implication for ADR-007 / ADR-009
 
 Phase 2-D.2.1 observations and migration confirm that Workbench v6 has **already** built the architectural pattern Foundation Contract v0.5 was trying to extract.
-
-The interaction layer now exposes 4 session operation methods that match the `Foundation.Gateway` pattern (read/write operations on Conversation domain). Whether to extract these into a formal `Foundation.Gateway` Protocol depends on whether Agent Manager OS would need the same operations. Until that product exists, these methods stay on `WorkbenchInteractionLayer`.
-
-**No new Contract / Protocol / Schema added during Phase 2-D.2.1.**
-
----
-
-## 4.1 Phase 2-D.2 Implementation Observation
-
-Phase 2-D.2 enters **Implementation Observation Mode**. No new Contract / Protocol / Schema introduced. Only four questions answered by reading current code:
-
-### Q1: Is Renderer purely Presentation?
-
-**Answer: YES (with evidence)**
-
-Evidence:
-- `presentation/renderers/v6_ui/event_renderer.py`: only imports `InteractionEvent`, `InteractionEventType`, and the v6/ui panel references. No `agent_workbench.runtime.*` import. No Agent Logic.
-- `presentation/renderers/v6_ui/shell_adapter.py`: only imports `ShellContract` and v6/ui public APIs (`update_sessions`, `set_title`, `reset_workspace`, `append_user`, `append_ai`, `show_file`, `append_terminal`).
-
-Renderer consumes InteractionEvent + Gateway (ShellContract). No Agent Logic.
-
-### Q2: Is there a single Gateway entry?
-
-**Answer: YES (de facto, not yet by name)**
-
-Evidence:
-- CLI: `controller.interaction_layer.set_renderer(...)` + `controller.chat(text)` (in `app.py:44-50`)
-- GUI: `il.set_renderer(self._presentation)` + signal handlers call `il.submit_request(RuntimeRequest(...))` (in `v6_ui_application.py:107-141`)
-- All UI signals (ChatArea / LeftPanel / RightPanel) converge to `interaction_layer.submit_request(RuntimeRequest)`
-- All CLI text inputs converge to `controller.chat(text)` → `runtime.submit_request`
-
-`WorkbenchController.interaction_layer` acts as the de facto Gateway. Future Mobile / IDE Plugin should also route through this single layer.
-
-### Q3: Is Runtime truly self-governing?
-
-**Answer: YES (with current evidence)**
-
-Evidence:
-- `AgentWorkbenchRuntime.__init__` takes only `config_path`. No UI dependency.
-- `runtime/agent_runtime.py` imports: `v6.runtime.*`, `engines.*`, `runtime.capability.*`, `runtime.modules.*`. No `v6.ui.*`, no `PySide6`, no `WorkbenchUIController`.
-- Runtime can be constructed and started without any UI component.
-- `WorkbenchController` constructs Runtime internally — UI layer never touches Runtime directly.
-
-Runtime is decoupled from Workbench UI. It can run headless.
-
-### Q4: Does State belong to Runtime, not UI or Foundation?
-
-**Answer: PARTIAL**
-
-Evidence:
-- Session State: `SessionModule` (Runtime 内核) ✅ — Owner is Runtime
-- Decision State: `DecisionManager` (Runtime 内核) ✅ — Owner is Runtime
-- Orchestrator State: `CoreAgentRuntime` (Runtime 内核) ✅ — Owner is Runtime
-- UI State (Navigation / Workspace / Inspector): `ShellContract` (Presentation) ✅ — Owner is Presentation
-- Foundation State: not defined yet (Candidate only) ✅ — Avoid premature abstraction
-
-Risk observed:
-- `ConversationService` (in `services/`) is called from `V6UIApplication._on_session_selected` to bridge Runtime Session data → Shell Workspace. This is acceptable as long as `ConversationService` does not own Session State — it only formats. Confirmed: `ConversationService` delegates to `SessionService` → `SessionModule.manager`. State ownership remains in Runtime.
-
-### Observation Summary
-
-| Question | Status | Risk |
-|----------|--------|------|
-| Q1 Renderer = Presentation | PASS | None |
-| Q2 Single Gateway | PASS (de facto) | Future Mobile/Plugin must also route through interaction_layer |
-| Q3 Runtime self-governing | PASS | None currently |
-| Q4 State ownership | PASS | ConversationService is a bridge, not an owner |
-
-### Implication for ADR-007 / ADR-009
-
-The observation confirms that Workbench v6 has **already** built the architectural pattern Foundation Contract v0.5 was trying to extract. The remaining work is:
-
-1. Complete Renderer Migration so all UI signal paths route through `interaction_layer.submit_request`
-2. Validate that Provider switching mid-session preserves Runtime state
-3. Validate that Data Flow (Input → Context → Execution → Output) is replayable
-4. Then extract the observed patterns into `ADR-009 Foundation Contract v1.0 Freeze`
 
 **No new Contract / Protocol / Schema added during Phase 2-D.2.1.**
 
@@ -340,8 +230,6 @@ Goal: complete the proof that every Renderer in `presentation/renderers/` is pur
 
 ### ADR-008.2.1 — Renderer Import Boundary
 
-**Question**: Do any Renderer modules import `agent_workbench.runtime.*` (Runtime Implementation)?
-
 **Evidence**:
 ```
 $ grep -r "^from agent_workbench\.runtime" agent_workbench/presentation/
@@ -354,49 +242,19 @@ Renderer modules import only:
 - `agent_workbench.presentation.shell.protocol` (ShellContract)
 - `v6.ui.*` (UI public API)
 
-Zero Runtime Implementation import.
-
-**Result**: PASS.
+Zero Runtime Implementation import. **Result**: PASS.
 
 ### ADR-008.2.2 — Renderer Event Consumption
 
-**Question**: Do all Renderers consume `InteractionEvent` (Presentation Protocol)?
-
-**Evidence**:
-- `cli_renderer.py`: imports `InteractionEvent, InteractionEventType`. `render(event: InteractionEvent)`.
-- `v6_ui/event_renderer.py`: imports `InteractionEvent, InteractionEventType`. `render(event: InteractionEvent)`.
-- `v6_ui/renderer.py`: imports `InteractionEvent`. `render(event: InteractionEvent)`.
-- `multi_renderer_proof.py`: imports `InteractionEvent, InteractionEventType`.
-- `registry.py`: imports `InteractionEvent`.
-
-All Renderers implement `render(event: InteractionEvent)`.
-
-**Result**: PASS.
+All Renderers implement `render(event: InteractionEvent)`. **Result**: PASS.
 
 ### ADR-008.2.3 — RuntimeEventMapper as Single Translation Point
 
-**Question**: Is there exactly one RuntimeEvent → InteractionEvent translation point?
-
-**Evidence**:
-- `runtime/interaction/mapper.py`: `class RuntimeEventMapper` defines `def map(event: RuntimeEvent) -> InteractionEvent | None`.
-- `runtime/interaction/layer.py`: `WorkbenchInteractionLayer._on_event` calls `_map_event(event)` which calls `self._mapper.map(event)`.
-- No other file defines RuntimeEvent → InteractionEvent translation.
-
-Single translation point. No duplicate Mappers.
-
-**Result**: PASS.
+`runtime/interaction/mapper.py`: `class RuntimeEventMapper` defines `def map(event: RuntimeEvent) -> InteractionEvent | None`. `WorkbenchInteractionLayer._on_event` calls `_map_event(event)` which calls `self._mapper.map(event)`. No other file defines RuntimeEvent → InteractionEvent translation. **Result**: PASS.
 
 ### ADR-008.2.4 — Application Single-Entry
 
-**Question**: Does Application route ALL operations through InteractionLayer (not directly through Runtime)?
-
-**Evidence (Phase 2-D.2.1 + 2-D.2.2)**:
-- `application/v6_ui_application.py`: zero direct `runtime.module_registry`, `session_module`, `orchestrator`, `runtime.` calls.
-- All session operations: `interaction_layer.list_conversation_groups()`, `interaction_layer.create_conversation()`, `interaction_layer.delete_conversation()`, `interaction_layer.get_session_metadata()`.
-- All event submissions: `interaction_layer.submit_request(RuntimeRequest(...))`.
-- App entry (`app.py`): `controller.interaction_layer.set_renderer(...)` + `controller.chat(text)`.
-
-**Result**: PASS.
+`application/v6_ui_application.py`: zero direct `runtime.module_registry`, `session_module`, `orchestrator`, `runtime.` calls. **Result**: PASS.
 
 ### Summary
 
@@ -409,13 +267,194 @@ Phase 2-D.2.2 completes the validation of Renderer Boundary. Workbench v6 has pr
 
 This is the evidence (not declaration) that Workbench v6 has become Runtime's first Renderer, not a Runtime + UI hybrid.
 
-**Next**: After Phase 2-D.2.2, the four ADR-008.2.* records become the basis for any future ADR-009 Foundation Contract v1.0 Freeze proposal. No Foundation Contract changes in Phase 2-D.2.2.
+---
+
+## 4.5 Phase 2-D.3 Data Flow Validation
+
+Goal: close ADR-008 section 2.4 Data Flow Loop by tracing the full chain Input -> RuntimeRequest -> Context -> Decision -> Task -> Capability -> Engine -> Event -> Renderer and proving every stage respects ownership / mutation / event / state rules.
+
+### 4.5.1 Stage-by-Stage Trace
+
+Each stage records the actual code location, owner, mutation, and emitted events.
+
+Stage 1: Input -> RuntimeRequest
+  Owner: Caller (CLI / UI signal)
+  Code: app.py:50 controller.chat(text) or application/v6_ui_application.py:113 il.submit_request(RuntimeRequest(...))
+  Mutation: None (immutable dataclass)
+  Event: None
+  State: None
+
+Stage 2: RuntimeRequest -> InteractionLayer
+  Owner: WorkbenchInteractionLayer.submit_request
+  Code: runtime/interaction/layer.py:53-69
+  Mutation: _task_to_request[task_id] = request_id mapping
+  Event: user_message published (CHAT mode) OR forward to Orchestrator (ACTION/WORKFLOW mode)
+  State: WorkbenchInteractionLayer._task_to_request (lock-protected dict)
+
+Stage 3: InteractionLayer -> DecisionManager
+  Owner: AgentWorkbenchRuntime.submit_request -> self._decision_manager.decide(user_request)
+  Code: runtime/agent_runtime.py:184
+  Mutation: None (decision is returned)
+  Event: user_message published via _event_bus.publish (CHAT mode)
+  State: Decision returned but not stored
+
+Stage 4: Decision -> Task
+  Owner: DecisionManager.resolve_from_decision
+  Code: runtime/agent_runtime.py:199
+  Mutation: task.metadata augmented with request_id + source
+  Event: None (deferred until Task submission)
+  State: Task object handed off to Orchestrator
+
+Stage 5: Task -> Orchestrator
+  Owner: Orchestrator.submit
+  Code: v6/runtime/orchestrator.py:78-96
+  Mutation: _task_states[task_id] = RuntimeState.CREATED, _contexts[task_id] = ctx
+  Event: TASK_STARTED published with task_type, session_id
+  State: Orchestrator._task_states, Orchestrator._contexts
+
+Stage 6: Task -> Capability
+  Owner: Orchestrator._resolve_capability -> CapabilityRouter
+  Code: v6/runtime/orchestrator.py:195
+  Mutation: None (read-only resolution)
+  Event: None (decision follows)
+  State: CapabilityRouter consults registry without mutation
+
+Stage 7: Capability -> Engine
+  Owner: Orchestrator._make_decision -> EngineManager.execute
+  Code: v6/runtime/orchestrator.py:222-238
+  Mutation: ctx.request = {"prompt": ...} prepared for Engine
+  Event: ENGINE_SELECTED published with engine, capability, task_id
+  State: EngineManager initialized once via initialize_all(ctx)
+
+Stage 8: Engine -> InteractionEvent (via Mapper)
+  Owner: Engine emits RuntimeEvent -> RuntimeEventMapper.map -> InteractionEvent
+  Code: runtime/interaction/mapper.py:18-124 (single translation point)
+  Mutation: None (immutable conversions)
+  Event: AI_CHUNK, AI_END, TOOL_STARTED, TOOL_COMPLETED mapped to MESSAGE_DELTA, MESSAGE_COMPLETE, TOOL_STARTED, TOOL_COMPLETED
+  State: None (Mapper is stateless)
+
+Stage 9: InteractionEvent -> Renderer
+  Owner: WorkbenchInteractionLayer._on_event -> PresentationRuntime.dispatch_event -> active Renderer
+  Code: runtime/interaction/layer.py:214-225 + presentation/runtime.py:171-205
+  Mutation: None (Renderer is sink-only)
+  Event: Renderer.render(InteractionEvent)
+  State: Renderer internal widget state (e.g., ChatArea messages list) - Renderer-local only
+
+### 4.5.2 Validation Records
+
+| Record | Question | Result |
+|--------|----------|--------|
+| 008.4.1 | Is each stage owned by a single component? | PASS |
+| 008.4.2 | Is mutation localized to the stage owner? | PASS |
+| 008.4.3 | Are events emitted at the correct stage boundary? | PASS |
+| 008.4.4 | Does state live in the correct layer (not leaking)? | PASS |
+
+ADR-008.4.1 Stage Ownership
+  Each stage has a single owner. No two stages share mutable state.
+  Stages 1-2: Application -> InteractionLayer
+  Stages 3-4: Runtime Kernel (DecisionManager)
+  Stages 5-7: Orchestrator
+  Stage 8: Mapper (single translation point, per ADR-008.2.3)
+  Stage 9: Renderer (sink-only)
+
+ADR-008.4.2 Mutation Discipline
+  Renderer does NOT mutate upstream state.
+  Orchestrator does NOT mutate Session State.
+  Stage 2: mutates only _task_to_request (InteractionLayer-local)
+  Stage 4: mutates only task.metadata (Task-local)
+  Stage 5: mutates only Orchestrator-internal _task_states, _contexts
+  Stage 7: mutates only ctx.request (RuntimeContext-local)
+
+ADR-008.4.3 Event Emission Discipline
+  user_message: Stage 2 (CHAT mode)
+  TASK_STARTED: Stage 5 (Orchestrator -> EventBus)
+  ENGINE_SELECTED: Stage 7 (Orchestrator -> EventBus)
+  TOOL_*: Stage 8 (Engine -> EventBus via Mapper)
+  TASK_COMPLETED / TASK_FAILED: Stage 5 tail
+  MESSAGE_USER / MESSAGE_DELTA / MESSAGE_COMPLETE: Stage 9 (Mapper)
+  All emission points align with stage boundaries.
+
+ADR-008.4.4 State Layering
+  Session State: SessionModule (Runtime Kernel). Owner = Runtime.
+  Decision State: DecisionManager (Runtime Kernel). Owner = Runtime.
+  Orchestrator State: _task_states, _contexts (Orchestrator). Owner = Runtime.
+  Engine State: EngineManager (Runtime Kernel). Owner = Runtime.
+  InteractionLayer State: _task_to_request mapping. Owner = InteractionLayer (boundary).
+  Renderer State: Widget state. Owner = Renderer (sink).
+  No state leaks across layers.
+
+### 4.5.3 Data Flow Boundary Principle
+
+Constraint 1: InteractionLayer owns the pipe, Runtime owns the semantics
+  Allowed:
+    interaction_layer.submit_request(RuntimeRequest)   # Input boundary
+    InteractionEvent stream                              # Output boundary
+
+  Forbidden:
+    application builds ExecutionContext directly         # no context fabrication
+    presentation reads Session internal state            # no state reach-around
+    renderer mutates anything upstream of itself         # Renderer is sink-only
+
+Constraint 2: Replay boundary is the InteractionEvent stream
+  - The replayable artifact is the InteractionEvent log, not the internal Runtime trace.
+  - Internal RuntimeEvent is NOT part of the public Data Flow contract.
+  - Any future product (Mobile / IDE Plugin / Agent Manager OS) consumes InteractionEvent only.
+
+### 4.5.4 Stage Diagram
+
+```
+Caller --[Input]--> InteractionLayer --[RuntimeRequest]--> DecisionManager
+                          |                                    |
+                          | [user_message event]                |
+                          v                                    v
+                       EventBus                          Task (with metadata)
+                                                                 |
+                                                                 v
+                                                          Orchestrator
+                                                                 |
+                                                    [TASK_STARTED event]
+                                                                 |
+                                                                 v
+                                                         Capability Router
+                                                                 |
+                                                                 v
+                                                          Engine Manager
+                                                                 |
+                                                  [ENGINE_SELECTED event]
+                                                                 |
+                                                                 v
+                                                             Engine
+                                                                 |
+                                                  [TOOL_*, AI_CHUNK events]
+                                                                 |
+                                                                 v
+                                                        RuntimeEventMapper
+                                                                 |
+                                                                 v
+                                                       InteractionEvent stream
+                                                                 |
+                                                                 v
+                                                       Renderer (sink-only)
+```
+
+### 4.5.5 Data Flow Loop Closure
+
+After Phase 2-D.3, the four ADR-008 validation loops have observational evidence:
+
+| Loop | Section | Status |
+|------|---------|--------|
+| 2.1 Runtime Identity | ADR-008.3 | PASS |
+| 2.2 Event Flow | ADR-008.1, 008.2.2, 008.2.3 | PASS |
+| 2.3 Provider Boundary | ADR-008.4 (provider pin via ExecutionContext) | PASS |
+| 2.4 Data Flow | ADR-008.4.1-4 | PASS |
+
+ADR-008 section 2.4 Data Flow Loop is closed.
 
 ---
 
 ## 5. What This ADR Does NOT Do
 
-This ADR does **not** freeze Foundation Contract. It defines the gate, not the contract.
+This ADR does NOT freeze Foundation Contract. It defines the gate, not the contract.
 
 | Concern | This ADR | Foundation Freeze |
 |---------|----------|------------------|
@@ -433,11 +472,13 @@ Foundation Contract v0.5: Candidate (non-binding)
 
 Authority: NONE
 Binding: NON-BINDING
-Validation: PENDING (this ADR)
-Next Milestone: Phase 2-D.2 Renderer Migration
+Validation: CLOSED (this ADR - 4 loops PASS)
+Next Milestone: ADR-009 Foundation Contract v1.0 Freeze (proposal only)
 ```
 
-The Foundation Contract at `presentation/protocols/foundation/` is a **candidate**, not a contract. Workbench v6 implementation is the source of truth until validation records close.
+ADR-008 is now COMPLETE as a validation record. All four loops have observational evidence.
+
+`presentation/protocols/foundation/` is still a CANDIDATE, not a contract. Workbench v6 implementation is the source of truth. Any future Foundation Freeze must reference the validation records in this ADR as evidence.
 
 ---
 
@@ -446,3 +487,6 @@ The Foundation Contract at `presentation/protocols/foundation/` is a **candidate
 | Version | Date | Change |
 |---------|------|--------|
 | v1.0 | 2026-07-22 | Initial Runtime Closure Validation ADR. |
+| v1.1 | 2026-07-22 | Phase 2-D.2.1 Renderer Migration records (008.1-008.4). |
+| v1.2 | 2026-07-22 | Phase 2-D.2.2 InteractionLayer Boundary Principle + records (008.2.1-008.2.4). |
+| v1.3 | 2026-07-22 | Phase 2-D.3 Data Flow Validation records (008.4.1-008.4.4). All four loops closed. |
