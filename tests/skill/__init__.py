@@ -1,0 +1,1 @@
+"""tests/skill/__init__.py — v6.10.0-alpha Skill 测试包。"""
