@@ -223,3 +223,35 @@ class ProviderWorkspaceItem(QWidget):
             card.test_requested.connect(self.test_requested.emit)
             self._cards_layout.addWidget(card)
             self._cards.append(card)
+
+    # ──────────────────────────────────────────────────────────
+    # v6.10.0-alpha: ViewModel-driven API (Configuration-Driven Principle P5)
+    # ──────────────────────────────────────────────────────────
+
+    def set_view_models(self, view_models: list[Any]) -> None:
+        """通过 ProviderViewModel 列表刷新卡片（v6.10 推荐入口）。
+
+        Args:
+            view_models: provider.view_models.ProviderViewModel 列表。
+        """
+        self.set_providers([_view_model_to_dict(vm) for vm in view_models])
+
+
+def _view_model_to_dict(vm: Any) -> dict[str, Any]:
+    """ProviderViewModel → legacy dict config 转换。
+
+    仅用于 ProviderCard 的 dict 接口（保持向后兼容）。
+    """
+    enabled = vm.metadata.get("enabled", "True") == "True"
+    models = list(vm.models)
+    return {
+        "name": vm.name,
+        "type": vm.protocol,
+        "models": models,
+        "model": models[0] if models else "",
+        "base_url": vm.base_url,
+        "enabled": enabled,
+        "status": vm.status,
+        "provider_id": vm.provider_id,
+        "has_api_key": vm.has_api_key,
+    }
