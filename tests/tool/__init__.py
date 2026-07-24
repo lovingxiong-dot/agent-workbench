@@ -1,0 +1,1 @@
+"""tests/tool/__init__.py — v6.10.0-alpha Tool 测试包。"""
