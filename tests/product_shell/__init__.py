@@ -1,0 +1,1 @@
+"""tests/product_shell/__init__.py — v6.10.0-alpha Product Shell 测试包。"""
