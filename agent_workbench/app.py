@@ -243,12 +243,47 @@ def run_gui_v6(config_path: str | None = None) -> int:
     return app.exec()
 
 
+def _has_stdin() -> bool:
+    """检测 stdin 是否真实可用（PyInstaller --noconsole 时为 False）。"""
+    try:
+        import sys
+        if sys.stdin is None:
+            return False
+        # 真实尝试读取元数据（不会真正阻塞）
+        sys.stdin.fileno()
+        return True
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Agent Workbench V6")
     parser.add_argument("--config", "-c", default=None, help="配置文件路径")
-    parser.add_argument("--mode", "-m", choices=["cli", "gui", "gui-v6"], default="cli", help="运行模式")
+    parser.add_argument("--mode", "-m", choices=["cli", "gui", "gui-v6"], default=None, help="运行模式（默认自动）")
     parser.add_argument("--test-input", default=None, help="非交互模式：运行一次输入后退出（用于测试）")
     args = parser.parse_args(argv)
+
+    # 模式自动推断：
+    #   - 显式指定 → 尊重用户
+    #   - 默认 + 有 stdin → CLI
+    #   - 默认 + 无 stdin（双击 / GUI 启动）→ GUI-v6
+    if args.mode is None:
+        if _has_stdin():
+            args.mode = "cli"
+        else:
+            # 双击 exe / GUI 启动时自动降级到 GUI-v6
+            args.mode = "gui-v6"
+
+    # CLI 模式但 stdin 不可用：提示用户使用 GUI
+    if args.mode == "cli" and not _has_stdin():
+        print(
+            "[错误] CLI 模式需要 stdin。请使用以下方式之一：\n"
+            "  1. 在 cmd / PowerShell 中运行：AgentWorkbench.exe --mode cli\n"
+            "  2. 双击桌面快捷方式启动 GUI 模式\n"
+            "  3. 使用 --test-input 参数进行非交互测试\n",
+            file=sys.stderr,
+        )
+        return 2
 
     if args.mode == "gui":
         return run_gui(config_path=args.config)

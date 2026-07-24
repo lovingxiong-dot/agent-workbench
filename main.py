@@ -6,6 +6,14 @@ import sys
 import os
 import traceback
 
+# 强制 UTF-8 stdout/stderr（PyInstaller --console=True 在 Windows 下默认 cp1252）
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+except (AttributeError, OSError):
+    # Python < 3.7 或 reconfigure 失败时回退
+    pass
+
 # 确保项目根在 sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
