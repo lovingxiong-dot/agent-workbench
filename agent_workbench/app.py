@@ -27,18 +27,30 @@ def run_cli(config_path: str | None = None, test_input: str | None = None) -> in
     """
     controller = WorkbenchController(config_path=config_path)
     controller.start()
-    agent_name = controller.runtime.config.get("agent.name", "Agent Workbench V6")
+    agent_name = controller.get_agent_name()
     print(f"[{agent_name}] 已启动")
 
     # 显示 Session 恢复状态
-    if controller.session_id:
-        session_module = controller.runtime.module_registry.get("session")
-        if session_module is not None:
-            history = session_module.history(controller.session_id)
-            if history:
-                print(f"[Session] 已恢复上次会话 ({len(history)} 条消息, id={controller.session_id})")
-            else:
-                print(f"[Session] 新建会话 (id={controller.session_id})")
+    session_info = controller.get_session_info()
+    if session_info["session_id"]:
+        if session_info["is_restored"]:
+            print(f"[Session] 已恢复上次会话 ({session_info['history_count']} 条消息, id={session_info['session_id']})")
+        else:
+            print(f"[Session] 新建会话 (id={session_info['session_id']})")
+
+    # Preflight Check：Provider 就绪检查
+    preflight = controller.preflight_check()
+    if not preflight["ready"]:
+        print(f"\n[警告] Provider 未就绪：")
+        for issue in preflight["issues"]:
+            print(f"  - {issue}")
+        if preflight["suggestions"]:
+            print("建议：")
+            for s in preflight["suggestions"]:
+                print(f"  > {s}")
+        if preflight["available_providers"]:
+            print(f"可用 Provider: {', '.join(preflight['available_providers'])}")
+        print()
 
     # 接入 CLI 流式渲染器，通过 Interaction Boundary 接收流式事件
     cli_renderer = CLIStreamRenderer()
@@ -53,7 +65,7 @@ def run_cli(config_path: str | None = None, test_input: str | None = None) -> in
             return 0
 
         print("输入消息按回车，输入 'exit' 退出。")
-        print("命令：/agent <id> 切换 Agent | /agents 查看 Agent 列表 | /model <name> 切换模型")
+        print("命令：/agents | /agent <id> | /providers | /provider <name> | /model <name> | /status | /config")
         while True:
             text = input("> ").strip()
             if text.lower() in {"exit", "quit"}:
@@ -126,6 +138,17 @@ def _handle_cli_command(text: str, controller) -> str | None:
             return f"已切换到 Agent: {a['name']} ({a['id']})"
         return f"Agent '{arg}' 不存在。可用: {', '.join(a['id'] for a in controller.list_agents())}"
 
+    if cmd == "/providers":
+        providers = controller.list_providers()
+        current = controller.get_current_provider()
+        lines = ["可用 Provider："]
+        for p in providers:
+            marker = " *" if p == current else "  "
+            models = controller.list_models() if p == current else []
+            model_info = f" (模型: {', '.join(models)})" if models else ""
+            lines.append(f"  {marker} {p}{model_info}")
+        return "\n".join(lines)
+
     if cmd == "/model":
         if not arg:
             return f"当前模型: {controller.get_current_model()} (Provider: {controller.get_current_provider()})"
@@ -142,7 +165,32 @@ def _handle_cli_command(text: str, controller) -> str | None:
         providers = controller.list_providers()
         return f"Provider '{arg}' 不存在。可用: {', '.join(providers)}"
 
-    return f"未知命令: {cmd}。可用: /agent, /agents, /model, /provider"
+    if cmd == "/status":
+        s = controller.get_status()
+        lines = [
+            f"Agent:     {s['agent']}",
+            f"Provider:  {s['provider']} ({'运行中' if s['running'] else '已停止'})",
+            f"Model:     {s['model']}",
+            f"Session:   {s['session_id'] or '无'}",
+            f"Modules:   {', '.join(s['modules'])}",
+            f"Providers: {', '.join(s['providers_available'])}",
+            f"Agents:    {', '.join(s['agents_available'])}",
+        ]
+        return "\n".join(lines)
+
+    if cmd == "/config":
+        c = controller.get_config_summary()
+        lines = [
+            f"Workbench:  {c['agent_name']}",
+            f"Provider:   {c['default_provider']}",
+            f"Model:      {c['model']}",
+            f"Temperature: {c['temperature']}",
+            f"Max Tokens:  {c['max_tokens']}",
+            f"Max History: {c['max_history']}",
+        ]
+        return "\n".join(lines)
+
+    return f"未知命令: {cmd}。可用: /agent, /agents, /providers, /provider, /model, /status, /config"
 
 
 def run_gui(config_path: str | None = None) -> int:

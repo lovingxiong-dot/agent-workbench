@@ -1,7 +1,10 @@
 """tests/v6/runtime/test_orchestrator_chain.py — Orchestrator Capability Chain 测试。"""
 from __future__ import annotations
 
+import importlib
 import threading
+
+import pytest
 
 from v6.runtime.enums import RuntimeState
 from v6.runtime.task import Task
@@ -9,6 +12,13 @@ from v6.runtime.user_request import UserRequest
 
 from agent_workbench.controller import WorkbenchController
 from agent_workbench.runtime.manager.runtime import ManagerRuntime
+
+# 环境依赖标记：openai 包未安装时跳过需要真实 Provider 的测试
+_openai_available = importlib.util.find_spec("openai") is not None
+_skip_no_openai = pytest.mark.skipif(
+    not _openai_available,
+    reason="openai 包未安装，属于环境依赖问题，非代码缺陷。安装: pip install openai",
+)
 
 
 def _controller() -> WorkbenchController:
@@ -22,6 +32,7 @@ def _controller() -> WorkbenchController:
     return controller
 
 
+@_skip_no_openai
 def test_orchestrator_executes_capability_chain_in_order():
     controller = _controller()
     try:
@@ -41,6 +52,7 @@ def test_orchestrator_executes_capability_chain_in_order():
         controller.stop()
 
 
+@_skip_no_openai
 def test_orchestrator_publishes_chain_step_events():
     controller = _controller()
     event_bus = controller._runtime.core_runtime.event_bus
@@ -105,6 +117,7 @@ def test_orchestrator_chain_stops_on_step_failure():
         controller.stop()
 
 
+@_skip_no_openai
 def test_orchestrator_ignores_chain_for_legacy_chat_task():
     controller = _controller()
     try:

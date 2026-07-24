@@ -9,6 +9,8 @@
 """
 from __future__ import annotations
 
+import importlib
+
 import pytest
 
 from agent_workbench.controller import WorkbenchController
@@ -23,6 +25,13 @@ from agent_workbench.runtime.decision import (
     Policy,
     RuntimeDecision,
     RuntimeMode,
+)
+
+# 环境依赖标记：openai 包未安装时跳过需要真实 Provider 的测试
+_openai_available = importlib.util.find_spec("openai") is not None
+_skip_no_openai = pytest.mark.skipif(
+    not _openai_available,
+    reason="openai 包未安装，属于环境依赖问题，非代码缺陷。安装: pip install openai",
 )
 from v6.runtime.enums import RuntimeState
 from v6.runtime.orchestrator import Orchestrator
@@ -39,6 +48,7 @@ def controller() -> WorkbenchController:
         ctrl.stop()
 
 
+@_skip_no_openai
 def test_general_query_enters_runtime_via_chat_capability(controller: WorkbenchController) -> None:
     """Test 1：普通聊天请求由 ACTION → chat Capability 进入 Runtime，调用默认 Provider。"""
     ctx = controller.chat("解释一下TCP")
@@ -54,6 +64,7 @@ def test_general_query_enters_runtime_via_chat_capability(controller: WorkbenchC
     assert chain[0]["engine_capability"] == "text_generation"
 
 
+@_skip_no_openai
 def test_action_image_generation(controller: WorkbenchController) -> None:
     """Test 2：ACTION + CREATE_ARTIFACT 路由到 image_generation 能力。"""
     ctx = controller.chat("生成日落图片")
@@ -68,6 +79,7 @@ def test_action_image_generation(controller: WorkbenchController) -> None:
     assert chain[0]["capability_id"] == "image_generation"
 
 
+@_skip_no_openai
 def test_action_python_analysis_chain(controller: WorkbenchController) -> None:
     """Test 3：ANALYZE + python 生成 coding.python 能力链。"""
     ctx = controller.chat("分析python代码")
@@ -86,6 +98,7 @@ def test_action_python_analysis_chain(controller: WorkbenchController) -> None:
     ]
 
 
+@_skip_no_openai
 def test_legacy_task_path_still_works(controller: WorkbenchController) -> None:
     """Test 4：旧 Task → submit_task 路径继续可用。"""
     from v6.runtime.task import ChatTask

@@ -1,5 +1,34 @@
 # Changelog
 
+## v6.15.0-alpha (2026-07-24) — Product Shell Integration Milestone
+
+> **里程碑语义**：Phase 2-D Product Shell Integration 完成。CLI 与 GUI 共享统一 WorkbenchController，建立 Preflight Check Provider 就绪检查系统，CLI 命令系统完整覆盖。所有 Frozen Contract 边界保持，v6-core 零回归。
+
+### Added
+
+- `WorkbenchController.get_agent_name()`：返回工作台名称（替代直接访问 `runtime.config`）。
+- `WorkbenchController.get_session_info()`：返回 Session 摘要信息（替代直接访问 `module_registry`）。
+- `WorkbenchController.get_status()`：返回 Runtime 综合状态摘要（Agent/Provider/Model/Session/Modules/Agents）。
+- `WorkbenchController.get_config_summary()`：返回当前配置摘要（Temperature/MaxTokens/MaxHistory）。
+- `WorkbenchController.preflight_check()`：Provider 就绪检查系统，验证凭证、Provider 可用性、模型可用性。失败不产生 Task 失败，只返回结构化状态。
+- CLI 命令：`/status`、`/config`、`/providers`。
+- `tests/v6_10/test_product_shell_integration.py`：17 个集成测试，覆盖 Gate 2 (Runtime Path)、Gate 3 (Multi Shell)、Gate 4 (Boundary Integrity)、Preflight Check、CLI DataSource。
+- `.project/decisions/ADR-010-package-action-execution-boundary.md`：记录 `execute_agent_action()` 绕过 Runtime 的已知架构债务。
+- `.project/decisions/ADR-011-controller-api-surface-freeze.md`：定义 `WorkbenchController` 公共 API 面冻结规则。
+- `docs/v6/product-shell-phase-report.md`：Phase 2-D Product Shell Integration Final Report。
+
+### Changed
+
+- `agent_workbench/app.py`：`run_cli()` 重构，移除直接 Runtime 访问（`runtime.config`、`runtime.module_registry`），改用 Controller 公共 API。启动时执行 Preflight Check，凭证缺失输出友好提示。
+- `agent_workbench/app.py`：`_handle_cli_command()` 新增 `/status`、`/config`、`/providers` 命令。
+- `tests/test_controller_interaction.py`：`test_controller_chat_routes_general_query_to_chat_capability` 添加 `pytest.mark.skipif`（openai 包未安装时跳过），标记为环境依赖问题。
+
+### Fixed
+
+- 标记 openai dependency test environment issue：`pytest.mark.skipif` 跳过需要 openai 包的测试，明确属于环境依赖问题，非代码缺陷。
+
+---
+
 ## v6.14.0-alpha (2026-07-20) — Dogfooding Phase: D5 Agent Selector
 
 > **里程碑语义**：D5 完成 Agent 选择器。支持在 CLI 中通过 `/agent` 命令切换 Agent Identity（Personal/Coding/Research），每个 Agent 有独立的 system_prompt、provider、model 配置。

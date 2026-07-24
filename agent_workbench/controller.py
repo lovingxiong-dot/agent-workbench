@@ -250,6 +250,155 @@ class WorkbenchController:
             return active.name
         return "Unknown"
 
+    def get_agent_name(self) -> str:
+        """返回工作台名称（来自 config agent.name）。"""
+        return self._runtime.config.get("agent.name", "Agent Workbench V6")
+
+    def get_session_info(self) -> dict:
+        """返回当前 Session 摘要信息，供 CLI 展示。
+
+        Returns:
+            {"session_id": str|None, "history_count": int, "is_restored": bool}
+        """
+        session_module = self._runtime.module_registry.get("session")
+        if session_module is None:
+            return {"session_id": None, "history_count": 0, "is_restored": False}
+        history = session_module.history(self._session_id) if self._session_id else []
+        return {
+            "session_id": self._session_id,
+            "history_count": len(history) if history else 0,
+            "is_restored": bool(history),
+        }
+
+    def get_status(self) -> dict:
+        """返回 Runtime 综合状态摘要，供 /status 命令。
+
+        Returns:
+            {"agent": str, "provider": str, "model": str, "session_id": str|None,
+             "running": bool, "modules": list[str], "providers_available": list[str]}
+        """
+        return {
+            "agent": self.get_active_agent_name(),
+            "provider": self.get_current_provider(),
+            "model": self.get_current_model(),
+            "session_id": self._session_id,
+            "running": self._runtime.running,
+            "modules": list(self._runtime.module_registry.namespaces()),
+            "providers_available": self.list_providers(),
+            "agents_available": [a["id"] for a in self.list_agents()],
+        }
+
+    def get_config_summary(self) -> dict:
+        """返回当前配置摘要，供 /config 命令。
+
+        Returns:
+            {"agent_name": str, "default_provider": str, "model": str,
+             "temperature": float, "max_tokens": int, "max_history": int}
+        """
+        return {
+            "agent_name": self.get_agent_name(),
+            "default_provider": self._runtime.config.get("model.default_provider", "echo"),
+            "model": self.get_current_model(),
+            "temperature": self._runtime.config.get("model.sampling.temperature", 0.7),
+            "max_tokens": self._runtime.config.get("model.sampling.max_tokens", 2048),
+            "max_history": self._runtime.config.get("model.context.max_history", 20),
+        }
+
+    def preflight_check(self) -> dict:
+        """Provider 就绪检查：验证凭证、Provider 可用性、模型可用性。
+
+        流程：
+          1. 检查当前 Provider 是否可用
+          2. 检查 Provider 凭证是否已配置
+          3. 检查模型是否可用
+
+        Returns:
+            {"ready": bool, "provider": str, "model": str, "issues": list[str],
+             "available_providers": list[str], "suggestions": list[str]}
+
+        失败不产生 Task 失败，只返回状态。
+        """
+        issues: list[str] = []
+        suggestions: list[str] = []
+        provider_name = self.get_current_provider()
+        model_name = self.get_current_model()
+
+        # 检查 Provider 是否可用
+        if not provider_name:
+            issues.append("未配置默认 Provider")
+            suggestions.append("使用 /provider <name> 切换 Provider")
+            suggestions.append("使用 /providers 查看可用 Provider 列表")
+            return {
+                "ready": False,
+                "provider": "",
+                "model": "",
+                "issues": issues,
+                "available_providers": self.list_providers(),
+                "suggestions": suggestions,
+            }
+
+        model_module = self._runtime.module_registry.get("model")
+        if model_module is None:
+            issues.append("Model Module 未注册")
+            return {
+                "ready": False,
+                "provider": provider_name,
+                "model": model_name,
+                "issues": issues,
+                "available_providers": self.list_providers(),
+                "suggestions": ["请检查 Runtime 初始化"],
+            }
+
+        # 检查 Provider 凭证
+        provider_config = self._runtime.config.get("model.providers", [])
+        current_config = None
+        for cfg in provider_config:
+            if cfg.get("name") == provider_name:
+                current_config = cfg
+                break
+
+        if current_config is None:
+            issues.append(f"Provider '{provider_name}' 未在配置中找到")
+            suggestions.append("检查 config 中的 model.providers 配置")
+        else:
+            api_key = current_config.get("api_key", "")
+            if not api_key or api_key.startswith("${"):
+                # 尝试环境变量展开
+                import os
+                env_key = current_config.get("api_key_env", "")
+                if env_key:
+                    resolved = os.environ.get(env_key, "")
+                    if not resolved:
+                        issues.append(f"Provider '{provider_name}': API Key 未配置（环境变量 {env_key} 为空）")
+                        suggestions.append(f"设置环境变量 {env_key} 或在 .env 文件中配置")
+                        suggestions.append("使用 /setup 配置 Provider 凭证")
+                    # else: resolved OK
+                else:
+                    issues.append(f"Provider '{provider_name}': API Key 未配置")
+                    suggestions.append("使用 /setup 配置 Provider 凭证")
+                    suggestions.append("或在 config 中设置 api_key / api_key_env 字段")
+
+        # 检查模型可用性
+        if not model_name:
+            issues.append("未选择模型")
+            suggestions.append(f"使用 /model <name> 选择模型，可用: {', '.join(self.list_models())}")
+        elif model_module:
+            available = self.list_models()
+            if model_name not in available:
+                issues.append(f"模型 '{model_name}' 不在 Provider '{provider_name}' 的可用列表中")
+                suggestions.append(f"可用模型: {', '.join(available) if available else '无'}")
+                suggestions.append("使用 /model <name> 切换模型")
+
+        ready = len(issues) == 0
+        return {
+            "ready": ready,
+            "provider": provider_name,
+            "model": model_name,
+            "issues": issues,
+            "available_providers": self.list_providers(),
+            "suggestions": suggestions,
+        }
+
     def get_system_prompt(self) -> str:
         """返回当前 Agent 的 System Prompt。"""
         agent_module = self._runtime.module_registry.get("agent")
