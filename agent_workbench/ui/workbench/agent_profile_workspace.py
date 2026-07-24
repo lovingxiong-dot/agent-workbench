@@ -1,12 +1,17 @@
 """agent_workbench/ui/workbench/agent_profile_workspace.py — Agent Profile 详情页。
 
 展示选中 Agent 的完整信息：名称、描述、System Prompt、Provider、模型、Skills、Tools。
+
+v6.10.0-alpha Agent Configuration Layer：
+  - 保留原有 _setup_ui / 详情展示
+  - 追加 set_view_model(profile) — AgentProfile ViewModel 入口
+  - 追加 signals：edit_requested / activate_requested / delete_requested
 """
 from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QLabel,
@@ -19,10 +24,25 @@ from v6.ui.base import C, font
 
 
 class AgentProfileWorkspaceItem(QWidget):
-    """Agent Profile 详情页。"""
+    """Agent Profile 详情页。
+
+    v6.10.0-alpha:
+      - 保留原有 _setup_ui / 详情展示
+      - 新增 ViewModel 入口 set_view_model(profile)
+      - 新增 signals: edit_requested / activate_requested / delete_requested
+    """
+
+    # ──────────────────────────────────────────────────────────
+    # v6.10.0-alpha: Agent 操作 signals
+    # ──────────────────────────────────────────────────────────
+
+    edit_requested = Signal(str)  # agent_id
+    activate_requested = Signal(str)  # agent_id
+    delete_requested = Signal(str)  # agent_id
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._current_profile: Any = None  # AgentProfile | None
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -192,3 +212,49 @@ class AgentProfileWorkspaceItem(QWidget):
         label.setStyleSheet(f"color: {C['text_primary']}; border: none;")
         layout.addWidget(label)
         return group
+
+    # ──────────────────────────────────────────────────────────
+    # v6.10.0-alpha: ViewModel 接入
+    # ──────────────────────────────────────────────────────────
+
+    def set_view_model(self, profile: Any) -> None:
+        """通过 AgentProfile ViewModel 刷新详情页（v6.10 推荐入口）。
+
+        Args:
+            profile: view_models.agent_profile.AgentProfile。
+        """
+        self._current_profile = profile
+        info = self._profile_to_legacy_info(profile)
+        self.set_agent(info)
+
+    def get_current_profile(self) -> Any:
+        """获取当前 ViewModel。"""
+        return self._current_profile
+
+    @staticmethod
+    def _profile_to_legacy_info(profile: Any) -> dict[str, Any]:
+        """AgentProfile -> legacy agent info dict（保留旧 _render_info 入口）。"""
+        return {
+            "agent_id": profile.identity.agent_id,
+            "name": profile.identity.name,
+            "description": profile.identity.description,
+            "avatar": profile.identity.avatar,
+            "system_prompt": "",
+            "provider": profile.provider_id,
+            "model": "",
+            "skills": [{"name": s} for s in profile.skills],
+            "tools": [{"name": t} for t in profile.tools],
+            "capabilities": [],
+        }
+
+    def request_edit(self, agent_id: str) -> None:
+        """UI 请求编辑 Agent（emit signal）。"""
+        self.edit_requested.emit(agent_id)
+
+    def request_activate(self, agent_id: str) -> None:
+        """UI 请求激活 Agent（emit signal）。"""
+        self.activate_requested.emit(agent_id)
+
+    def request_delete(self, agent_id: str) -> None:
+        """UI 请求删除 Agent（emit signal）。"""
+        self.delete_requested.emit(agent_id)
