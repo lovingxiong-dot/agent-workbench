@@ -32,6 +32,10 @@ storage/*.json
 storage/*.yaml
 storage/vector_store/
 config/.env
+config/config.local.yaml
+config/local.yaml
+config/local.*
+**/config/config.local.yaml
 *.spec.bak
 
 # --- IDE / Agent Temp ---
