@@ -35,7 +35,11 @@
 | `v6.17.0-alpha` | 2026-07-25 | **Phase 3.10 Presentation Layer Frozen** |
 | `v6.18.0-alpha` | 2026-07-25 | **Phase 3.11 Finalization HEAD** (current) |
 
-> **Note**: Tag ordering ≠ Phase ordering. v6.16 = Phase 3.11 (latest frozen), v6.17 = Phase 3.10 (previous frozen). This is intentional to keep stable `main` (`v6.12.0-beta.15`) untouched.
+> **Historical Note (Tag vs Phase ordering)**:
+> - **Version tags** (e.g. v6.16) represent **commit chronology** (when code was tagged)
+> - **Phase numbers** (e.g. Phase 3.11) represent **architecture evolution** (what milestone was achieved)
+> 
+> These are **independent dimensions**. v6.16.0-alpha = Phase 3.11 (latest frozen), v6.17.0-alpha = Phase 3.10 (previous frozen). This is intentional: the tag for Phase 3.10 (Presentation) was created after the tag for Phase 3.11 (Runtime) to keep stable `main` (`v6.12.0-beta.15`) untouched. **When in doubt: read the Milestone column, not the Version column.**
 
 ### ADR Index (Architecture Decisions)
 
@@ -184,7 +188,11 @@ CENTRE / AOS (Shared Ancestor)
 │  │                                                    │  │
 │  │ v6.9.6-foundation (Frozen) + Phase 3.11 Evolution │  │
 │  │ RuntimeContract: Provider, Tool, Skill, Workflow   │  │
-│  │ Memory via Capability Runtime Contract             │  │
+│  │                                                    │  │
+│  │ Memory: NOT implemented in Runtime Kernel          │  │
+│  │   (Future Memory through Capability Contract;     │  │
+│  │    designed in Phase 3.16, ADR-020;                │  │
+│  │    not in v6/runtime/)                             │  │
 │  └────────────────────────────────────────────────────┘  │
 │                          ↑                                │
 │                          │ (read-only event flow)        │
@@ -335,6 +343,12 @@ Request → Planning → Task → Capability → Engine → Provider
 
 **Location**: `tools/` (NOT in `v6/runtime/`)
 
+> **Boundary Statement**:
+> - `tools/` is **NOT** a Runtime extension.
+> - `tools/` consumes Runtime artifacts / events (read-only via `RuntimeEvent`).
+> - `tools/` does NOT modify Runtime Kernel.
+> - `tools/` does NOT introduce new concepts into `v6/runtime/`.
+
 | Module | Phase | Status | ADR |
 |--------|-------|--------|-----|
 | `tools/observation/` | Phase 3.12 | Designed, uncommitted | ADR-016 |
@@ -345,7 +359,7 @@ Request → Planning → Task → Capability → Engine → Provider
 | `tools/harness/` | Phase 3.16 | Architecture Review only | ADR-020 |
 | `tools/context/` | Phase 3.16 | Architecture Review only | ADR-020 |
 
-> **Important**: Cognitive Layer consumes Runtime via read-only event flow. It does NOT modify Runtime Kernel.
+> **Important**: Cognitive Layer consumes Runtime via read-only event flow. It does NOT modify Runtime Kernel. Do NOT add `v6/runtime/observation/`, `v6/runtime/insight/`, or `v6/runtime/decision_support/`.
 
 ### 5.4 Presentation Layer
 
