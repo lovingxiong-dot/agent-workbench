@@ -49,9 +49,10 @@ archive/*         ← Frozen version snapshots (v3 / v4 / v5 / archive/v6-core /
 | **Active Branch** | `v6-agent` ⭐ |
 | **Historical Branches** | `archive/v6-core`, `archive/v6-service`, `archive/v6-dev` |
 | **Runtime Foundation** | `v6.9.6-foundation` (2026-07-09, frozen) |
-| **Runtime Execution Kernel** | `v6.16.0-alpha` (2026-07-25, frozen, ADR-013/014/015) |
-| **Presentation Layer** | `v6.17.0-alpha` (2026-07-25, frozen, Phase 3.10) |
-| **Current HEAD** | `v6.18.0-alpha` (in-progress, post-Phase 3.11) |
+| **Runtime Execution Kernel** | `v6.16.0-alpha` (2026-07-25, Frozen, ADR-013/014/015) |
+| **Presentation Layer** | `v6.17.0-alpha` (2026-07-25, Frozen) |
+| **Observation Layer** | `v6.19.0-alpha` (2026-07-25, Phase 3.12 Complete, ADR-016) |
+| **Current HEAD** | `v6.19.0-alpha` (post-Phase 3.12, pre-Phase 3.13) |
 | **Public Baseline** | `v6.0.0-alpha` |
 | **Internal Migration Checkpoint** | `v6.5.8-alpha` (kept for historical traceability) |
 
@@ -138,7 +139,7 @@ v6-agent (Active Development — single source)
 
 ### Working Tree Status (2026-07-25)
 
-- 63 modified files (uncommitted)
+- 3 modified files (uncommitted)
 - Phase 2-D legacy changes: `v6/ui/*.py`, `agent_workbench/application/v6_ui_application.py`, `storage/sessions/*.json`
-- Phase 3.12-3.15 untracked: `tools/observation/`, `tools/presentation/`, `tools/insight/`, `tools/decision_support/`, `tests/tools/`, `v6/presentation/observation/`
-- Phase 3.11 Runtime Finalization: ✅ committed (Phase 3.11 Runtime Finalization Batch)
+- Phase 3.13-3.15 untracked: `tools/presentation/`, `tools/insight/`, `tools/decision_support/`, `tests/tools/`, `v6/presentation/observation/`
+- Phase 3.12 Observation: ✅ committed (3c754f4)

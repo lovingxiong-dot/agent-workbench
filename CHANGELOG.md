@@ -4,6 +4,39 @@
 >
 > **Tag ordering note**: Version numbers reflect commit order and may not match architectural phase order. Phase 3.10 (Presentation) is `v6.17.0-alpha`; Phase 3.11 (Runtime Kernel) is `v6.16.0-alpha`. This is intentional to keep stable line on `main` (`v6.12.0-beta.15`) untouched.
 
+## v6.19.0-alpha (2026-07-25) — Phase 3.12 Observation Layer Complete
+
+> **Milestone**: Phase 3.12 Observation Layer Complete. First Cognitive Layer Frozen.
+> - Contract Schema (ADR-016) Frozen at `observation.v0.1`
+> - Read-only RuntimeEvent Consumer
+> - Minimal in-memory Registry (3 methods only)
+> - 88/88 Observation tests PASS, 100/100 Runtime tests unchanged
+> - Coexistence: prototype (reports/collectors/adapters/derived) preserved
+> - Next: Phase 3.13 Presentation & Consumption
+
+### Added
+
+- `tools/observation/contract/observation_artifact.py` (Frozen, 10 fields, schema_version = "observation.v0.1")
+- `tools/observation/consumer/runtime_event_consumer.py` (read-only Adapter, 5→3 type mapping, pure function)
+- `tools/observation/registry/observation_registry.py` (minimal in-memory, 3 methods: register / query_by_id / query_by_execution_id)
+- `.project/PROJECT_CONTEXT.md` (Execution Context Snapshot, <200 lines)
+
+### Architecture (ADR)
+
+- **ADR-016**: Observation Layer Contract (Frozen Phase 3.12)
+
+### Tests
+
+- 88/88 Observation tests PASS (38 Contract + 29 Consumer + 19 Registry + 2 __init__)
+- 100/100 Runtime tests unchanged (Phase 3.11 B/C/D)
+
+### Principle
+
+> **Observation records what happened. Memory remembers what matters.**
+> 两者不要提前合并。Memory features (persistence, schema registry, governance) are Phase 3.16+ scope.
+
+---
+
 ## v6.18.0-alpha (2026-07-25) — Phase 3.11 Finalization HEAD
 
 > **Milestone**: Phase 3.11 Runtime Finalization Complete (post-Phase 3.11 Runtime Frozen `v6.16.0-alpha`).

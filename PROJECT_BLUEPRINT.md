@@ -54,6 +54,8 @@
 | ADR-019 | Agent Decision Support Boundary | Frozen (Phase 3.15, designed) |
 | ADR-020 | Cognitive Continuity & Harness Architecture Contract | Architecture Review only |
 
+> **Phase 3.12 Status (2026-07-25)**: Observation Layer Contract (ADR-016) implemented with 3 submodules: `contract/` (Frozen Schema, 5 types / 4 sources / 3 scores), `consumer/` (read-only RuntimeEvent Adapter), `registry/` (Minimal in-memory, 3 methods). 88/88 Observation tests PASS. Runtime tests 100/100 unchanged.
+
 ---
 
 ## Part 1 — Constitution (Constitution Reference)
