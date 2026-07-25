@@ -144,8 +144,18 @@ NEW Runtime Execution
 | Phase 3.14 Insight Understanding | ⏭ Next | High |
 | Phase 3.15 Decision Support | ⏸ Pending | High |
 | Phase 3.16 Memory + Harness (Architecture Review only) | ⏸ Pending | Medium |
-| Working tree 残留修改 (Phase 2-D 遗留) | ⏭ 后续 | Low |
-| Stash 清理 (3 → 0) | ⏭ 后续 | Low |
+
+### Known Working Tree (untracked / modified, NOT in current Phase scope)
+
+| File | Type | Reason |
+|------|------|--------|
+| `tests/tools/` | untracked dir | Future Phase tests (3.14+) |
+| `tests/v6/presentation/` | untracked dir | Future Runtime tests |
+| `tools/insight/` | untracked dir | Phase 3.14 asset |
+| `tools/decision_support/` | untracked dir | Phase 3.15 asset |
+| `v6/presentation/` | untracked dir | Runtime internal (out of scope) |
+| `storage/sessions/*.json` (modified) | runtime data | Now gitignored (storage/**/*.json) |
+| `v6/ui/*.py` (modified) | Phase 2-D legacy | Pre-v6.9.6, deferred cleanup |
 
 ## 12. Next Steps for Incoming Agent
 
