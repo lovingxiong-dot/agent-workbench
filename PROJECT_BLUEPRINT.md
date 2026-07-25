@@ -1,7 +1,7 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v6.14.0-alpha | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 61 |
+| 项目名称 | AI Agent 工作台 | 当前版本 | v6.16.0-alpha (Runtime Frozen) / v6.17.0-alpha (Presentation Frozen) | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 61 |
 
 ## Current Development Authority
 
@@ -9,8 +9,12 @@
 > **Public baseline: `v6.0.0-alpha`.**
 > **Framework Core baseline: `v6.8.0-alpha`.**
 > **V6 Runtime Foundation Baseline: `v6.9.6-foundation` — frozen at 2026-07-09. The Runtime Kernel is complete. The next era is the Agent Workbench Ecosystem.**
+> **V6 Runtime Execution Kernel Baseline: `v6.16.0-alpha` — frozen 2026-07-25. Runtime Foundation + Execution Kernel Evolution (ADR-013/014/015) complete.**
+> **V6 Presentation Layer Baseline: `v6.17.0-alpha` — frozen 2026-07-25. Runtime Presentation Integration complete.**
 > **From v6.11 onward, Runtime is considered stable infrastructure. The primary evolution target becomes the Workbench Layer, where Metadata, Schema, Plugins, and Digital Identity form the long-term product differentiation.**
 > **自 v6.11 起，Runtime 视为稳定基础设施，后续主要演进对象转为 Workbench Layer；Metadata、Schema、Plugin 与 Digital Identity 将成为产品长期演进方向。**
+> 
+> **2026-07-25: Phase 3.11 Execution Kernel Evolution Complete. 进入 Phase 3 Consolidation 收口阶段。下一阶段：Phase 3.12 Observation Layer / Phase 3.16 Cognitive Continuity + Harness。**
 
 | Item | Value |
 |---|---|
@@ -180,6 +184,88 @@ From this point forward:
 - **All new capabilities** must enter through the frozen Capability Runtime Contract.
 - **All GUI, Provider, Tool, Skill, Workflow, Memory, and Knowledge work** branches from `v6.9.6-foundation`.
 - **Repository hygiene** is enforced by `scripts/audit_repository.py` and `scripts/verify_repository.py`.
+
+## Presentation Layer Status (Phase 3.8 — 3.10)
+
+> **Phase 3.10: CLOSED — Runtime Presentation Integration Complete.**
+> Workbench 已从"UI 外壳"正式成为 Runtime Client。
+
+| Phase | Status | Key Achievement |
+|-------|--------|----------------|
+| 3.8 Presentation Runtime Binding | Closed | EventAdapter → PresentationModel → Multi-Renderer 链路 |
+| 3.9 Presentation Contract Stabilization | Closed | Model/Renderer/Adapter 三层契约冻结，Golden Path 验证 |
+| 3.10 Runtime Presentation Integration | Closed | Blocking Callback 修复，真实 Runtime Execution Golden Path，TracePresentationModel |
+
+### Frozen Contracts (Phase 3.10 verified)
+
+| Contract | Status | Modified in 3.10 |
+|----------|--------|-----------------|
+| RuntimeRequest | Frozen | No |
+| RuntimeEvent | Frozen | No |
+| InteractionEvent | Frozen | No |
+| Presentation Contract | Frozen | No |
+| Renderer Protocol | Prepared | No |
+
+### Architecture Debt (carried forward)
+
+| ID | Description | Phase |
+|----|-------------|-------|
+| DEBT-004 | Renderer 直接依赖 chat_items | Phase 4 |
+| DEBT-005 | Legacy design_tokens compatibility layer | Phase 4 |
+| DEBT-006 | MessageViewModel 未继承 BasePresentationModel | Phase 4 |
+| ADR-012 | Runtime Execution Isolation Strategy (PROPOSAL) | Phase 4-5 |
+
+### Future ADR on Execution Model
+
+- [ADR-012](.project/decisions/ADR-012-runtime-execution-isolation.md): 当前 `threading.Thread` 方案是 Phase 3.10 最小修复，长期演进至 `TaskScheduler` + `ExecutionPool` + `Worker Runtime`
+
+## Runtime Execution Kernel Status (Phase 3.11)
+
+> **Phase 3.11: CLOSED — Execution Kernel Evolution Complete.**
+> Runtime Foundation (`v6.9.6-foundation`) + Execution Kernel Evolution (`v6.16.0-alpha`)。
+
+| Component | Status | ADR | Notes |
+|-----------|--------|-----|-------|
+| Parent-Child Execution Model | Closed | ADR-015 | submit_child() / cancel() DFS propagation |
+| Cancellation Propagation | Closed | ADR-015 | CancellationPropagationContext (frozen + invariants) |
+| Execution Metadata | Closed | ADR-015 | ExecutionMetadata (frozen) |
+| Execution Registry | Closed | ADR-015 | Topology owner |
+| Lifecycle / Activity Dual State | Closed | (3.11-A) | LifecycleState + ActivityState |
+| TASK_CANCELLED Event | Closed | ADR-013 | RuntimeEvent extension |
+| ExecutionControl | Closed | ADR-014/015 | Cancellation Token aggregator |
+| CancellationPropagation | Closed | ADR-015 | PropagationType + Limits |
+
+### Runtime Freeze Certificate (`v6.16.0-alpha`)
+
+After `v6.16.0-alpha`, the v6/runtime/ kernel is **frozen with explicit boundaries**:
+
+**Allowed**:
+- ✓ Bug Fix
+- ✓ Frozen Contract compatibility (向后兼容字段)
+
+**Forbidden**:
+- ✗ Memory / Knowledge / Identity additions
+- ✗ Agent Role / Harness Logic
+- ✗ New Runtime concepts or control flows
+- ✗ New responsibilities for existing Runtime modules
+
+**Rationale**: Runtime is stable infrastructure. New capabilities enter via Capability Runtime Contract and the Workbench Ecosystem (Provider, Tool, Skill, Workflow, Memory, Knowledge).
+
+---
+
+## Phase 3 Consolidation Status (2026-07-25)
+
+> **Status: ACTIVE — Repository Truth Alignment Phase.**
+> Phase 3.11 Runtime Frozen. Pending: Phase 3.12-3.15 Asset Sync + Phase 3.16 Architecture.
+
+| Milestone | Status | Notes |
+|-----------|--------|-------|
+| Phase 3.11 Runtime Finalization | ✅ Done | v6.16.0-alpha tag, 372 tests PASS |
+| Phase 3.12-3.15 Asset Sync | 🟡 Pending | Observation/Presentation/Insight/Decision Support 资产未提交 |
+| Phase 3.16 Architecture | 🟡 Pending | ADR-020 v0.4 Cognitive Continuity + Harness (Review only, no implementation) |
+| Phase 3 Consolidation (C0-C3) | 🟡 Pending | Repository Truth Alignment + Runtime Freeze Confirmation + Doc Sync + Harness/Observation Planning |
+
+**Next Milestone**: Phase 3.12 Observation Layer (after Phase 3 Consolidation).
 
 ## Agent Workbench 定位
 
