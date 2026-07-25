@@ -20,7 +20,9 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from v6.runtime.enums import RuntimeState
+from v6.runtime.enums import ActivityState, LifecycleState, RuntimeState, lifecycle_to_runtime
+from v6.runtime.execution_control import ExecutionControl
+from v6.runtime.execution_metadata import ExecutionMetadata
 from v6.runtime.metrics import RuntimeMetrics
 from v6.runtime.result import RuntimeResult
 from v6.runtime.trace import RuntimeTrace
@@ -70,6 +72,14 @@ class RuntimeContext:
     status: RuntimeState = RuntimeState.CREATED
     created_at: float = field(default_factory=time.time)
 
+    # Phase 3.11-A: 双状态模型 + Execution Identity
+    lifecycle: LifecycleState = LifecycleState.CREATED
+    activity: ActivityState = ActivityState.IDLE
+    execution: Optional[ExecutionMetadata] = None
+
+    # Phase 3.11-C: 执行控制（聚合 CancellationToken 等控制令牌）
+    control: ExecutionControl = field(default_factory=ExecutionControl)
+
     def __post_init__(self) -> None:
         self._lock = threading.RLock()
 
@@ -90,6 +100,17 @@ class RuntimeContext:
             **kwargs,
         )
 
+    def attach_execution(self, execution: "ExecutionMetadata") -> None:
+        """v0.3: 统一 ExecutionMetadata 绑定入口。
+
+        在 execution 创建后调用，确保 ctx.control 与 ctx.execution.control
+        引用同一 ExecutionControl 实例（不变量：避免双 CancellationToken）。
+        """
+        with self._lock:
+            self.execution = execution
+            # 同步 control 引用（保证 is 同一对象）
+            self.control = execution.control
+
     # ─────────────────────────────────────────────────────────
     # 数据管理方法（允许）
     # ─────────────────────────────────────────────────────────
@@ -100,12 +121,43 @@ class RuntimeContext:
             self.messages.append(ChatMessage(role=role, content=content))
 
     def set_status(self, status: RuntimeState | str) -> None:
-        """线程安全地更新任务状态；接受枚举或字符串以保持兼容性。"""
+        """线程安全地更新任务状态；接受枚举或字符串以保持兼容性。
+
+        同时同步 lifecycle 字段（向后兼容映射）。
+        """
         with self._lock:
             if isinstance(status, RuntimeState):
                 self.status = status
             else:
                 self.status = RuntimeState(status)
+            # 同步 lifecycle（向后兼容）
+            self._sync_status_to_lifecycle()
+
+    def set_lifecycle(self, lifecycle: LifecycleState, activity: ActivityState | None = None) -> None:
+        """Phase 3.11-A: 线程安全地更新双状态模型。
+
+        同时同步旧 status 字段（向后兼容）。
+        """
+        with self._lock:
+            self.lifecycle = lifecycle
+            if activity is not None:
+                self.activity = activity
+            # 同步旧 status（向后兼容）
+            self.status = lifecycle_to_runtime(lifecycle)
+
+    def _sync_status_to_lifecycle(self) -> None:
+        """将旧 status 同步到新 lifecycle 字段（向后兼容）。"""
+        _status_to_lifecycle: dict[RuntimeState, LifecycleState] = {
+            RuntimeState.CREATED: LifecycleState.CREATED,
+            RuntimeState.QUEUED: LifecycleState.QUEUED,
+            RuntimeState.PLANNING: LifecycleState.PLANNING,
+            RuntimeState.EXECUTING: LifecycleState.EXECUTING,
+            RuntimeState.RUNNING: LifecycleState.EXECUTING,
+            RuntimeState.COMPLETED: LifecycleState.COMPLETED,
+            RuntimeState.FAILED: LifecycleState.FAILED,
+            RuntimeState.CANCELLED: LifecycleState.CANCELLED,
+        }
+        self.lifecycle = _status_to_lifecycle.get(self.status, LifecycleState.CREATED)
 
     def snapshot(self) -> Dict[str, Any]:
         """返回当前状态的深拷贝快照（用于 Checkpoint / Replay / Rollback）。"""
@@ -134,6 +186,15 @@ class RuntimeContext:
             self.metadata = copy.deepcopy(snapshot.get("metadata", {}))
             self.status = self._restore_state(snapshot.get("status", RuntimeState.CREATED))
             self.created_at = snapshot.get("created_at", time.time())
+            # Phase 3.11-A: 恢复双状态模型
+            self.lifecycle = self._restore_lifecycle(snapshot.get("lifecycle", "created"))
+            self.activity = self._restore_activity(snapshot.get("activity", "idle"))
+            self.execution = self._restore_execution(snapshot.get("execution"))
+            # Phase 3.11-C: 恢复控制状态
+            self.control = self._restore_control(snapshot.get("control"))
+            # v0.3: 恢复 ABI 不变量（control 与 execution.control 同一对象）
+            if self.execution is not None:
+                self.control = self.execution.control
             # trace 恢复：若快照含 steps 则重建 RuntimeTrace，否则保留当前实例
             raw_trace = snapshot.get("trace")
             if isinstance(raw_trace, dict) and "steps" in raw_trace:
@@ -168,10 +229,33 @@ class RuntimeContext:
             self.trace.clear()
             self.metadata.clear()
             self.status = RuntimeState.CREATED
+            self.lifecycle = LifecycleState.CREATED
+            self.activity = ActivityState.IDLE
+            self.execution = None
+            self.control = ExecutionControl()
 
     def clone(self) -> "RuntimeContext":
         """深拷贝自身，生成独立副本。"""
         with self._lock:
+            # v0.3: 手动 deep-copy ExecutionMetadata（避免 deepcopy 进入
+            # ExecutionControl 的 threading.Event 不可 pickle）
+            cloned_execution = None
+            if self.execution is not None:
+                cloned_execution = ExecutionMetadata(
+                    execution_id=self.execution.execution_id,
+                    task_id=self.execution.task_id,
+                    parent_execution_id=self.execution.parent_execution_id,
+                    created_at=self.execution.created_at,
+                    started_at=self.execution.started_at,
+                    finished_at=self.execution.finished_at,
+                    deadline_at=self.execution.deadline_at,
+                    retry_count=self.execution.retry_count,
+                    max_retries=self.execution.max_retries,
+                    priority=self.execution.priority,
+                    tags=list(self.execution.tags),
+                )
+                # control 是新实例（execution.control 已由 default_factory 创建）
+
             cloned = RuntimeContext(
                 task_id=self.task_id,
                 session_id=self.session_id,
@@ -191,7 +275,14 @@ class RuntimeContext:
                 metadata=copy.deepcopy(self.metadata),
                 status=self.status,
                 created_at=self.created_at,
+                lifecycle=self.lifecycle,
+                activity=self.activity,
+                execution=cloned_execution,
+                control=ExecutionControl(),  # 新实例（深拷贝 threading.Event 不可 pickle）
             )
+        # v0.3: 重建 control 与 execution.control 的 is 关系（保持 ABI 不变量）
+        if cloned.execution is not None:
+            cloned.control = cloned.execution.control
         # trace 是独立的可变对象，需要单独深拷贝步骤
         cloned.trace = RuntimeTrace()
         for step in self.trace.steps():
@@ -235,6 +326,46 @@ class RuntimeContext:
             return RuntimeState(raw)
         return RuntimeState.CREATED
 
+    @staticmethod
+    def _restore_lifecycle(raw: Any) -> LifecycleState:
+        if isinstance(raw, LifecycleState):
+            return raw
+        if isinstance(raw, str):
+            return LifecycleState(raw)
+        return LifecycleState.CREATED
+
+    @staticmethod
+    def _restore_activity(raw: Any) -> ActivityState:
+        if isinstance(raw, ActivityState):
+            return raw
+        if isinstance(raw, str):
+            return ActivityState(raw)
+        return ActivityState.IDLE
+
+    @staticmethod
+    def _restore_execution(raw: Any) -> Optional[ExecutionMetadata]:
+        if isinstance(raw, ExecutionMetadata):
+            return raw
+        if isinstance(raw, dict):
+            return ExecutionMetadata(
+                execution_id=raw.get("execution_id", ""),
+                task_id=raw.get("task_id", ""),
+                parent_execution_id=raw.get("parent_execution_id"),
+            )
+        return None
+
+    @staticmethod
+    def _restore_control(raw: Any) -> ExecutionControl:
+        """从快照恢复控制状态。
+
+        CancellationToken 基于 threading.Event，不可序列化。
+        恢复时创建新实例，若快照标记为已取消则重新触发取消。
+        """
+        control = ExecutionControl()
+        if isinstance(raw, dict) and raw.get("cancelled"):
+            control.cancel(raw.get("cancel_reason", ""))
+        return control
+
     def _make_snapshot(self) -> Dict[str, Any]:
         return {
             "task_id": self.task_id,
@@ -256,4 +387,16 @@ class RuntimeContext:
             "metadata": copy.deepcopy(self.metadata),
             "status": self.status.value if isinstance(self.status, RuntimeState) else self.status,
             "created_at": self.created_at,
+            "lifecycle": self.lifecycle.value,
+            "activity": self.activity.value,
+            "execution": {
+                "execution_id": self.execution.execution_id,
+                "task_id": self.execution.task_id,
+                "parent_execution_id": self.execution.parent_execution_id,
+            } if self.execution is not None else None,
+            # Phase 3.11-C: 控制状态快照（CancellationToken 不可序列化，仅保存状态）
+            "control": {
+                "cancelled": self.control.is_cancelled,
+                "cancel_reason": self.control.cancellation.reason,
+            },
         }

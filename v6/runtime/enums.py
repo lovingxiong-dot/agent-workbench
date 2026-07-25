@@ -140,9 +140,10 @@ TRACE_EVENT_PARENT_LEVEL: dict[str, str | None] = {
 
 
 class RuntimeState(str, Enum):
-    """Runtime Task 生命周期状态枚举。
+    """Runtime Task 生命周期状态枚举（向后兼容）。
 
-    未来可迁移到 RuntimeTask.state；当前先由 RuntimeContext.status 承载。
+    Phase 3.11 起，新代码应使用 LifecycleState + ActivityState 双状态模型。
+    本枚举保留用于旧代码兼容。
     """
 
     CREATED = "created"
@@ -155,3 +156,50 @@ class RuntimeState(str, Enum):
     CANCELLED = "cancelled"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class LifecycleState(str, Enum):
+    """任务生命周期状态（Phase 3.11-A 双状态模型）。
+
+    每个 Task 在当前时刻仅处于一个 LifecycleState。
+    终态：COMPLETED / FAILED / CANCELLED。
+    """
+
+    CREATED = "created"       # 任务已创建，尚未提交
+    QUEUED = "queued"         # 已提交到调度队列，等待分配
+    PLANNING = "planning"     # 正在规划执行策略
+    EXECUTING = "executing"   # 正在执行（ActivityState 描述具体活动）
+    COMPLETED = "completed"   # 终态：执行成功
+    FAILED = "failed"         # 终态：执行失败
+    CANCELLED = "cancelled"   # 终态：已取消
+
+
+class ActivityState(str, Enum):
+    """当前执行活动状态（Phase 3.11-A 双状态模型）。
+
+    仅在 LifecycleState.EXECUTING 期间有意义。
+    其他 LifecycleState 下固定为 IDLE。
+    """
+
+    IDLE = "idle"           # 无活动（非 EXECUTING 状态）
+    RUNNING = "running"     # 正在执行（通用）
+    STREAMING = "streaming" # 流式输出中（LLM）
+    WAITING = "waiting"     # 等待外部事件（Tool/MCP/API）
+    PAUSED = "paused"       # 已暂停（用户或系统触发）
+
+
+# LifecycleState → RuntimeState 向后兼容映射
+_LIFECYCLE_TO_RUNTIME: dict[LifecycleState, RuntimeState] = {
+    LifecycleState.CREATED: RuntimeState.CREATED,
+    LifecycleState.QUEUED: RuntimeState.QUEUED,
+    LifecycleState.PLANNING: RuntimeState.PLANNING,
+    LifecycleState.EXECUTING: RuntimeState.EXECUTING,
+    LifecycleState.COMPLETED: RuntimeState.COMPLETED,
+    LifecycleState.FAILED: RuntimeState.FAILED,
+    LifecycleState.CANCELLED: RuntimeState.CANCELLED,
+}
+
+
+def lifecycle_to_runtime(lifecycle: LifecycleState) -> RuntimeState:
+    """将 LifecycleState 映射到旧 RuntimeState（向后兼容）。"""
+    return _LIFECYCLE_TO_RUNTIME.get(lifecycle, RuntimeState.CREATED)

@@ -35,6 +35,7 @@ class RuntimeEventType(str, Enum):
     TASK_STARTED = "task.started"
     TASK_COMPLETED = "task.completed"
     TASK_FAILED = "task.failed"
+    TASK_CANCELLED = "task.cancelled"  # Phase 3.11-A: ADR-013
 
     CAPABILITY_RESOLVED = "capability.resolved"
 
@@ -89,6 +90,7 @@ _RUNTIME_EVENT_TO_TRACE: dict[str, TraceEvent] = {
     RuntimeEventType.TASK_STARTED: TraceEvent.TASK_START,
     RuntimeEventType.TASK_COMPLETED: TraceEvent.TASK_FINISH,
     RuntimeEventType.TASK_FAILED: TraceEvent.TASK_ERROR,
+    RuntimeEventType.TASK_CANCELLED: TraceEvent.TASK_ERROR,  # Phase 3.11-C: 取消映射到 task_error
     RuntimeEventType.CAPABILITY_RESOLVED: TraceEvent.CAPABILITY_RESOLVED,
     RuntimeEventType.ENGINE_SELECTED: TraceEvent.ENGINE_SELECTED,
     RuntimeEventType.ENGINE_STARTED: TraceEvent.ENGINE_START,
@@ -248,23 +250,36 @@ class EventBus:
         self._ready.clear()
 
     def _run_loop(self) -> None:
-        """在后台线程中运行 asyncio 事件循环。"""
-        self._loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self._loop)
-        self._queue = asyncio.Queue()
+        """在后台线程中运行 asyncio 事件循环。
+
+        Bug Fix (Phase 3.10): 保存 loop 本地引用，避免 stop() 并发设置
+        self._loop = None 导致 finally 块 AttributeError。
+        """
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        self._loop = loop
+        queue = asyncio.Queue()
+        self._queue = queue
         self._ready.set()
         try:
-            self._loop.run_until_complete(self._dispatch_loop())
+            loop.run_until_complete(self._dispatch_loop())
         finally:
-            self._loop.close()
+            loop.close()
 
     async def _dispatch_loop(self) -> None:
-        """持续从队列取出事件并分发给订阅者。"""
+        """持续从队列取出事件并分发给订阅者。
+
+        Bug Fix (Phase 3.10): 捕获 _dispatch 异常，防止单个回调崩溃导致
+        事件循环退出、后续事件丢失。
+        """
         while self._running:
             event = await self._queue.get()
             if event is None:
                 break
-            await self._dispatch(event)
+            try:
+                await self._dispatch(event)
+            except Exception:  # pragma: no cover - defensive
+                traceback.print_exc()
 
     def _write_trace_hook(self, event: RuntimeEvent) -> None:
         """将事件同步写入对应 Trace Hook（publish 调用线程内执行）。"""
@@ -298,9 +313,17 @@ class EventBus:
             traceback.print_exc()
 
     async def _dispatch(self, event: RuntimeEvent) -> None:
-        """调用该事件类型的所有订阅者；Trace Hook 已在 publish 阶段同步写入。"""
+        """调用该事件类型的所有订阅者；Trace Hook 已在 publish 阶段同步写入。
+
+        Bug Fix (Phase 3.10): 支持通配符 "*" 订阅，使 InteractionLayer 等全局监听者
+        能收到所有事件。此前 subscribe("*", cb) 虽然接受但 dispatch 从未调用。
+        """
         with self._lock:
             callbacks = list(self._subscribers.get(event.type, []))
+            # 通配符 "*" 订阅者接收所有事件类型
+            wildcard = self._subscribers.get("*", [])
+            if wildcard:
+                callbacks = callbacks + list(wildcard)
         for callback in callbacks:
             try:
                 if inspect.iscoroutinefunction(callback):
