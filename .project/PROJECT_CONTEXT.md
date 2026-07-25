@@ -12,10 +12,10 @@
 | Field | Value |
 |-------|-------|
 | **Active Branch** | `v6-agent` ⭐ (SINGLE source of truth) |
-| **HEAD Commit** | `1b6cec3` |
-| **Current Version** | `v6.18.0-alpha` |
-| **Current Milestone** | Phase 3.12 Batch 3 — Minimal Observation Registry (in progress) |
-| **Next Milestone** | Phase 3.12 Finalization (per Brief) |
+| **HEAD Commit** | `dd1f9eb` |
+| **Current Version** | `v6.19.0-alpha` |
+| **Current Milestone** | Phase 3.12 Observation Layer Complete (Frozen) |
+| **Next Milestone** | Phase 3.13 Presentation & Consumption (Ready) |
 
 ## 2. Frozen Tags (Architecture Anchors)
 
@@ -40,25 +40,23 @@
 
 ### Completed
 
-- ✅ **Batch 1**: Observation Contract Schema (`6c15b70`)
-  - Location: `tools/observation/contract/`
-  - 5 `ObservationType` (Performance / Resource / Lifecycle / Event / Health)
-  - 4 `ObservationSource` (Human / Agent / Runtime / System)
-  - 3 `ObservationScore` (relevance / confidence / stability) [0.0, 1.0]
-  - Frozen `ObservationArtifact` (10 fields, schema_version = "observation.v0.1")
-  - 38/38 contract tests PASS
-- ✅ **Context Sync** (`02d1422`): Added `.project/PROJECT_CONTEXT.md`
-
-### In Progress
-
-- ⏭ **Batch 2**: RuntimeEvent Consumer (in progress)
-  - Read-only Adapter: `RuntimeEvent → ObservationArtifact` (consume only)
-  - NOT Runtime subscription, NOT Runtime mutation
-  - Location: `tools/observation/consumer/`
+- ✅ **Batch 1**: Observation Contract Schema (`6c15b70`) — 5 types / 4 sources / 3 scores, Frozen `observation.v0.1`
+- ✅ **Batch 2**: RuntimeEvent Consumer (`1b6cec3`) — Read-only Adapter
+- ✅ **Batch 3**: Minimal Observation Registry (`3c754f4`) — 3 methods, in-memory only
+- ✅ **Finalization** (`2ff8b70` / `dd1f9eb`) — Tag v6.19.0-alpha
 
 ### Next
 
-- ⏭ **Batch 3**: Observation Registry (after Batch 2)
+- ⏭ **Phase 3.13 Presentation & Consumption** (Ready)
+  - `ObservationArtifact → ObservationViewModel` (platform-agnostic)
+  - Location: `tools/presentation/contract/`, `tools/presentation/adapter/`, `tools/presentation/consumer/`
+  - Frozen: `ObservationViewModel` schema (10 fields: id/title/summary/category/severity/timestamp/source/metrics/metadata)
+  - Strict NOT in scope: Dashboard / Chart / EventBus新通道 / Storage / Memory / Insight / AI Summary
+
+### Principle
+
+> **Observation records what happened. Memory remembers what matters.**
+> 两者不要提前合并。Presentation 保持 platform-agnostic。
 
 ## 5. Known Structure (tools/observation/)
 
