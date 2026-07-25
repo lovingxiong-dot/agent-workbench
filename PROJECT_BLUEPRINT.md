@@ -34,6 +34,8 @@
 | `v6.16.0-alpha` | 2026-07-25 | **Phase 3.11 Runtime Execution Kernel Frozen** ⭐ (ADR-013/014/015) |
 | `v6.17.0-alpha` | 2026-07-25 | **Phase 3.10 Presentation Layer Frozen** |
 | `v6.18.0-alpha` | 2026-07-25 | **Phase 3.11 Finalization HEAD** (current) |
+| `v6.19.0-alpha` | 2026-07-25 | Phase 3.12 Observation Layer Complete |
+| `v6.20.0-alpha` | 2026-07-25 | **Phase 3.13 Presentation & Consumption Complete** (current) |
 
 > **Historical Note (Tag vs Phase ordering)**:
 > - **Version tags** (e.g. v6.16) represent **commit chronology** (when code was tagged)
