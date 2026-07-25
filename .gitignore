@@ -28,7 +28,7 @@ __pycache__/
 # --- Data ---
 *.db
 storage/*.db
-storage/*.json
+storage/**/*.json
 storage/*.yaml
 storage/vector_store/
 config/.env
