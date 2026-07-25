@@ -85,11 +85,9 @@ v6-agent (Active Development — single source)
     |
     +-- v6.17.0-alpha  ← Phase 3.10 Presentation Frozen
     |
-    +-- v6.19.0-alpha  ← Phase 3.12 Observation Layer Complete
-    |
-    +-- v6.20.0-alpha  ← Phase 3.13 Presentation & Consumption Complete [Current HEAD]
-    |
-    +-- Phase 3.14+    ← Workbench Ecosystem evolution (pending commits)
+    +-- v6.19.0-alpha  ← Phase 3.12 Observation Layer Complete [Current HEAD]
+     |
+     +-- Phase 3.13+    ← Workbench Ecosystem evolution (pending commits)
 ```
 
 ### Tag Migration Note (2026-07-25)
@@ -128,9 +126,9 @@ v6-agent (Active Development — single source)
 
 ## Current Milestone (2026-07-25)
 
-- **Current Version**: v6.20.0-alpha
+- **Current Version**: v6.19.0-alpha (Reference)
 - **Current Branch**: `v6-agent` ⭐
-- **HEAD Commit**: `5f71af8` (pushed)
+- **HEAD Commit**: `21c4752` (pushed)
 - **Frozen Baseline**: v6.16.0-alpha (Phase 3.11 Runtime Frozen) + v6.17.0-alpha (Phase 3.10 Presentation Frozen) + v6.9.6-foundation (Runtime Foundation Frozen)
 - **Stable Release Line**: `main` (currently v6.12.0-beta.15)
 - **Pending Changes**:

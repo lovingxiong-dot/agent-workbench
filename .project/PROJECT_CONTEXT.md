@@ -12,10 +12,10 @@
 | Field | Value |
 |-------|-------|
 | **Active Branch** | `v6-agent` ⭐ (SINGLE source of truth) |
-| **HEAD Commit** | `dd1f9eb` |
-| **Current Version** | `v6.19.0-alpha` |
-| **Current Milestone** | Phase 3.12 Observation Layer Complete (Frozen) |
-| **Next Milestone** | Phase 3.13 Presentation & Consumption (Ready) |
+| **HEAD Commit** | `21c4752` |
+| **Current Version** | `v6.19.0-alpha` (Reference) |
+| **Current Milestone** | Phase 3.13 Presentation & Consumption (Code Complete) |
+| **Next Milestone** | Phase 3.14 Insight Understanding |
 
 ## 2. Frozen Tags (Architecture Anchors)
 
@@ -40,18 +40,23 @@
 
 ### Completed
 
-- ✅ **Batch 1**: Observation Contract Schema (`6c15b70`) — 5 types / 4 sources / 3 scores, Frozen `observation.v0.1`
-- ✅ **Batch 2**: RuntimeEvent Consumer (`1b6cec3`) — Read-only Adapter
-- ✅ **Batch 3**: Minimal Observation Registry (`3c754f4`) — 3 methods, in-memory only
-- ✅ **Finalization** (`2ff8b70` / `dd1f9eb`) — Tag v6.19.0-alpha
+- ✅ **Phase 3.12 Observation Layer** (`6c15b70` → `3c754f4`) — 3 submodules, 88/88 tests
+- ✅ **Phase 3.13 Presentation & Consumption** (`b14754d` → `21c4752`) — 3 submodules, 100/100 tests (NOT promoted to release per AISE Standard)
 
-### Next
+### In Progress
 
-- ⏭ **Phase 3.13 Presentation & Consumption** (Ready)
-  - `ObservationArtifact → ObservationViewModel` (platform-agnostic)
-  - Location: `tools/presentation/contract/`, `tools/presentation/adapter/`, `tools/presentation/consumer/`
-  - Frozen: `ObservationViewModel` schema (10 fields: id/title/summary/category/severity/timestamp/source/metrics/metadata)
-  - Strict NOT in scope: Dashboard / Chart / EventBus新通道 / Storage / Memory / Insight / AI Summary
+- ⏭ **Phase 3.14 Insight Understanding** (Next)
+
+### AISE Standard (Daily Phase)
+
+- Code: feature commits per submodule
+- Docs: update `PROJECT_CONTEXT.md` (light) + `CHANGELOG.md` (one line)
+- No tag, no full Blueprint/Lineage sync, no ADR, no Handoff doc
+
+### AISE Standard (Foundation Milestone)
+
+- Full sync: PROJECT_BLUEPRINT + PROJECT_LINEAGE + ADR + Tag + Handoff
+- Trigger: Foundation-level architecture change (e.g. v6.0 → v6.1 → v6.2)
 
 ### Principle
 
@@ -136,8 +141,9 @@ NEW Runtime Execution
 
 | Item | Status | Priority |
 |------|--------|----------|
-| Phase 3.12 Batch 3 Minimal Observation Registry | ⏭ In Progress | High |
-| Phase 3.12 Finalization (Tag + Handoff) | ⏭ Next | High |
+| Phase 3.14 Insight Understanding | ⏭ Next | High |
+| Phase 3.15 Decision Support | ⏸ Pending | High |
+| Phase 3.16 Memory + Harness (Architecture Review only) | ⏸ Pending | Medium |
 | Working tree 残留修改 (Phase 2-D 遗留) | ⏭ 后续 | Low |
 | Stash 清理 (3 → 0) | ⏭ 后续 | Low |
 
@@ -145,14 +151,14 @@ NEW Runtime Execution
 
 1. Read this file (PROJECT_CONTEXT.md) — 30 seconds
 2. Read [PROJECT_BLUEPRINT.md](../PROJECT_BLUEPRINT.md) — 5 minutes (Architecture Charter)
-3. Read [ADR-016 Observation Layer Contract](../decisions/ADR-016-observation-layer-contract.md) — 5 minutes
-4. Run `python -m pytest tests/observation/ -v` — verify all PASS
-5. Continue with Phase 3.12 Batch 3 (Minimal Registry) or Finalization
+3. Run `python -m pytest tests/observation/ tests/presentation/ -v` — verify all PASS
+4. Continue with Phase 3.14 (Insight Understanding)
 
 **DO NOT**:
 - ❌ Re-discover project structure (already in this file)
 - ❌ Touch `v6/runtime/`
 - ❌ Delete prototype subdirs
 - ❌ Commit to `main`
-- ❌ Add new ADR / docs unless key architecture change
 - ❌ Mix Observation with Memory (different concepts)
+- ❌ Mix Presentation with UI (Presentation is platform-agnostic, NOT UI Model)
+- ❌ Do release ceremonies on every phase (defer to Foundation Milestone)

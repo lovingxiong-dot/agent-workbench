@@ -4,39 +4,12 @@
 >
 > **Tag ordering note**: Version numbers reflect commit order and may not match architectural phase order. Phase 3.10 (Presentation) is `v6.17.0-alpha`; Phase 3.11 (Runtime Kernel) is `v6.16.0-alpha`. This is intentional to keep stable line on `main` (`v6.12.0-beta.15`) untouched.
 
-## v6.20.0-alpha (2026-07-25) — Phase 3.13 Presentation & Consumption Complete
+## Phase 3.13 — Presentation & Consumption (Code Complete, NOT a Release)
 
-> **Milestone**: Phase 3.13 Presentation & Consumption Complete. First platform-agnostic Presentation Contract.
-> - Frozen `ObservationViewModel` (10 fields, schema "presentation.v0.1")
-> - Pure function Adapter: `ObservationArtifact → ObservationViewModel`
-> - Read-only Consumer: `produce()` / `produce_json()`
-> - 100/100 Presentation tests PASS, 100/100 Runtime tests unchanged
-> - Strict NOT in scope: UI / Renderer / Storage / Memory / EventBus new channel / AI Summary
-> - Coexistence: prototype (view_models/, adapters/) preserved
-> - Next: Phase 3.14 Insight Understanding
-
-### Added
-
-- `tools/presentation/contract/observation_view_model.py` (Frozen, 10 fields: id/title/summary/category/severity/timestamp/source/metrics/metadata/schema_version)
-- `tools/presentation/adapter/observation_presentation_adapter.py` (pure function: ObservationArtifact → ObservationViewModel)
-- `tools/presentation/consumer/observation_consumer.py` (read-only: produce() / produce_json())
-
-### Architecture (ADR)
-
-- **ADR-017**: Observation Presentation Boundary (Frozen Phase 3.13)
-
-### Tests
-
-- 100/100 Presentation tests PASS (34 Contract + 28 Adapter + 16 Consumer + 22 Integration)
-- 100/100 Runtime tests unchanged (Phase 3.11 B/C/D)
-
-### Success Criteria (verified)
-
-- ✅ Runtime 不知道 Presentation 存在 (no v6.runtime import in NEW subdirs)
-- ✅ Presentation 不知道 UI 平台 (no PySide/PyQt/QML/react/vue)
-- ✅ Consumer 只读 (no mutation)
-- ✅ Contract 可冻结 (frozen dataclass)
-- ✅ 下一阶段 Insight / Memory 不被污染
+- **Status**: Code complete (5 submodules, 100/100 tests PASS). NOT a release candidate per AISE Standard (release ceremonies deferred to Foundation Milestone).
+- **Submodules**: `contract/` (ObservationViewModel), `adapter/` (pure), `consumer/` (read-only), `tests/presentation/`.
+- **Tests**: 100/100 Presentation tests + 100/100 Runtime tests unchanged = 200/200 PASS.
+- **Note**: 6 fine-grained commits on `v6-agent` (5f71af8, 57686f8, 3d3edcc, b14754d, c11c9e2, 21c4752). Tag `v6.20.0-alpha` retained for reference but not promoted.
 
 ---
 
