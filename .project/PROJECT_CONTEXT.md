@@ -12,10 +12,10 @@
 | Field | Value |
 |-------|-------|
 | **Active Branch** | `v6-agent` ⭐ (SINGLE source of truth) |
-| **HEAD Commit** | `02d1422` |
+| **HEAD Commit** | `1b6cec3` |
 | **Current Version** | `v6.18.0-alpha` |
-| **Current Milestone** | Phase 3.12 Batch 2 — RuntimeEvent Consumer (in progress) |
-| **Next Milestone** | Phase 3.12 Batch 3 — Observation Registry |
+| **Current Milestone** | Phase 3.12 Batch 3 — Minimal Observation Registry (in progress) |
+| **Next Milestone** | Phase 3.12 Finalization (per Brief) |
 
 ## 2. Frozen Tags (Architecture Anchors)
 
@@ -138,8 +138,8 @@ NEW Runtime Execution
 
 | Item | Status | Priority |
 |------|--------|----------|
-| Phase 3.12 Batch 2 RuntimeEvent Consumer | ⏭ In Progress | High |
-| Phase 3.12 Batch 3 Observation Registry | ⏭ Next | High |
+| Phase 3.12 Batch 3 Minimal Observation Registry | ⏭ In Progress | High |
+| Phase 3.12 Finalization (Tag + Handoff) | ⏭ Next | High |
 | Working tree 残留修改 (Phase 2-D 遗留) | ⏭ 后续 | Low |
 | Stash 清理 (3 → 0) | ⏭ 后续 | Low |
 
@@ -149,7 +149,7 @@ NEW Runtime Execution
 2. Read [PROJECT_BLUEPRINT.md](../PROJECT_BLUEPRINT.md) — 5 minutes (Architecture Charter)
 3. Read [ADR-016 Observation Layer Contract](../decisions/ADR-016-observation-layer-contract.md) — 5 minutes
 4. Run `python -m pytest tests/observation/ -v` — verify all PASS
-5. Continue with Task 2 (Phase 3.12 Batch 2 RuntimeEvent Consumer)
+5. Continue with Phase 3.12 Batch 3 (Minimal Registry) or Finalization
 
 **DO NOT**:
 - ❌ Re-discover project structure (already in this file)
@@ -157,3 +157,4 @@ NEW Runtime Execution
 - ❌ Delete prototype subdirs
 - ❌ Commit to `main`
 - ❌ Add new ADR / docs unless key architecture change
+- ❌ Mix Observation with Memory (different concepts)
