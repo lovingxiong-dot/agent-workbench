@@ -1,31 +1,47 @@
 ---
 # Project Blueprint
 ## 元信息
-| 项目名称 | AI Agent 工作台 | 当前版本 | v6.16.0-alpha (Runtime Frozen) / v6.17.0-alpha (Presentation Frozen) | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha | 存档次数 | 61 |
+| 项目名称 | AI Agent Workbench v6 (Workbench OS 1.0) | 当前版本 | v6.18.0-alpha | 当前 HEAD | b736cb7 (v6-agent) | 公开立项标签 | v6.0.0-alpha | 内部迁移标签 | v6.5.8-alpha |
 
-## Current Development Authority
+## Current Development Authority (2026-07-25)
 
-> **The active development line is `v6-agent` based on `v6.8.0-alpha` (V6 Framework Core Foundation Baseline).**
+> **The active development line is `v6-agent` — single source of truth for product evolution.**
 > **Public baseline: `v6.0.0-alpha`.**
-> **Framework Core baseline: `v6.8.0-alpha`.**
-> **V6 Runtime Foundation Baseline: `v6.9.6-foundation` — frozen at 2026-07-09. The Runtime Kernel is complete. The next era is the Agent Workbench Ecosystem.**
-> **V6 Runtime Execution Kernel Baseline: `v6.16.0-alpha` — frozen 2026-07-25. Runtime Foundation + Execution Kernel Evolution (ADR-013/014/015) complete.**
-> **V6 Presentation Layer Baseline: `v6.17.0-alpha` — frozen 2026-07-25. Runtime Presentation Integration complete.**
-> **From v6.11 onward, Runtime is considered stable infrastructure. The primary evolution target becomes the Workbench Layer, where Metadata, Schema, Plugins, and Digital Identity form the long-term product differentiation.**
-> **自 v6.11 起，Runtime 视为稳定基础设施，后续主要演进对象转为 Workbench Layer；Metadata、Schema、Plugin 与 Digital Identity 将成为产品长期演进方向。**
-> 
-> **2026-07-25: Phase 3.11 Execution Kernel Evolution Complete. 进入 Phase 3 Consolidation 收口阶段。下一阶段：Phase 3.12 Observation Layer / Phase 3.16 Cognitive Continuity + Harness。**
+> **Runtime Foundation Baseline: `v6.9.6-foundation` — frozen at 2026-07-09.**
+> **Runtime Execution Kernel Baseline: `v6.16.0-alpha` — frozen 2026-07-25 (Phase 3.11, ADR-013/014/015).**
+> **Presentation Layer Baseline: `v6.17.0-alpha` — frozen 2026-07-25 (Phase 3.10).**
+> **Current HEAD: `v6.18.0-alpha` (post-Phase 3.11 Finalization, pre-Phase 3.12).**
+> **From v6.11 onward, Runtime is considered stable infrastructure. The primary evolution target becomes the Workbench Layer (Metadata, Schema, Plugins, Digital Identity).**
+> **自 v6.11 起，Runtime 视为稳定基础设施，后续主要演进对象转为 Workbench Layer。**
 
-| Item | Value |
-|---|---|
-| Active branch | `v6-agent` |
-| Framework Core baseline | `v6.8.0-alpha` |
-| Frozen foundation branch | `v6-core` |
-| Service extension branch | `v6-service` |
-| Public baseline | `v6.0.0-alpha` |
-| Internal migration checkpoint | `v6.5.8-alpha` (historical, not public) |
-| Frozen archive | `v5-dev` |
-| Rule | Do not modify `v5-dev`. Framework Core (`v6-core`) only accepts bug fixes. Service work goes to `v6-service`. Agent work goes to `v6-agent`. |
+> **Important Distinction**: Version numbers (e.g. v6.16) do **not** equal Phase numbers (e.g. Phase 3.11). Version increments chronologically per commit; Phase is an architectural milestone label. They coincide for some checkpoints (e.g. v6.16 ≈ Phase 3.11) but this is not a general rule.
+
+## Current Snapshot (2026-07-25)
+
+| Field | Value |
+|-------|-------|
+| **Active Branch** | `v6-agent` ⭐ (SINGLE source of truth) |
+| **HEAD Commit** | `b736cb7` (pushed to origin/v6-agent) |
+| **Current Version** | v6.18.0-alpha |
+| **Current Milestone** | Phase 3.11 Finalization Complete |
+| **Next Milestone** | Phase 3.12 Observation Layer |
+| **Stable Line** | `main` (v6.12.0-beta.15) |
+| **Runtime Foundation** | v6.9.6-foundation (2026-07-09, Frozen) |
+| **Runtime Execution Kernel** | v6.16.0-alpha (2026-07-25, Frozen, ADR-013/014/015) |
+| **Presentation Layer** | v6.17.0-alpha (2026-07-25, Frozen) |
+| **Public Baseline** | v6.0.0-alpha |
+
+## Branch Architecture (Blueprint Definition)
+
+| Branch | Status | Purpose | Allowed Changes |
+|--------|--------|---------|-----------------|
+| `v6-core` | Frozen (Runtime Kernel) | Framework Core Foundation | Only bug fixes; Runtime = frozen infrastructure |
+| `v6-service` | Extension Layer (planned) | Runtime Service Architecture (Memory, Prompt, Model Adapter, Tool Adapter, Knowledge Adapter) | Capability extension via Capability Runtime Contract |
+| `v6-agent` | **Active Development** ⭐ | Agent Application (Product Evolution) | All product work — Metadata, UI, Workflow, etc. |
+
+> **Implementation Reality (2026-07-25)**: In current Git state, **only `v6-agent` is actively maintained** as a single-source-of-truth branch. `v6-core` and `v6-service` were planned as 3-tier separation in PROJECT_BLUEPRINT design, but in practice their work has been merged into `v6-agent`. This single-branch strategy is intentional to avoid merge conflicts and keep the agent-product co-evolving.
+> 
+> **Rule**: All AI Agents MUST `git checkout v6-agent` for any development. Never develop on `main`, `v6-core`, `v6-service`, or archive branches.
 
 See also [`PROJECT_LINEAGE.md`](./PROJECT_LINEAGE.md) for the complete V5 / V6 identity map.
 
@@ -462,12 +478,14 @@ Only downward. Never upward. Runtime does not know v6/ui exists.
 |----------|---------|--------|
 | `v6/ui/` (22 files) | Pure UI Foundation — extracted from early Workbench | **ACTIVE** — Phase 2-B Renderer target |
 | `agent_workbench/ui/workbench/` (32 files) | Legacy architecture validation UI | **PRESERVED** |
-| `v6-agent` branch | Deprecated application-centric architecture | **ARCHIVED** |
+| `v6-agent` (CURRENT) | Active development branch | **ACTIVE** ⭐ (single source of truth) |
 
 ### Lineage Distinction
 
+> **Important (2026-07-25 Correction)**: The line "`v6-agent` branch ... ARCHIVED" was a historical note about an early deprecated **application-centric architecture** pattern (`UI → Controller → Agent Runtime → LLM`). The current `v6-agent` Git branch is the **Active Development branch** for v6 product evolution. These are two different things with the same name — context disambiguates.
+
 `v6/ui` is the **Pure UI Foundation** — an independent Presentation Design System.
-It does **not** inherit from the deprecated `v6-agent` (`UI → Controller → Agent Runtime → LLM`).
+It does **not** inherit from the deprecated early `v6-agent` application-centric architecture.
 
 The current architecture is:
 

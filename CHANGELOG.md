@@ -1,6 +1,23 @@
 # Changelog
 
-## v6.18.0-alpha (2026-07-25) — Phase 3.11 Execution Kernel Evolution
+> **Repository Narrative Migration 2026-07-25** — Version numbers (e.g. v6.18) do **not** equal Milestone numbers (e.g. Phase 3.11). They are independent dimensions.
+>
+> **Tag ordering note**: Version numbers reflect commit order and may not match architectural phase order. Phase 3.10 (Presentation) is `v6.17.0-alpha`; Phase 3.11 (Runtime Kernel) is `v6.16.0-alpha`. This is intentional to keep stable line on `main` (`v6.12.0-beta.15`) untouched.
+
+## v6.18.0-alpha (2026-07-25) — Phase 3.11 Finalization HEAD
+
+> **Milestone**: Phase 3.11 Runtime Finalization Complete (post-Phase 3.11 Runtime Frozen `v6.16.0-alpha`).
+> - 8 Runtime components frozen at `v6.16.0-alpha`
+> - 372 tests PASS
+> - Runtime Boundary Audit (8/8 A, 0 B)
+> - Handoff document generated
+> - Artifact Sync: PROJECT_BLUEPRINT / PROJECT_LINEAGE / PROJECT_STATE / Handoff all synchronized
+> - Repository Authority Audit completed: 5 source documents migrated to `v6-agent` (single active development branch)
+> - Next: Phase 3.12 Observation Layer Implementation (after Phase 3.12-3.15 Asset Sync)
+
+### Added
+
+- `v6/runtime/orchestrator.py`: Phase 3.11-D v0.3 — Parent-Child Execution (`submit_child()`) + Top-down DFS Cancellation (`cancel()`) + Deadline model (`DEADLINE_EXCEEDED`)
 
 > **里程碑语义**：Phase 3.11 Execution Kernel Evolution Complete。Runtime Foundation + Execution Kernel Frozen。
 > - Runtime Foundation (`v6.9.6-foundation`) + Execution Kernel Evolution (`v6.16.0-alpha`) 同时冻结

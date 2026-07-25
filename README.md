@@ -1,6 +1,6 @@
 # AI Agent Workbench
 
-> **Stable line: `main` (v6.12.0-beta.15) | Development line: `v6-agent` (v6.14.0-alpha)**
+> **Stable line: `main` (v6.12.0-beta.15) | Development line: `v6-agent` (v6.18.0-alpha)**
 >
 > V6 is a ground-up rewrite of the Agent Runtime platform. It uses `RuntimeContext` as the single public protocol and treats Agent capabilities as first-class Runtime objects.
 >
@@ -8,15 +8,35 @@
 
 ---
 
-## Architecture Status (v6.14.0-alpha)
+## Current Snapshot (2026-07-25)
+
+| Field | Value |
+|-------|-------|
+| **Active Branch** | `v6-agent` ⭐ (single source of truth) |
+| **HEAD Commit** | `b736cb7` |
+| **Current Version** | `v6.18.0-alpha` |
+| **Current Milestone** | Phase 3.11 Finalization Complete |
+| **Next Milestone** | Phase 3.12 Observation Layer |
+| **Runtime Frozen** | `v6.16.0-alpha` (Phase 3.11) |
+| **Runtime Foundation** | `v6.9.6-foundation` |
+| **Presentation Frozen** | `v6.17.0-alpha` (Phase 3.10) |
+| **Public Baseline** | `v6.0.0-alpha` |
+| **Tests** | 372 PASS |
+
+> **Note**: Version numbers (e.g. v6.18) do NOT equal Milestone numbers (e.g. Phase 3.11). They are independent dimensions.
+
+---
+
+## Architecture Status (v6.18.0-alpha)
 
 ```
 CENTRE Runtime → Interaction Boundary → Presentation Renderer → v6/ui → Qt
 ```
 
-- **v6/ui** (22 files) is the frozen Pure UI Foundation — NOT the deprecated v6-agent
+- **v6/ui** (22 files) is the frozen Pure UI Foundation
 - **Renderer** layer (`presentation/renderers/v6_ui/`) maps data to UI, never touches v6/ui private members
 - **Application** layer (`application/`) uses `WorkbenchController`, NOT `WorkbenchUIController`
+- **v6/runtime/** is **FROZEN** at `v6.16.0-alpha` (Phase 3.11). Only bug fix / contract compatibility allowed.
 - Read [ARCHITECTURE_BOUNDARY.md](./ARCHITECTURE_BOUNDARY.md) before modifying any file
 
 ---
