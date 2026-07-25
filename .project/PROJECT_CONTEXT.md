@@ -12,10 +12,10 @@
 | Field | Value |
 |-------|-------|
 | **Active Branch** | `v6-agent` ⭐ (SINGLE source of truth) |
-| **HEAD Commit** | `6c15b70` |
+| **HEAD Commit** | `02d1422` |
 | **Current Version** | `v6.18.0-alpha` |
-| **Current Milestone** | Phase 3.12 Batch 1 Complete |
-| **Next Milestone** | Phase 3.12 Batch 2 — RuntimeEvent Consumer |
+| **Current Milestone** | Phase 3.12 Batch 2 — RuntimeEvent Consumer (in progress) |
+| **Next Milestone** | Phase 3.12 Batch 3 — Observation Registry |
 
 ## 2. Frozen Tags (Architecture Anchors)
 
@@ -47,12 +47,18 @@
   - 3 `ObservationScore` (relevance / confidence / stability) [0.0, 1.0]
   - Frozen `ObservationArtifact` (10 fields, schema_version = "observation.v0.1")
   - 38/38 contract tests PASS
+- ✅ **Context Sync** (`02d1422`): Added `.project/PROJECT_CONTEXT.md`
+
+### In Progress
+
+- ⏭ **Batch 2**: RuntimeEvent Consumer (in progress)
+  - Read-only Adapter: `RuntimeEvent → ObservationArtifact` (consume only)
+  - NOT Runtime subscription, NOT Runtime mutation
+  - Location: `tools/observation/consumer/`
 
 ### Next
 
-- ⏭ **Batch 2**: RuntimeEvent Consumer
-  - Read-only Adapter (NOT Runtime subscription)
-  - Boundary: `RuntimeEvent → ObservationArtifact` (read-only)
+- ⏭ **Batch 3**: Observation Registry (after Batch 2)
 
 ## 5. Known Structure (tools/observation/)
 
@@ -132,16 +138,17 @@ NEW Runtime Execution
 
 | Item | Status | Priority |
 |------|--------|----------|
+| Phase 3.12 Batch 2 RuntimeEvent Consumer | ⏭ In Progress | High |
+| Phase 3.12 Batch 3 Observation Registry | ⏭ Next | High |
 | Working tree 残留修改 (Phase 2-D 遗留) | ⏭ 后续 | Low |
 | Stash 清理 (3 → 0) | ⏭ 后续 | Low |
-| Phase 3.12 Batch 2 RuntimeEvent Consumer | ⏭ Next | High |
 
 ## 12. Next Steps for Incoming Agent
 
 1. Read this file (PROJECT_CONTEXT.md) — 30 seconds
 2. Read [PROJECT_BLUEPRINT.md](../PROJECT_BLUEPRINT.md) — 5 minutes (Architecture Charter)
 3. Read [ADR-016 Observation Layer Contract](../decisions/ADR-016-observation-layer-contract.md) — 5 minutes
-4. Run `python -m pytest tests/observation/contract/ -v` — verify 38 PASS
+4. Run `python -m pytest tests/observation/ -v` — verify all PASS
 5. Continue with Task 2 (Phase 3.12 Batch 2 RuntimeEvent Consumer)
 
 **DO NOT**:
@@ -149,3 +156,4 @@ NEW Runtime Execution
 - ❌ Touch `v6/runtime/`
 - ❌ Delete prototype subdirs
 - ❌ Commit to `main`
+- ❌ Add new ADR / docs unless key architecture change
