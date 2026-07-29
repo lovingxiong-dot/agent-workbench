@@ -19,6 +19,14 @@
 - **Tests**: 84/84 Insight + 88/88 Observation + 100/100 Presentation + 100/100 Runtime = 372/372 PASS.
 - **Strict NOT in scope**: Memory / Decision / Action / Planning / AI Summary / LLM narrative / persistent knowledge.
 
+## Phase 3.15 — Decision Support (Code Complete, NOT a Release)
+
+- **Status**: Code complete (3 submodules, 100/100 tests PASS). NOT a release candidate per AISE Standard.
+- **Decision**: "What should we consider" (NOT "what to do now", NOT ActionExecutor).
+- **Submodules**: `contract/` (DecisionArtifact + DecisionOption + DecisionStrategy), `adapter/` (pure, rule-based strategy selection + option generation), `consumer/` (read-only).
+- **Tests**: 100/100 Decision + 84/84 Insight + 88/88 Observation + 100/100 Presentation + 100/100 Runtime = 472/472 PASS.
+- **Strict NOT in scope**: execute / schedule / capability routing / task mutation / memory write / LLM autonomous decision / ActionExecutor / AgentPlanner / WorkflowEngine.
+
 ---
 
 ## v6.19.0-alpha (2026-07-25) — Phase 3.12 Observation Layer Complete
