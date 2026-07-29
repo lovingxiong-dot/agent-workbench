@@ -45,7 +45,11 @@
 
 ### In Progress
 
-- ⏭ **Phase 3.14 Insight Understanding** (Next)
+- ⏭ **Phase 3.14 Insight Understanding** (Ready)
+  - `ObservationArtifact → InsightArtifact` (structured understanding layer)
+  - Location: `tools/insight/contract/`, `tools/insight/adapter/`, `tools/insight/consumer/`
+  - Frozen: `InsightArtifact` schema (observation reference / pattern / classification / confidence / explanation metadata)
+  - Strict NOT in scope: Memory / Decision / Action / Planning / AI Summary / LLM narrative / persistent knowledge
 
 ### AISE Standard (Daily Phase)
 
@@ -141,7 +145,7 @@ NEW Runtime Execution
 
 | Item | Status | Priority |
 |------|--------|----------|
-| Phase 3.14 Insight Understanding | ⏭ Next | High |
+| Phase 3.14 Insight Understanding | ⏭ In Progress | High |
 | Phase 3.15 Decision Support | ⏸ Pending | High |
 | Phase 3.16 Memory + Harness (Architecture Review only) | ⏸ Pending | Medium |
 
@@ -161,7 +165,7 @@ NEW Runtime Execution
 
 1. Read this file (PROJECT_CONTEXT.md) — 30 seconds
 2. Read [PROJECT_BLUEPRINT.md](../PROJECT_BLUEPRINT.md) — 5 minutes (Architecture Charter)
-3. Run `python -m pytest tests/observation/ tests/presentation/ -v` — verify all PASS
+3. Run `python -m pytest tests/observation/ tests/presentation/ tests/insight/ -v` — verify all PASS
 4. Continue with Phase 3.14 (Insight Understanding)
 
 **DO NOT**:
@@ -171,4 +175,5 @@ NEW Runtime Execution
 - ❌ Commit to `main`
 - ❌ Mix Observation with Memory (different concepts)
 - ❌ Mix Presentation with UI (Presentation is platform-agnostic, NOT UI Model)
+- ❌ Mix Insight with Decision (Insight ≠ Decision, separate phases)
 - ❌ Do release ceremonies on every phase (defer to Foundation Milestone)
