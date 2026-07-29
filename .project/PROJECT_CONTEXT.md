@@ -12,10 +12,10 @@
 | Field | Value |
 |-------|-------|
 | **Active Branch** | `v6-agent` ⭐ (SINGLE source of truth) |
-| **HEAD Commit** | `21c4752` |
+| **HEAD Commit** | `69eb7e9` |
 | **Current Version** | `v6.19.0-alpha` (Reference) |
-| **Current Milestone** | Phase 3.13 Presentation & Consumption (Code Complete) |
-| **Next Milestone** | Phase 3.14 Insight Understanding |
+| **Current Milestone** | Phase 3.14 Insight Understanding (Code Complete) |
+| **Next Milestone** | Phase 3.15 Decision Support (Ready) |
 
 ## 2. Frozen Tags (Architecture Anchors)
 
@@ -42,14 +42,15 @@
 
 - ✅ **Phase 3.12 Observation Layer** (`6c15b70` → `3c754f4`) — 3 submodules, 88/88 tests
 - ✅ **Phase 3.13 Presentation & Consumption** (`b14754d` → `21c4752`) — 3 submodules, 100/100 tests (NOT promoted to release per AISE Standard)
+- ✅ **Phase 3.14 Insight Understanding** (`70141a4` → `69eb7e9`) — 3 submodules, 84/84 tests (NOT promoted to release per AISE Standard)
 
 ### In Progress
 
-- ⏭ **Phase 3.14 Insight Understanding** (Ready)
-  - `ObservationArtifact → InsightArtifact` (structured understanding layer)
-  - Location: `tools/insight/contract/`, `tools/insight/adapter/`, `tools/insight/consumer/`
-  - Frozen: `InsightArtifact` schema (observation reference / pattern / classification / confidence / explanation metadata)
-  - Strict NOT in scope: Memory / Decision / Action / Planning / AI Summary / LLM narrative / persistent knowledge
+- ⏭ **Phase 3.15 Decision Support** (Ready)
+  - `InsightArtifact → DecisionArtifact` (decision options layer)
+  - Location: `tools/decision_support/contract/`, `tools/decision_support/adapter/`, `tools/decision_support/consumer/`
+  - Frozen: `DecisionArtifact` schema (decision options / rationale metadata / confidence / constraints)
+  - Strict NOT in scope: execute / schedule / capability routing / task mutation / memory write / LLM autonomous decision / ActionExecutor / AgentPlanner / WorkflowEngine
 
 ### AISE Standard (Daily Phase)
 
@@ -145,8 +146,7 @@ NEW Runtime Execution
 
 | Item | Status | Priority |
 |------|--------|----------|
-| Phase 3.14 Insight Understanding | ⏭ In Progress | High |
-| Phase 3.15 Decision Support | ⏸ Pending | High |
+| Phase 3.15 Decision Support | ⏭ In Progress | High |
 | Phase 3.16 Memory + Harness (Architecture Review only) | ⏸ Pending | Medium |
 
 ### Known Working Tree (untracked / modified, NOT in current Phase scope)
@@ -165,8 +165,8 @@ NEW Runtime Execution
 
 1. Read this file (PROJECT_CONTEXT.md) — 30 seconds
 2. Read [PROJECT_BLUEPRINT.md](../PROJECT_BLUEPRINT.md) — 5 minutes (Architecture Charter)
-3. Run `python -m pytest tests/observation/ tests/presentation/ tests/insight/ -v` — verify all PASS
-4. Continue with Phase 3.14 (Insight Understanding)
+3. Run `python -m pytest tests/observation/ tests/presentation/ tests/insight/ tests/decision_support/ -v` — verify all PASS
+4. Continue with Phase 3.15 (Decision Support)
 
 **DO NOT**:
 - ❌ Re-discover project structure (already in this file)
@@ -176,4 +176,5 @@ NEW Runtime Execution
 - ❌ Mix Observation with Memory (different concepts)
 - ❌ Mix Presentation with UI (Presentation is platform-agnostic, NOT UI Model)
 - ❌ Mix Insight with Decision (Insight ≠ Decision, separate phases)
+- ❌ Mix Decision with Execution (Decision = options, NOT ActionExecutor)
 - ❌ Do release ceremonies on every phase (defer to Foundation Milestone)
