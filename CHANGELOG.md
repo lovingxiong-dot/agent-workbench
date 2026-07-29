@@ -11,6 +11,14 @@
 - **Tests**: 100/100 Presentation tests + 100/100 Runtime tests unchanged = 200/200 PASS.
 - **Note**: 6 fine-grained commits on `v6-agent` (5f71af8, 57686f8, 3d3edcc, b14754d, c11c9e2, 21c4752). Tag `v6.20.0-alpha` retained for reference but not promoted.
 
+## Phase 3.14 — Insight Understanding (Code Complete, NOT a Release)
+
+- **Status**: Code complete (3 submodules, 84/84 tests PASS). NOT a release candidate per AISE Standard.
+- **Insight**: "What does it mean" (NOT AI summary, NOT decision, NOT memory).
+- **Submodules**: `contract/` (InsightArtifact, 5 fields), `adapter/` (pure, rule-based pattern detection), `consumer/` (read-only).
+- **Tests**: 84/84 Insight + 88/88 Observation + 100/100 Presentation + 100/100 Runtime = 372/372 PASS.
+- **Strict NOT in scope**: Memory / Decision / Action / Planning / AI Summary / LLM narrative / persistent knowledge.
+
 ---
 
 ## v6.19.0-alpha (2026-07-25) — Phase 3.12 Observation Layer Complete
