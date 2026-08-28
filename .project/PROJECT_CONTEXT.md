@@ -12,10 +12,10 @@
 | Field | Value |
 |-------|-------|
 | **Active Branch** | `v6-agent` ⭐ (SINGLE source of truth) |
-| **HEAD Commit** | `69eb7e9` |
+| **HEAD Commit** | `6301a14` |
 | **Current Version** | `v6.19.0-alpha` (Reference) |
-| **Current Milestone** | Phase 3.14 Insight Understanding (Code Complete) |
-| **Next Milestone** | Phase 3.15 Decision Support (Ready) |
+| **Current Milestone** | Phase 3.15 Decision Support (Code Complete) |
+| **Next Milestone** | Phase 3.16 Memory + Harness (Architecture Review Only) |
 
 ## 2. Frozen Tags (Architecture Anchors)
 
@@ -43,14 +43,19 @@
 - ✅ **Phase 3.12 Observation Layer** (`6c15b70` → `3c754f4`) — 3 submodules, 88/88 tests
 - ✅ **Phase 3.13 Presentation & Consumption** (`b14754d` → `21c4752`) — 3 submodules, 100/100 tests (NOT promoted to release per AISE Standard)
 - ✅ **Phase 3.14 Insight Understanding** (`70141a4` → `69eb7e9`) — 3 submodules, 84/84 tests (NOT promoted to release per AISE Standard)
+- ✅ **Phase 3.15 Decision Support** (`9a5f1db` → `6301a14`) — 3 submodules, 100/100 tests (NOT promoted to release per AISE Standard)
 
 ### In Progress
 
-- ⏭ **Phase 3.15 Decision Support** (Ready)
-  - `InsightArtifact → DecisionArtifact` (decision options layer)
-  - Location: `tools/decision_support/contract/`, `tools/decision_support/adapter/`, `tools/decision_support/consumer/`
-  - Frozen: `DecisionArtifact` schema (decision options / rationale metadata / confidence / constraints)
-  - Strict NOT in scope: execute / schedule / capability routing / task mutation / memory write / LLM autonomous decision / ActionExecutor / AgentPlanner / WorkflowEngine
+- 🔍 **Phase 3.16 Memory + Harness** (Architecture Review Only)
+  - NOT a Code Phase. NO Implementation, NO Test, NO Runtime changes.
+  - Location: `.project/architecture/phase-3.16-review/`
+  - 5 ADRs covering root boundaries:
+    - ADR-016 State Ownership (who owns system state)
+    - ADR-017 Persistence Authority (Read ≠ Write)
+    - ADR-018 Agent Lifecycle (Created/Initialized/Active/Suspended/Archived)
+    - ADR-019 Runtime Authority (Runtime can/can't)
+    - ADR-020 Human Approval Boundary (Insight → Human Approval → Execution)
 
 ### AISE Standard (Daily Phase)
 
@@ -146,8 +151,8 @@ NEW Runtime Execution
 
 | Item | Status | Priority |
 |------|--------|----------|
-| Phase 3.15 Decision Support | ⏭ In Progress | High |
-| Phase 3.16 Memory + Harness (Architecture Review only) | ⏸ Pending | Medium |
+| Phase 3.16 Memory + Harness (Architecture Review Only) | 🔍 In Progress | High |
+| Future Architecture Cycle | ⏸ Pending | Medium |
 
 ### Known Working Tree (untracked / modified, NOT in current Phase scope)
 
@@ -166,7 +171,7 @@ NEW Runtime Execution
 1. Read this file (PROJECT_CONTEXT.md) — 30 seconds
 2. Read [PROJECT_BLUEPRINT.md](../PROJECT_BLUEPRINT.md) — 5 minutes (Architecture Charter)
 3. Run `python -m pytest tests/observation/ tests/presentation/ tests/insight/ tests/decision_support/ -v` — verify all PASS
-4. Continue with Phase 3.15 (Decision Support)
+4. Continue with Phase 3.16 (Architecture Review Only, NO code)
 
 **DO NOT**:
 - ❌ Re-discover project structure (already in this file)
@@ -177,4 +182,6 @@ NEW Runtime Execution
 - ❌ Mix Presentation with UI (Presentation is platform-agnostic, NOT UI Model)
 - ❌ Mix Insight with Decision (Insight ≠ Decision, separate phases)
 - ❌ Mix Decision with Execution (Decision = options, NOT ActionExecutor)
+- ❌ Write any code in Phase 3.16 (Architecture Review ONLY)
+- ❌ Add Runtime / Memory / Harness in Phase 3.16
 - ❌ Do release ceremonies on every phase (defer to Foundation Milestone)

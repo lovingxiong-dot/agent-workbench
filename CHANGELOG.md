@@ -27,6 +27,18 @@
 - **Tests**: 100/100 Decision + 84/84 Insight + 88/88 Observation + 100/100 Presentation + 100/100 Runtime = 472/472 PASS.
 - **Strict NOT in scope**: execute / schedule / capability routing / task mutation / memory write / LLM autonomous decision / ActionExecutor / AgentPlanner / WorkflowEngine.
 
+## Phase 3.16 — Memory + Harness (Architecture Review Only, NOT a Code Phase)
+
+- **Status**: Architecture Review Only. NO Implementation, NO Test, NO Runtime changes.
+- **5 ADRs covering root boundaries** (`.project/architecture/phase-3.16-review/`):
+  - ADR-016 State Ownership (Runtime ≠ State Owner)
+  - ADR-017 Persistence Authority (Read ≠ Write, Memory Write needs Human Grant)
+  - ADR-018 Agent Lifecycle (Runtime 不能 Create / Archive Agent)
+  - ADR-019 Runtime Authority (Runtime 是 Stateless Executor)
+  - ADR-020 Human Approval Boundary (Insight → Decision → Human Approval → Execution)
+- **Tests**: 472/472 PASS (unchanged from Phase 3.15).
+- **Strict NOT in scope**: Implementation / Test / Runtime / Memory / Harness (review only).
+
 ---
 
 ## v6.19.0-alpha (2026-07-25) — Phase 3.12 Observation Layer Complete
